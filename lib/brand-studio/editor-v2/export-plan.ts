@@ -14,6 +14,7 @@ import type { TimingAnswer } from './container';
 import { frameStateAt, spansOf, totalFrames, type FrameClip, type FrameSequence } from './frames';
 import { overlayFrames, type CutAnchor } from './cut-anchor';
 import { isNeutral, type EditorDoc } from './model';
+import { cloneSpeedCurve, curveAverageSpeed, curveStartMedia } from './speed-curve';
 import { lineageOf } from './stored';
 
 /** Sound is mixed and written at this rate. */
@@ -159,10 +160,16 @@ export interface AudioSegment {
   sampleCount: number;
   /** Media time of the cut's first frame, on the film's frame grid: `(inFrame + phase / speedDen) / fps`. */
   sourceOffsetSec: number;
-  /** `speedNum / speedDen`. */
+  /** `speedNum / speedDen` (or average curve speed when curved). */
   rate: number;
   /** `0` when muted. */
   gain: number;
+  /** Present when the cut uses a variable speed curve; omitted for constant speeds. */
+  curve?: import('./speed-curve').SpeedCurve;
+  /** Film frame rate, included on curved segments so audio resampling aligns to the film grid. */
+  fps?: number;
+  /** Timeline frame count of the cut, included on curved segments. */
+  frameCount?: number;
 }
 
 export interface AudioPlan {
@@ -184,15 +191,21 @@ export function audioPlan(sequence: FrameSequence, sampleRate = EXPORT_SAMPLE_RA
   const segments = spans.map((span, index): AudioSegment => {
     const { clip } = span;
     const next = index + 1 < spans.length ? starts[index + 1]! : totalSamples;
-    return {
+    const base: AudioSegment = {
       clipId: clip.id,
       srcUrl: clip.srcUrl,
       startSample: starts[index]!,
       sampleCount: next - starts[index]!,
-      sourceOffsetSec: (clip.inFrame + clip.phase / clip.speedDen) / sequence.fps,
-      rate: clip.speedNum / clip.speedDen,
+      sourceOffsetSec: clip.speedCurve ? curveStartMedia(clip.speedCurve) / sequence.fps : (clip.inFrame + clip.phase / clip.speedDen) / sequence.fps,
+      rate: clip.speedCurve ? curveAverageSpeed(clip.speedCurve) : clip.speedNum / clip.speedDen,
       gain: clip.muted ? 0 : clip.volume,
     };
+    if (clip.speedCurve) {
+      base.curve = cloneSpeedCurve(clip.speedCurve);
+      base.fps = sequence.fps;
+      base.frameCount = clip.frames;
+    }
+    return base;
   });
   return { sampleRate, totalSamples, segments };
 }

@@ -1023,3 +1023,147 @@
 .filmContents li[data-quiet] { color: var(--ys-ink-secondary); }
 .stillOverlay { position: absolute; transform: translate(-50%, -50%); height: auto; pointer-events: none; }
 .gradeRegion { position: absolute; pointer-events: none; }
+
+.speedPanel { display: grid; gap: 8px; }
+.speedHeadRow { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.speedHeadRow .seg { flex: none; }
+.speedHeadRow .seg button { flex: none; padding: 0 10px; }
+.speedLengthReadout { font-size: 11px; color: var(--ys-ink-secondary); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.speedConstantBox { display: grid; gap: 8px; }
+.speedNumericRow { display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; }
+.speedInputWrap { display: grid; gap: 4px; flex: 1; min-width: 0; font-size: 11px; color: var(--ys-ink-secondary); }
+.speedInputField {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+  height: 32px;
+  border-radius: var(--ys-r-control);
+  background: var(--ys-canvas);
+  box-shadow: inset 0 0 0 1px var(--ys-line);
+  color: var(--ys-ink);
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.speedInputField:focus-within { box-shadow: inset 0 0 0 1.5px var(--ys-accent); }
+.speedNumberInput {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  outline: none;
+  font-variant-numeric: tabular-nums;
+}
+.speedResetBtn,
+.speedPointRemoveBtn {
+  min-height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--ys-r-control);
+  background: var(--ys-panel);
+  color: var(--ys-ink-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: inset 0 0 0 1px var(--ys-line);
+  transition: background-color var(--ys-dur) var(--ys-ease), color var(--ys-dur) var(--ys-ease);
+}
+.speedResetBtn:hover:not(:disabled),
+.speedPointRemoveBtn:hover:not(:disabled) { background: var(--ys-hover); color: var(--ys-ink); }
+.speedResetBtn:disabled,
+.speedPointRemoveBtn:disabled { opacity: 0.4; cursor: default; }
+.speedSliderBlock { display: grid; gap: 4px; }
+.speedSliderTrack {
+  position: relative;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+  border-radius: var(--ys-r-sm);
+}
+.speedSliderTrack[aria-disabled='true'] { opacity: 0.45; cursor: default; }
+.speedSliderRail {
+  width: 100%;
+  height: 4px;
+  border-radius: var(--ys-r-pill);
+  background: var(--ys-panel);
+  box-shadow: inset 0 0 0 1px var(--ys-line);
+}
+.speedSliderFill {
+  position: absolute;
+  left: 0;
+  height: 4px;
+  border-radius: var(--ys-r-pill);
+  background: var(--ys-accent);
+  pointer-events: none;
+}
+.speedSliderThumb {
+  position: absolute;
+  top: 50%;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--ys-accent);
+  border: 2px solid var(--ys-ink);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+.speedTicks {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--ys-ink-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.speedCurveBox { display: grid; gap: 7px; }
+.speedPresetsGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
+.speedPresetBtn {
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  padding: 4px 3px;
+  border: 0;
+  border-radius: var(--ys-r-control);
+  background: var(--ys-canvas);
+  color: var(--ys-ink-secondary);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px var(--ys-line);
+  transition: background-color var(--ys-dur) var(--ys-ease), color var(--ys-dur) var(--ys-ease), box-shadow var(--ys-dur) var(--ys-ease);
+}
+.speedPresetBtn:hover:not(:disabled) { background: var(--ys-hover); color: var(--ys-ink); }
+.speedPresetBtn[aria-pressed='true'] { background: var(--ys-hover); color: var(--ys-ink); box-shadow: inset 0 0 0 1.5px var(--ys-accent); }
+.speedGraphWrap {
+  border-radius: var(--ys-r-control);
+  background: var(--ys-canvas);
+  box-shadow: inset 0 0 0 1px var(--ys-line);
+  overflow: hidden;
+}
+.speedGraphSvg { display: block; width: 100%; height: auto; touch-action: none; user-select: none; cursor: crosshair; }
+.speedSvgLabel { font-family: var(--ys-mono); font-size: 9px; fill: var(--ys-ink-secondary); pointer-events: none; }
+.speedCurvePoint { outline: none; }
+.speedCurvePoint:focus-visible { outline: none; }
+.speedCurvePoint:focus-visible circle:last-of-type { stroke: var(--ys-accent); stroke-width: 2.5px; }
+.speedPointBar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 6px; }
+.speedMiniField { display: grid; gap: 3px; flex: 1 1 56px; min-width: 0; font-size: 10px; color: var(--ys-ink-secondary); }
+.speedMiniField input {
+  width: 100%;
+  height: 28px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: var(--ys-r-control);
+  background: var(--ys-canvas);
+  color: var(--ys-ink);
+  box-shadow: inset 0 0 0 1px var(--ys-line);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.speedSlowNote { margin: 0; font-size: 11px; line-height: 1.45; color: var(--ys-ink-secondary); }

@@ -16,6 +16,30 @@
  */
 import type { CaptionPosition, CaptionSize, ComposeAspect } from '@/lib/brand-studio/compose/timeline';
 
+import {
+  clampSpeed,
+  curveEndMedia,
+  curveMediaPosAt,
+  curveRawDurationFrames,
+  curveSpeedAtFrame,
+  curveStartMedia,
+  curveTotalFrames,
+  curveTotalSpanMedia,
+  gcdInt,
+  isFlatCurve,
+  isValidSpeedCurve,
+  MAX_CURVE_TOTAL_POINTS,
+  maxWindowedCurveFrames,
+  normalizeCurvePoints,
+  splitWindowedCurve,
+  toSpeedRational,
+  trimWindowedCurveEdge,
+  type SpeedCurve,
+  type SpeedPoint,
+} from './speed-curve';
+
+export type { SpeedCurve, SpeedPoint };
+
 export interface FrameClip {
   id: string;
   label: string;
@@ -33,6 +57,10 @@ export interface FrameClip {
   frames: number;
   speedNum: number;
   speedDen: number;
+  /** Unrounded original media span `{ num, den }` carried across speed changes so slider sweeps never drift. */
+  mediaSpan?: { num: number; den: number };
+  /** Optional per-cut variable speed curve across `[0, 1]` of this cut's footage span. Omitted when constant. */
+  speedCurve?: SpeedCurve;
   /** `0..1` */
   volume: number;
   muted: boolean;
@@ -87,13 +115,39 @@ export function mediaFramesOf(clip: Pick<FrameClip, 'sourceFrames' | 'sourceFps'
 
 /** The longest this cut can be from its in-point at its speed. */
 export function clipMaxFrames(clip: FrameClip, fps: number): number {
+  if (clip.speedCurve) {
+    return maxWindowedCurveFrames(clip.speedCurve, mediaFramesOf(clip, fps));
+  }
   const left = (mediaFramesOf(clip, fps) - clip.inFrame) * clip.speedDen - clip.phase;
   return Math.max(1, Math.ceil(left / clip.speedNum));
 }
 
+export function clipMediaPosAt(clip: FrameClip, offset: number): number {
+  if (clip.speedCurve) return curveMediaPosAt(clip.speedCurve, offset);
+  return clip.inFrame + (clip.phase + offset * clip.speedNum) / clip.speedDen;
+}
+
+export function clipSpeedAt(clip: FrameClip, offset: number): number {
+  if (clip.speedCurve) return curveSpeedAtFrame(clip.speedCurve, offset);
+  return clip.speedNum / clip.speedDen;
+}
+
 /** What the cut shows on its `offset`-th frame. */
 export function clipFrameAt(clip: FrameClip, offset: number, fps: number): { mediaFrame: number; sourceFrame: number; seekSec: number } {
-  const mediaFrame = clip.inFrame + Math.floor((clip.phase + offset * clip.speedNum) / clip.speedDen);
+  let mediaFrame: number;
+  if (clip.speedCurve) {
+    const maxMediaFrame = Math.max(0, Math.floor(curveEndMedia(clip.speedCurve) - 1e-7));
+    const flat = isFlatCurve(clip.speedCurve);
+    if (flat !== null && Math.abs(flat - clampSpeed(flat)) < 1e-12) {
+      const { num, den } = toSpeedRational(flat);
+      const rawPos = curveStartMedia(clip.speedCurve) + (offset * num) / den;
+      mediaFrame = clamp(Math.floor(rawPos + 1e-9), 0, maxMediaFrame);
+    } else {
+      mediaFrame = clamp(Math.floor(curveMediaPosAt(clip.speedCurve, offset) + 1e-9), 0, maxMediaFrame);
+    }
+  } else {
+    mediaFrame = clip.inFrame + Math.floor((clip.phase + offset * clip.speedNum) / clip.speedDen);
+  }
   const sourceFrame = clamp(sourceFrameIndex(mediaFrame, fps, clip.sourceFps), 0, Math.max(0, clip.sourceFrames - 1));
   return { mediaFrame, sourceFrame, seekSec: sourceSeekSec(sourceFrame, clip.sourceFps) };
 }
@@ -170,8 +224,33 @@ export function splitAtFrame(seq: FrameSequence, frame: number, newId: string): 
   const span = spansOf(seq).find((entry) => frame > entry.start && frame < entry.end);
   if (!span) return seq;
   const offset = frame - span.start;
-  const left: FrameClip = { ...span.clip, frames: offset };
-  const right: FrameClip = { ...span.clip, id: newId, ...shifted(span.clip, offset), frames: span.clip.frames - offset };
+  const { mediaSpan: _dropSpan, ...cleanClip } = span.clip;
+  let left: FrameClip;
+  let right: FrameClip;
+  if (cleanClip.speedCurve) {
+    const split = splitWindowedCurve(cleanClip.speedCurve, offset);
+    if (!split) return seq;
+    const { left: leftCurve, right: rightCurve } = split;
+    left = {
+      ...cleanClip,
+      inFrame: Math.max(0, Math.floor(curveStartMedia(leftCurve) + 1e-9)),
+      frames: offset,
+      speedCurve: leftCurve,
+    };
+    right = {
+      ...cleanClip,
+      id: newId,
+      inFrame: Math.max(0, Math.floor(curveStartMedia(rightCurve) + 1e-9)),
+      phase: 0,
+      frames: cleanClip.frames - offset,
+      speedNum: 1,
+      speedDen: 1,
+      speedCurve: rightCurve,
+    };
+  } else {
+    left = { ...cleanClip, frames: offset };
+    right = { ...cleanClip, id: newId, ...shifted(cleanClip, offset), frames: cleanClip.frames - offset };
+  }
   const clips = [...seq.clips];
   clips.splice(span.index, 1, left, right);
   return { ...seq, clips };
@@ -185,15 +264,34 @@ export function trimClipEdge(seq: FrameSequence, index: number, edge: 'start' | 
   const clip = seq.clips[index];
   if (!clip) return { seq, applied: 0 };
   let applied = Math.round(delta);
+  const { mediaSpan: _dropSpan, ...cleanClip } = clip;
+
+  if (cleanClip.speedCurve) {
+    const res = trimWindowedCurveEdge(cleanClip.speedCurve, edge, applied, mediaFramesOf(cleanClip, seq.fps));
+    if (res.applied === 0) return { seq, applied: 0 };
+    const next: FrameClip = {
+      ...cleanClip,
+      inFrame: Math.max(0, Math.floor(curveStartMedia(res.curve) + 1e-9)),
+      phase: 0,
+      frames: curveTotalFrames(res.curve),
+      speedCurve: res.curve,
+    };
+    const clips = [...seq.clips];
+    clips[index] = next;
+    return { seq: withClips(seq, clips), applied: res.applied };
+  }
+
   if (edge === 'start') {
-    const back = Math.floor((clip.inFrame * clip.speedDen + clip.phase) / clip.speedNum);
-    applied = clamp(applied, -back, clip.frames - 1);
+    const back = Math.floor((cleanClip.inFrame * cleanClip.speedDen + cleanClip.phase) / cleanClip.speedNum);
+    applied = clamp(applied, -back, cleanClip.frames - 1);
   } else {
-    applied = clamp(applied, 1 - clip.frames, clipMaxFrames(clip, seq.fps) - clip.frames);
+    applied = clamp(applied, 1 - cleanClip.frames, clipMaxFrames(cleanClip, seq.fps) - cleanClip.frames);
   }
   if (applied === 0) return { seq, applied: 0 };
   const next: FrameClip =
-    edge === 'start' ? { ...clip, ...shifted(clip, applied), frames: clip.frames - applied } : { ...clip, frames: clip.frames + applied };
+    edge === 'start'
+      ? { ...cleanClip, ...shifted(cleanClip, applied), frames: cleanClip.frames - applied }
+      : { ...cleanClip, frames: cleanClip.frames + applied };
   const clips = [...seq.clips];
   clips[index] = next;
   return { seq: withClips(seq, clips), applied };
@@ -228,13 +326,120 @@ export function insertClips(seq: FrameSequence, atIndex: number, clips: readonly
 export function setClipSpeed(seq: FrameSequence, index: number, speedNum: number, speedDen: number): FrameSequence {
   const clip = seq.clips[index];
   if (!clip || !isWhole(speedNum) || !isWhole(speedDen) || speedNum < 1 || speedDen < 1) return seq;
-  if (clip.speedNum === speedNum && clip.speedDen === speedDen) return seq;
-  const covered = Math.ceil((clip.phase + clip.frames * clip.speedNum) / clip.speedDen);
-  const retimed: FrameClip = { ...clip, speedNum, speedDen, phase: 0, frames: 1 };
-  retimed.frames = clamp(Math.round((covered * speedDen) / speedNum), 1, clipMaxFrames(retimed, seq.fps));
+  if (!clip.speedCurve && clip.speedNum === speedNum && clip.speedDen === speedDen) return seq;
+
+  const { speedCurve, mediaSpan: existingSpan, ...baseClip } = clip;
+  let inFrame = baseClip.inFrame;
+  let baseNum: number;
+  let baseDen: number;
+
+  if (speedCurve) {
+    inFrame = clamp(Math.floor(curveStartMedia(speedCurve) + 1e-9), 0, Math.max(0, mediaFramesOf(baseClip, seq.fps) - 1));
+    const winMatchesDomain =
+      Math.abs(curveStartMedia(speedCurve) - speedCurve.startMedia) <= 1e-9 &&
+      Math.abs(curveEndMedia(speedCurve) - (speedCurve.startMedia + speedCurve.spanMedia)) <= 1e-9;
+    if (existingSpan && winMatchesDomain) {
+      baseNum = existingSpan.num;
+      baseDen = existingSpan.den;
+    } else {
+      const pct = Math.max(1, Math.round(curveTotalSpanMedia(speedCurve) * 100));
+      const g = gcdInt(pct, 100);
+      baseNum = pct / g;
+      baseDen = 100 / g;
+    }
+  } else if (existingSpan) {
+    baseNum = existingSpan.num;
+    baseDen = existingSpan.den;
+  } else {
+    // Match main's rounded-up covered span on first speed change from legacy cuts without mediaSpan.
+    const covered = Math.ceil((baseClip.phase + baseClip.frames * baseClip.speedNum) / baseClip.speedDen);
+    baseNum = Math.max(1, covered);
+    baseDen = 1;
+  }
+
+  const retimed: FrameClip = { ...baseClip, inFrame, phase: 0, speedNum, speedDen, frames: 1 };
+  const maxAllowed = clipMaxFrames(retimed, seq.fps);
+  const targetFrames = Math.round((baseNum * speedDen) / (baseDen * speedNum));
+  retimed.frames = clamp(targetFrames, 1, maxAllowed);
+  if (retimed.frames * speedNum * baseDen !== baseNum * speedDen || baseDen > 1) {
+    retimed.mediaSpan = { num: baseNum, den: baseDen };
+  }
   const clips = [...seq.clips];
   clips[index] = retimed;
   return withClips(seq, clips);
+}
+
+export function setClipConstantSpeed(seq: FrameSequence, index: number, speed: number): FrameSequence {
+  const { num, den } = toSpeedRational(speed);
+  return setClipSpeed(seq, index, num, den);
+}
+
+function sameSpeedPoints(a: readonly SpeedPoint[], b: readonly SpeedPoint[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    const pa = a[i]!;
+    const pb = b[i]!;
+    if (
+      Math.abs(pa.pos - pb.pos) > 1e-9 ||
+      Math.abs(pa.speed - pb.speed) > 1e-9 ||
+      (pa.slope === undefined) !== (pb.slope === undefined) ||
+      (pa.slope !== undefined && Math.abs(pa.slope - pb.slope!) > 1e-9) ||
+      (pa.slopeRight === undefined) !== (pb.slopeRight === undefined) ||
+      (pa.slopeRight !== undefined && Math.abs(pa.slopeRight - pb.slopeRight!) > 1e-9)
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+export function setClipSpeedCurve(seq: FrameSequence, index: number, points: readonly SpeedPoint[]): FrameSequence {
+  const clip = seq.clips[index];
+  if (!clip) return seq;
+  if (points.length > MAX_CURVE_TOTAL_POINTS) return seq;
+  const cleanPoints = normalizeCurvePoints(points);
+  if (cleanPoints.length > MAX_CURVE_TOTAL_POINTS) return seq;
+  if (clip.speedCurve && sameSpeedPoints(cleanPoints, clip.speedCurve.points)) {
+    return seq;
+  }
+  const media = mediaFramesOf(clip, seq.fps);
+  const startMedia = clip.speedCurve ? curveStartMedia(clip.speedCurve) : clip.inFrame + clip.phase / clip.speedDen;
+  const rawSpan = clip.speedCurve
+    ? curveTotalSpanMedia(clip.speedCurve)
+    : clip.mediaSpan
+      ? clip.mediaSpan.num / clip.mediaSpan.den
+      : (clip.frames * clip.speedNum) / clip.speedDen;
+  const spanMedia = Math.min(rawSpan, Math.max(1e-6, media - startMedia));
+  const nextCurve: SpeedCurve = { startMedia, spanMedia: Math.max(1e-6, spanMedia), points: cleanPoints };
+  if (curveRawDurationFrames(nextCurve) < 1 - 1e-6) {
+    return seq;
+  }
+  const inFrame = clamp(Math.floor(startMedia + 1e-9), 0, Math.max(0, media - 1));
+  const retimed: FrameClip = {
+    ...clip,
+    inFrame,
+    phase: 0,
+    speedNum: 1,
+    speedDen: 1,
+    frames: curveTotalFrames(nextCurve),
+    speedCurve: nextCurve,
+  };
+  const winMatchesDomain =
+    !clip.speedCurve ||
+    (Math.abs(curveStartMedia(clip.speedCurve) - clip.speedCurve.startMedia) <= 1e-9 &&
+      Math.abs(curveEndMedia(clip.speedCurve) - (clip.speedCurve.startMedia + clip.speedCurve.spanMedia)) <= 1e-9);
+  if (clip.mediaSpan && winMatchesDomain) {
+    retimed.mediaSpan = clip.mediaSpan;
+  } else {
+    delete retimed.mediaSpan;
+  }
+  const clips = [...seq.clips];
+  clips[index] = retimed;
+  return withClips(seq, clips);
+}
+
+export function resetClipSpeed(seq: FrameSequence, index: number): FrameSequence {
+  return setClipConstantSpeed(seq, index, 1);
 }
 
 export function setClipAudio(seq: FrameSequence, index: number, volume: number, muted: boolean): FrameSequence {
@@ -289,6 +494,22 @@ export function wholeFrameViolations(seq: FrameSequence): string[] {
     if (clip.inFrame < 0) out.push(`cut ${index + 1} starts before its footage`);
     if (clip.speedNum < 1 || clip.speedDen < 1) out.push(`cut ${index + 1} speed ${clip.speedNum}/${clip.speedDen}`);
     if (clip.phase < 0 || clip.phase >= clip.speedDen) out.push(`cut ${index + 1} phase ${clip.phase}`);
+    if (clip.speedCurve) {
+      if (!isValidSpeedCurve(clip.speedCurve)) {
+        out.push(`cut ${index + 1} speedCurve is invalid`);
+      } else {
+        if (curveStartMedia(clip.speedCurve) < -1e-6) {
+          out.push(`cut ${index + 1} curve starts before its footage`);
+        }
+        if (isWhole(seq.fps) && curveEndMedia(clip.speedCurve) > mediaFramesOf(clip, seq.fps) + 1e-4) {
+          out.push(`cut ${index + 1} curve runs past its footage`);
+        }
+        const expectedFrames = curveTotalFrames(clip.speedCurve);
+        if (clip.frames !== expectedFrames) {
+          out.push(`cut ${index + 1} frames ${clip.frames} mismatches curve length ${expectedFrames}`);
+        }
+      }
+    }
     if (isWhole(seq.fps) && clip.frames > clipMaxFrames(clip, seq.fps)) out.push(`cut ${index + 1} runs past its footage`);
   });
   const total = totalFrames(seq);

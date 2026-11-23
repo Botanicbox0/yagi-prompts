@@ -16,6 +16,7 @@ import {
   visibleCaptions,
   zoomScrollLeft,
 } from '@/lib/brand-studio/editor-v2/frames';
+import { formatSpeed } from '@/lib/brand-studio/editor-v2/speed-curve';
 import { duckEnvelope, envelopeGainAt, waveform } from '@/lib/brand-studio/editor-v2/model';
 import { formatBinding } from '@/lib/brand-studio/editor-v2/shortcuts';
 import { FrameThumbs, type ThumbRequest } from './frame-thumbs';
@@ -434,7 +435,8 @@ export function Timeline({ api }: { api: EditorApi }) {
                   data-frames={span.frames}
                   data-in-frame={span.clip.inFrame}
                   data-phase={span.clip.phase}
-                  data-speed={`${span.clip.speedNum}/${span.clip.speedDen}`}
+                  data-speed={span.clip.speedCurve ? 'curve' : `${span.clip.speedNum}/${span.clip.speedDen}`}
+                  data-speed-curve={span.clip.speedCurve ? '1' : undefined}
                   data-source-fps={span.clip.sourceFps}
                   data-source-frames={span.clip.sourceFrames}
                   data-clip-id={span.clip.id}
@@ -455,7 +457,13 @@ export function Timeline({ api }: { api: EditorApi }) {
                   <span className={styles.clipHandle} data-edge="start" onPointerDown={(event) => startTrim(event, span.index, 'start')} title={copy.timeline.trimStart} />
                   <span className={styles.clipBadge}>{span.index + 1}</span>
                   {look && <span className={styles.clipLook} data-source={look.source} />}
-                  {span.clip.speedNum !== span.clip.speedDen && <span className={styles.clipRate}>{span.clip.speedNum / span.clip.speedDen}×</span>}
+                  {span.clip.speedCurve ? (
+                    <span className={styles.clipRate}>{copy.cut.clip.speedCurveBadge}</span>
+                  ) : (
+                    span.clip.speedNum !== span.clip.speedDen && (
+                      <span className={styles.clipRate}>{formatSpeed(span.clip.speedNum / span.clip.speedDen)}×</span>
+                    )
+                  )}
                   <span className={styles.clipHandle} data-edge="end" onPointerDown={(event) => startTrim(event, span.index, 'end')} title={copy.timeline.trimEnd} />
                 </div>
               );

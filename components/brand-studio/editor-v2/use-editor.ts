@@ -39,7 +39,11 @@ import {
   removeClips as removeClipsFromSequence,
   setAspect as setSequenceAspect,
   setClipAudio as setSequenceClipAudio,
+  resetClipSpeed as resetSequenceClipSpeed,
+  setClipConstantSpeed as setSequenceClipConstantSpeed,
   setClipSpeed as setSequenceClipSpeed,
+  setClipSpeedCurve as setSequenceClipSpeedCurve,
+  type SpeedPoint,
   spansOf,
   splitAtFrame,
   totalFrames,
@@ -49,6 +53,7 @@ import {
   type FrameClip,
   type FrameSequence,
 } from '@/lib/brand-studio/editor-v2/frames';
+import { cloneSpeedCurve } from '@/lib/brand-studio/editor-v2/speed-curve';
 import {
   DEFAULT_REFRAME,
   LOOK_DETAILS,
@@ -96,6 +101,10 @@ import { readFilmText, watchFilmText, writeFilmText } from './film-store';
 import { readFootage } from './footage-facts';
 import { measureSource } from './measure-fps';
 import { loadShortcutPrefs, saveShortcutPrefs } from './shortcut-store';
+
+export function speedUndoKey(clipId: string): string {
+  return `clip-speed:${clipId}`;
+}
 
 export const ASPECT_KEYS: Readonly<Record<ComposeAspect, keyof StudioEditorCopy['aspectNames']>> = {
   '16:9': 'r16x9',
@@ -692,6 +701,21 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
   }, [status, addSource]);
 
   const setSpeed = useCallback((index: number, num: number, den: number) => edit((current) => setSequenceClipSpeed(current, index, num, den)), [edit]);
+  const setConstantSpeed = useCallback(
+    (index: number, rate: number, coalesce = false) => {
+      const clipKey = speedUndoKey(docRef.current.sequence.clips[index]?.id ?? String(index));
+      edit((current) => setSequenceClipConstantSpeed(current, index, rate), undefined, coalesce ? clipKey : undefined);
+    },
+    [edit],
+  );
+  const setSpeedCurve = useCallback(
+    (index: number, points: readonly SpeedPoint[], coalesce = false) => {
+      const clipKey = speedUndoKey(docRef.current.sequence.clips[index]?.id ?? String(index));
+      edit((current) => setSequenceClipSpeedCurve(current, index, points), undefined, coalesce ? clipKey : undefined);
+    },
+    [edit],
+  );
+  const resetSpeed = useCallback((index: number) => edit((current) => resetSequenceClipSpeed(current, index)), [edit]);
   const setClipAudio = useCallback(
     (index: number, volume: number, muted: boolean) => edit((current) => setSequenceClipAudio(current, index, volume, muted), undefined, 'clip-volume'),
     [edit],
@@ -730,7 +754,11 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
     (source: Clipboard, atIndex: number) => {
       if (blockedRef.current) return;
       if (sequence.clips.length + source.clips.length > MAX_COMPOSE_CLIPS) return say(copy.toast.full);
-      const copies = source.clips.map((clip) => ({ ...clip, id: newId('cut') }));
+      const copies = source.clips.map((clip) => ({
+        ...clip,
+        id: newId('cut'),
+        ...(clip.speedCurve ? { speedCurve: cloneSpeedCurve(clip.speedCurve) } : {}),
+      }));
       remember(copies.map((made, i) => [made.id, source.clips[i]!.id] as const));
       change((current) => {
         const next = withSequence(current, insertClips(current.sequence, atIndex, copies));
@@ -1176,6 +1204,9 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
     removeClips,
     addMaterial,
     setSpeed,
+    setConstantSpeed,
+    setSpeedCurve,
+    resetSpeed,
     setClipAudio,
     setAspect,
     copyClips,
