@@ -210,7 +210,8 @@ describe('B1a brand subscriptions integration & route (§8.2–§8.11)', () => {
     });
     expect(await loadBrandSubscription(f.sql, f.orgId)).toMatchObject({ status: 'active' });
     expect(await loadPlanAssignment(f.sql, f.orgId)).toMatchObject({ planId: 'b2b_29', endsOn: '2026-12-01' });
-    expect((await loadAllowance(f.sql, f.orgId, studioEnv(), t0)).capKrw).toBe(270_000);
+    // Started 2026-11-10: the first month's credits follow the invoice's 21/30 days (B1b first-month proration).
+    expect((await loadAllowance(f.sql, f.orgId, studioEnv(), t0)).capKrw).toBe(189_000);
 
     // Second org with activateBeforePayment + confirm: true -> plan access open immediately with ends_on = due_on
     const owner2 = randomUUID();
@@ -232,7 +233,7 @@ describe('B1a brand subscriptions integration & route (§8.2–§8.11)', () => {
     expect(started2).toMatchObject({ ok: true, applied: true });
     expect(await loadBrandSubscription(f.sql, org2Res.id)).toMatchObject({ status: 'pending', activatedBeforePayment: true });
     expect(await loadPlanAssignment(f.sql, org2Res.id)).toMatchObject({ planId: 'b2b_49', endsOn: '2026-11-24' });
-    expect((await loadAllowance(f.sql, org2Res.id, studioEnv(), t0)).capKrw).toBe(460_000);
+    expect((await loadAllowance(f.sql, org2Res.id, studioEnv(), t0)).capKrw).toBe(322_000);
   });
 
   it('§8.5 Unpaid flow: ends_on = oldest due_on, past_due, suspended after grace, no new invoice while suspended, resume prorated on pay', async () => {

@@ -16,10 +16,13 @@ import {
   planActiveWithGrace,
   type PaidBrandPlanId,
 } from './math';
+import { brandWorkspaceApprovalOpen } from '@/lib/flags';
 import { hasTable, loadAllowanceSchemaState } from './schema-guard';
 import { syncPlanDefaultSnapshot } from './snapshot';
+import { loadWorkspaceApprovalSchemaReady } from './workspace-approval-schema';
 import type {
   BrandAllowanceGrant,
+  BrandAllowanceGrantKind,
   BrandBillingFailureCode,
   BrandBillingOutcome,
   BrandPlanAllowanceDefault,
@@ -397,20 +400,67 @@ export async function loadActiveExtraGrantsTotal(
   return Math.max(0, Number(row?.extra ?? 0));
 }
 
+type GrantInput = z.infer<typeof GrantExtraInput>;
+
+/** The checks every grant passes before anything is written: amount, month (this KST month or the next), reason. */
+function checkGrantInput(
+  input: unknown,
+  now: Date,
+): { ok: true; value: GrantInput } | { ok: false; code: 'invalid'; field: string } {
+  const parsed = GrantExtraInput.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, code: 'invalid', field: (parsed.error.issues[0]?.path ?? []).map(String).join('.') };
+  }
+  if (!isAllowedGrantMonth(parsed.data.validMonth, now)) {
+    return { ok: false, code: 'invalid', field: 'validMonth' };
+  }
+  return { ok: true, value: parsed.data };
+}
+
+/**
+ * The grant insert, inside the caller's transaction. Without `kind` it is exactly the statement the manual operation
+ * has always run (the row takes the column default, `extra`). With `kind` (migration 0184, `BRAND_WORKSPACE_APPROVAL`
+ * callers only) it also writes `kind` / `carried_from` and yields to the unique rules (one original trial per
+ * organization, one carry per grant): `id: null` when such a row already exists.
+ */
+export async function insertAllowanceGrantInTx(
+  sql: SqlRunner,
+  input: unknown,
+  options: { createdBy: string | null; now: Date; kind?: 'trial'; carriedFrom?: string | null },
+): Promise<{ ok: true; id: string | null } | { ok: false; code: 'invalid'; field: string }> {
+  const checked = checkGrantInput(input, options.now);
+  if (!checked.ok) return checked;
+  const v = checked.value;
+  const id = randomUUID();
+  if (options.kind === undefined) {
+    await sql.query(
+      `insert into brand_allowance_grants (id, organization_id, amount_krw, valid_month, reason, created_by)
+         values ($1, $2, $3, $4, $5, $6)`,
+      [id, v.organizationId, v.amountKrw, v.validMonth, v.reason, options.createdBy],
+    );
+    return { ok: true, id };
+  }
+  const row = (
+    await sql.query<{ id: string }>(
+      `insert into brand_allowance_grants (id, organization_id, amount_krw, valid_month, reason, created_by, kind, carried_from)
+         values ($1, $2, $3, $4, $5, $6, $7, $8)
+       on conflict do nothing
+       returning id`,
+      [id, v.organizationId, v.amountKrw, v.validMonth, v.reason, options.createdBy, options.kind, options.carriedFrom ?? null],
+    )
+  ).rows[0];
+  return { ok: true, id: row ? String(row.id) : null };
+}
+
 export async function grantExtraAllowance(
   deps: { sql: SqlRunner; now?: () => Date },
   viewer: Viewer,
   input: unknown,
 ): Promise<BrandBillingOutcome<{ id: string }>> {
-  const parsed = GrantExtraInput.safeParse(input);
-  if (!parsed.success) {
-    return { ok: false, code: 'invalid', field: (parsed.error.issues[0]?.path ?? []).map(String).join('.') };
-  }
-  const v = parsed.data;
   const nowDate = deps.now?.() ?? new Date();
-  if (!isAllowedGrantMonth(v.validMonth, nowDate)) {
-    return { ok: false, code: 'invalid', field: 'validMonth' };
-  }
+  const checked = checkGrantInput(input, nowDate);
+  if (!checked.ok) return checked;
+  const v = checked.value;
   try {
     return await deps.sql.transaction(async (sql) => {
       const adminId = await requireDbAdmin(sql, viewer);
@@ -418,13 +468,9 @@ export async function grantExtraAllowance(
       if (!(await sql.query('select id from brand_organizations where id = $1 for update', [v.organizationId])).rows[0]) {
         return { ok: false as const, code: 'not_found' as const };
       }
-      const id = randomUUID();
-      await sql.query(
-        `insert into brand_allowance_grants (id, organization_id, amount_krw, valid_month, reason, created_by)
-           values ($1, $2, $3, $4, $5, $6)`,
-        [id, v.organizationId, v.amountKrw, v.validMonth, v.reason, adminId],
-      );
-      return { ok: true as const, id };
+      const inserted = await insertAllowanceGrantInTx(sql, v, { createdBy: adminId, now: nowDate });
+      if (!inserted.ok) return inserted;
+      return { ok: true as const, id: inserted.id! };
     });
   } catch (error) {
     return outcomeError(error);
@@ -461,6 +507,14 @@ export async function revokeExtraAllowance(
         v.grantId,
         adminId,
       ]);
+      // B1b: revoking an original trial grant also revokes what was carried from it, with the same audit trail, so no
+      // trial credit stays active. Only with BRAND_WORKSPACE_APPROVAL on and 0184 applied; off, as before.
+      if (brandWorkspaceApprovalOpen() && (await loadWorkspaceApprovalSchemaReady(sql))) {
+        await sql.query(
+          'update brand_allowance_grants set revoked_at = now(), revoked_by = $2 where carried_from = $1 and revoked_at is null',
+          [v.grantId, adminId],
+        );
+      }
       return { ok: true as const, id: String(row.id), organizationId: String(row.organization_id) };
     });
   } catch (error) {
@@ -476,6 +530,8 @@ export async function listExtraAllowanceGrants(
   if (!UUID.safeParse(organizationId).success) return [];
   if (!(await hasTable(sql, 'brand_allowance_grants'))) return [];
   const month = kstMonthOf(now);
+  // The grant kind (0184) is read only with BRAND_WORKSPACE_APPROVAL on and the columns present; off, the query is as before.
+  const withKind = brandWorkspaceApprovalOpen() && (await loadWorkspaceApprovalSchemaReady(sql));
   const { rows } = await sql.query<{
     id: string;
     organization_id: string;
@@ -486,8 +542,16 @@ export async function listExtraAllowanceGrants(
     created_at: unknown;
     revoked_at: unknown;
     revoked_by: string | null;
+    kind?: string;
+    carried_from?: string | null;
   }>(
-    `select id, organization_id, amount_krw, valid_month, reason,
+    withKind
+      ? `select id, organization_id, amount_krw, valid_month, reason,
+            created_by, created_at, revoked_at, revoked_by, kind, carried_from
+       from brand_allowance_grants
+      where organization_id = $1
+      order by created_at desc, id desc`
+      : `select id, organization_id, amount_krw, valid_month, reason,
             created_by, created_at, revoked_at, revoked_by
        from brand_allowance_grants
       where organization_id = $1
@@ -509,6 +573,12 @@ export async function listExtraAllowanceGrants(
       createdAt: stamp(r.created_at) ?? new Date(0).toISOString(),
       revokedAt,
       revokedBy: r.revoked_by ? String(r.revoked_by) : null,
+      ...(withKind
+        ? {
+            kind: (r.kind === 'trial' || r.kind === 'pack' ? r.kind : 'extra') as BrandAllowanceGrantKind,
+            carriedFrom: r.carried_from ? String(r.carried_from) : null,
+          }
+        : {}),
     };
   });
 }

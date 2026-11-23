@@ -120,6 +120,8 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
       'brand_usage_payments',
       'brand_usage_quotes',
       'brand_usage_scope_revisions',
+      // docs/BRAND-RECURRING-BILLING.md §6.5 (0184) — the admin's explicit workspace approval and its trial grant.
+      'brand_workspace_approvals',
       'brand_workspace_events',
       // docs/CAMPAIGNS.md (2026-09-03) — the paid cousin of contests: the campaign, one application per
       // creator walked through the state machine, and the same append-only write ledger the contest

@@ -31,6 +31,8 @@ import { loadOrganizationSupportSyncMode } from '@/lib/brands/team-notice-inbox'
 import { loadOrganizationStorageSummary } from '@/lib/brands/storage-quota';
 import { formatStorageBytes } from '@/lib/brands/storage-quota-format';
 import { loadBrandOrgDetailOps, ORG_JOB_STATUSES, orgJobStatusFilter } from '@/lib/admin/brand-org-detail';
+import { loadWorkspaceApprovalPanel } from '@/lib/brands/billing/workspace-approval';
+import { BrandWorkspaceApprovalCard } from '@/components/admin/brand-workspace-approval-card';
 import { formatBillingOutcomeDetail } from '@/lib/admin/brand-billing-console';
 import { formatAdminTime, formatCount, formatKrw, shortId } from '@/lib/admin/format';
 import { interpolate } from '@/lib/i18n/format';
@@ -108,6 +110,7 @@ export default async function StudioOrganization({
     supportSync,
     storageSummary,
     detailOps,
+    approvalPanel,
   ] = await Promise.all([
     loadBrandSupport({ sql }, viewer, id, true).then((r) => r ?? []),
     sql.query<{ id: string; project_id: string; name: string }>(
@@ -124,6 +127,8 @@ export default async function StudioOrganization({
     loadOrganizationSupportSyncMode(sql, id),
     loadOrganizationStorageSummary(sql, id).catch(() => null),
     loadBrandOrgDetailOps(sql, viewer, id, { jobStatus, env, now }),
+    // B1b: the workspace approval card (renders nothing while BRAND_WORKSPACE_APPROVAL is off).
+    loadWorkspaceApprovalPanel(sql, id, { now }),
   ]);
 
   const previews = previewsRes.rows;
@@ -499,6 +504,15 @@ export default async function StudioOrganization({
                   ),
                 })}
               </p>
+              {detailOps?.allowance?.planProration && (
+                <p data-plan-proration>
+                  {interpolate(od.billing.planProrationNote, {
+                    days: detailOps.allowance.planProration.days,
+                    periodDays: detailOps.allowance.planProration.periodDays,
+                    full: formatKrw(detailOps.allowance.planProration.fullKrw, locale),
+                  })}
+                </p>
+              )}
             </div>
             <OpForm op="brandBilling.planAndAllowance.set" back={`${backUrl}#billing`} className="grid gap-3">
               <input type="hidden" name="organizationId" value={id} />
@@ -771,6 +785,15 @@ export default async function StudioOrganization({
               <p className="admin-empty">{od.billing.noGrants}</p>
             )}
           </Panel>
+
+          <BrandWorkspaceApprovalCard
+            panel={approvalPanel}
+            sandboxed={isSandboxedOrg}
+            organizationId={id}
+            back={`${backUrl}#billing-workspace-approval`}
+            copy={od.workspaceApproval}
+            locale={locale}
+          />
         </div>
 
         <Panel title={od.billing.invoicesHeading} id="billing-invoices">

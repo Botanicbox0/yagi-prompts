@@ -333,6 +333,17 @@ export function brandWorkspacePrototypeLayerOpen(env: Record<string, string | un
 }
 
 /**
+ * docs/BRAND-RECURRING-BILLING.md §6.5 (B1b) — explicit workspace approval: the admin operation
+ * `brandWorkspace.approve` records the approval and grants the one-time trial credits, the hourly job carries an
+ * unused trial into the next month once, and an approved organization is exempt from the pre-approval upload limit.
+ * Default OFF: open only when the server environment says exactly `BRAND_WORKSPACE_APPROVAL=on`. Off means no query
+ * names the approval table or the grant `kind` / `carried_from` columns (migration 0184), exactly as before.
+ */
+export function brandWorkspaceApprovalOpen(env: Record<string, string | undefined> = process.env): boolean {
+  return env.BRAND_WORKSPACE_APPROVAL === 'on';
+}
+
+/**
  * Workspace team invitation e-mails (`invitation.create`). Default OFF: on only when the server
  * environment says exactly `BRAND_ORG_INVITE_EMAIL=on`. Off preserves link-only copy behavior.
  */

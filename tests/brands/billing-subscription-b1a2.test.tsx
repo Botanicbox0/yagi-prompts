@@ -188,6 +188,10 @@ const SUBSCRIBED_WRITERS: Record<string, string> = {
   'brandBilling.profile.set': 'billing profile only',
   'brandBilling.grant.create': 'credit grant only',
   'brandBilling.grant.revoke': 'credit grant only',
+  // B1b (BRAND_WORKSPACE_APPROVAL): writes brand_workspace_approvals and one trial row in brand_allowance_grants, never a
+  // plan, invoice or subscription row. Not refused for a subscribed organization: once per organization, the trial is
+  // added on top of its plan cap like any grant.
+  'brandWorkspace.approve': 'approval record + one trial credit grant only (allowed; added on top of the plan cap)',
   'brandEngine.plan': 'refused:subscription_managed',
   'brandSubscription.start': 'refused:subscription_exists',
   'brandSubscription.cancel': 'allowed',
