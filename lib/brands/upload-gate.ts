@@ -19,6 +19,8 @@
 import { studioEnv } from '../brand-studio/env';
 import { loadAllowance } from '../brand-studio/usage';
 import type { SqlRunner } from '../db/sql-runner';
+import { brandWorkspaceApprovalOpen } from '../flags';
+import { hasWorkspaceApproval, loadWorkspaceApprovalSchemaReady } from './billing/workspace-approval-schema';
 import {
   isUnapprovedUploadReason,
   UNAPPROVED_UPLOAD_MAX_FILES,
@@ -195,6 +197,12 @@ export async function isOrganizationUploadApproved(
 
   const createdMs = new Date(orgRow.created_at).getTime();
   if (Number.isFinite(createdMs) && createdMs < UPLOAD_GATE_APPLIES_FROM_MS) return true;
+
+  // 0) An admin approved the workspace (BRAND_WORKSPACE_APPROVAL, migration 0184): exempt for good, so the limit does
+  //    not come back when the trial credits run out. Flag off: not looked at, the checks below run exactly as before.
+  if (brandWorkspaceApprovalOpen() && (await loadWorkspaceApprovalSchemaReady(sql)) && (await hasWorkspaceApproval(sql, organizationId))) {
+    return true;
+  }
 
   // 1) Allowance cap > 0
   const allowance = await loadAllowance(sql, organizationId, studioEnv(), now);

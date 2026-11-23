@@ -20,7 +20,9 @@ import {
   kstMonthOf,
   PAID_BRAND_PLAN_IDS,
   planActiveWithGrace,
+  type PaidBrandPlanId,
 } from '@/lib/brands/billing/math';
+import { planCapForMonth, type PlanCapProration } from '@/lib/brands/billing/plan-credits';
 import { hasColumn, loadAllowanceSchemaState } from '@/lib/brands/billing/schema-guard';
 import type { StudioAllowanceView } from './contracts';
 import { STUDIO_CREDIT_KRW } from './credits';
@@ -63,6 +65,11 @@ export interface StudioAllowance {
   preferredLane: StudioLane | null;
   /** False when no explicit override or plan default applies and the env default is used. */
   configured: boolean;
+  /**
+   * Present only when `source` is `plan` and the plan started after the 1st of this KST month: `baseCapKrw` is then that
+   * month's share of the plan's full cap (`planCapForMonth`). Admin display only.
+   */
+  planProration?: PlanCapProration;
 }
 
 export async function usedKrwIn(sql: SqlRunner, organizationId: string, window: { start: Date; end: Date }): Promise<number> {
@@ -221,6 +228,7 @@ export async function loadAllowance(
   const preferredLane = lane && (STUDIO_LANES as readonly string[]).includes(lane) ? (lane as StudioLane) : null;
   let source: AllowanceSource = 'default';
   let baseCapKrw = env.defaultMonthlyKrw;
+  let planProration: PlanCapProration | null = null;
 
   if (isOverride && rowCap !== null) {
     source = 'override';
@@ -238,7 +246,10 @@ export async function loadAllowance(
     );
     if (active) {
       source = 'plan';
-      baseCapKrw = planDefaultCap;
+      // First month (B1b): a plan that started after the 1st of this month gives credits in the invoice's proportion.
+      const planMonth = planCapForMonth({ planId: planId as PaidBrandPlanId, fullCapKrw: planDefaultCap, startedOn: planStartedOn, month });
+      baseCapKrw = planMonth.capKrw;
+      planProration = planMonth.proration;
     }
   }
 
@@ -251,6 +262,7 @@ export async function loadAllowance(
     resetsAt: window.end.toISOString(),
     preferredLane,
     configured: isOverride || source === 'plan',
+    ...(planProration ? { planProration } : {}),
   };
 }
 

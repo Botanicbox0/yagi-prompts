@@ -144,6 +144,9 @@ export interface BrandInvoiceEvent {
   createdAt: string;
 }
 
+/** `extra`: a manual grant (the column default). `trial`: the workspace-approval trial or its carry. `pack`: reserved. */
+export type BrandAllowanceGrantKind = 'extra' | 'trial' | 'pack';
+
 export interface BrandAllowanceGrant {
   id: string;
   organizationId: string;
@@ -155,6 +158,10 @@ export interface BrandAllowanceGrant {
   createdAt: string;
   revokedAt: string | null;
   revokedBy: string | null;
+  /** Present only with `BRAND_WORKSPACE_APPROVAL=on` on a migrated schema (0184). */
+  kind?: BrandAllowanceGrantKind;
+  /** The grant this one carries into the next month; present with `kind`. */
+  carriedFrom?: string | null;
 }
 
 export interface CustomerBrandBillingView {
