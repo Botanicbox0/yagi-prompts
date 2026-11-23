@@ -41,20 +41,21 @@ import {
   upsertPlanAssignmentInTx,
   type BrandPlanId,
 } from '../plans';
+import { cycleContaining, cycleStartAt } from '../billing/cycle';
 import {
   addMonthsToPeriod,
+  currentRun,
+  cycleStartingOn,
   dueOnForInvoice,
   firstInvoiceRuleApplies,
   pendingPlanCarriedByInvoice,
   evaluateSubscription,
-  findAdminVoidedPeriods,
-  firstDayOfPeriod,
+  findAdminVoidedCycles,
   isPaidPlanId,
   nextPeriodOf,
   periodOfDay,
-  prorationFromDay,
   subscriptionNeedsReissue,
-  wasBillableOnDay,
+  type Cycle,
   type BrandCollectionMethod,
   type BrandInvoiceKind,
   type BrandSubscriptionStatus,
@@ -145,6 +146,8 @@ type ExtendedInvoiceRow = {
   created_via: string | null;
   issued_via: string | null;
   subscription_epoch: number | null;
+  cycle_start?: string | null;
+  cycle_end?: string | null;
   memo: string;
 };
 
@@ -349,7 +352,8 @@ async function loadInvoicesForEngine(
             voided_by::text as voided_by, void_reason, created_at,
             kind, covers_months, due_on::text as due_on, collection_method,
             tax_invoice_issued_on::text as tax_invoice_issued_on, tax_invoice_ref,
-            created_via, issued_via, subscription_epoch, memo
+            created_via, issued_via, subscription_epoch, memo,
+            cycle_start::text as cycle_start, cycle_end::text as cycle_end
        from brand_invoices
       where organization_id = $1
         and subscription_epoch = $2
@@ -401,6 +405,8 @@ function mapEngineInvoices(rows: readonly ExtendedInvoiceRow[]): EngineInvoice[]
     voidedBy: r.void_actor_kind,
     createdAt: stamp(r.created_at),
     createdVia: r.created_via === 'system' ? 'system' : r.created_via === 'admin' ? 'admin' : null,
+    cycleStart: r.cycle_start == null ? null : String(r.cycle_start).slice(0, 10),
+    cycleEnd: r.cycle_end == null ? null : String(r.cycle_end).slice(0, 10),
   }));
 }
 
@@ -434,12 +440,23 @@ export async function loadSubscriptionPanelFacts(
     subscription: toEngineSubscription(subscription),
     invoices,
     assignment: null,
-    olderEpochPeriods: await loadOlderEpochPeriods(sql, subscription),
+    olderEpochCycles: await loadOlderEpochCycles(sql, subscription),
   });
+  const current = evaluation.cycle.currentCycle;
   return {
-    currentPeriod,
-    waivedPeriods: evaluation.waivedPeriods,
-    currentPeriodWaived: evaluation.waivedPeriods.includes(currentPeriod),
+    // B1c-2: a subscription reissues its CURRENT cycle (or a new first invoice while waiting for the first payment).
+    currentPeriod: current ? periodOfDay(current.start) : currentPeriod,
+    currentCycle: current,
+    nextCycle: evaluation.cycle.nextCycle,
+    nextDraftDay: evaluation.cycle.nextDraftDay,
+    anchor: evaluation.cycle.anchor,
+    accessEnd: evaluation.accessEnd,
+    oldestUnpaid: evaluation.oldestUnpaid
+      ? { invoiceId: evaluation.oldestUnpaid.id, dueOn: evaluation.oldestUnpaid.dueOn }
+      : null,
+    firstInvoicePending: evaluation.firstInvoicePending,
+    waivedPeriods: evaluation.waivedCycles,
+    currentPeriodWaived: current !== null && evaluation.waivedCycles.includes(current.start),
     needsReissue: evaluation.needsReissue,
     nothingPaid,
     blockedByOlderEpoch: evaluation.blockedByOlderEpoch,
@@ -528,13 +545,15 @@ export async function recordReconcileFailure(sql: SqlRunner, organizationId: str
 async function refreshFutureSubscriptionDrafts(sql: SqlRunner, sub: BrandSubscription, now: Date): Promise<void> {
   if (!isPaidPlanId(sub.planId)) return;
   const currentPlan: PaidBrandPlanId = sub.planId;
-  const currentPeriod = periodOfDay(kstDayOf(now));
+  const today = kstDayOf(now);
   const rows = await loadInvoicesForEngine(sql, sub.organizationId, sub.epoch);
   const effectiveFrom = sub.pendingPlanEffectivePeriod ?? addMonthsToPeriod(periodOfDay(sub.startedOn), 1);
   for (const row of rows) {
-    if (row.kind !== 'subscription' || row.status !== 'draft' || String(row.period) <= currentPeriod) continue;
+    // B1c-2: the job's drafts of FUTURE cycles follow the plan in force for their cycle.
+    const start = row.cycle_start ? String(row.cycle_start).slice(0, 10) : null;
+    if (row.kind !== 'subscription' || row.status !== 'draft' || !start || start <= today) continue;
     const planFor: PaidBrandPlanId =
-      sub.pendingPlanId !== null && isPaidPlanId(sub.pendingPlanId) && String(row.period) >= effectiveFrom
+      sub.pendingPlanId !== null && isPaidPlanId(sub.pendingPlanId) && periodOfDay(start) >= effectiveFrom
         ? sub.pendingPlanId
         : currentPlan;
     const input = await computeCurrentDraftRefreshInput(sql, row, planFor, null);
@@ -547,6 +566,14 @@ async function refreshFutureSubscriptionDrafts(sql: SqlRunner, sub: BrandSubscri
     });
     if (!refreshed.ok) throw new BrandBillingDenied(refreshed.code, refreshed.detail ?? 'refresh_draft_failed');
   }
+}
+
+/** B1c-2: the latest subscription invoice of the cycle starting on `start` — the one a reissue replaces. */
+function latestSubscriptionInvoiceOfCycle(rows: readonly ExtendedInvoiceRow[], start: string): ExtendedInvoiceRow | null {
+  const list = rows
+    .filter((r) => r.kind === 'subscription' && r.cycle_start && String(r.cycle_start).slice(0, 10) === start)
+    .sort((a, b) => String(stamp(a.created_at) ?? '').localeCompare(String(stamp(b.created_at) ?? '')) || String(a.id).localeCompare(String(b.id)));
+  return list.at(-1) ?? null;
 }
 
 /** B1a-2: the latest subscription invoice of `period` (by creation) — the one a reissue replaces. */
@@ -569,19 +596,27 @@ function startDayForDayCount(days: number | null, period: string): string | null
 const MAX_BILLING_PASSES = 4;
 const MAX_RECONCILE_EVALUATIONS = 24;
 
-function isBillingAction(action: SubscriptionAction): boolean {
-  return action.type === 'void' || action.type === 'applyPendingPlan' || action.type === 'draft' || action.type === 'issue';
+type BillingAction = Extract<SubscriptionAction, { type: 'void' | 'setInvoiceCycle' | 'applyPendingPlan' | 'draft' | 'issue' }>;
+
+function isBillingAction(action: SubscriptionAction): action is BillingAction {
+  return (
+    action.type === 'void' ||
+    action.type === 'setInvoiceCycle' ||
+    action.type === 'applyPendingPlan' ||
+    action.type === 'draft' ||
+    action.type === 'issue'
+  );
 }
 
 function suppressBillingAction(
   action: SubscriptionAction,
-  evaluation: { calendar: { currentPeriod: string } },
+  evaluation: { cycle: { nextCycle: Cycle | null } },
   suppressBilling: Set<string>,
   suppressVoid: Set<string>,
 ): void {
-  if (action.type === 'void') suppressVoid.add(action.invoiceId);
-  else if (action.type === 'applyPendingPlan') suppressBilling.add(evaluation.calendar.currentPeriod);
-  else if (action.type === 'draft' || action.type === 'issue') suppressBilling.add(action.period);
+  if (action.type === 'void' || action.type === 'setInvoiceCycle') suppressVoid.add(action.invoiceId);
+  else if (action.type === 'applyPendingPlan') suppressBilling.add(evaluation.cycle.nextCycle?.start ?? '');
+  else if (action.type === 'draft' || action.type === 'issue') suppressBilling.add(action.cycleStart);
 }
 
 /** Run `fn` inside a savepoint: a failure rolls back only `fn`'s statements and is returned, not thrown. */
@@ -615,9 +650,18 @@ async function settleNullEpochInvoices(
   now: Date,
 ): Promise<{ adopted: string[]; voided: string[]; failures: string[] }> {
   const nowIso = now.toISOString();
-  const out = { adopted: [] as string[], voided: [] as string[], failures: [] as string[] };
-  const { rows } = await sql.query<{ id: string; status: BrandInvoiceStatus; period: string; issued_at: unknown; due_on: string | null }>(
-    `select id::text as id, status, period, issued_at, due_on::text as due_on
+  const out = { adopted: [] as string[], voided: [] as string[], held: [] as string[], failures: [] as string[] };
+  const { rows } = await sql.query<{
+    id: string;
+    status: BrandInvoiceStatus;
+    period: string;
+    issued_at: unknown;
+    due_on: string | null;
+    cycle_start: string | null;
+    cycle_end: string | null;
+  }>(
+    `select id::text as id, status, period, issued_at, due_on::text as due_on,
+            cycle_start::text as cycle_start, cycle_end::text as cycle_end
        from brand_invoices
       where organization_id = $1
         and subscription_epoch is null
@@ -652,22 +696,39 @@ async function settleNullEpochInvoices(
         return 'voided' as const;
       }
       const issueDay = stampKstDay(row.issued_at) ?? kstDayOf(now);
-      const dueOn =
-        row.due_on ??
-        dueOnForInvoice({
-          issueDay,
-          period: String(row.period),
-          method: sub.collectionMethod,
-          ...(!epochPaid && !sub.activatedBeforePayment ? { firstInvoiceWithoutEarlyAccess: { startedOn: sub.startedOn } } : {}),
-        });
+      // B1c-2, rule 11: an adopted invoice keeps its cycle; without one it gets the cycle of the anchor that starts
+      // in its month, and is held (left unadopted, counted) when there is no anchor or that cycle is taken.
+      let cycle: Cycle | null = row.cycle_start && row.cycle_end ? { start: String(row.cycle_start).slice(0, 10), end: String(row.cycle_end).slice(0, 10) } : null;
+      if (!cycle) {
+        const anchor = (await loadPlanAssignment(sql, sub.organizationId))?.startedOn ?? null;
+        const index = anchor
+          ? (Number(String(row.period).slice(0, 4)) - Number(anchor.slice(0, 4))) * 12 + (Number(String(row.period).slice(5, 7)) - Number(anchor.slice(5, 7)))
+          : -1;
+        if (!anchor || index < 0) return 'held' as const;
+        cycle = { start: cycleStartAt(anchor, index), end: cycleStartAt(anchor, index + 1) };
+        const taken = (
+          await sql.query(
+            `select 1 from brand_invoices
+              where organization_id = $1 and subscription_epoch = $2 and kind = 'subscription' and status <> 'void'
+                and cycle_start < $4::date and cycle_end > $3::date
+              limit 1`,
+            [sub.organizationId, sub.epoch, cycle.start, cycle.end],
+          )
+        ).rows[0];
+        if (taken) return 'held' as const;
+      }
+      void epochPaid;
+      const dueOn = row.due_on ?? dueOnForInvoice({ issueDay, cycleStart: cycle.start, method: sub.collectionMethod });
       const updated = (
         await sql.query(
           `update brand_invoices
               set subscription_epoch = $2,
-                  due_on = coalesce(due_on, $3::date)
+                  due_on = coalesce(due_on, $3::date),
+                  cycle_start = coalesce(cycle_start, $4::date),
+                  cycle_end = coalesce(cycle_end, $5::date)
             where id = $1 and subscription_epoch is null
             returning id`,
-          [id, sub.epoch, dueOn],
+          [id, sub.epoch, dueOn, cycle.start, cycle.end],
         )
       ).rows[0];
       if (!updated) return null;
@@ -688,6 +749,7 @@ async function settleNullEpochInvoices(
     });
     if (!res.ok) out.failures.push(`adopt:${reconcileErrorCode(res.error)}`.slice(0, RECONCILE_ERROR_MAX));
     else if (res.value === 'voided') out.voided.push(id);
+    else if (res.value === 'held') out.held.push(id);
     else if (res.value === 'adopted') out.adopted.push(id);
   }
   return out;
@@ -700,8 +762,8 @@ async function settleNullEpochInvoices(
  * organizations without a subscription.)
  */
 async function normaliseNullDueDates(sql: SqlRunner, sub: BrandSubscription, now: Date): Promise<string[]> {
-  const { rows } = await sql.query<{ id: string; period: string; issued_at: unknown }>(
-    `select id::text as id, period, issued_at
+  const { rows } = await sql.query<{ id: string; period: string; issued_at: unknown; cycle_start: string | null }>(
+    `select id::text as id, period, issued_at, cycle_start::text as cycle_start
        from brand_invoices
       where organization_id = $1 and subscription_epoch = $2 and kind = 'subscription'
         and status = 'issued' and due_on is null
@@ -725,11 +787,11 @@ async function normaliseNullDueDates(sql: SqlRunner, sub: BrandSubscription, now
   for (const row of rows) {
     step += 1;
     const res = await withSavepoint(sql, `subscription_due_${step}`, async () => {
+      void epochPaid;
       const dueOn = dueOnForInvoice({
         issueDay: stampKstDay(row.issued_at) ?? kstDayOf(now),
-        period: String(row.period),
+        cycleStart: row.cycle_start ? String(row.cycle_start).slice(0, 10) : null,
         method: sub.collectionMethod,
-        ...(!epochPaid && !sub.activatedBeforePayment ? { firstInvoiceWithoutEarlyAccess: { startedOn: sub.startedOn } } : {}),
       });
       const updated = (
         await sql.query('update brand_invoices set due_on = $2::date where id = $1 and due_on is null returning id', [row.id, dueOn])
@@ -758,20 +820,22 @@ function stampKstDay(value: unknown): string | null {
   return iso ? kstDayOf(new Date(iso)) : null;
 }
 
-async function loadOlderEpochPeriods(sql: SqlRunner, sub: BrandSubscription): Promise<string[]> {
-  const { rows } = await sql.query<{ period: string }>(
-    `select distinct period
+/** Cycles an OLDER epoch's non-void invoice occupies from this epoch's start on (never adopted; held). */
+async function loadOlderEpochCycles(sql: SqlRunner, sub: BrandSubscription): Promise<Cycle[]> {
+  const { rows } = await sql.query<{ cycle_start: string; cycle_end: string }>(
+    `select distinct cycle_start::text as cycle_start, cycle_end::text as cycle_end
        from brand_invoices
       where organization_id = $1
         and subscription_epoch is not null
         and subscription_epoch <> $2
         and kind = 'subscription'
         and status <> 'void'
-        and period >= $3
-      order by period`,
-    [sub.organizationId, sub.epoch, periodOfDay(sub.startedOn)],
+        and cycle_start is not null
+        and cycle_end > $3::date
+      order by cycle_start`,
+    [sub.organizationId, sub.epoch, sub.startedOn],
   );
-  return rows.map((r) => String(r.period));
+  return rows.map((r) => ({ start: String(r.cycle_start).slice(0, 10), end: String(r.cycle_end).slice(0, 10) }));
 }
 
 /**
@@ -843,7 +907,7 @@ export async function reconcileSubscriptionInTx(
   summary.voidedInvoiceIds.push(...settled.voided);
   summary.failures.push(...settled.failures);
   summary.failures.push(...(await normaliseNullDueDates(sql, sub, now)));
-  const olderEpochPeriods = await loadOlderEpochPeriods(sql, sub);
+  const olderEpochCycles = await loadOlderEpochCycles(sql, sub);
   const suppressBilling = new Set<string>();
   const suppressVoid = new Set<string>();
   let stepNo = 0;
@@ -861,7 +925,7 @@ export async function reconcileSubscriptionInTx(
       invoices: mapEngineInvoices(invoiceRows),
       assignment,
       sandboxed: false,
-      olderEpochPeriods,
+      olderEpochCycles,
       suppressBillingFor: [...suppressBilling],
       suppressVoidOf: [...suppressVoid],
     });
@@ -874,17 +938,42 @@ export async function reconcileSubscriptionInTx(
       }
     }
 
+    // B1c-2: drafts are keyed by their cycle start.
     const draftsByPeriod = new Map<string, ExtendedInvoiceRow>();
     for (const r of invoiceRows) {
-      if (r.kind === 'subscription' && r.status === 'draft') draftsByPeriod.set(String(r.period), r);
+      if (r.kind === 'subscription' && r.status === 'draft' && r.cycle_start) draftsByPeriod.set(String(r.cycle_start).slice(0, 10), r);
     }
 
     let failedThisPass = false;
     for (const action of evaluation.actions) {
-      if (action.type === 'void' || action.type === 'applyPendingPlan' || action.type === 'draft' || action.type === 'issue') {
+      if (isBillingAction(action)) {
         stepNo += 1;
         const result = await withSavepoint(sql, `subscription_step_${stepNo}`, async () => {
-          if (action.type === 'void') {
+          if (action.type === 'setInvoiceCycle') {
+            // Rule 4: the first payment starts cycle 0 on its paid day.
+            const set = (
+              await sql.query(
+                `update brand_invoices
+                    set cycle_start = $2::date, cycle_end = $3::date, period = $4
+                  where id = $1 and cycle_start is null and status = 'paid'
+                  returning id`,
+                [action.invoiceId, action.cycleStart, action.cycleEnd, periodOfDay(action.cycleStart)],
+              )
+            ).rows[0];
+            if (!set) throw new BrandBillingDenied('conflict', 'cycle_already_set');
+            await appendInvoiceEvent(sql, {
+              invoiceId: action.invoiceId,
+              organizationId,
+              action: 'edited',
+              fromStatus: 'paid',
+              toStatus: 'paid',
+              snapshot: { cycleStart: action.cycleStart, cycleEnd: action.cycleEnd },
+              note: 'first payment starts the billing cycle',
+              actorId: null,
+              actorKind: 'system',
+              createdAt: nowIso,
+            });
+          } else if (action.type === 'void') {
             const voided = await voidBrandInvoiceInTx(sql, SYSTEM_ACTOR, { invoiceId: action.invoiceId, reason: action.reason }, now, {
               recordActorKind: true,
             });
@@ -913,7 +1002,6 @@ export async function reconcileSubscriptionInTx(
               createdAt: nowIso,
             });
           } else if (action.type === 'draft') {
-            const prorate = prorationFromDay(action.prorateFromDay, action.period);
             const drafted = await draftBrandInvoiceInTx(
               sql,
               SYSTEM_ACTOR,
@@ -921,7 +1009,7 @@ export async function reconcileSubscriptionInTx(
                 organizationId,
                 period: action.period,
                 planId: action.planId,
-                prorate: prorate ?? false,
+                prorate: false,
                 applyActiveDiscount: true,
                 manualAmounts: false,
                 manualReason: '',
@@ -934,10 +1022,12 @@ export async function reconcileSubscriptionInTx(
                 dueOn: null,
                 collectionMethod: sub.collectionMethod,
                 subscriptionEpoch: sub.epoch,
+                cycleStart: action.cycleStart,
+                cycleEnd: action.cycleEnd,
               },
             );
             if (!drafted.ok) throw new BrandBillingDenied(drafted.code, `draft_failed${drafted.detail ? `:${drafted.detail}` : ''}`);
-            draftsByPeriod.set(action.period, {
+            draftsByPeriod.set(action.cycleStart, {
               id: drafted.invoice.id,
               organization_id: organizationId,
               period: drafted.invoice.period,
@@ -968,12 +1058,11 @@ export async function reconcileSubscriptionInTx(
               memo: drafted.invoice.memo,
             });
           } else {
-            const draftRow = draftsByPeriod.get(action.period);
+            const draftRow = draftsByPeriod.get(action.cycleStart);
             if (!draftRow) throw new BrandBillingDenied('conflict', 'missing_draft_for_issue');
             // Round 4, A: the job owns every subscription draft of the epoch and refreshes it to its rule.
-            // B4.4: the engine decides full month or prorated-from-today; a stale draft is refreshed to exactly that.
-            const targetProrate = prorationFromDay(action.prorateFromDay, action.period);
-            const refreshInput = await computeCurrentDraftRefreshInput(sql, draftRow, sub.planId, targetProrate);
+            // B1c-2: always the full monthly price of the plan in force (no proration anywhere).
+            const refreshInput = await computeCurrentDraftRefreshInput(sql, draftRow, sub.planId, null);
             if (refreshInput) {
               const refreshed = await updateDraftBrandInvoiceInTx(sql, SYSTEM_ACTOR, refreshInput, now, {
                 kind: 'subscription',
@@ -1007,7 +1096,9 @@ export async function reconcileSubscriptionInTx(
         }
         if (action.type === 'void') {
           summary.voidedInvoiceIds.push(action.invoiceId);
-          if (draftsByPeriod.get(action.period)?.id === action.invoiceId) draftsByPeriod.delete(action.period);
+          if (action.cycleStart && draftsByPeriod.get(action.cycleStart)?.id === action.invoiceId) draftsByPeriod.delete(action.cycleStart);
+        } else if (action.type === 'setInvoiceCycle') {
+          // nothing to count: the first payment's cycle is written
         } else if (action.type === 'applyPendingPlan') {
           summary.planChanged = true;
         } else if (action.type === 'draft') {
@@ -1351,16 +1442,10 @@ export async function startSubscription(
         return { ok: false as const, code: 'invalid' as const, field: 'billingProfile', detail: 'billing_profile_required' };
       }
 
-      // Round 3, item 1: a first invoice without early access is due within its own month, so the first-invoice
-      // expiry (the day after that month) can never come before the due date. With early access: issue + 14.
-      const dueOn = v.activateBeforePayment
-        ? dueOnForInvoice({ issueDay: todayKst, period: currentMonth, method: 'transfer' })
-        : dueOnForInvoice({
-            issueDay: todayKst,
-            period: currentMonth,
-            method: 'transfer',
-            firstInvoiceWithoutEarlyAccess: { startedOn },
-          });
+      // B1c-2, rules 4–5: the first invoice is the full price, due on the start day + 14. With early access cycle 0
+      // starts on the start day; without, the invoice has NO cycle until its payment is confirmed (rule 4).
+      const dueOn = dueOnForInvoice({ issueDay: startedOn, method: 'transfer' });
+      const firstCycle = v.activateBeforePayment ? { start: startedOn, end: cycleStartAt(startedOn, 1) } : null;
       // A1: refuse when a non-void subscription invoice already exists for the start period — or for a later
       // period: the (organization, period) uniqueness is global, so the engine could never draft that month.
       const existingPeriodSubInv = (
@@ -1376,13 +1461,14 @@ export async function startSubscription(
         return { ok: false as const, code: 'conflict' as const, detail: 'period_already_invoiced' };
       }
 
-      const prorate = proposeProration(startedOn, currentMonth);
-      const amounts = await derivedInvoiceAmounts(sql, v.organizationId, paidPlanId, prorate);
+      const amounts = await derivedInvoiceAmounts(sql, v.organizationId, paidPlanId, null);
       const previewValues = {
         organizationId: v.organizationId,
         planId: paidPlanId,
         startedOn,
         dueOn,
+        cycleStart: firstCycle?.start ?? null,
+        cycleEnd: firstCycle?.end ?? null,
         proratedDays: amounts.proratedDays,
         periodDays: amounts.periodDays,
         discountPercent: amounts.discountPct,
@@ -1392,8 +1478,8 @@ export async function startSubscription(
         activateBeforePayment: v.activateBeforePayment,
       };
       const digest = previewDigest(previewValues);
-      // Round 3, item 1: warn when the first invoice leaves fewer than 3 days to pay inside the starting month.
-      const shortPaymentWindow = !v.activateBeforePayment && diffCalendarDays(dueOn, startedOn) < 3;
+      // B1c-2: the due date is always the start day + 14 now, so the payment window is never short.
+      const shortPaymentWindow = false;
       // Round 4, B8: exactly two modes — `previewOnly`, or `confirm` with the digest of the preview the admin saw.
       if (v.previewOnly) {
         return { ok: true as const, applied: false as const, preview: { ...previewValues, digest, shortPaymentWindow } };
@@ -1443,7 +1529,7 @@ export async function startSubscription(
           organizationId: v.organizationId,
           period: currentMonth,
           planId: paidPlanId,
-          prorate: prorate ?? false,
+          prorate: false,
           applyActiveDiscount: true,
           manualAmounts: false,
           manualReason: '',
@@ -1456,6 +1542,8 @@ export async function startSubscription(
           dueOn: null,
           collectionMethod: 'transfer',
           subscriptionEpoch: nextEpoch,
+          cycleStart: firstCycle?.start ?? null,
+          cycleEnd: firstCycle?.end ?? null,
         },
       );
       if (!drafted.ok) throw new BrandBillingDenied(drafted.code, drafted.detail);
@@ -1575,9 +1663,14 @@ export async function cancelSubscription(
         if (!hasAnyPaid) {
           if (inv.status === 'draft' || inv.status === 'issued') reason = 'subscription_canceled_unpaid';
         } else if (inv.status === 'draft') {
-          if (inv.period > currentPeriod) reason = 'subscription_canceled_future_draft';
-          else if (inv.period === currentPeriod) reason = 'subscription_canceled_current_draft';
-        } else if (inv.status === 'issued' && inv.period > currentPeriod) {
+          // B1c-2: by cycle — a draft of a later cycle, or of the cycle containing today.
+          const start = inv.cycle_start ? String(inv.cycle_start).slice(0, 10) : null;
+          if (start ? start > kstDayOf(nowDate) : String(inv.period) > currentPeriod) reason = 'subscription_canceled_future_draft';
+          else reason = 'subscription_canceled_current_draft';
+        } else if (
+          inv.status === 'issued' &&
+          (inv.cycle_start ? String(inv.cycle_start).slice(0, 10) > kstDayOf(nowDate) : String(inv.period) > currentPeriod)
+        ) {
           // Round 5, A5: guard — nothing of a later month survives a cancel (a paid one extends the end instead).
           reason = 'subscription_canceled_future_invoice';
         }
@@ -1727,12 +1820,18 @@ export async function scheduleDowngrade(
   const targetPlanId: PaidBrandPlanId = planId;
   const nowDate = deps.now?.() ?? new Date();
   const nowIso = nowDate.toISOString();
-  const effectiveFromPeriod = nextPeriodOf(kstMonthOf(nowDate));
+  let effectiveFromPeriod = nextPeriodOf(kstMonthOf(nowDate));
 
   try {
     return await deps.sql.transaction(async (sql) => {
       const adminId = await requireDbAdmin(sql, viewer);
       if (!brandBillingAutoIssueOpen(deps.env)) return { ok: false as const, code: 'disabled' as const };
+      // B1c-2, rule 10: the downgrade applies to the first cycle that starts after today (anchor = plan start).
+      const anchorAssignment = await loadPlanAssignment(sql, organizationId);
+      if (anchorAssignment) {
+        const next = cycleContaining(anchorAssignment.startedOn, kstDayOf(nowDate))?.end ?? anchorAssignment.startedOn;
+        effectiveFromPeriod = periodOfDay(next);
+      }
       if (!(await loadSubscriptionSchemaReady(sql))) return { ok: false as const, code: 'unavailable' as const };
 
       const orgGate = await lockOrgNotSandboxed(sql, organizationId);
@@ -1883,7 +1982,7 @@ export interface ReissuePeriodPreview {
   supplyKrw: number;
   vatKrw: number;
   totalKrw: number;
-  /** Why it may be reissued: the admin voided this month, or nothing was ever paid and nothing is open. */
+  /** Why it may be reissued: the admin voided the current cycle, or nothing was ever paid and nothing is open. */
   reason: 'admin_voided' | 'needs_reissue';
   digest: string;
   /** Round 4, B9: a first invoice due fewer than 3 days after it is issued (shown, not part of the digest). */
@@ -1891,12 +1990,12 @@ export interface ReissuePeriodPreview {
 }
 
 /**
- * Reissue the CURRENT KST period through the service (two-step confirm bound to the preview digest):
- * - the latest invoice of this month was voided by an admin (while this month is current), or
- * - review round 2, item 3: nothing was ever paid and nothing is open in this epoch (voided or expired first
- *   invoice) — allowed in any later month, for the current month prorated from today.
- * Proration obeys B4.4 (full month if billable on the 1st, else prorated from today); a full month carries a
- * due downgrade (B4.3). Early access, if granted, applies again through the engine's normal rule.
+ * Reissue through the service (two-step confirm bound to the preview digest), B1c-2 rule 9 and rule 4:
+ * - the latest invoice of the CURRENT cycle was voided by an admin (only while that cycle is current): the new
+ *   invoice has the same cycle dates, the full price with the discount then in force, and the SAME due date; or
+ * - nothing was ever paid and nothing is open in this epoch (voided or expired first invoice, no early access): a
+ *   new first invoice at full price, due today + 14, without a cycle (the cycle starts on its paid date).
+ * No proration anywhere. Early access, if granted, applies again through the engine's normal rule.
  */
 export async function reissueSubscriptionPeriod(
   deps: { sql: SqlRunner; now?: () => Date; env?: Record<string, string | undefined>; graceDays?: number },
@@ -1928,9 +2027,6 @@ export async function reissueSubscriptionPeriod(
       const orgGate = await lockOrgNotSandboxed(sql, v.organizationId);
       if (!orgGate.ok) return orgGate;
 
-      if (v.period !== currentMonth) {
-        return { ok: false as const, code: 'invalid' as const, field: 'period', detail: 'reissue_current_period_only' };
-      }
 
       const row = (
         await sql.query<SubscriptionRow>(
@@ -1949,71 +2045,59 @@ export async function reissueSubscriptionPeriod(
 
       const invoiceRows = await loadInvoicesForEngine(sql, v.organizationId, sub.epoch);
       const engineInvoices = mapEngineInvoices(invoiceRows);
-      const nonVoidForPeriod = engineInvoices.some(
-        (i) => i.kind === 'subscription' && i.status !== 'void' && i.period === v.period,
+      // B1c-2, rule 9: `reissueCycle` — the CURRENT cycle only (same cycle dates, full price with the discount then in
+      // force, the SAME due date as the voided invoice). While nothing is paid and there is no early access the
+      // subscription waits for its first payment: a new first invoice without a cycle, due today + 14.
+      const engineSub = toEngineSubscription(sub);
+      const needsReissue = subscriptionNeedsReissue(engineSub, engineInvoices);
+      const freshFirstInvoice = needsReissue && firstInvoiceRuleApplies(engineSub, engineInvoices);
+      const run = currentRun(engineInvoices, todayKst);
+      const current = run ? cycleContaining(run.anchor, todayKst) : null;
+      const targetCycle: Cycle | null = freshFirstInvoice ? null : current ? cycleStartingOn(run!.anchor, current.start) : null;
+      const targetPeriod = targetCycle ? periodOfDay(targetCycle.start) : currentMonth;
+      if (v.period !== targetPeriod) {
+        return { ok: false as const, code: 'invalid' as const, field: 'period', detail: 'reissue_current_period_only' };
+      }
+      if (!freshFirstInvoice && !targetCycle) {
+        return { ok: false as const, code: 'conflict' as const, detail: 'period_not_admin_voided' };
+      }
+      const nonVoidForTarget = engineInvoices.some(
+        (i) =>
+          i.kind === 'subscription' &&
+          i.status !== 'void' &&
+          (targetCycle ? i.cycleStart === targetCycle.start : !i.cycleStart),
       );
-      const reason: ReissuePeriodPreview['reason'] | null = nonVoidForPeriod
+      const reason: ReissuePeriodPreview['reason'] | null = nonVoidForTarget
         ? null
-        : findAdminVoidedPeriods(engineInvoices).includes(v.period)
+        : targetCycle && findAdminVoidedCycles(engineInvoices).includes(targetCycle.start)
           ? 'admin_voided'
-          : subscriptionNeedsReissue(toEngineSubscription(sub), engineInvoices)
+          : needsReissue
             ? 'needs_reissue'
             : null;
       if (reason === null) {
         return { ok: false as const, code: 'conflict' as const, detail: 'period_not_admin_voided' };
       }
-
-      // B1a-2, item 1: a reissue re-issues the SAME month — the same day count and due date as the invoice it
-      // replaces (a full month stays full, a resumed or first month keeps its days), never re-priced from today.
-      // Exception: nothing was ever paid AND the first-invoice rule applies (no early access) — a new first
-      // invoice, prorated from today when the month was not billable on its 1st, due by the first-invoice rule.
-      // With early access the customer had access from the start, so the voided invoice is copied as well.
-      // (Nothing of this period to copy — e.g. an earlier month's first invoice expired — keeps that behaviour.)
-      const freshFirstInvoice =
-        subscriptionNeedsReissue(toEngineSubscription(sub), engineInvoices) &&
-        firstInvoiceRuleApplies(toEngineSubscription(sub), engineInvoices);
-      const replaced = freshFirstInvoice ? null : latestSubscriptionInvoiceOfPeriod(invoiceRows, v.period);
-      let prorateFromDay: string | null;
-      if (replaced) {
-        prorateFromDay = startDayForDayCount(replaced.prorated_days, v.period);
-      } else {
-        const billableOnFirst = wasBillableOnDay({
-          targetDay: firstDayOfPeriod(v.period),
-          graceDays,
-          subscription: toEngineSubscription(sub),
-          invoices: engineInvoices,
-        });
-        prorateFromDay = billableOnFirst ? null : todayKst;
-      }
-      const billableOnFirst = prorateFromDay === null;
-      const prorate = prorationFromDay(prorateFromDay, v.period);
-
+      const replaced = targetCycle ? latestSubscriptionInvoiceOfCycle(invoiceRows, targetCycle.start) : null;
+      const prorate = null;
       const effectiveFromPeriod =
         sub.pendingPlanEffectivePeriod ?? addMonthsToPeriod(periodOfDay(sub.startedOn), 1);
       const shouldApplyPending =
+        targetCycle !== null &&
         sub.pendingPlanId !== null &&
         isPaidPlanId(sub.pendingPlanId) &&
         sub.pendingPlanId !== sub.planId &&
-        billableOnFirst &&
-        v.period >= effectiveFromPeriod;
+        targetPeriod >= effectiveFromPeriod;
       const planToBill: PaidBrandPlanId = shouldApplyPending ? (sub.pendingPlanId as PaidBrandPlanId) : sub.planId;
-      // Round 3, items 1 and 3: a subscription with nothing paid and no early access reissues a first invoice
-      // (it expires the day after its month), due inside that month; otherwise max(today, 1st of the period) + 14.
-      const firstInvoiceRule = firstInvoiceRuleApplies(toEngineSubscription(sub), engineInvoices);
-      const dueOn =
-        replaced?.due_on ??
-        dueOnForInvoice({
-          issueDay: todayKst,
-          period: v.period,
-          method: sub.collectionMethod,
-          ...(firstInvoiceRule ? { firstInvoiceWithoutEarlyAccess: { startedOn: sub.startedOn } } : {}),
-        });
+      const firstInvoiceRule = freshFirstInvoice;
+      const dueOn = replaced?.due_on ?? dueOnForInvoice({ issueDay: todayKst, cycleStart: targetCycle?.start ?? null, method: sub.collectionMethod });
       const amounts = await derivedInvoiceAmounts(sql, v.organizationId, planToBill, prorate);
       const previewValues = {
         organizationId: v.organizationId,
         period: v.period,
+        cycleStart: targetCycle?.start ?? null,
+        cycleEnd: targetCycle?.end ?? null,
         planId: planToBill,
-        prorateFromDay,
+        prorateFromDay: null as string | null,
         dueOn,
         proratedDays: amounts.proratedDays,
         periodDays: amounts.periodDays,
@@ -2025,7 +2109,8 @@ export async function reissueSubscriptionPeriod(
       };
       const digest = previewDigest(previewValues);
 
-      const shortPaymentWindow = firstInvoiceRule && diffCalendarDays(dueOn, todayKst) < 3;
+      void firstInvoiceRule;
+      const shortPaymentWindow = false;
       if (v.previewOnly) {
         return { ok: true as const, applied: false as const, preview: { ...previewValues, digest, shortPaymentWindow } };
       }
@@ -2072,7 +2157,7 @@ export async function reissueSubscriptionPeriod(
           organizationId: v.organizationId,
           period: v.period,
           planId: planToBill,
-          prorate: prorate ?? false,
+          prorate: false,
           applyActiveDiscount: true,
           manualAmounts: false,
           manualReason: '',
@@ -2085,6 +2170,8 @@ export async function reissueSubscriptionPeriod(
           dueOn: null,
           collectionMethod: sub.collectionMethod,
           subscriptionEpoch: sub.epoch,
+          cycleStart: targetCycle?.start ?? null,
+          cycleEnd: targetCycle?.end ?? null,
         },
       );
       if (!drafted.ok) throw new BrandBillingDenied(drafted.code, drafted.detail);

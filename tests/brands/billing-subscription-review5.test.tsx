@@ -234,7 +234,9 @@ describe('B1a review round 5 — A: the job is the only issuer', () => {
     const [dec] = await invoiceOf(orgId, '2026-12');
     await markBrandInvoicePaid({ sql, now: at('2027-01-09T03:00:00Z') }, ADMIN_VIEWER, { invoiceId: dec!.id, paidMethod: 'transfer', paidAt: '2027-01-09' });
     const [janNow] = await invoiceOf(orgId, '2027-01');
-    expect(janNow).toMatchObject({ id: jan!.id, status: 'issued', proratedDays: 23 });
+    // B1c-2, rule 8: a new cycle starts on the paid date (full price); the old anchor's January draft is voided.
+    expect(janNow).toMatchObject({ status: 'issued', proratedDays: null, cycleStart: '2027-01-09' });
+    expect(await invoiceRow(jan!.id)).toMatchObject({ status: 'void' });
   });
 
   it('A1 probe: a discount granted after the D-7 draft is applied by the job on issue day (no hand-issue at the old amount)', async () => {
@@ -298,7 +300,7 @@ describe('B1a review round 5 — A: the job is the only issuer', () => {
     expect(await invoiceRow(dec!.id)).toMatchObject({ status: 'void', void_reason: 'subscription_canceled_future_invoice' });
     await runBrandSubscriptionTick({ sql, now: at('2026-11-27T02:00:00Z') });
     const added = (await notices()).slice(before).map((n) => n.preview).join('\n');
-    expect(added).toContain('해지(다음 달 청구서) 1건');
+    expect(added).toContain('해지(다음 주기 청구서) 1건');
     // The subscription ends with November; nothing is left for a later month.
     await runBrandSubscriptionTick({ sql, now: at('2026-12-01T01:00:00Z') });
     expect(await loadBrandSubscription(sql, orgId)).toMatchObject({ status: 'ended' });
@@ -441,7 +443,7 @@ describe('B1a review round 5 — B: remaining findings', () => {
     expect((admin as { detail?: string }).detail).toMatch(/^reconcile_failed:access:syncAssignment:/);
     await sql.query('drop trigger test_fail_plan on brand_plan_assignments');
     expect(await reconcileSubscriptionAdmin({ sql, now: at('2026-11-05T03:00:00Z') }, ADMIN_VIEWER, { organizationId: orgId })).toMatchObject({ ok: true });
-    expect(await loadPlanAssignment(sql, orgId)).toMatchObject({ endsOn: '2026-12-01' });
+    expect(await loadPlanAssignment(sql, orgId)).toMatchObject({ endsOn: '2026-12-05' });
   });
 
   it('B3: a null due date on an issued invoice of the epoch is normalised once, with a system event', async () => {

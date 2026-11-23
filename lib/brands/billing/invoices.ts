@@ -38,6 +38,9 @@ export interface SubscriptionInvoiceWriteMeta {
   dueOn: string | null;
   collectionMethod: 'transfer' | 'card' | null;
   subscriptionEpoch?: number | null;
+  /** B1c-2: the billing cycle of a subscription invoice (null: a first invoice waiting for its payment). */
+  cycleStart?: string | null;
+  cycleEnd?: string | null;
 }
 
 /** What the post-commit reconcile reports back: a failed step, and whether it cost the customer access. */
@@ -548,10 +551,19 @@ export async function draftBrandInvoiceInTx(
   const targetKind = subscriptionMeta?.kind ?? 'subscription';
   const conflict = (
     subscriptionMeta
-      ? await sql.query(
-          "select 1 from brand_invoices where organization_id = $1 and period = $2 and status <> 'void' and kind = $3 limit 1",
-          [v.organizationId, v.period, targetKind],
-        )
+      ? subscriptionMeta.cycleStart && subscriptionMeta.cycleEnd
+        ? // B1c-2: one non-void subscription invoice per cycle, and cycles never overlap.
+          await sql.query(
+            `select 1 from brand_invoices
+              where organization_id = $1 and status <> 'void' and kind = $4
+                and cycle_start < $3::date and cycle_end > $2::date
+              limit 1`,
+            [v.organizationId, subscriptionMeta.cycleStart, subscriptionMeta.cycleEnd, targetKind],
+          )
+        : await sql.query(
+            "select 1 from brand_invoices where organization_id = $1 and period = $2 and status <> 'void' and kind = $3 and cycle_start is null limit 1",
+            [v.organizationId, v.period, targetKind],
+          )
       : await sql.query(
           "select 1 from brand_invoices where organization_id = $1 and period = $2 and status <> 'void' limit 1",
           [v.organizationId, v.period],
@@ -589,9 +601,9 @@ export async function draftBrandInvoiceInTx(
              id, organization_id, period, plan_id, base_list_krw, list_krw, prorated_days, period_days,
              discount_id, discount_percent, discount_krw, supply_krw, vat_krw, total_krw,
              manual_amounts, manual_reason, status, memo, created_by, created_at, updated_by, updated_at,
-             kind, covers_months, due_on, collection_method, created_via, subscription_epoch
+             kind, covers_months, due_on, collection_method, created_via, subscription_epoch, cycle_start, cycle_end
            ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, 'draft', $17, $18, $19::timestamptz, $18, $19::timestamptz,
-                     $20, $21, $22::date, $23, $24, $25)
+                     $20, $21, $22::date, $23, $24, $25, $26::date, $27::date)
            returning *`,
           [
             id,
@@ -619,6 +631,8 @@ export async function draftBrandInvoiceInTx(
             subscriptionMeta.collectionMethod,
             actor.kind,
             subscriptionMeta.subscriptionEpoch ?? null,
+            subscriptionMeta.cycleStart ?? null,
+            subscriptionMeta.cycleEnd ?? null,
           ],
         )
       ).rows[0]!
@@ -1296,11 +1310,16 @@ export async function issueBrandInvoiceInTx(
   if (!invoiceRowConsistent(row)) {
     return { ok: false, code: 'conflict', detail: 'inconsistent_amounts' };
   }
-  // Review round 4, B4: a subscription draft of a month that has ended is never issued (admin or job).
+  // Review round 4, B4 / B1c-2: a subscription draft whose cycle has ended is never issued by the job.
+  const rowCycleEnd = subscriptionMeta
+    ? ((await sql.query<{ cycle_end: string | null }>('select cycle_end::text as cycle_end from brand_invoices where id = $1', [row.id])).rows[0]
+        ?.cycle_end ?? null)
+    : null;
   if (
     subscriptionMeta &&
     String((row as unknown as { kind?: string }).kind ?? 'subscription') === 'subscription' &&
-    String(row.period) < kstDayOf(nowDate).slice(0, 7)
+    rowCycleEnd != null &&
+    String(rowCycleEnd).slice(0, 10) <= kstDayOf(nowDate)
   ) {
     return { ok: false, code: 'conflict', detail: 'period_ended' };
   }

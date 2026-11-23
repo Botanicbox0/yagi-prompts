@@ -165,7 +165,7 @@ describe('B1a review round 2', () => {
       expect(await loadPlanAssignment(f.sql, f.orgId), iso).toMatchObject({ endsOn: '2027-01-01' });
     }
     const panelDec = await loadBrandOrgDetailOps(f.sql, admin(), f.orgId, { now: new Date('2026-12-10T01:00:00Z') });
-    expect(panelDec?.subscriptionPanel?.facts).toMatchObject({ currentPeriodWaived: true, waivedPeriods: ['2026-12'], needsReissue: false });
+    expect(panelDec?.subscriptionPanel?.facts).toMatchObject({ currentPeriodWaived: true, waivedPeriods: ['2026-12-01'], needsReissue: false });
     await runBrandSubscriptionTick({ sql: f.sql, now: at('2027-01-01T01:00:00Z') });
     const jan = (await listBrandInvoices(f.sql, { organizationId: f.orgId })).find((i) => i.period === '2027-01');
     expect(jan).toMatchObject({ status: 'issued', proratedDays: null });
@@ -174,10 +174,10 @@ describe('B1a review round 2', () => {
       await reissueCompat({ sql: f.sql, now: at('2027-01-05T01:00:00Z') }, admin(), { organizationId: f.orgId, period: '2026-12' }),
     ).toMatchObject({ ok: false, field: 'period', detail: 'reissue_current_period_only' });
     const panelJan = await loadBrandOrgDetailOps(f.sql, admin(), f.orgId, { now: new Date('2027-01-05T01:00:00Z') });
-    expect(panelJan?.subscriptionPanel?.facts).toMatchObject({ currentPeriodWaived: false, waivedPeriods: ['2026-12'] });
+    expect(panelJan?.subscriptionPanel?.facts).toMatchObject({ currentPeriodWaived: false, waivedPeriods: ['2026-12-01'] });
   });
 
-  it('item 3: a never-paid first invoice expires with its month (system void, discount returned), the subscription waits with an alert, and reissue works in a later month', async () => {
+  it('item 3 (B1c-2 rule 4): a never-paid first invoice expires when today > due + 14 (system void, discount returned), the subscription waits with an alert, and reissue works in a later month', async () => {
     await f.sql.query(
       "insert into brand_discounts (organization_id, percent, invoices_total, status, created_by) values ($1, 10, 1, 'active', $2)",
       [f.orgId, f.ids.admin],
@@ -188,12 +188,13 @@ describe('B1a review round 2', () => {
       startedOn: '2026-11-20',
     });
     if (!s.ok || !s.applied) throw new Error('start failed');
-    // Round 4, B3: expiry comes 7 days after the month (a payment made on time can still be recorded).
-    for (const iso of ['2026-11-30T01:00:00Z', '2026-12-01T01:00:00Z', '2026-12-07T01:00:00Z']) {
+    // B1c-2, rule 4: due on the start day + 14 (Dec 4); voided when today > due + 14 (Dec 19).
+    expect(await invoiceRow(s.firstInvoiceId)).toMatchObject({ due_on: '2026-12-04' });
+    for (const iso of ['2026-12-04T01:00:00Z', '2026-12-10T01:00:00Z', '2026-12-18T01:00:00Z']) {
       await runBrandSubscriptionTick({ sql: f.sql, now: at(iso) });
       expect(await invoiceRow(s.firstInvoiceId), iso).toMatchObject({ status: 'issued' });
     }
-    const dec = await runBrandSubscriptionTick({ sql: f.sql, now: at('2026-12-08T01:00:00Z') });
+    const dec = await runBrandSubscriptionTick({ sql: f.sql, now: at('2026-12-19T01:00:00Z') });
     expect(dec).toMatchObject({ voided: 1, issued: 0, drafted: 0 });
     expect(await invoiceRow(s.firstInvoiceId)).toMatchObject({ status: 'void', voided_by: null, void_reason: 'first_invoice_expired' });
     const event = (
@@ -211,7 +212,8 @@ describe('B1a review round 2', () => {
     expect(panel?.subscriptionPanel?.facts).toMatchObject({ needsReissue: true, nothingPaid: true });
 
     const preview = await reissueCompat({ sql: f.sql, now: at('2027-01-10T01:00:00Z') }, admin(), { organizationId: f.orgId, period: '2027-01' });
-    expect(preview).toMatchObject({ ok: true, applied: false, preview: { reason: 'needs_reissue', prorateFromDay: '2027-01-10', proratedDays: 22, periodDays: 31 } });
+    // B1c-2: a new first invoice without a cycle, full price, due today + 14 (no proration anywhere).
+    expect(preview).toMatchObject({ ok: true, applied: false, preview: { reason: 'needs_reissue', prorateFromDay: null, proratedDays: null, cycleStart: null, dueOn: '2027-01-24' } });
     if (!preview.ok || preview.applied) return;
     const applied = await reissueCompat({ sql: f.sql, now: at('2027-01-10T01:00:00Z') }, admin(), {
       organizationId: f.orgId,
@@ -219,7 +221,7 @@ describe('B1a review round 2', () => {
       confirm: true,
       previewDigest: preview.preview.digest,
     });
-    expect(applied).toMatchObject({ ok: true, applied: true, invoice: { status: 'issued', period: '2027-01', proratedDays: 22 } });
+    expect(applied).toMatchObject({ ok: true, applied: true, invoice: { status: 'issued', period: '2027-01', proratedDays: null } });
     expect(await loadBrandSubscription(f.sql, f.orgId)).toMatchObject({ status: 'pending' });
   });
 
@@ -239,16 +241,16 @@ describe('B1a review round 2', () => {
       expect(await runBrandSubscriptionTick({ sql: f.sql, now: at(iso) }), iso).toMatchObject({ drafted: 0, issued: 0 });
       expect(await loadPlanAssignment(f.sql, f.orgId), iso).toBeNull();
     }
-    const preview = await reissueCompat({ sql: f.sql, now: at('2026-12-15T01:00:00Z') }, admin(), { organizationId: f.orgId, period: '2026-12' });
+    const preview = await reissueCompat({ sql: f.sql, now: at('2026-12-15T01:00:00Z') }, admin(), { organizationId: f.orgId, period: '2026-11' });
     if (!preview.ok || preview.applied) throw new Error('preview failed');
     await reissueCompat({ sql: f.sql, now: at('2026-12-15T01:00:00Z') }, admin(), {
       organizationId: f.orgId,
-      period: '2026-12',
+      period: '2026-11',
       confirm: true,
       previewDigest: preview.preview.digest,
     });
-    // Early access applies again: open through the new due date.
-    expect(await loadPlanAssignment(f.sql, f.orgId)).toMatchObject({ endsOn: '2026-12-29' });
+    // B1c-2: the reissue copies the voided cycle [Nov 20, Dec 20) and its due date (Dec 4); early access applies again.
+    expect(await loadPlanAssignment(f.sql, f.orgId)).toMatchObject({ endsOn: '2026-12-04' });
   });
 
   it('item 5: plan edits are refused while a subscription owns the plan; allowance-only changes keep working', async () => {
@@ -329,29 +331,28 @@ describe('B1a review round 2', () => {
     expect(panel?.subscriptionPanel?.facts).toMatchObject({ graceDays: 0 });
   });
 
-  it('item 8: the job voids its own stale draft of a past month; an admin draft of a past month is left alone', async () => {
-    // Suspended on Dec 1 (November unpaid past grace) -> December's D-7 draft stays a draft and expires in January.
+  it('item 8 (B1c-2): the job voids the next cycle\'s draft once that cycle ended unbilled while suspended; an admin drafts no month', async () => {
     const s = await startSubscriptionCompat({ sql: f.sql, now: at('2026-10-20T01:00:00Z') }, admin(), {
       organizationId: f.orgId,
       planId: 'b2b_69',
       startedOn: '2026-10-20',
     });
     if (!s.ok || !s.applied) throw new Error('start failed');
-    await markBrandInvoicePaid({ sql: f.sql, now: at('2026-10-21T01:00:00Z') }, admin(), { invoiceId: s.firstInvoiceId, paidMethod: 'transfer' });
-    await runBrandSubscriptionTick({ sql: f.sql, now: at('2026-11-01T01:00:00Z') });
-    await runBrandSubscriptionTick({ sql: f.sql, now: at('2026-11-25T01:00:00Z') });
-    const decDraft = (await listBrandInvoices(f.sql, { organizationId: f.orgId })).find((i) => i.period === '2026-12')!;
+    await markBrandInvoicePaid({ sql: f.sql, now: at('2026-10-21T01:00:00Z') }, admin(), { invoiceId: s.firstInvoiceId, paidMethod: 'transfer', paidAt: '2026-10-20' });
+    for (const iso of ['2026-11-13T01:00:00Z', '2026-11-20T01:00:00Z', '2026-12-13T01:00:00Z']) await runBrandSubscriptionTick({ sql: f.sql, now: at(iso) });
+    const decDraft = (await listBrandInvoices(f.sql, { organizationId: f.orgId })).find((i) => i.cycleStart === '2026-12-20')!;
     expect(decDraft.status).toBe('draft');
-    await runBrandSubscriptionTick({ sql: f.sql, now: at('2026-12-01T01:00:00Z') });
+    await runBrandSubscriptionTick({ sql: f.sql, now: at('2026-12-19T01:00:00Z') });
     expect(await loadBrandSubscription(f.sql, f.orgId)).toMatchObject({ status: 'suspended' });
-    // Round 5, A2 (replaces "an admin draft of a past month is left alone"): an admin drafts no month at all.
-    const adminPast = await draftBrandInvoice({ sql: f.sql, now: at('2026-12-02T01:00:00Z') }, admin(), {
+    const adminPast = await draftBrandInvoice({ sql: f.sql, now: at('2026-12-19T02:00:00Z') }, admin(), {
       organizationId: f.orgId,
       period: '2026-09',
       planId: 'b2b_69',
     });
     expect(adminPast).toMatchObject({ ok: false, code: 'conflict', detail: 'subscription_owns_period' });
-    await runBrandSubscriptionTick({ sql: f.sql, now: at('2027-01-02T01:00:00Z') });
+    await runBrandSubscriptionTick({ sql: f.sql, now: at('2026-12-20T01:00:00Z') });
+    expect(await invoiceRow(decDraft.id)).toMatchObject({ status: 'draft' });
+    await runBrandSubscriptionTick({ sql: f.sql, now: at('2027-01-20T01:00:00Z') });
     expect(await invoiceRow(decDraft.id)).toMatchObject({ status: 'void', voided_by: null, void_reason: 'stale_system_draft' });
   });
 

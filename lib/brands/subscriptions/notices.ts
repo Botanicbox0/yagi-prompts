@@ -14,12 +14,12 @@ export interface SystemVoidRecord {
 
 const VOID_REASON_LABELS: Record<string, string> = {
   first_invoice_expired: '기한 지난 첫 청구서',
-  stale_system_draft: '지난달 자동 초안',
+  stale_system_draft: '지난 주기 자동 초안',
   null_epoch_draft: '자동 발행을 끈 동안 만든 초안',
   subscription_canceled_unpaid: '해지(결제 없음)',
-  subscription_canceled_future_draft: '해지(다음 달 초안)',
-  subscription_canceled_future_invoice: '해지(다음 달 청구서)',
-  subscription_canceled_current_draft: '해지(이번 달 초안)',
+  subscription_canceled_future_draft: '해지(다음 주기 초안)',
+  subscription_canceled_future_invoice: '해지(다음 주기 청구서)',
+  subscription_canceled_current_draft: '해지(이번 주기 초안)',
 };
 
 /** "시스템 취소 N건 (사유별) · 세금계산서 발행 기록이 있는 취소 M건 — 수정 세금계산서 필요" */

@@ -1148,7 +1148,7 @@ export default async function StudioOrganization({
                             </span>
                           )}
                           {inv.status === 'void' &&
-                            subPanel?.facts?.waivedPeriods.includes(inv.period) &&
+                            subPanel?.facts?.waivedPeriods.includes(inv.cycleStart ?? inv.period) &&
                             inv.period < subPanel.facts.currentPeriod && (
                               <span className="admin-cell-sub" data-waived-period>
                                 {od.billing.subscriptionWaivedPastLabel}
@@ -1185,6 +1185,9 @@ export default async function StudioOrganization({
                         {sub.pendingPlanId && (
                           <div className="mt-1 text-xs opacity-85">
                             {od.billing.subscriptionPendingDowngrade}: <strong>{b.planNames[sub.pendingPlanId]}</strong>
+                            {sub.pendingPlanEffectivePeriod
+                              ? ` · ${interpolate(od.billing.subscriptionDowngradeFrom, { period: sub.pendingPlanEffectivePeriod })}`
+                              : ''}
                           </div>
                         )}
                       </div>
@@ -1193,9 +1196,22 @@ export default async function StudioOrganization({
                         <div>
                           {sub.startedOn} · {od.billing.subscriptionCollectionTransfer}
                         </div>
+                        {subPanel.facts?.currentCycle && (
+                          <div className="opacity-80" data-subscription-current-cycle>
+                            {od.billing.subscriptionCurrentCycle}: {subPanel.facts.currentCycle.start} – {subPanel.facts.currentCycle.end}
+                          </div>
+                        )}
                         <div className="opacity-80">
                           {od.billing.subscriptionEndsOn}: {subPanel.endsOn ?? '—'}
                         </div>
+                        {subPanel.facts?.firstInvoicePending && (
+                          <div className="opacity-85" data-subscription-first-payment-pending>
+                            {interpolate(od.billing.subscriptionFirstPaymentPending, {
+                              due: subPanel.facts.firstInvoicePending.dueOn,
+                              expires: subPanel.facts.firstInvoicePending.expiresOn,
+                            })}
+                          </div>
+                        )}
                         {sub.activatedBeforePayment && (
                           <div className="opacity-80">{od.billing.subscriptionActivatedEarly}</div>
                         )}
@@ -1205,7 +1221,7 @@ export default async function StudioOrganization({
                           {od.billing.subscriptionNextDraft} / {od.billing.subscriptionNextIssue}
                         </span>
                         <div>
-                          {subPanel.calendar.nextDraftOpenDay} / {subPanel.calendar.nextIssueDay}
+                          {subPanel.calendar.nextDraftOpenDay ?? '—'} / {subPanel.calendar.nextIssueDay ?? '—'}
                         </div>
                         {subPanel.oldestUnpaid && (
                           <div className="opacity-85">

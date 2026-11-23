@@ -175,6 +175,9 @@ const REQUIRED_SUBSCRIPTION_COLUMNS: ReadonlyArray<readonly [string, string]> = 
   ['brand_invoices', 'subscription_epoch'],
   ['brand_invoice_events', 'actor_kind'],
   ['brand_plan_events', 'actor_kind'],
+  // B1c-2: the engine bills cycles (0186).
+  ['brand_invoices', 'cycle_start'],
+  ['brand_invoices', 'cycle_end'],
 ];
 
 /**

@@ -569,7 +569,7 @@ export function formatBillingOutcomeDetail(detail: string | undefined, locale: '
             '취소 기록은 저장했습니다. 구독 상태는 반영하지 못했습니다. "재계산"을 누르거나 다음 정산 배치를 기다려 주세요',
           subscription_access_not_updated:
             '입금 기록은 저장했습니다. 구독 상태와 이용 기간은 반영하지 못해 고객이 지금 이용하지 못할 수 있습니다. "재계산"을 누르거나 다음 정산 배치를 기다려 주세요',
-          reissue_current_period_only: '취소된 청구서 재발행은 이번 달(KST) 기간만 허용됩니다',
+          reissue_current_period_only: '취소된 청구서 재발행은 이번 주기(KST)만 허용됩니다',
           period_not_admin_voided: '해당 기간은 관리자가 취소한 청구서 재발행 대상이 아닙니다',
           subscription_not_reissuable: '종료되었거나 해지 예약된 구독은 청구서를 재발행할 수 없습니다',
           started_on_must_be_current_month: '구독 시작일은 이번 달(KST) 내 날짜여야 합니다',
@@ -581,9 +581,9 @@ export function formatBillingOutcomeDetail(detail: string | undefined, locale: '
           subscription_owns_period:
             '구독 중인 조직의 정기 청구서는 구독이 직접 만들고 발행합니다. 금액을 바꾸려면 발행 전에 할인을 주거나 끝내세요(퍼센트·적용 건수, 발행일에 반영). 발행 후라면 청구서를 취소하고 같은 달 안에 "다시 발행"을 쓰세요(그때의 할인이 반영된 기본 금액)',
           subscription_draft_locked:
-            '정기 청구서 초안은 메모만 고칠 수 있습니다. 금액을 바꾸려면 발행 전에 할인을 주거나 끝내세요(퍼센트·적용 건수, 발행일에 반영). 발행 후라면 청구서를 취소하고 같은 달 안에 "다시 발행"을 쓰세요(그때의 할인이 반영된 기본 금액)',
+            '정기 청구서 초안은 메모만 고칠 수 있습니다. 금액을 바꾸려면 발행 전에 할인을 주거나 끝내세요(퍼센트·적용 건수, 발행일에 반영). 발행 후라면 청구서를 취소하고 같은 주기 안에 "다시 발행"을 쓰세요(그때의 할인이 반영된 기본 금액)',
           subscription_job_issues:
-            '구독 중인 조직의 정기 청구서는 구독이 직접 발행합니다. 지금 발행하려면 "재계산"을 누르세요. 이번 달 청구서를 취소했다면 "다시 발행"을 쓰세요. 금액을 바꾸려면 발행 전에 할인을 주거나 끝내세요(발행일에 반영)',
+            '구독 중인 조직의 정기 청구서는 구독이 직접 발행합니다. 지금 발행하려면 "재계산"을 누르세요. 이번 주기 청구서를 취소했다면 "다시 발행"을 쓰세요. 금액을 바꾸려면 발행 전에 할인을 주거나 끝내세요(발행일에 반영)',
           paid_at_in_future: '입금일은 오늘(KST)보다 늦을 수 없습니다',
           period_ended: '이미 지난 달의 정기 청구서 초안은 발행할 수 없습니다',
           reconcile_failed: '다시 정산했지만 일부 단계가 실패했습니다. 상태와 이용 기간은 반영했고, 오류 코드는 구독 카드에 있습니다',
@@ -623,7 +623,7 @@ export function formatBillingOutcomeDetail(detail: string | undefined, locale: '
             'The cancellation is recorded. The subscription state could not be updated; press "Reconcile now" or wait for the next scheduled run',
           subscription_access_not_updated:
             'The payment is recorded. The subscription state and access period could not be updated, so the customer may have no access now; press "Reconcile now" or wait for the next scheduled run',
-          reissue_current_period_only: 'Only the current KST period can be reissued',
+          reissue_current_period_only: 'Only the current billing cycle (KST) can be reissued',
           period_not_admin_voided: 'Selected period is not awaiting reissue from an admin void',
           subscription_not_reissuable: 'Ended or cancel-scheduled subscriptions cannot reissue invoices',
           started_on_must_be_current_month: 'Subscription start date must fall within the current KST month',
@@ -633,11 +633,11 @@ export function formatBillingOutcomeDetail(detail: string | undefined, locale: '
           preview_stale: 'Values changed since the preview; preview again before confirming',
           subscription_managed: "This organization's plan is managed by its subscription; change it on the subscription panel",
           subscription_owns_period:
-            "A subscribed organization's subscription invoices are created and issued by the subscription. To change the amount, grant or end a discount before the invoice is issued (percent, number of invoices; applied on issue day). After issue, void the invoice and use \"Reissue\" within the same month (standard amount with the discount then in force)",
+            "A subscribed organization's subscription invoices are created and issued by the subscription. To change the amount, grant or end a discount before the invoice is issued (percent, number of invoices; applied on issue day). After issue, void the invoice and use \"Reissue\" within the same cycle (standard amount with the discount then in force)",
           subscription_draft_locked:
-            'Only the memo of a subscription draft can be changed. To change the amount, grant or end a discount before the invoice is issued (percent, number of invoices; applied on issue day). After issue, void the invoice and use "Reissue" within the same month (standard amount with the discount then in force)',
+            'Only the memo of a subscription draft can be changed. To change the amount, grant or end a discount before the invoice is issued (percent, number of invoices; applied on issue day). After issue, void the invoice and use "Reissue" within the same cycle (standard amount with the discount then in force)',
           subscription_job_issues:
-            'The subscription issues its own invoices. To issue now, use "Reconcile now"; for a voided current month use "Reissue". To change the amount, grant or end a discount before issue (applied on issue day)',
+            'The subscription issues its own invoices. To issue now, use "Reconcile now"; for a voided current cycle use "Reissue". To change the amount, grant or end a discount before issue (applied on issue day)',
           paid_at_in_future: 'The paid date cannot be later than today (KST)',
           period_ended: 'A subscription draft of a month that has already ended cannot be issued',
           reconcile_failed:

@@ -479,12 +479,13 @@ describe('§7 plan-default admin display bug fixes & §6 flag-gated SSR', () => 
     vi.setSystemTime(new Date('2026-12-05T01:00:00Z'));
     await voidBrandInvoice({ sql }, ADMIN_VIEWER, { invoiceId: dec.id, reason: 'goodwill' });
     const decemberHtml = await render(paidOrg);
-    expect(decemberHtml).toContain('이번 달 청구서가 취소되어 이 달은 청구하지 않습니다. 청구하려면 다시 발행하세요.');
+    // B1c-2: cycle wording on the subscription card.
+    expect(decemberHtml).toContain('이번 주기 청구서가 취소되어 이 주기는 청구하지 않습니다. 청구하려면 다시 발행하세요.');
     expect(decemberHtml).toContain('brandSubscription.reissuePeriod');
     expect(decemberHtml).toContain('data-org-subscription');
     vi.setSystemTime(new Date('2027-01-05T01:00:00Z'));
     const januaryHtml = await render(paidOrg);
-    expect(januaryHtml).not.toContain('이번 달 청구서가 취소되어');
+    expect(januaryHtml).not.toContain('이번 주기 청구서가 취소되어');
     expect(januaryHtml).toContain('data-waived-period');
     expect(januaryHtml).toContain('취소 — 청구 안 함');
     expect(januaryHtml).toContain('기간 끝 해지를 예약합니다');
@@ -503,6 +504,6 @@ describe('§7 plan-default admin display bug fixes & §6 flag-gated SSR', () => 
 
     // The start form carries the one-sentence note (item 6).
     const freshOrg = await makeOrg('Start Note Fixture');
-    expect(await render(freshOrg)).toContain('첫 청구서는 시작일부터 계산하고, 플랜은 입금이 확인되면 열립니다.');
+    expect(await render(freshOrg)).toContain('입금 전 먼저 열기를 쓰지 않으면 플랜과 결제 주기는 입금이 확인된 날부터 시작합니다.');
   });
 });

@@ -378,26 +378,6 @@ describe('B1a-2 — reissue keeps the day count and the due date', () => {
     return jan!;
   }
 
-  it('item 1: January at 23/31 due Jan 23 is reissued on Jan 12 and again on Jan 25 at 23/31 due Jan 23', async () => {
-    const orgId = await makeOrg('Reissue Same Days Fixture');
-    let jan = await januaryAt23Days(orgId);
-    for (const day of ['2027-01-12', '2027-01-25']) {
-      await voidBrandInvoice({ sql, now: at(`${day}T01:00:00Z`) }, ADMIN_VIEWER, { invoiceId: jan.id, reason: 'redo' });
-      const preview = await reissueSubscriptionPeriod({ sql, now: at(`${day}T02:00:00Z`) }, ADMIN_VIEWER, {
-        organizationId: orgId,
-        period: '2027-01',
-        previewOnly: true,
-      });
-      expect(preview, day).toMatchObject({ ok: true, applied: false, preview: { proratedDays: 23, periodDays: 31, dueOn: '2027-01-23' } });
-      const re = await reissueConfirmed({ sql, now: at(`${day}T02:00:00Z`) }, ADMIN_VIEWER, { organizationId: orgId, period: '2027-01' });
-      if (!re.ok || !re.applied) throw new Error(`reissue failed ${day}`);
-      expect(await invoiceRow(re.invoice.id), day).toMatchObject({ status: 'issued', prorated_days: 23, due_on: '2027-01-23' });
-      jan = (await invoiceOf(orgId, '2027-01'))[0]!;
-    }
-    // Jan 25 is after the due date: the normal rules apply (past due within grace).
-    expect(await loadBrandSubscription(sql, orgId)).toMatchObject({ status: 'past_due' });
-  });
-
   it('review follow-up 1: an early-access first invoice (29 days, due Jan 17) is reissued on Jan 5, 12 and 20 unchanged', async () => {
     const orgId = await makeOrg('Early Reissue Fixture');
     const s = await startConfirmed({ sql, now: at('2027-01-03T01:00:00Z') }, ADMIN_VIEWER, {
@@ -408,37 +388,19 @@ describe('B1a-2 — reissue keeps the day count and the due date', () => {
       confirm: true,
     });
     if (!s.ok || !s.applied) throw new Error('start failed');
-    expect(await invoiceRow(s.firstInvoiceId)).toMatchObject({ prorated_days: 29, due_on: '2027-01-17' });
+    expect(await invoiceRow(s.firstInvoiceId)).toMatchObject({ prorated_days: null, due_on: '2027-01-17' });
     expect(await loadPlanAssignment(sql, orgId)).toMatchObject({ endsOn: '2027-01-17' });
     let current = s.firstInvoiceId;
     for (const day of ['2027-01-05', '2027-01-12', '2027-01-20']) {
       await voidBrandInvoice({ sql, now: at(`${day}T01:00:00Z`) }, ADMIN_VIEWER, { invoiceId: current, reason: 'redo' });
       const re = await reissueConfirmed({ sql, now: at(`${day}T02:00:00Z`) }, ADMIN_VIEWER, { organizationId: orgId, period: '2027-01' });
       if (!re.ok || !re.applied) throw new Error(`reissue failed ${day}`);
-      expect(await invoiceRow(re.invoice.id), day).toMatchObject({ status: 'issued', prorated_days: 29, due_on: '2027-01-17' });
+      expect(await invoiceRow(re.invoice.id), day).toMatchObject({ status: 'issued', prorated_days: null, due_on: '2027-01-17' });
       expect(await loadPlanAssignment(sql, orgId), day).toMatchObject({ endsOn: '2027-01-17' });
       current = re.invoice.id;
     }
   });
 
-  it('item 1: a full month is reissued in full with its own due date; a never-paid first invoice is still a new first invoice', async () => {
-    const orgId = await makeOrg('Reissue Full Fixture');
-    await startPaid(orgId);
-    await runBrandSubscriptionTick({ sql, now: at('2026-11-25T01:00:00Z') });
-    await runBrandSubscriptionTick({ sql, now: at('2026-12-01T01:00:00Z') });
-    const [dec] = await invoiceOf(orgId, '2026-12');
-    await voidBrandInvoice({ sql, now: at('2026-12-10T01:00:00Z') }, ADMIN_VIEWER, { invoiceId: dec!.id, reason: 'redo' });
-    const re = await reissueConfirmed({ sql, now: at('2026-12-10T02:00:00Z') }, ADMIN_VIEWER, { organizationId: orgId, period: '2026-12' });
-    if (!re.ok || !re.applied) throw new Error('reissue failed');
-    expect(await invoiceRow(re.invoice.id)).toMatchObject({ prorated_days: null, due_on: '2026-12-15' });
-
-    const fresh = await makeOrg('Reissue First Fixture');
-    const s = await startUnpaid(fresh, '2026-11-03');
-    await voidBrandInvoice({ sql, now: at('2026-11-04T01:00:00Z') }, ADMIN_VIEWER, { invoiceId: s.firstInvoiceId, reason: 'redo' });
-    const first = await reissueConfirmed({ sql, now: at('2026-11-25T01:00:00Z') }, ADMIN_VIEWER, { organizationId: fresh, period: '2026-11' });
-    if (!first.ok || !first.applied) throw new Error('first reissue failed');
-    expect(await invoiceRow(first.invoice.id)).toMatchObject({ prorated_days: 6, due_on: '2026-11-30' });
-  });
 });
 
 describe('B1a-2 — the 1st of the month for a customer behind on payment (founder decision: as Stripe does)', () => {
@@ -475,7 +437,8 @@ describe('B1a-2 — the 1st of the month for a customer behind on payment (found
     }
     await markBrandInvoicePaid({ sql, now: at('2027-01-09T03:00:00Z') }, ADMIN_VIEWER, { invoiceId: dec.id, paidMethod: 'transfer', paidAt: '2027-01-09' });
     const [jan] = await invoiceOf(orgId, '2027-01');
-    expect(jan).toMatchObject({ status: 'issued', proratedDays: 23 });
+    // B1c-2, rule 8: the payment starts a new full-price cycle on the paid date.
+    expect(jan).toMatchObject({ status: 'issued', proratedDays: null, cycleStart: '2027-01-09' });
     expect(await loadBrandSubscription(sql, orgId)).toMatchObject({ status: 'active' });
   });
 });
