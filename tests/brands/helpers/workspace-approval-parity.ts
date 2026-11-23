@@ -16,7 +16,7 @@ import { seedProfile } from '@/tests/helpers/billing';
 import { runner } from '@/tests/helpers/pglite';
 
 /**
- * B1b-1 §4: the flag-off scenario for `BRAND_WORKSPACE_APPROVAL`, recorded from origin/main (ade904ee) into
+ * B1b-1 §4: the flag-off scenario for `BRAND_WORKSPACE_APPROVAL`, recorded from origin/main (14d21d56) into
  * `tests/brands/fixtures/brand-workspace-approval-flag-off-parity.json` and replayed by
  * `tests/brands/workspace-approval-parity.test.ts` against the current code, on the schema before 0184 and after it.
  *

@@ -1,5 +1,5 @@
 {
- "note": "Recorded from origin/main (ade904ee) with BRAND_WORKSPACE_APPROVAL unset, BRAND_STUDIO_DEFAULT_MONTHLY_KRW=0, BRAND_PLAN_GRACE_DAYS=14, on the schema before 0184 and after 0184/0185 (identical). SQL whitespace collapsed, UUIDs replaced by <uuid>, database clock stamps by <time>. Scenario: tests/brands/helpers/workspace-approval-parity.ts; the tick route at 2026-11-10T01:00:00Z with BRAND_BILLING_AUTO_ISSUE off and on.",
+ "note": "Recorded from origin/main (14d21d56) with BRAND_WORKSPACE_APPROVAL unset, BRAND_STUDIO_DEFAULT_MONTHLY_KRW=0, BRAND_PLAN_GRACE_DAYS=14, on the schema before 0184 and after 0184/0185 (identical). SQL whitespace collapsed, UUIDs replaced by <uuid>, database clock stamps by <time>. Scenario: tests/brands/helpers/workspace-approval-parity.ts; the tick route at 2026-11-10T01:00:00Z with BRAND_BILLING_AUTO_ISSUE off and on. Re-recorded after B1a-2 changed the hourly job (first recording: ade904ee).",
  "ops": [
   {
    "op": "grantExtra",
@@ -832,6 +832,7 @@
     "noticeEnqueued": false,
     "voidNoticeEnqueued": false,
     "failureNoticeEnqueued": false,
+    "attentionNoticeEnqueued": false,
     "graceDaysBelowOne": false
    },
    "log": [
@@ -922,7 +923,11 @@
      ]
     },
     {
-     "text": "select count(*)::int as n from brand_subscriptions where status <> 'ended' and (reconcile_failures >= 3 or (reconcile_failures >= 1 and last_reconcile_error like 'access:%'))",
+     "text": "select organization_id::text as organization_id from brand_subscriptions where status <> 'ended' and (reconcile_failures >= 3 or (reconcile_failures >= 1 and last_reconcile_error like 'access:%'))",
+     "params": []
+    },
+    {
+     "text": "select count(*) filter (where s.status = 'suspended')::int as suspended, count(*) filter ( where s.status = 'pending' and not exists ( select 1 from brand_invoices i where i.organization_id = s.organization_id and i.subscription_epoch = s.epoch and ((i.status = 'paid' and i.kind in ('subscription', 'prepay')) or (i.status = 'issued' and i.kind in ('subscription', 'adjustment'))) ) )::int as pending_reissue from brand_subscriptions s where s.status <> 'ended'",
      "params": []
     }
    ]

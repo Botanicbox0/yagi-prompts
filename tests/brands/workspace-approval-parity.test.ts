@@ -15,8 +15,8 @@ import {
 /**
  * B1b-1 §4 (product owner requirement): with `BRAND_WORKSPACE_APPROVAL` off, `loadAllowance`, `reserveAllowance`,
  * `isOrganizationUploadApproved`, the grant operations and the hourly route run exactly the SQL origin/main runs and
- * return exactly its results — on the schema before 0184 and after it. The fixture was recorded from origin/main
- * (ade904ee) before any of this slice's code changed.
+ * return exactly its results — on the schema before 0184 and after it. The fixture was recorded by running origin/main's
+ * own code (first ade904ee; re-recorded from 14d21d56 after B1a-2 changed the hourly job), never edited by hand.
  */
 const routeMocks = vi.hoisted(() => ({ sql: null as SqlRunner | null }));
 vi.mock('@/lib/db/connect', () => ({ getSqlRunner: async () => routeMocks.sql }));
