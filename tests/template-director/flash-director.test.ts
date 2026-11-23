@@ -13,6 +13,7 @@ import {
   MORPHIC_APPROVED_VIDEO_LAWS,
   MORPHIC_MODIFICATION_PLAYBOOK,
   PERSONAL_NO_BGM_AUDIO_CONTRACT_EN,
+  PERSONAL_SKIN_CONTRACT_EN,
   resolveTemplateBaseline,
   toClientDirectorTurnResponse,
   unwrapServerOnlyPrompt,
@@ -125,7 +126,7 @@ describe('Step 0: Photo Inspection & Cleanup Model Routing (Gemini 4 Hydrogen)',
       requiresDualCandidateSelection: true,
       candidateEngines: ['seedream-5.5', 'nano-banana-2.1'],
       candidatePromptsEn: {
-        'seedream-5.5': expect.stringContaining('Reference Image 1 provides the young Korean female subject'),
+        'seedream-5.5': expect.stringContaining("Reference Image 1 provides the subject's exact facial identity"),
         'nano-banana-2.1': expect.stringContaining('SURGICAL IN-PLACE IDENTITY LOCK')
       },
       editPromptEn: expect.stringContaining('Keep the person in Image 1 100% identical')
@@ -293,7 +294,8 @@ describe('Step 0: Photo Inspection & Cleanup Model Routing (Gemini 4 Hydrogen)',
     const unwrappedSeedream = unwrapServerOnlyPrompt(plan.opticalMasterPromptEn);
     expect(unwrappedSeedream).not.toContain('bare shoulders');
     expect(unwrappedSeedream).not.toContain('visible pores');
-    expect(unwrappedSeedream).toContain('Reference Image 1 provides the young Korean female subject');
+    expect(unwrappedSeedream).toContain("Reference Image 1 provides the subject's exact facial identity");
+    expect(unwrappedSeedream).not.toMatch(/\b(?:korean|female|woman|she|her)\b/i);
     expect(unwrappedSeedream).toContain('very low specular-to-diffuse ratio');
 
     const unwrappedNanoFallback = unwrapServerOnlyPrompt(plan.fallbackMasterPromptEn);
@@ -474,7 +476,8 @@ No background music, no sunglasses, no original casual outfit, handheld objects,
       // Stage 2 DOES see the private master prompt and Video-Creator film director rules
       expect(bodyText).toContain('Extreme Low-Key Night Chiaroscuro');
       expect(bodyText).toContain('Strict No-BGM Audio Rule');
-      expect(bodyText).toContain('SKIN_MATTE_CONTRACT');
+      expect(bodyText).toContain('PERSONAL SKIN CONTRACT');
+      expect(bodyText).not.toContain('visible pores');
       expect(bodyText).toContain(`"thinkingLevel":"${GEMINI_DIRECTOR_THINKING_LEVEL}"`);
 
       return geminiJsonResponse({
@@ -523,7 +526,8 @@ No background music, no sunglasses, no original casual outfit, handheld objects,
     const unwrapped = unwrapServerOnlyPrompt(result.compiledPrompt);
     expect(unwrapped).toContain('@Image 2 supplies ONLY the tailored matte jet-black (#141517) lambskin leather biker jacket');
     expect(unwrapped).toContain('sleek chin-length dark-brown bob hairstyle with soft bangs');
-    expect(unwrapped).toContain('Natural matte skin texture with visible pores');
+    expect(unwrapped).toContain(PERSONAL_SKIN_CONTRACT_EN);
+    expect(unwrapped).not.toContain('visible pores');
     expect(verifyRewrittenPrompt(unwrapped).ok).toBe(true);
   });
 });
