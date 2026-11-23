@@ -7,6 +7,7 @@ import { StudioShowroom } from "@/components/brand-studio/studio-showroom";
 import { studioShowroomVisible, studioV2Visible } from "@/lib/brand-studio/visibility";
 import { hasProductionContracts } from "@/components/brand-studio/video/contracts-link";
 import { studioEnv } from "@/lib/brand-studio/env";
+import { billingPlanCatalogue } from "@/lib/brands/billing-page-data";
 import { VideoStudioWorkspace } from "@/components/brand-studio/video/workspace";
 import s from "@/components/brand-studio/video/video.module.css";
 import { scopedHref } from "@/lib/brands/workspace/selection";
@@ -126,6 +127,8 @@ export default async function StudioVideoPage({
         copy={dict.brandStudio}
         libraryCopy={dict.studioLibrary}
         videoCopy={t}
+        billingCopy={dict.brandBilling.customer}
+        planCatalogue={billingPlanCatalogue()}
         initialTab={opensEdit ? "edit" : "create"}
         initialCreateMode={opensReverse ? "blueprint" : "prompt"}
         initialAssetId={asset && UUID.test(asset) ? asset : null}

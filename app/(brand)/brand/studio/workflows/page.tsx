@@ -14,6 +14,7 @@ import { studioShowroomVisible, studioV2Visible } from '@/lib/brand-studio/visib
 import { listOrgPlaybooks, listOrgWorkflows, STARTER_WORKFLOWS, toRecentRunSummaries } from '@/lib/brand-studio/workflows';
 import type { RecentRunSummaryWire } from '@/lib/brand-studio/workflows/contracts';
 import { featureDenied } from '@/lib/brands/features';
+import { billingPlanCatalogue } from '@/lib/brands/billing-page-data';
 import { scopedHref } from '@/lib/brands/workspace/selection';
 import { brandStudioV2Open } from '@/lib/flags';
 
@@ -111,11 +112,14 @@ export default async function StudioWorkflowsPage({
   return (
     <WorkflowsHub
       organizationId={choice.id}
+      organizationName={choice.name}
       locale={locale}
       canCreate={canCreate}
       agentAccessAllowed={agentAccessAllowed}
       mcpOrigin={mcpOrigin}
       copy={dict.studioWorkflows}
+      billingCopy={dict.brandBilling.customer}
+      planCatalogue={billingPlanCatalogue()}
       imageStudioHref={scopedHref('/brand/studio', choice)}
       videoStudioHref={scopedHref('/brand/studio/video', choice)}
       assetsHref={scopedHref('/brand/library', choice)}

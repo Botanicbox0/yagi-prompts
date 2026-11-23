@@ -15,9 +15,11 @@ import { roomHref } from '@/components/brand-rooms/room/visibility';
 import { clock } from '@/components/brand-studio/rail/text';
 import { RAIL_ICON } from '@/components/brand-workspace/rail-model';
 import { HOME_DOOR_EXAMPLES, HOME_STARTERS, type HomeDoorKey, type HomeLayout, type HomeResult, type HomeTeamKey, type HomeToolKey } from '@/lib/brands/workspace/home';
+import type { BillingPlanCatalogueItem } from '@/lib/brands/billing-ui';
 import type { FirstRunChecklistState } from '@/lib/brands/workspace/home-checklist';
 import { scopedHref } from '@/lib/brands/workspace/selection';
 import { interpolate } from '@/lib/i18n/format';
+import type { BrandBillingCopy } from '@/messages/brand-billing';
 import type { BrandHomeCopy } from '@/messages/brand-home';
 import type { RoomsChatCopy } from '@/messages/rooms-chat';
 import type { RoomsShellCopy } from '@/messages/rooms-shell';
@@ -62,6 +64,8 @@ export interface WorkspaceHomeProps {
   notice?: ReactNode;
   /** First-run onboarding checklist state derived from existing tables (C1 Item 2). */
   checklist?: FirstRunChecklistState | null;
+  canOpenBilling?: boolean;
+  planCatalogue?: readonly BillingPlanCatalogueItem[];
   copy: {
     home: BrandHomeCopy;
     shell: StudioShellCopy;
@@ -74,6 +78,7 @@ export interface WorkspaceHomeProps {
     activeStatus: string;
     closedRequestDraft?: string;
     closedRequestOrgFallback?: string;
+    billingCustomer?: BrandBillingCopy['customer'];
   };
 }
 
@@ -158,8 +163,12 @@ export function WorkspaceHome(props: WorkspaceHomeProps) {
         <FirstRunChecklist
           organizationId={organizationId}
           organizationName={props.organizationName}
+          locale={props.locale}
           checklist={props.checklist}
           copy={h.checklist}
+          billingCopy={copy.billingCustomer}
+          planCatalogue={props.planCatalogue}
+          canOpenBilling={props.canOpenBilling}
           closedRequestDraft={copy.closedRequestDraft}
           closedRequestOrgFallback={copy.closedRequestOrgFallback}
         />

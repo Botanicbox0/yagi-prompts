@@ -11,6 +11,8 @@ import { createPortal } from "react-dom";
 import { extractClipboardImages, isEditableTextTarget, prepareClipboardUploadFiles } from "@/lib/brand-studio/clipboard-image";
 import type { StudioAssetView, StudioJobView, StudioOutputView, StudioState } from "@/lib/brand-studio/contracts";
 import { REGION_V2_MODEL, regionV2Models, type StudioMedium } from "@/lib/brand-studio/models";
+import type { BillingPlanCatalogueItem } from "@/lib/brands/billing-ui";
+import type { BrandBillingCopy } from "@/messages/brand-billing";
 import type { Dictionary } from "@/lib/i18n/dictionaries";
 import { isFailure, uploadProblem, type StudioApi } from "./api";
 import { ClosedAllowanceBanner } from "./closed-allowance-banner";
@@ -48,6 +50,8 @@ export interface StudioAppProps {
   locale: StudioLocale;
   /** `dict.brandStudio`. */
   copy: StudioCopy;
+  billingCopy?: BrandBillingCopy["customer"];
+  planCatalogue?: readonly BillingPlanCatalogueItem[];
   /** The medium this screen makes and lists: the image screen never shows video controls or video runs, and the reverse. */
   mode: StudioMedium;
   /** `dict.studioLibrary`, handed to the library rail (slice B2). */
@@ -202,7 +206,7 @@ export function recentPictures(jobs: readonly StudioJobView[], assets: readonly 
   return out;
 }
 
-export function StudioApp({ organizationId, organizationName, locale, copy, mode, libraryCopy, layersCopy, videoCopy, projectsCopy, initialState = null, api }: StudioAppProps) {
+export function StudioApp({ organizationId, organizationName, locale, copy, billingCopy, planCatalogue, mode, libraryCopy, layersCopy, videoCopy, projectsCopy, initialState = null, api }: StudioAppProps) {
   // The project new pictures go into. Null (no project) is the default and an ordinary state.
   const [projectChoice, setProjectChoice] = useState<string | null>(null);
   const studio = useStudio({ organizationId, initialState, api, projectId: mode === "image" ? projectChoice : null });
@@ -890,16 +894,21 @@ export function StudioApp({ organizationId, organizationName, locale, copy, mode
         </p>
         {state && dockOpen && (
           <Dock
+            organizationId={organizationId}
+            organizationName={organizationName}
             mode={mode}
             draft={dock.draft}
             tray={dock.tray}
             labels={trayLabels(dock.tray, copy)}
             copy={copy}
             locale={locale}
+            billingCopy={billingCopy}
+            planCatalogue={planCatalogue}
             allowance={state.allowance}
             credits={isGroupDraft(dock.draft) ? groupCredits(dock.draft, dock.tray) : dockCredits(dock.draft, dock.tray)}
             busy={dock.busy}
             message={dock.message}
+            errorCode={dock.errorCode}
             notice={dock.notice}
             toast={status}
             project={activeProject ? { title: activeProject.title, hint: libraryCopy.projects.dockInto.replace("{name}", activeProject.title) } : null}
@@ -936,7 +945,7 @@ export function StudioApp({ organizationId, organizationName, locale, copy, mode
           />
         )}
         {state && canCreate && !dockOpen && (
-          <ClosedAllowanceBanner organizationId={organizationId} organizationName={organizationName} dockCopy={copy.dock} />
+          <ClosedAllowanceBanner organizationId={organizationId} organizationName={organizationName} dockCopy={copy.dock} billingCopy={billingCopy} planCatalogue={planCatalogue} locale={locale} surface="studio_image" />
         )}
         {state && !canCreate && (
           <p className="bs-readonly" data-studio-read-only>
@@ -980,6 +989,11 @@ export function StudioApp({ organizationId, organizationName, locale, copy, mode
           index={viewer.index}
           copy={copy}
           locale={locale}
+          organizationId={organizationId}
+          organizationName={organizationName}
+          billingCopy={billingCopy}
+          planCatalogue={planCatalogue}
+          allowance={state?.allowance ?? null}
           canCreate={canCreate}
           canGenerate={dockOpen}
           busy={viewer.busy}

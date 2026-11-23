@@ -8,7 +8,7 @@
  * (`enhance: false`), so nothing is rewritten twice and the run records both.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { STUDIO_LIMITS } from "@/lib/brand-studio/contracts";
+import { STUDIO_LIMITS, type StudioErrorCode } from "@/lib/brand-studio/contracts";
 import type { StudioMedium } from "@/lib/brand-studio/models";
 import { isFailure } from "./api";
 import { errorLine, fill, newRequestId, type StudioCopy } from "./copy";
@@ -142,7 +142,17 @@ export function useDock({
 }) {
   const [draft, setDraft] = useState<DockDraft>(() => initialDraft(mode ?? initialMedium));
   const [tray, setTray] = useState<TrayItem[]>([]);
-  const [message, setMessage] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<{
+    message: string | null;
+    errorCode: StudioErrorCode | null;
+  }>({ message: null, errorCode: null });
+  const setMessage = useCallback(
+    (next: string | null, code: StudioErrorCode | null = null) => {
+      setFeedback({ message: next, errorCode: code });
+    },
+    [],
+  );
+  const { message, errorCode } = feedback;
   /** A quiet line about something the bar did on its own (switching to video). */
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -309,7 +319,7 @@ export function useDock({
     const result = await studio.createGroup({ ...probe.input, requestId: press.current.ids[0]! });
     setBusy(false);
     if (isFailure(result)) {
-      setMessage(errorLine(copy, result.code));
+      setMessage(errorLine(copy, result.code), result.code);
       return false;
     }
     press.current = null;
@@ -346,7 +356,7 @@ export function useDock({
       const result = await studio.createJob({ ...probe.inputs[0]!, requestId: ids[0]! });
       setBusy(false);
       if (isFailure(result)) {
-        setMessage(errorLine(copy, result.code));
+        setMessage(errorLine(copy, result.code), result.code);
         return false;
       }
       press.current = null;
@@ -359,7 +369,7 @@ export function useDock({
     setBusy(false);
     const failed = results.find(isFailure);
     if (failed) {
-      setMessage(errorLine(copy, failed.code));
+      setMessage(errorLine(copy, failed.code), failed.code);
       if (results.every(isFailure)) return false;
     }
     press.current = null;
@@ -507,6 +517,7 @@ export function useDock({
     remove: (key: string) => setTray((t) => removeFromTray(t, key)),
     move: (from: number, to: number) => setTray((t) => moveInTray(t, from, to)),
     message,
+    errorCode,
     setMessage,
     notice,
     setNotice,

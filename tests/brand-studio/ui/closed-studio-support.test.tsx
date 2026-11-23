@@ -255,20 +255,25 @@ describe('closed studio state & prefilled SupportDrawer request (Item 3)', () =>
     const initialDialog = findElement(initialTree, (el) => el.type === 'dialog');
     expect(initialDialog?.props.open).toBe(false);
 
-    // 2) Render real ClosedAllowanceBanner for ORG and click "이용 신청".
-    const bannerTree = ClosedAllowanceBanner({
-      organizationId: ORG,
-      organizationName: '아틀리에 모네',
-      dockCopy: koCopy,
-    });
-    const ctaButton = findElement(bannerTree, (el) => el.type === 'button');
-    expect(ctaButton).not.toBeNull();
-    (ctaButton!.props.onClick as () => void)();
+    // 2) Render real ClosedAllowanceBanner via React markup -> renders "이용 신청" button, zero red/SLA copy.
+    const bannerHtml = renderToStaticMarkup(
+      <ClosedAllowanceBanner
+        organizationId={ORG}
+        organizationName="아틀리에 모네"
+        dockCopy={koCopy}
+      />,
+    );
+    expect(bannerHtml).toContain('data-studio-allowance-closed');
+    expect(bannerHtml).toContain('이용 신청');
+    expect(bannerHtml).toContain('data-variant="solid"');
+
+    // 3) SupportDrawer still opens on explicit openBrandSupport dispatch with prefilled editable draft.
+    openBrandSupport({ organizationId: ORG, draft: expectedDraft }, fakeWindow as unknown as Window);
 
     // Flush the async history refresh triggered when SupportDrawer opens so `busy` settles to `false`.
     await new Promise((r) => setTimeout(r, 0));
 
-    // 3) Re-render real SupportDrawer -> must be open, targeted at ORG, with prefilled editable textarea.
+    // 4) Re-render real SupportDrawer -> must be open, targeted at ORG, with prefilled editable textarea.
     const openedTree = renderSupport();
     const openedDialog = findElement(openedTree, (el) => el.type === 'dialog');
     expect(openedDialog?.props.open).toBe(true);

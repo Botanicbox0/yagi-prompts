@@ -1120,24 +1120,60 @@ export async function loadBrandSupport(deps:BrandWorkspaceDeps,viewer:Viewer,id:
  });}catch(e){if(e instanceof Denied)return null;throw e}
 }
 /** `entry` as for `sendBrandMessage`: server-provided, never from the request. Viewer-role organization members may send support messages. */
-export async function sendBrandSupport(deps:BrandWorkspaceDeps,viewer:Viewer,input:unknown,entry:BrandWriteEntry='client'):Promise<BrandOutcome> {
+export interface SendBrandSupportOptions {
+  noticeKind?: 'support_message' | 'allowance_request' | 'plan_request';
+  adminPath?: string;
+  perOrgHourlyLimit?: number;
+  requireWritableMember?: boolean;
+}
+
+export async function sendBrandSupport(
+  deps: BrandWorkspaceDeps,
+  viewer: Viewer,
+  input: unknown,
+  entry: BrandWriteEntry = 'client',
+  options?: SendBrandSupportOptions,
+): Promise<BrandOutcome> {
  return mutation(deps,viewer,z.object({organizationId:z.uuid(),body:z.string().trim().min(1).max(4000),requestId:z.uuid(),surface:z.string().trim().max(80).optional()}),input,async(sql,userId,v)=>{
-  const isStudio=entry==='studio'?(await studio(sql,userId),true)
-   :(await clientOrStudio(sql,userId,()=>member(sql,userId,v.organizationId,false),async()=>undefined)).studio;
-  const org=(await sql.query('select id from brand_organizations where id=$1 for update',[v.organizationId])).rows[0];if(!org)throw new Denied('not_found');
+  let isStudio=false;
+  if(options?.requireWritableMember){
+   if(isSandboxedClientOrganization({id:v.organizationId,name:''}))throw new Denied('not_found');
+   try{
+    await member(sql,userId,v.organizationId,true);
+   }catch(err){
+    if(err instanceof Denied&&err.code==='not_found'&&(await profile(sql,userId)).is_admin===true){
+     const row=(await sql.query<{id:string;name:string}>('select id, name from brand_organizations where id=$1',[v.organizationId])).rows[0];
+     if(!row||isSandboxedClientOrganization({id:String(row.id),name:String(row.name??'')}))throw new Denied('not_found');
+     throw new Denied('forbidden');
+    }
+    throw err;
+   }
+  }else{
+   isStudio=entry==='studio'?(await studio(sql,userId),true)
+    :(await clientOrStudio(sql,userId,()=>member(sql,userId,v.organizationId,false),async()=>undefined)).studio;
+  }
+  const org=(await sql.query<{id:string;name:string}>('select id, name from brand_organizations where id=$1 for update',[v.organizationId])).rows[0];
+  if(!org||(options?.requireWritableMember&&isSandboxedClientOrganization({id:String(org.id),name:String(org.name??'')})))throw new Denied('not_found');
   const old=(await sql.query('select id from brand_support_messages where organization_id=$1 and created_by=$2 and request_id=$3',[v.organizationId,userId,v.requestId])).rows[0];if(old)return{id:String(old.id)};
+  if(options?.perOrgHourlyLimit&&options.perOrgHourlyLimit>0){
+   const hasOutbox=(await sql.query<{ready:boolean}>("select to_regclass('public.team_notice_deliveries') is not null as ready")).rows[0]?.ready===true;
+   if(hasOutbox){
+    const orgCount=(await sql.query("select count(*)::int as n from team_notice_deliveries where organization_id=$1 and kind in ('plan_request','allowance_request') and created_at>now()-interval '1 hour'",[v.organizationId])).rows[0];
+    if(Number(orgCount?.n)>=options.perOrgHourlyLimit)throw new Denied('rate_limited');
+   }
+  }
   const hasSyncedLedger=(await sql.query<{ready:boolean}>("select to_regclass('public.support_synced_replies') is not null as ready")).rows[0]?.ready===true;
   const count=(await sql.query(hasSyncedLedger?"select count(*)::int as n from brand_support_messages m where m.created_by=$1 and m.created_at>now()-interval '1 hour' and not exists (select 1 from support_synced_replies s where s.message_id=m.id)":"select count(*)::int as n from brand_support_messages where created_by=$1 and created_at>now()-interval '1 hour' and id<>request_id",[userId])).rows[0];if(Number(count?.n)>=30)throw new Denied('rate_limited');
   const id=randomUUID();await sql.query('insert into brand_support_messages(id,organization_id,body,author_role,created_by,request_id) values($1,$2,$3,$4,$5,$6)',[id,v.organizationId,v.body,isStudio?'studio':'brand',userId,v.requestId]);
   if (!isStudio) {
-    await enqueueTeamNotice(sql, 'support_message', {
+    await enqueueTeamNotice(sql, options?.noticeKind ?? 'support_message', {
       organizationId: v.organizationId,
       sourceTable: 'brand_support_messages',
       sourceId: id,
       actorUserId: userId,
       surface: v.surface ?? 'support_drawer',
       preview: v.body,
-      adminPath: `/admin/brand-workspace/organizations/${v.organizationId}#support`,
+      adminPath: options?.adminPath ?? `/admin/brand-workspace/organizations/${v.organizationId}#support`,
     });
   }
   return{id};

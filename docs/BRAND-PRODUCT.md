@@ -150,6 +150,19 @@ values ('deb648e9-c2df-43d4-b2a7-7f9eff8180d9', array['generative_media','sound'
   5. B2B 별지 약관 문안 (해지·환불·할인 환수 기준).
   6. 고객 노출 과금 화면 문구 (`messages/brand-billing.ts`의 `customer` 블록 — 대표 확인 대기).
 
+### 6.5 고객 플랜 및 청구 UI · 요청 경로 (`/brand/billing`, `POST /api/brand-billing/request`)
+- **고객 화면 (`/brand/billing`)**:
+  - 접근 제어: 조직 소유자·관리자(`owner`/`admin`) 전체 열람·수정(청구 프로필, 할인 코드 적용, 요청 접수), 비관리 멤버(`editor`/`viewer`/`guest`)는 차분한 `"관리자에게 문의"` 화면, 스튜디오 팀(`studio`, DB 확인 `profiles.is_admin`)은 `<StaffNotice />` 읽기 전용, 샌드박스 조직은 `404(notFound())`, `0176` 테이블 미적용 DB는 `"준비 중"` 화면.
+  - 구성: ① 배정 플랜(플랜명·월 이용료 부가세 별도·이용 기간·5단계 상태 `시작 예정`/`이용 중`/`종료 예정`/`종료 · 유예 종료일`/`기간 종료` 및 `"플랜 문의"` / 미배정 시 `b2b_29`·`b2b_49`·`b2b_69` 카탈로그 — `BRAND_PLANS` 단일 기준 + `"이용 신청"`), ② 이번 달 크레딧 사용량(`used ÷ cap`·추가 크레딧 및 만료일만 표시, 원화·관리자 사유 미노출·매달 1일 KST 초기화), ③ 활성 할인 요약 및 할인 코드 입력(`activeDiscount` 응답 기준 `success`/`replaced`/`code_unavailable`/`rate_limited`/`invalid`/`forbidden`/`unavailable` 분기), ④ 읽기 전용 청구 내역(상태 `발행됨`/`입금 확인`/`취소` + 연체 배지·세금계산서 계좌이체 정산 안내, 카드 결제 UI 없음), ⑤ 세금계산서 정보 7항목(실시간 10자리 사업자등록번호 체크섬·이메일 검증, `PUT /api/brand-billing/profile`).
+  - 추가 읽기 필드: `GET /api/brand-billing`에 활성 `extraGrants`(`credits`, `validMonth`, `expiresOn`)를 가산(additive) 포함.
+- **요청 폼 및 아웃박스 연동 (`BillingRequestDialog` / `POST /api/brand-billing/request`)**:
+  - 동일 출처(CSRF `sameOriginMutation`) + 본문 크기 상한(`8,192B`) 검증, 의도 3종(`plan_request`, `allowance_request`, `plan_question`), 희망 플랜(선택, `BRAND_PLANS` 기반 요금·부가세 별도 표기), 용도/필요량 자유 입력(답변은 작업 공간 채팅으로 일원화 안내), 세금계산서 정보 7항목 완성도 및 `/brand/billing#billing-profile` 링크 제공.
+  - 제출 시 호출자 로케일(`ko`/`en`)에 맞춰 `brand_support_messages`에 1건 기록하고 `team_notice_deliveries`에 `plan_request` 또는 `allowance_request` 알림 1건(`admin_path = /admin/brand-workspace/organizations/<orgId>`, `plan_question`은 `billing:plan_question:...` surface로 구분)을 적재한 뒤 응답 후 `runLiveTeamNoticeDeliveryPass`를 실행한다.
+  - DB 기반 조직당 시간당 5건(`perOrgHourlyLimit = 5`) 요청 제한 및 `requestId` 멱등성(입력 수정 시 신규 `requestId` 재발급) 적용. 안내 소요 시간 약속 금지, 워크스페이스 채팅 답변 안내만 표기.
+- **4개 스튜디오 미개방/한도 소진 상태(이미지·영상·사운드·워크플로우·편집·시퀀스 레일·수정 어시스트)**:
+  - 미개방(`allowance_closed` / `capKrw <= 0`): 한 줄 안내 + `"이용 신청"` 버튼(요청 폼 `plan_request`; 사운드 스튜디오는 컴포저 유지).
+  - 한도 소진(`allowance_exhausted` / 잔여 크레딧 0): 인라인 안내(필요 vs 남은 크레딧, 다음 초기화일 KST, 원화 미노출; 일반 유효성 메시지는 병행 유지) + `"추가 크레딧 요청"` 버튼(요청 폼 `allowance_request`).
+
 ## 7. AI 모델 — Argon의 자리 (D4)
 
 공식 문서 확인(`argon-sound-assembly.md`): `gemini-4-argon`은 텍스트·이미지·영상·오디오·PDF **입력**, 텍스트 **출력**, 오디오·이미지 생성·Live API **미지원**. 즉 대표의 "사운드 조립" = **듣고 보고 고르고 배치하고 판정**하는 일이고, 소리 자체는 다른 엔진이 만든다.
@@ -220,7 +233,7 @@ values ('deb648e9-c2df-43d4-b2a7-7f9eff8180d9', array['generative_media','sound'
 
 ## 15. 런칭 첫 실행 · 미승인 업로드 게이트 · 운영 플래그
 
-- **워크스페이스 첫 실행**: 워크스페이스 생성(`organization.create`) 후 `BRAND_STUDIO_V2=on`이면 `/brand/home`으로 이동한다. `/brand/home`에는 생성 후 30일 이내·미완료 워크스페이스에만 4단계 시작 가이드(`status = 'active'` 팀원 초대 · 로고/제품 사진 · 이용 상태 · 첫 이미지)가 표시되며, 닫기 상태는 조직별 쿠키(`yagi_brand_home_checklist_dismissed_<orgId>`)로 서버에서 읽어 플리커 없이 유지한다. 스튜디오 미승인 상태(`capKrw = 0`)에서는 `이용 신청` 버튼이 회사명·희망 제작 내용이 미리 채워진 편집 가능한 요청서로 `SupportDrawer`를 연다(미승인·이용 가능 2상태만 표시).
+- **워크스페이스 첫 실행**: 워크스페이스 생성(`organization.create`) 후 `BRAND_STUDIO_V2=on`이면 `/brand/home`으로 이동한다. `/brand/home`에는 생성 후 30일 이내·미완료 워크스페이스에만 4단계 시작 가이드(`status = 'active'` 팀원 초대 · 로고/제품 사진 · 이용 상태 · 첫 이미지)가 표시되며, 닫기 상태는 조직별 쿠키(`yagi_brand_home_checklist_dismissed_<orgId>`)로 서버에서 읽어 플리커 없이 유지한다. 이용 상태 단계는 DB 상태(`team_notice_deliveries` 실제 이용/한도 요청 여부 — `plan_question` 문의는 제외 — 및 활성 플랜·한도)에 따라 **`"신청 전"` / `"신청 접수"` / `"이용 가능"`** 3단계로 진실하게 표시되며, 권한별(`/brand/billing` 링크는 `owner`/`admin`에게만 노출) 안내와 함께 `이용 신청` 버튼 클릭 시 `BillingRequestDialog`(`POST /api/brand-billing/request`)를 연다.
 - **미승인 워크스페이스 업로드 게이트**: `UPLOAD_GATE_APPLIES_FROM`(`2026-11-24T00:00:00+09:00`) 이후 생성된 신규 자가 가입 조직 중 ① `capKrw > 0`, ② 이력이 존재하는 플랜(`brand_plan_assignments`/`brand_plan_events`), ③ 팀 제작/전달 레코드(`studio_managed`·스태프 생성 프로젝트/계약/스토리보드/룸 메시지/전달물/콘텐츠 버전), ④ 어드민 스토리지 오버라이드(`brand_storage_quotas.quota_bytes`) 중 **하나도 해당하지 않는 경우**에만 비관리자 멤버 업로드분과 대기 중인 룸 첨부 예약을 합산해 **500 MB · 50개**(`UNAPPROVED_UPLOAD_QUOTA_BYTES`, `UNAPPROVED_UPLOAD_MAX_FILES`)로 제한한다. 팀원(어드민) 업로드는 차단·합산에서 제외되며, 기존 로고 교체는 파일 수를 +1하지 않는다. 오류 문구는 하드코딩 대신 live 상수(`STUDIO_LIMITS`, `BRAND_ATTACHMENT_LIMITS`, `ROOM_LIMITS`, `STORYBOARD_LIMITS`)와 미승인 한도를 읽어 생성한다.
 - **관련 플래그 및 기본값**:
   - `BRAND_WORKSPACE_PROTOTYPE_LAYER`: 기본 **off** (`'on'`일 때만 프로젝트 화면의 프로토타입 모듈과 `/s/` 공유 데모를 로드; **off**여도 실제 납품 영상 `activeContent.mediaUrl`과 DB 메시지/결정 기반 타임코드 핀을 `RealReviewPlayer`로 인라인 재생).

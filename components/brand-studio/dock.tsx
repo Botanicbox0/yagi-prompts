@@ -20,12 +20,16 @@ import {
   STUDIO_SHOT_LIMITS,
   type StudioAllowanceView,
   type StudioAssetView,
+  type StudioErrorCode,
 } from "@/lib/brand-studio/contracts";
 import { creditsLeft } from "@/lib/brand-studio/credits";
 import type { StudioMedium, StudioVideoModel } from "@/lib/brand-studio/models";
+import type { BillingPlanCatalogueItem } from "@/lib/brands/billing-ui";
+import type { BrandBillingCopy } from "@/messages/brand-billing";
 import type { Dictionary } from "@/lib/i18n/dictionaries";
 import { studioVideoEn, studioVideoKo } from "@/messages/studio-video";
 import { uploadKind } from "./api";
+import { StudioAllowanceNotice } from "./studio-allowance-notice";
 import {
   AtMentionMenu,
   applyMentionInsertion,
@@ -72,16 +76,21 @@ import type { FilmState } from "./use-studio";
 export interface DockProps {
   /** The screen's medium; the bar never offers the other one. */
   mode?: StudioMedium;
+  organizationId?: string;
+  organizationName?: string | null;
   draft: DockDraft;
   tray: readonly TrayItem[];
   labels: readonly string[];
   copy: StudioCopy;
   locale: StudioLocale;
+  billingCopy?: BrandBillingCopy["customer"];
+  planCatalogue?: readonly BillingPlanCatalogueItem[];
   allowance: StudioAllowanceView;
   /** This run's expected cost in credits (dock-model.ts `dockCredits`, the server's arithmetic). */
   credits: number;
   busy: boolean;
   message: string | null;
+  errorCode?: StudioErrorCode | null;
   /** A quiet line about something the bar did on its own. */
   notice?: string | null;
   /** The screen's latest status line, shown as a small pill above the bar (the screen announces it). */
@@ -667,7 +676,34 @@ export function Dock(props: DockProps) {
           {caretLine}
         </span>
       </div>
-      {message && (
+      {props.errorCode === "allowance_closed" ? (
+        <StudioAllowanceNotice
+          kind="closed"
+          organizationId={props.organizationId ?? ""}
+          organizationName={props.organizationName}
+          locale={locale}
+          billingCopy={props.billingCopy}
+          planCatalogue={props.planCatalogue}
+          surface={props.mode === "video" ? "studio_video" : "studio_image"}
+          solidCta={false}
+        />
+      ) : props.errorCode === "allowance_exhausted" ||
+        (props.allowance.capKrw > 0 && creditsLeft(props.allowance.capKrw, props.allowance.usedKrw) <= 0) ? (
+        <StudioAllowanceNotice
+          kind="exhausted"
+          organizationId={props.organizationId ?? ""}
+          organizationName={props.organizationName}
+          locale={locale}
+          billingCopy={props.billingCopy}
+          planCatalogue={props.planCatalogue}
+          neededCredits={props.credits > 0 ? props.credits : null}
+          remainingCredits={creditsLeft(props.allowance.capKrw, props.allowance.usedKrw)}
+          resetsAt={props.allowance.resetsAt}
+          surface={props.mode === "video" ? "studio_video" : "studio_image"}
+          solidCta={false}
+        />
+      ) : null}
+      {message && props.errorCode !== "allowance_closed" && props.errorCode !== "allowance_exhausted" && (
         <p id={`${id}-message`} className="bs-dock-message" role="alert" data-studio-dock-message>
           {message}
         </p>

@@ -20,6 +20,7 @@ export const studioShellEn = {
     assets: 'Assets',
     brandKit: 'Brand kit',
     team: 'Team',
+    billing: 'Plan & billing',
     settings: 'Settings',
     more: 'More',
     expand: 'Show menu names',
@@ -151,6 +152,7 @@ export const studioShellKo: typeof studioShellEn = {
     assets: '에셋',
     brandKit: '브랜드 키트',
     team: '팀',
+    billing: '플랜 및 청구', // 대표 확인 대기
     settings: '설정',
     more: '더보기',
     expand: '메뉴 이름 보기',

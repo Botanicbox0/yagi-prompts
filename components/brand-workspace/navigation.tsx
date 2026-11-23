@@ -2,7 +2,7 @@
 import { useEffect, useState, type DragEvent } from 'react';
 import { usePathname } from 'next/navigation';
 import { featureDenied, isSandboxedClientOrganization } from '@/lib/brands/features';
-import { poolVisible, scopedHref, sectionVisibility, selectedChoice, type BrandWorkspaceScope } from '@/lib/brands/workspace/selection';
+import { billingVisible, poolVisible, scopedHref, sectionVisibility, selectedChoice, type BrandWorkspaceScope } from '@/lib/brands/workspace/selection';
 import { soundStudioVisible, studioShowroomVisible, studioV2Visible } from '@/lib/brand-studio/visibility';
 import { brandHomeVisible } from '@/lib/brands/workspace/home';
 import type { StudioShellCopy } from '@/messages/studio-shell';
@@ -16,7 +16,7 @@ const ALL: NavigationVisibility = { studio: true, identity: true, settings: true
 const NAV_ORDER_STORAGE_KEY = 'twings_brand_nav_order_v1';
 
 /** `creators`: given only while the creator pool is open (TWINGS_INFLUENCERS); shown to owners and editors. */
-type Labels = { home: string; members: string; settings: string; library: string; studio: string; identity?: string; creators?: string };
+type Labels = { home: string; members: string; settings: string; billing?: string; library: string; studio: string; identity?: string; creators?: string };
 
 type NavEntry = readonly [href: string, label: string, iconPath: string, shown: boolean];
 
@@ -37,12 +37,14 @@ function Links({
   scope,
   pool,
   layoutMode = 'topbar',
+  billingShown = false,
 }: {
   labels: Labels;
   visible: NavigationVisibility;
   scope: (path: string) => string;
   pool: boolean;
   layoutMode?: 'topbar' | 'sidebar';
+  billingShown?: boolean;
 }) {
   const path = usePathname() ?? '/brand';
   const isKo = /[가-힣]/.test(labels.home);
@@ -136,6 +138,7 @@ function Links({
   const utilityEntries = (
     [
       ['/brand/members', labels.members, 'M2 17v-2a6 6 0 0 1 12 0v2M5 6a3 3 0 1 0 6 0 3 3 0 1 0-6 0M16 12v5M14 14h5', visible.members],
+      ['/brand/billing', labels.billing ?? '', 'M4.5 4.5h11v12l-2-1.3-1.75 1.3-1.75-1.3-1.75 1.3-1.75-1.3-2 1.3z M7.5 8.5h5M7.5 11.5h3.5', Boolean(billingShown && labels.billing)],
       ['/brand/settings', labels.settings, 'M4 5h12M4 10h12M4 15h12M7 3v4M13 8v4M8 13v4', visible.settings],
     ] as const
   ).filter(([, , , shown]) => shown);
@@ -306,6 +309,7 @@ function Scoped({ scope, studioV2 = false, shell, locale = 'ko', railExpanded = 
         creators={poolVisible(choice) && Boolean(labels.creators)}
         identity={Boolean(visible.identity && labels.identity)}
         team={visible.members}
+        billing={billingVisible(choice) && Boolean(labels.billing)}
         settings={visible.settings}
         canCreate={(studio || roomsActive) && (choice?.role === 'owner' || choice?.role === 'editor')}
         copy={shell}
@@ -328,6 +332,7 @@ function Scoped({ scope, studioV2 = false, shell, locale = 'ko', railExpanded = 
       pool={poolVisible(choice)}
       layoutMode={isMorphic ? 'sidebar' : 'topbar'}
       scope={(path) => scopedHref(path, choice)}
+      billingShown={billingVisible(choice)}
     />
   );
 }
@@ -349,6 +354,6 @@ export function WorkspaceNavigation({
   return scope ? (
     <Scoped scope={scope} studioV2={studioV2} shell={shell} locale={locale} railExpanded={railExpanded} rooms={rooms} roomsCopy={roomsCopy} homeLabel={homeLabel} railModes={railModes} soundStudio={soundStudio} {...labels} />
   ) : (
-    <Links labels={labels} visible={ALL} pool layoutMode="topbar" scope={(path) => path} />
+    <Links labels={labels} visible={ALL} pool layoutMode="topbar" scope={(path) => path} billingShown={Boolean(labels.billing)} />
   );
 }

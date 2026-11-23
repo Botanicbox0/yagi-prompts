@@ -54,6 +54,8 @@ export interface ComposerInput {
   videoAssetId?: string;
   /** Sung with no lyrics: the brand and words to include from the lyrics options, sent with the request. */
   words?: ComposerWords;
+  /** Exact credit quote computed by musicQuoteCredits for insufficient-credit notices. */
+  quotedCredits?: number;
   /** The tempo a draft was planned at (§12.11), sent with its lyrics so the run and the design keep it. */
   bpm?: number;
 }
@@ -109,13 +111,17 @@ export const MusicComposer = forwardRef<
     onCreate: (input: ComposerInput) => void;
     onClearError: () => void;
     /** Free: a draft from the description, or the customer's lyrics polished; resolves to the lyrics or a line to show. */
-    onDraft: (request: LyricsDraftRequest) => Promise<{ lyrics: string; model: string; bpm?: number } | { error: string }>;
+    onDraft: (
+      request: LyricsDraftRequest,
+    ) => Promise<
+      { lyrics: string; model: string; bpm?: number } | { error: string } | { allowanceCode: 'allowance_closed' | 'allowance_exhausted' }
+    >;
     /** SA4: library videos "영상 길이" can fit the lyrics and the design to. */
     videos?: readonly LyricsVideo[];
     /** "지금 설계하기": the free design preview; resolves to the design or a line to show. */
     onDesign: (
       input: Pick<ComposerInput, 'prompt' | 'vocal' | 'lyrics' | 'careful' | 'structure' | 'videoAssetId' | 'words' | 'targetSeconds' | 'bpm' | 'lyricsBy'> & { avoid?: boolean },
-    ) => Promise<{ design: ComposerDesign } | { error: string }>;
+    ) => Promise<{ design: ComposerDesign } | { error: string } | { allowanceCode: 'allowance_closed' | 'allowance_exhausted' }>;
   }
 >(function MusicComposer(props, ref) {
   const { copy } = props;
@@ -242,6 +248,7 @@ export const MusicComposer = forwardRef<
       ...(words ? { words } : {}),
       ...(sentBpm ? { bpm: sentBpm } : {}),
       ...(architect && design ? { designed: { style: design.style, title: design.title } } : {}),
+      quotedCredits: credits,
     });
   };
   const submit = (event?: FormEvent) => {
@@ -295,6 +302,7 @@ export const MusicComposer = forwardRef<
     // Settings changed while it was on its way: the answer no longer matches what would be sent.
     if (designKeyRef.current !== askedFor) return;
     if ('design' in answer) setDesign(answer.design);
+    else if ('allowanceCode' in answer) setLocalError(null);
     else setLocalError(answer.error);
   };
   // Runs once the settings it needs are in the dock ("다르게 설계하기", or lyrics drafted first).
@@ -348,6 +356,10 @@ export const MusicComposer = forwardRef<
       setDrafted(true);
       return true;
     }
+    if ('allowanceCode' in answer) {
+      setLocalError(null);
+      return false;
+    }
     if (!quiet) setLocalError(answer.error);
     return false;
   };
@@ -359,6 +371,7 @@ export const MusicComposer = forwardRef<
     const answer = await props.onDraft(draftRequest('polish'));
     setPolishing(false);
     if ('lyrics' in answer) setPolish({ lyrics: answer.lyrics.slice(0, LYRICS_LIMITS.max), model: answer.model, ...(answer.bpm ? { bpm: answer.bpm } : {}) });
+    else if ('allowanceCode' in answer) setLocalError(null);
     else setLocalError(answer.error);
   };
   const sentPreview = sentLyrics ? markLyrics(sentLyrics, options.structure, plan?.form ?? null) : '';

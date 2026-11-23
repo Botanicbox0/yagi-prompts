@@ -16,6 +16,7 @@ import {
   STUDIO_LIMITS,
   STUDIO_REVISE_MODES,
   STUDIO_UPLOAD_MIMES,
+  type StudioAllowanceView,
   type StudioJobCreated,
   type StudioJobView,
   type StudioOutputView,
@@ -24,10 +25,13 @@ import {
   type StudioRevisePlan,
   type StudioReviseProblem,
 } from "@/lib/brand-studio/contracts";
-import { creditsOf } from "@/lib/brand-studio/credits";
+import { creditsLeft, creditsOf } from "@/lib/brand-studio/credits";
+import type { BillingPlanCatalogueItem } from "@/lib/brands/billing-ui";
+import type { BrandBillingCopy } from "@/messages/brand-billing";
 import type { ApiResult } from "./api";
 import { credits, errorLine, fill, type StudioCopy, type StudioLocale } from "./copy";
 import { StudioIcon } from "./icons";
+import { StudioAllowanceNotice } from "./studio-allowance-notice";
 import { REF_DRAG_TYPE, acceptsDrag, decodeRefDrag, startRefDrag, type RefSource, type TrayItem } from "./refs";
 import {
   REVISE_MATERIALS_MAX,
@@ -338,6 +342,11 @@ export interface ReviseFormViewProps {
   version: number;
   copy: StudioCopy;
   locale: StudioLocale;
+  organizationId?: string;
+  organizationName?: string | null;
+  billingCopy?: BrandBillingCopy["customer"];
+  planCatalogue?: readonly BillingPlanCatalogueItem[];
+  allowance?: StudioAllowanceView | null;
   recent: readonly TrayItem[];
   uploading: boolean;
   onPrompt(text: string): void;
@@ -712,9 +721,25 @@ export function ReviseFormView(props: ReviseFormViewProps) {
     </div>
   );
   const noteRow = state.note && (
-    <p className="bs-dock-message" role="alert" data-revise-note>
-      {noteLine(state.note, state, copy)}
-    </p>
+    state.note === "allowance_closed" || state.note === "allowance_exhausted" ? (
+      <StudioAllowanceNotice
+        kind={state.note === "allowance_closed" ? "closed" : "exhausted"}
+        organizationId={props.organizationId ?? ""}
+        organizationName={props.organizationName}
+        locale={locale}
+        billingCopy={props.billingCopy}
+        planCatalogue={props.planCatalogue}
+        remainingCredits={
+          props.allowance ? creditsLeft(props.allowance.capKrw, props.allowance.usedKrw) : null
+        }
+        resetsAt={props.allowance?.resetsAt ?? null}
+        surface="studio_revise"
+      />
+    ) : (
+      <p className="bs-dock-message" role="alert" data-revise-note>
+        {noteLine(state.note, state, copy)}
+      </p>
+    )
   );
 
   if (dialogue) {
@@ -961,6 +986,10 @@ export function ReviseForm({
   support,
   copy,
   locale,
+  organizationName,
+  billingCopy,
+  planCatalogue,
+  allowance,
   fallbackVersion,
   exclude,
   stage = null,
@@ -970,6 +999,10 @@ export function ReviseForm({
   support: ReviseSupport;
   copy: StudioCopy;
   locale: StudioLocale;
+  organizationName?: string | null;
+  billingCopy?: BrandBillingCopy["customer"];
+  planCatalogue?: readonly BillingPlanCatalogueItem[];
+  allowance?: StudioAllowanceView | null;
   /** The next number before the plan answers. */
   fallbackVersion: number;
   /** Keys not to offer in the recent strip (the clip itself). */
@@ -1101,6 +1134,11 @@ export function ReviseForm({
       version={state.plan?.version ?? fallbackVersion}
       copy={copy}
       locale={locale}
+      organizationId={support.organizationId}
+      organizationName={organizationName}
+      billingCopy={billingCopy}
+      planCatalogue={planCatalogue}
+      allowance={allowance}
       recent={recent}
       uploading={uploading}
       resolve={(source) => {

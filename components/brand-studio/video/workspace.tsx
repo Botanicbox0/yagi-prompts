@@ -31,6 +31,8 @@ import { extractContinuityFramesInBrowser } from "@/lib/brand-studio/continuity/
 import type { StudioAllowanceView, StudioAssetView, StudioJobView, StudioOutputView, StudioState } from "@/lib/brand-studio/contracts";
 import type { StudioVideoModel } from "@/lib/brand-studio/models";
 import type { VideoProjectDetail, VideoProjectStatus, VideoProjectSummary } from "@/lib/brand-studio/video-projects";
+import type { BillingPlanCatalogueItem } from "@/lib/brands/billing-ui";
+import type { BrandBillingCopy } from "@/messages/brand-billing";
 import type { Dictionary } from "@/lib/i18n/dictionaries";
 import type { StudioVideoCopy } from "@/messages/studio-video";
 import { createStudioApi, isFailure, measureInBrowser, uploadProblem, type StudioApi } from "../api";
@@ -82,6 +84,8 @@ export interface VideoStudioWorkspaceProps {
   copy: StudioCopy;
   libraryCopy: Dictionary["studioLibrary"];
   videoCopy: StudioVideoCopy;
+  billingCopy?: BrandBillingCopy["customer"];
+  planCatalogue?: readonly BillingPlanCatalogueItem[];
   initialTab?: "create" | "edit";
   initialCreateMode?: "prompt" | "blueprint";
   initialAssetId?: string | null;
@@ -197,6 +201,8 @@ export function VideoStudioWorkspace({
   copy,
   libraryCopy,
   videoCopy,
+  billingCopy,
+  planCatalogue,
   initialTab = "create",
   initialCreateMode = "prompt",
   initialAssetId = null,
@@ -1560,6 +1566,7 @@ export function VideoStudioWorkspace({
           <div className={w.videoBottomStack} data-video-bottom-stack>
             <SequenceRail
               organizationId={organizationId}
+              organizationName={organizationName}
               locale={locale}
               canEdit={canCreate}
               project={timeline}
@@ -1567,6 +1574,9 @@ export function VideoStudioWorkspace({
               selectedClipId={selectedClipId}
               inspectorTab={inspectorTab}
               audioAssets={audioAssets}
+              allowance={effectiveAllowance ?? state.allowance}
+              billingCopy={billingCopy}
+              planCatalogue={planCatalogue}
               extendingScene={extendingScene}
               musicGeneration={musicGeneration}
               railCopy={wc.rail}
@@ -1599,16 +1609,21 @@ export function VideoStudioWorkspace({
                 </div>
               ) : (
                 <Dock
+                  organizationId={organizationId}
+                  organizationName={organizationName}
                   mode="video"
                   draft={dock.draft}
                   tray={dock.tray}
                   labels={trayLabels(dock.tray, copy)}
                   copy={copy}
                   locale={locale}
+                  billingCopy={billingCopy}
+                  planCatalogue={planCatalogue}
                   allowance={effectiveAllowance ?? state.allowance}
                   credits={dockCredits(dock.draft, dock.tray)}
                   busy={dock.busy}
                   message={dock.message}
+                  errorCode={dock.errorCode}
                   notice={dock.notice}
                   toast={status}
                   film={remixVideo?.assetId ? (studio.films[remixVideo.assetId] ?? null) : null}
@@ -1663,7 +1678,7 @@ export function VideoStudioWorkspace({
         )}
 
         {state && canCreate && !dockOpen && (
-          <ClosedAllowanceBanner organizationId={organizationId} organizationName={organizationName} dockCopy={copy.dock} />
+          <ClosedAllowanceBanner organizationId={organizationId} organizationName={organizationName} dockCopy={copy.dock} billingCopy={billingCopy} planCatalogue={planCatalogue} locale={locale} surface="studio_video" />
         )}
         {state && !canCreate && (
           <p className="bs-readonly" data-studio-read-only>
@@ -1724,6 +1739,11 @@ export function VideoStudioWorkspace({
           index={viewer.index}
           copy={copy}
           locale={locale}
+          organizationId={organizationId}
+          organizationName={organizationName}
+          billingCopy={billingCopy}
+          planCatalogue={planCatalogue}
+          allowance={effectiveAllowance ?? state?.allowance ?? null}
           canCreate={canCreate}
           canGenerate={dockOpen}
           busy={viewer.busy}

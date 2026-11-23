@@ -63,7 +63,7 @@ export const RAIL_HREF: Readonly<Record<RailItemId, string>> = {
 };
 
 /** 18px stroke icons on a 20-unit grid. */
-export const RAIL_ICON: Readonly<Record<RailItemId | 'team' | 'settings' | 'create' | 'more' | 'toggle' | 'commission', string>> = {
+export const RAIL_ICON: Readonly<Record<RailItemId | 'team' | 'billing' | 'settings' | 'create' | 'more' | 'toggle' | 'commission', string>> = {
   messages: 'M3.5 4.5h10v7.5H8l-3 2.5v-2.5H3.5z M13.5 7.5h3v7H15v2l-2.6-2H9.5v-2.5',
   commission: 'M4 4.5h9.5l2.5 2.5v8.5H4z M7 9h6M7 12h4 M13.5 4.5V7H16',
   compose: 'M3.5 5.5h5v9h-5z M11.5 5.5h5v9h-5z M8.5 10h3',
@@ -78,6 +78,7 @@ export const RAIL_ICON: Readonly<Record<RailItemId | 'team' | 'settings' | 'crea
   assets: 'M3 6h14v10.5H3z M6 3.5h8 M6 13l3-3.5 3 2.6 2-1.8 3 3.2',
   brandKit: 'M4 3.5h12v13H4z M7 7h6M7 10h6M7 13h3.5',
   team: 'M2.5 16.5v-1.5a5.5 5.5 0 0 1 11 0v1.5M5 6.5a3 3 0 1 0 6 0 3 3 0 1 0-6 0M16 11v5M13.5 13.5h5',
+  billing: 'M4.5 4.5h11v12l-2-1.3-1.75 1.3-1.75-1.3-1.75 1.3-1.75-1.3-2 1.3z M7.5 8.5h5M7.5 11.5h3.5',
   settings: 'M4 5.5h12M4 10h12M4 14.5h12M7.5 3.5v4M12.5 8v4M8.5 12.5v4',
   create: 'M10 4.5v11M4.5 10h11',
   more: 'M4.5 10h.1M10 10h.1M15.5 10h.1',
