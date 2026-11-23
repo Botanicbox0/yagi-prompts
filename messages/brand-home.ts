@@ -50,6 +50,7 @@ export const brandHomeEn = {
     image: 'Open image result',
     video: 'Open video result',
   },
+  // 대표 확인 대기 — 홈 시작 가이드 체크리스트 문안 초안
   checklist: {
     title: 'Getting started',
     subtitle: 'Finish these basics to start creating images and videos.',
@@ -68,11 +69,15 @@ export const brandHomeEn = {
     },
     usage: {
       title: 'Studio access',
-      pendingStatus: 'Not active',
-      pendingBody: 'Available once your plan is confirmed. Submit a request below and our team will reply in workspace chat.',
+      pendingStatus: 'Before request',
+      pendingBody: 'Submit an access request first to create images, videos, and sound in this workspace.',
       pendingAction: 'Request access',
+      requestedStatus: 'Request received',
+      requestedBody: 'Your request is received. Studio creation opens once our team confirms your workspace plan.',
+      requestedAction: 'Send another inquiry',
       readyStatus: 'Ready',
-      readyBody: 'Studio creation and full uploads are available.',
+      readyBody: "This month's creation credits are ready to use.",
+      billingLink: 'Open plan & billing',
     },
     firstImage: {
       title: 'Make your first image',
@@ -119,6 +124,7 @@ export const brandHomeKo: typeof brandHomeEn = {
     image: '이미지 결과 열기',
     video: '영상 결과 열기',
   },
+  // 대표 확인 대기 — 홈 시작 가이드 체크리스트 문안 초안
   checklist: {
     title: '시작 가이드',
     subtitle: '기본 설정을 마치면 바로 이미지와 영상을 만들 수 있어요.',
@@ -137,11 +143,15 @@ export const brandHomeKo: typeof brandHomeEn = {
     },
     usage: {
       title: '스튜디오 이용',
-      pendingStatus: '이용 전',
-      pendingBody: '플랜 확정 후 이용할 수 있어요. 신청하시면 담당 팀이 워크스페이스 채팅으로 안내해 드려요.',
+      pendingStatus: '신청 전',
+      pendingBody: '이 작업 공간에서 이미지, 영상, 사운드를 제작하시려면 먼저 이용 신청을 해주세요.',
       pendingAction: '이용 신청',
+      requestedStatus: '신청 접수',
+      requestedBody: '이용 신청이 접수되었습니다. 담당 팀 확인 후 제작 기능을 이용하실 수 있습니다.',
+      requestedAction: '추가 문의하기',
       readyStatus: '이용 가능',
-      readyBody: '스튜디오 제작과 전체 업로드 기능을 모두 이용할 수 있어요.',
+      readyBody: '이번 달 제작 크레딧이 준비되어 바로 사용하실 수 있습니다.',
+      billingLink: '플랜 및 청구 확인하기',
     },
     firstImage: {
       title: '첫 이미지 만들기',

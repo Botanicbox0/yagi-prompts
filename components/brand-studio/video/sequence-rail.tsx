@@ -10,10 +10,13 @@ import {
   type DragEvent,
   type FormEvent,
 } from "react";
+import { StudioAllowanceNotice } from "@/components/brand-studio/studio-allowance-notice";
 import { fill as interpolate } from "@/components/brand-studio/copy";
 import { isEditableTextTarget } from "@/lib/brand-studio/clipboard-image";
 import type { StudioAllowanceView, StudioAssetView } from "@/lib/brand-studio/contracts";
-import { formatCredits } from "@/lib/brand-studio/credits";
+import { creditsLeft, formatCredits } from "@/lib/brand-studio/credits";
+import type { BillingPlanCatalogueItem } from "@/lib/brands/billing-ui";
+import type { BrandBillingCopy } from "@/messages/brand-billing";
 import {
   COMPOSE_ASPECTS,
   DEFAULT_COLOR_GRADE_SPEC,
@@ -123,6 +126,7 @@ const waitMs = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 export interface SequenceRailProps {
   organizationId: string;
+  organizationName?: string | null;
   locale: "ko" | "en";
   canEdit: boolean;
   project: ComposerProject;
@@ -130,6 +134,9 @@ export interface SequenceRailProps {
   selectedClipId: string | null;
   inspectorTab: SequenceInspectorTab;
   audioAssets: StudioAssetView[];
+  allowance?: StudioAllowanceView | null;
+  billingCopy?: BrandBillingCopy["customer"];
+  planCatalogue?: readonly BillingPlanCatalogueItem[];
   railCopy: StudioVideoCopy["workspace"]["rail"];
   floatingCopy: StudioVideoCopy["workspace"]["floatingBar"];
   extendingScene?: boolean;
@@ -151,6 +158,7 @@ export interface SequenceRailProps {
 
 export function SequenceRail({
   organizationId,
+  organizationName,
   locale,
   canEdit,
   project,
@@ -158,6 +166,9 @@ export function SequenceRail({
   selectedClipId,
   inspectorTab,
   audioAssets,
+  allowance,
+  billingCopy,
+  planCatalogue,
   railCopy,
   floatingCopy,
   extendingScene = false,
@@ -191,6 +202,10 @@ export function SequenceRail({
   const [upscaleRes, setUpscaleRes] = useState<UpscaleResolution>(1080);
   const [upscaleColor, setUpscaleColor] = useState<"lab" | "wavelet">("lab");
   const [upscaleBusy, setUpscaleBusy] = useState(false);
+  const [postProdAllowanceError, setPostProdAllowanceError] = useState<{
+    code: "allowance_closed" | "allowance_exhausted";
+    neededCredits: number | null;
+  } | null>(null);
 
   const localVideoInputRef = useRef<HTMLInputElement>(null);
   const gradeRefInputRef = useRef<HTMLInputElement>(null);
@@ -506,6 +521,7 @@ export function SequenceRail({
   const handleGenerateMusic = async () => {
     if (!canEdit || musicBusy) return;
     setMusicBusy(true);
+    setPostProdAllowanceError(null);
     try {
       const spec = MUSIC_STYLES[musicStyle];
       let current = await postPostProduction("music.generate", {
@@ -539,27 +555,31 @@ export function SequenceRail({
         onAllowanceUpdate?.(current.allowance as StudioAllowanceView);
       }
 
-      if (current.ok === true && current.status === "succeeded") {
-        const assetId = typeof current.assetId === "string" ? current.assetId : undefined;
-        const srcUrl =
-          (typeof current.audioUrl === "string" && current.audioUrl) ||
-          (typeof current.dataUrl === "string" && current.dataUrl) ||
-          (assetId ? `/api/brand-studio/compose?organizationId=${organizationId}&source=asset&id=${assetId}` : "");
-        if (srcUrl) {
-          onProjectChange({
-            ...project,
-            bgm: {
-              label: `${railCopy.inspector.musicStyles[musicStyle]} (${musicBpm} BPM)`,
-              sourceKind: "asset",
-              ...(assetId ? { assetId } : {}),
-              srcUrl,
-              durationSec: typeof current.durationSec === "number" ? current.durationSec : targetMusicDuration,
-              trimStartSec: 0,
-              volume: 0.45,
-              nonCommercialGuide: current.commercialAllowed === true ? false : current.nonCommercialOnly !== false,
-            },
-          });
+      if (current.ok !== true || current.status !== "succeeded") {
+        if (current.code === "allowance_closed" || current.code === "allowance_exhausted") {
+          setPostProdAllowanceError({ code: current.code, neededCredits: musicCostCredits });
         }
+        return;
+      }
+      const assetId = typeof current.assetId === "string" ? current.assetId : undefined;
+      const srcUrl =
+        (typeof current.audioUrl === "string" && current.audioUrl) ||
+        (typeof current.dataUrl === "string" && current.dataUrl) ||
+        (assetId ? `/api/brand-studio/compose?organizationId=${organizationId}&source=asset&id=${assetId}` : "");
+      if (srcUrl) {
+        onProjectChange({
+          ...project,
+          bgm: {
+            label: `${railCopy.inspector.musicStyles[musicStyle]} (${musicBpm} BPM)`,
+            sourceKind: "asset",
+            ...(assetId ? { assetId } : {}),
+            srcUrl,
+            durationSec: typeof current.durationSec === "number" ? current.durationSec : targetMusicDuration,
+            trimStartSec: 0,
+            volume: 0.45,
+            nonCommercialGuide: current.commercialAllowed === true ? false : current.nonCommercialOnly !== false,
+          },
+        });
       }
     } finally {
       setMusicBusy(false);
@@ -572,6 +592,7 @@ export function SequenceRail({
     const text = sfxPrompt.trim();
     if (!canEdit || !text || sfxBusy) return;
     setSfxBusy(true);
+    setPostProdAllowanceError(null);
     try {
       let current = await postPostProduction("sfx.generate", {
         organizationId,
@@ -596,27 +617,31 @@ export function SequenceRail({
       if (current.allowance && typeof current.allowance === "object") {
         onAllowanceUpdate?.(current.allowance as StudioAllowanceView);
       }
-      if (current.ok === true && current.status === "succeeded") {
-        const assetId = typeof current.assetId === "string" ? current.assetId : undefined;
-        const srcUrl =
-          (typeof current.audioUrl === "string" && current.audioUrl) ||
-          (typeof current.dataUrl === "string" && current.dataUrl) ||
-          (assetId ? `/api/brand-studio/compose?organizationId=${organizationId}&source=asset&id=${assetId}` : "");
-        if (srcUrl) {
-          applyPatches([
-            {
-              op: "add_sfx",
-              label: text.slice(0, 28),
-              sourceKind: "asset",
-              ...(assetId ? { assetId } : {}),
-              srcUrl,
-              startSec: roundTenths(playheadSec),
-              durationSec: typeof current.durationSec === "number" ? current.durationSec : 4,
-              volume: 0.85,
-            },
-          ]);
-          setSfxPrompt("");
+      if (current.ok !== true || current.status !== "succeeded") {
+        if (current.code === "allowance_closed" || current.code === "allowance_exhausted") {
+          setPostProdAllowanceError({ code: current.code, neededCredits: sfxCostCredits });
         }
+        return;
+      }
+      const assetId = typeof current.assetId === "string" ? current.assetId : undefined;
+      const srcUrl =
+        (typeof current.audioUrl === "string" && current.audioUrl) ||
+        (typeof current.dataUrl === "string" && current.dataUrl) ||
+        (assetId ? `/api/brand-studio/compose?organizationId=${organizationId}&source=asset&id=${assetId}` : "");
+      if (srcUrl) {
+        applyPatches([
+          {
+            op: "add_sfx",
+            label: text.slice(0, 28),
+            sourceKind: "asset",
+            ...(assetId ? { assetId } : {}),
+            srcUrl,
+            startSec: roundTenths(playheadSec),
+            durationSec: typeof current.durationSec === "number" ? current.durationSec : 4,
+            volume: 0.85,
+          },
+        ]);
+        setSfxPrompt("");
       }
     } finally {
       setSfxBusy(false);
@@ -671,6 +696,7 @@ export function SequenceRail({
   const handleRunUpscale = async () => {
     if (!canEdit || !targetUpscaleClip || upscaleBusy) return;
     setUpscaleBusy(true);
+    setPostProdAllowanceError(null);
     try {
       let current = await postPostProduction("upscale.submit", {
         organizationId,
@@ -705,25 +731,30 @@ export function SequenceRail({
         onAllowanceUpdate?.(current.allowance as StudioAllowanceView);
       }
 
-      if (current.ok === true && current.status === "succeeded") {
-        const newAssetId = typeof current.assetId === "string" ? current.assetId : undefined;
-        const newUrl =
-          (typeof current.url === "string" && current.url) ||
-          (typeof current.outputUrl === "string" && current.outputUrl) ||
-          targetUpscaleClip.srcUrl;
-        const stacked = stackClipTake(project, targetUpscaleClip.id, {
-          label: `${targetUpscaleClip.label} (${upscaleRes === 2160 ? "4K" : `${upscaleRes}p`})`,
-          sourceKind: newAssetId ? "asset" : targetUpscaleClip.sourceKind,
-          ...(newAssetId ? { assetId: newAssetId } : {}),
-          ...(!newAssetId && targetUpscaleClip.outputId ? { outputId: targetUpscaleClip.outputId } : {}),
-          srcUrl: newUrl,
-          thumbUrl: targetUpscaleClip.thumbUrl ?? null,
-          durationSec: targetUpscaleClip.durationSec,
-          trimStartSec: targetUpscaleClip.trimStartSec,
-          trimEndSec: targetUpscaleClip.trimEndSec,
-        });
-        onProjectChange(stacked);
+      if (current.ok !== true || current.status !== "succeeded") {
+        if (current.code === "allowance_closed" || current.code === "allowance_exhausted") {
+          setPostProdAllowanceError({ code: current.code, neededCredits: upscaleCostCredits });
+        }
+        return;
       }
+
+      const newAssetId = typeof current.assetId === "string" ? current.assetId : undefined;
+      const newUrl =
+        (typeof current.url === "string" && current.url) ||
+        (typeof current.outputUrl === "string" && current.outputUrl) ||
+        targetUpscaleClip.srcUrl;
+      const stacked = stackClipTake(project, targetUpscaleClip.id, {
+        label: `${targetUpscaleClip.label} (${upscaleRes === 2160 ? "4K" : `${upscaleRes}p`})`,
+        sourceKind: newAssetId ? "asset" : targetUpscaleClip.sourceKind,
+        ...(newAssetId ? { assetId: newAssetId } : {}),
+        ...(!newAssetId && targetUpscaleClip.outputId ? { outputId: targetUpscaleClip.outputId } : {}),
+        srcUrl: newUrl,
+        thumbUrl: targetUpscaleClip.thumbUrl ?? null,
+        durationSec: targetUpscaleClip.durationSec,
+        trimStartSec: targetUpscaleClip.trimStartSec,
+        trimEndSec: targetUpscaleClip.trimEndSec,
+      });
+      onProjectChange(stacked);
     } finally {
       setUpscaleBusy(false);
     }
@@ -1413,6 +1444,24 @@ export function SequenceRail({
                   </button>
                 ))}
               </div>
+
+              {postProdAllowanceError ? (
+                <StudioAllowanceNotice
+                  kind={postProdAllowanceError.code === "allowance_closed" ? "closed" : "exhausted"}
+                  organizationId={organizationId}
+                  organizationName={organizationName}
+                  locale={locale}
+                  billingCopy={billingCopy}
+                  planCatalogue={planCatalogue}
+                  neededCredits={postProdAllowanceError.neededCredits}
+                  remainingCredits={
+                    allowance ? creditsLeft(allowance.capKrw, allowance.usedKrw) : null
+                  }
+                  resetsAt={allowance?.resetsAt ?? null}
+                  surface="studio_video"
+                  solidCta={postProdAllowanceError.code === "allowance_closed"}
+                />
+              ) : null}
 
               {inspectorTab === "color" && (
                 <div className={w.seqInspectorBody} data-inspector-panel="color">

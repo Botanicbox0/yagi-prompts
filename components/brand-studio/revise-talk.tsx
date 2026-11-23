@@ -8,11 +8,14 @@
  * Without the flag the viewer renders revise-form.tsx instead, untouched.
  */
 import { useEffect, useId, useMemo, useRef, useState, type RefObject } from "react";
-import { STUDIO_LIMITS, STUDIO_REVISE_MATERIALS_MAX, STUDIO_UPLOAD_MIMES, type StudioJobCreated, type StudioReviseMarkRead } from "@/lib/brand-studio/contracts";
-import { creditsOf } from "@/lib/brand-studio/credits";
+import { STUDIO_LIMITS, STUDIO_REVISE_MATERIALS_MAX, STUDIO_UPLOAD_MIMES, type StudioAllowanceView, type StudioJobCreated, type StudioReviseMarkRead } from "@/lib/brand-studio/contracts";
+import { creditsLeft, creditsOf } from "@/lib/brand-studio/credits";
+import type { BillingPlanCatalogueItem } from "@/lib/brands/billing-ui";
+import type { BrandBillingCopy } from "@/messages/brand-billing";
 import type { ReviseSheet } from "@/lib/brand-studio/revision/sheet";
 import type { ApiResult } from "./api";
 import { credits, errorLine, fill, type StudioCopy, type StudioLocale } from "./copy";
+import { StudioAllowanceNotice } from "./studio-allowance-notice";
 import { StudioIcon } from "./icons";
 import type { TrayItem } from "./refs";
 import { createFrameGrabber, type FrameGrabber } from "./revise-mark-frame";
@@ -137,6 +140,12 @@ export function TalkView({
   state,
   copy,
   locale,
+  organizationId,
+  organizationName,
+  billingCopy,
+  planCatalogue,
+  allowance,
+  markAllowanceCode,
   draftClip,
   editStudioHref,
   uploading,
@@ -159,6 +168,12 @@ export function TalkView({
   state: TalkState;
   copy: StudioCopy;
   locale: StudioLocale;
+  organizationId?: string;
+  organizationName?: string | null;
+  billingCopy?: BrandBillingCopy["customer"];
+  planCatalogue?: readonly BillingPlanCatalogueItem[];
+  allowance?: StudioAllowanceView | null;
+  markAllowanceCode?: "allowance_closed" | "allowance_exhausted" | null;
   /** The clip on screen is a draft (the one quiet line about finals shows when the plan changes it inside). */
   draftClip: boolean;
   editStudioHref: string | null;
@@ -330,11 +345,34 @@ export function TalkView({
           </div>
         )}
       </SheetCard>
-      {state.note && (
-        <p className="bs-dock-message" role="alert" data-talk-note>
-          {errorLine(copy, state.note)}
-        </p>
-      )}
+      {(() => {
+        const allowanceCode =
+          state.note === "allowance_closed" || state.note === "allowance_exhausted"
+            ? state.note
+            : markAllowanceCode ?? null;
+        if (allowanceCode) {
+          return (
+            <StudioAllowanceNotice
+              kind={allowanceCode === "allowance_closed" ? "closed" : "exhausted"}
+              organizationId={organizationId ?? ""}
+              organizationName={organizationName}
+              locale={locale}
+              billingCopy={billingCopy}
+              planCatalogue={planCatalogue}
+              remainingCredits={
+                allowance ? creditsLeft(allowance.capKrw, allowance.usedKrw) : null
+              }
+              resetsAt={allowance?.resetsAt ?? null}
+              surface="studio_revise"
+            />
+          );
+        }
+        return state.note ? (
+          <p className="bs-dock-message" role="alert" data-talk-note>
+            {errorLine(copy, state.note)}
+          </p>
+        ) : null;
+      })()}
       {state.thread.length === 0 && (
         // Nothing said yet: one quiet line on what to do, right above the same input the conversation keeps.
         <p className="bs-muted bs-talk-first" data-talk-first>
@@ -471,6 +509,10 @@ export function ReviseTalk({
   support,
   copy,
   locale,
+  organizationName,
+  billingCopy,
+  planCatalogue,
+  allowance,
   draftClip,
   fallbackVersion,
   stage = null,
@@ -483,6 +525,10 @@ export function ReviseTalk({
   support: TalkSupport;
   copy: StudioCopy;
   locale: StudioLocale;
+  organizationName?: string | null;
+  billingCopy?: BrandBillingCopy["customer"];
+  planCatalogue?: readonly BillingPlanCatalogueItem[];
+  allowance?: StudioAllowanceView | null;
   draftClip: boolean;
   /** The number the next version gets before the server answers (the viewer's chain + 1). */
   fallbackVersion: number;
@@ -497,6 +543,9 @@ export function ReviseTalk({
   const [state, setState] = useState<TalkState>(() => initialTalkState(fallbackVersion));
   const [uploading, setUploading] = useState(false);
   const [marking, setMarkingState] = useState(false);
+  const [markAllowanceCode, setMarkAllowanceCode] = useState<
+    "allowance_closed" | "allowance_exhausted" | null
+  >(null);
   const live = useRef(support);
   live.current = support;
   const created = useRef(onCreated);
@@ -569,8 +618,15 @@ export function ReviseTalk({
     if (read && frame) {
       const answer = await read({ organizationId: support.organizationId, outputId, ...wireGeometry(mark), frame }).catch(() => null);
       if (answer && answer.ok) {
+        setMarkAllowanceCode(null);
         label = answer.label?.trim() || null;
         what = answer.what?.trim() || null;
+      } else if (
+        answer &&
+        !answer.ok &&
+        (answer.code === "allowance_closed" || answer.code === "allowance_exhausted")
+      ) {
+        setMarkAllowanceCode(answer.code);
       }
     }
     flow.setMarks(flow.state.marks.map((m) => (m.key === mark.key ? { ...m, reading: false, label, what } : m)));
@@ -597,6 +653,12 @@ export function ReviseTalk({
         state={state}
         copy={copy}
         locale={locale}
+        organizationId={support.organizationId}
+        organizationName={organizationName}
+        billingCopy={billingCopy}
+        planCatalogue={planCatalogue}
+        allowance={allowance}
+        markAllowanceCode={markAllowanceCode}
         draftClip={draftClip}
         editStudioHref={support.editStudioHref(outputId)}
         uploading={uploading}

@@ -15,12 +15,13 @@ import { studioEnv } from '@/lib/brand-studio/env';
 import { createStudioMediaStore } from '@/lib/brand-studio/media-store';
 import { jobsOf, viewsOf } from '@/lib/brand-studio/repo';
 import { allowanceView, loadAllowance } from '@/lib/brand-studio/usage';
+import { billingPlanCatalogue } from '@/lib/brands/billing-page-data';
 import { featureDenied, isSandboxedClientOrganization } from '@/lib/brands/features';
 import { brandHomeVisible, homeDoorPictures, homeLayout, homeResults, teamHomeProjects } from '@/lib/brands/workspace/home';
 import { loadFirstRunChecklistState } from '@/lib/brands/workspace/home-checklist';
 import { homeChecklistDismissCookieName, readChecklistDismissedFromCookie } from '@/lib/brands/workspace/home-checklist-cookie';
 import { loadBrandWorkspace } from '@/lib/brands/workspace/service';
-import { scopedHref } from '@/lib/brands/workspace/selection';
+import { billingChecklistLinkVisible, scopedHref } from '@/lib/brands/workspace/selection';
 import { brandRoomsOpen, brandSoundStudioOpen, brandStudioV2Open } from '@/lib/flags';
 import { soundStudioVisible } from '@/lib/brand-studio/visibility';
 
@@ -188,6 +189,8 @@ export default async function BrandWorkspaceHome({
       viewerNote={choice.role === 'viewer'}
       notice={access.staff ? <StaffNotice b={b} manageHref={viewer.isAdmin ? adminOrganizationHref(choice.id, brandHost) : null} /> : null}
       checklist={checklist}
+      canOpenBilling={billingChecklistLinkVisible(choice, viewer.isAdmin)}
+      planCatalogue={billingPlanCatalogue()}
       copy={{
         home: dict.brandHome,
         shell: dict.studioShell,
@@ -199,6 +202,7 @@ export default async function BrandWorkspaceHome({
         activeStatus: b.status.active,
         closedRequestDraft: dock.closedRequestDraft,
         closedRequestOrgFallback: dock.closedRequestOrgFallback,
+        billingCustomer: dict.brandBilling.customer,
       }}
     />
   );

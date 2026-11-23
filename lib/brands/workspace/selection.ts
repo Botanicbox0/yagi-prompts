@@ -122,6 +122,20 @@ export function poolVisible(choice: Pick<BrandWorkspaceChoice, 'role'> | null): 
   return choice?.role === 'owner' || choice?.role === 'editor';
 }
 
+/** Plan & billing (/brand/billing) is linked in workspace navigation except for guests and sandboxed clients. */
+export function billingVisible(choice: Pick<BrandWorkspaceChoice, 'id' | 'name' | 'role'> | null): boolean {
+  return Boolean(choice && choice.role !== 'guest' && !isSandboxedClientOrganization(choice));
+}
+
+/** Checklist link to /brand/billing is shown only to roles allowed to open the billing page. */
+export function billingChecklistLinkVisible(
+  choice: (Pick<BrandWorkspaceChoice, 'id' | 'name'> & { role: BrandChoiceRole | 'admin' }) | null,
+  isAdmin = false,
+): boolean {
+  if (!choice || isSandboxedClientOrganization(choice)) return false;
+  return choice.role === 'owner' || choice.role === 'admin' || (choice.role === 'studio' && isAdmin);
+}
+
 /** Where switching to `choice` lands: the same section when that brand's role can open it, else home. */
 export function switchHref(pathname: string, choice: BrandWorkspaceChoice): string {
   const visible = sectionVisibility(choice);
@@ -130,6 +144,7 @@ export function switchHref(pathname: string, choice: BrandWorkspaceChoice): stri
     : pathname === '/brand/studio' && visible.studio ? '/brand/studio'
     : pathname === '/brand/identity' && visible.identity ? '/brand/identity'
     : pathname === '/brand/settings' && visible.settings ? '/brand/settings'
+    : pathname === '/brand/billing' && billingVisible(choice) ? '/brand/billing'
     : pathname === '/brand/members' && visible.members ? '/brand/members'
     : pathname === '/brand/creators' && poolVisible(choice) ? '/brand/creators'
     : '/brand';

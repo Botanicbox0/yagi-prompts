@@ -22,6 +22,7 @@ import { loadProductionWorkspace } from "@/lib/brands/production/service";
 import { studioStage } from "@/lib/brands/production/stage";
 import { scopedHref, type BrandWorkspaceChoice } from "@/lib/brands/workspace/selection";
 import { getDictionary } from "@/lib/i18n/dictionaries";
+import { billingPlanCatalogue } from "@/lib/brands/billing-page-data";
 import { ContractProduction } from "./contract-production";
 import type { StudioLocale } from "./copy";
 import { StudioApp } from "./studio-app";
@@ -72,7 +73,7 @@ export async function brandStudioV2(input: StudioV2Input): Promise<ReactElement>
         {/* The credits line and the phone's library button are placed here by the studio (studio-app.tsx). */}
         <div className="bs-head-slot" data-studio-head-slot />
       </header>
-      <StudioApp organizationId={choice.id} organizationName={choice.name} locale={locale} copy={copy} mode="image" libraryCopy={dict.studioLibrary} {...(brandStudioProjectsOpen() ? { projectsCopy: dict.studioVideo.workspace.projects } : {})} layersCopy={dict.studioLayers} />
+      <StudioApp organizationId={choice.id} organizationName={choice.name} locale={locale} copy={copy} billingCopy={dict.brandBilling.customer} planCatalogue={billingPlanCatalogue()} mode="image" libraryCopy={dict.studioLibrary} {...(brandStudioProjectsOpen() ? { projectsCopy: dict.studioVideo.workspace.projects } : {})} layersCopy={dict.studioLayers} />
     </div>
   );
 }

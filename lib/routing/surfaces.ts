@@ -62,7 +62,7 @@ export function isBrandPath(pathname: string): boolean {
   // `identity`: the fixed brand identity layer, memory, and looks (docs/BRAND-PRODUCT.md §5).
   // `rooms`: messages and project rooms (docs/BRAND-ROOMS.md §3); each page gates itself.
   // `home`: the workspace home; `start`: the default landing that picks it or `/brand` (docs/BRAND-STUDIO-V3.md §12).
-  return pathname === '/brand' || /^\/brand\/(?:projects|members|invite|settings|library|studio|usage|creators|identity|rooms|home|start)(?:\/|$)/.test(pathname);
+  return pathname === '/brand' || /^\/brand\/(?:projects|members|invite|settings|billing|library|studio|usage|creators|identity|rooms|home|start)(?:\/|$)/.test(pathname);
 }
 
 const AUTH_METHODS: Record<string, readonly string[]> = {
@@ -225,10 +225,11 @@ export function brandRouteAllowed(pathname: string, method: string): boolean {
   if (pathname === '/api/brand-workspace/studio') return method === 'POST';
   // Secondary-usage payment (docs/SECONDARY-USAGE.md): create/confirm by POST, status by GET.
   if (pathname === '/api/brand-workspace/usage') return read || method === 'POST';
-  // Brand B2B billing (docs/BRAND-PRODUCT.md §6.4): owner/admin read-only JSON, profile edit, code redemption.
+  // Brand B2B billing (docs/BRAND-PRODUCT.md §6.4): owner/admin read-only JSON, profile edit, code redemption, and requests.
   if (pathname === '/api/brand-billing') return read;
   if (pathname === '/api/brand-billing/profile') return method === 'PUT';
   if (pathname === '/api/brand-billing/redeem') return method === 'POST';
+  if (pathname === '/api/brand-billing/request') return method === 'POST';
   if (/^\/api\/brand-workspace\/attachments\/[^/]+$/.test(pathname)) return read || method === 'POST';
   if (/^\/api\/brand-workspace\/organizations\/[^/]+\/logo$/.test(pathname)) return read || method === 'POST';
   if (/^\/api\/brand-workspace\/shortlist\/[a-f0-9-]+\/avatar$/.test(pathname)) return read;

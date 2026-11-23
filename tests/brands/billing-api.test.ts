@@ -8,6 +8,7 @@ import {
   createBrandDiscountCode,
   draftBrandInvoice,
   grantExtraAllowance,
+  revokeExtraAllowance,
   issueBrandInvoice,
   markBrandInvoicePaid,
   saveBrandBillingProfileAdmin,
@@ -15,6 +16,7 @@ import {
   voidBrandInvoice,
 } from '@/lib/brands/billing';
 import { SANDBOXED_CLIENT_ORG_IDS } from '@/lib/brands/features';
+import { kstMonthOf } from '@/lib/brands/billing/math';
 import { setPlanAssignment } from '@/lib/brands/plans';
 import { createBrandOrganization } from '@/lib/brands/workspace/service';
 import { coreMigrationFiles, readMigration } from '@/lib/db/migrations';
@@ -419,5 +421,45 @@ describe('reservation expiry from 10-minute notices tick cron', () => {
       ])
     ).rows[0]?.n;
     expect(attempts).toBe(1);
+  });
+
+  it('includes sanitized active extraGrants (credits + expiry date only) in GET /api/brand-billing without admin reasons or KRW', async () => {
+    const currentMonth = kstMonthOf(new Date());
+    await grantExtraAllowance({ sql: f.sql }, admin(), {
+      organizationId: f.orgId,
+      amountKrw: 50_000,
+      validMonth: currentMonth,
+      reason: 'TOP_SECRET_ADMIN_REASON',
+    });
+    const toRevoke = await grantExtraAllowance({ sql: f.sql }, admin(), {
+      organizationId: f.orgId,
+      amountKrw: 20_000,
+      validMonth: currentMonth,
+      reason: 'REVOKED_REASON',
+    });
+    if (toRevoke.ok) {
+      await revokeExtraAllowance({ sql: f.sql }, admin(), {
+        grantId: toRevoke.id,
+        organizationId: f.orgId,
+      });
+    }
+
+    mocks.viewer = owner();
+    const res = await getReq(f.orgId);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      ok: boolean;
+      extraGrants?: Array<Record<string, unknown>>;
+    };
+    expect(body.ok).toBe(true);
+    expect(Array.isArray(body.extraGrants)).toBe(true);
+    expect(body.extraGrants).toHaveLength(1);
+    const grant = body.extraGrants![0]!;
+    expect(grant.credits).toBeTypeOf('number');
+    expect(grant.expiresOn).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(grant).not.toHaveProperty('reason');
+    expect(grant).not.toHaveProperty('amountKrw');
+    expect(JSON.stringify(body.extraGrants)).not.toContain('TOP_SECRET_ADMIN_REASON');
+    expect(JSON.stringify(body.extraGrants)).not.toContain('REVOKED_REASON');
   });
 });

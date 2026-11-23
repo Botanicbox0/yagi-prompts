@@ -1,18 +1,26 @@
 'use client';
 
 import { useState } from 'react';
-import { scopedHref } from '@/lib/brands/workspace/selection';
-import type { FirstRunChecklistState } from '@/lib/brands/workspace/home-checklist';
+import { BillingRequestDialog } from '@/components/brand-billing/billing-request-form';
+import type { BillingPlanCatalogueItem } from '@/lib/brands/billing-ui';
+import type { ChecklistUsageState, FirstRunChecklistState } from '@/lib/brands/workspace/home-checklist';
 import { homeChecklistDismissCookieName } from '@/lib/brands/workspace/home-checklist-cookie';
+import { scopedHref } from '@/lib/brands/workspace/selection';
+import type { BrandBillingCopy } from '@/messages/brand-billing';
 import type { BrandHomeCopy } from '@/messages/brand-home';
-import { buildClosedAllowanceDraft, openBrandSupport } from '../support-trigger';
 import s from './home.module.css';
 
 export interface FirstRunChecklistProps {
   organizationId: string;
-  organizationName: string;
-  checklist: FirstRunChecklistState;
+  organizationName?: string;
+  locale?: 'ko' | 'en';
+  checklist?: FirstRunChecklistState;
+  state?: FirstRunChecklistState;
   copy: BrandHomeCopy['checklist'];
+  billingCopy?: BrandBillingCopy['customer'];
+  planCatalogue?: readonly BillingPlanCatalogueItem[];
+  canOpenBilling?: boolean;
+  hrefs?: { members?: string; studio?: string; billing?: string };
   closedRequestDraft?: string;
   closedRequestOrgFallback?: string;
 }
@@ -24,22 +32,45 @@ function writeDismissedCookie(organizationId: string): void {
 
 export function FirstRunChecklist({
   organizationId,
-  organizationName,
-  checklist,
+  locale,
+  checklist: checklistProp,
+  state: stateProp,
   copy,
-  closedRequestDraft = '{organization}',
-  closedRequestOrgFallback = 'Brand',
+  billingCopy,
+  planCatalogue,
+  canOpenBilling = true,
 }: FirstRunChecklistProps) {
   const [dismissed, setDismissed] = useState(false);
+  const [requestOpen, setRequestOpen] = useState(false);
+  const [localRequested, setLocalRequested] = useState(false);
 
-  if (!checklist.show || dismissed) return null;
+  const checklist = checklistProp ?? stateProp;
+  if (!checklist || !checklist.show || dismissed) return null;
 
   const scope = (path: string) => scopedHref(path, { id: organizationId });
-  const requestDraft = buildClosedAllowanceDraft(
-    { closedRequestDraft, closedRequestOrgFallback },
-    organizationName,
-  );
   const assetsDone = checklist.hasLogo && checklist.hasUploads;
+  const resolvedLocale: 'ko' | 'en' = locale ?? (!/[가-힣]/.test(copy.title) ? 'en' : 'ko');
+  const usageState: ChecklistUsageState = checklist.usageApproved
+    ? 'ready'
+    : checklist.usageState === 'requested' || checklist.usageRequestSent || localRequested
+      ? 'requested'
+      : 'not_requested';
+
+  const usageStatusLabel =
+    usageState === 'ready'
+      ? copy.usage.readyStatus
+      : usageState === 'requested'
+        ? copy.usage.requestedStatus
+        : copy.usage.pendingStatus;
+
+  const usageBodyText =
+    usageState === 'ready'
+      ? copy.usage.readyBody
+      : usageState === 'requested'
+        ? copy.usage.requestedBody
+        : copy.usage.pendingBody;
+
+  const showRequestAction = !checklist.usageApproved;
 
   return (
     <section className={s.checklist} aria-label={copy.title} data-home-first-run>
@@ -91,26 +122,48 @@ export function FirstRunChecklist({
           </div>
         </li>
 
-        <li className={s.checklistItem} data-checklist-done={checklist.usageApproved ? 'true' : 'false'}>
+        <li
+          className={s.checklistItem}
+          data-checklist-done={checklist.usageApproved ? 'true' : 'false'}
+          data-checklist-usage-state={usageState}
+        >
           <div className={s.checklistItemHead}>
             <span className={s.checklistItemTitle}>{copy.usage.title}</span>
-            {checklist.usageApproved ? <span className={s.checklistDone}>{copy.doneLabel}</span> : null}
+            <span
+              className={checklist.usageApproved ? s.checklistDone : s.checklistStatus}
+              data-home-checklist-usage-status={usageState}
+            >
+              {usageStatusLabel}
+            </span>
           </div>
-          <p className={s.checklistItemBody}>
-            {checklist.usageApproved ? copy.usage.readyBody : copy.usage.pendingBody}
-          </p>
-          {!checklist.usageApproved ? (
-            <div className={s.checklistActions}>
+          <p className={s.checklistItemBody}>{usageBodyText}</p>
+          <div className={s.checklistActions}>
+            {showRequestAction ? (
               <button
                 type="button"
                 className={s.checklistLink}
-                onClick={() => openBrandSupport({ organizationId, draft: requestDraft })}
+                onClick={() => {
+                  if (billingCopy) {
+                    setRequestOpen(true);
+                  } else if (typeof window !== 'undefined') {
+                    window.location.assign(scope('/brand/billing'));
+                  }
+                }}
                 data-home-checklist-request
               >
-                {copy.usage.pendingAction}
+                {usageState === 'requested' ? copy.usage.requestedAction : copy.usage.pendingAction}
               </button>
-            </div>
-          ) : null}
+            ) : null}
+            {canOpenBilling ? (
+              <a
+                href={scope('/brand/billing')}
+                className={s.checklistLink}
+                data-home-checklist-link="billing"
+              >
+                {copy.usage.billingLink}
+              </a>
+            ) : null}
+          </div>
         </li>
 
         <li className={s.checklistItem} data-checklist-done={checklist.hasFirstImage ? 'true' : 'false'}>
@@ -126,6 +179,24 @@ export function FirstRunChecklist({
           </div>
         </li>
       </ol>
+
+      {billingCopy ? (
+        <BillingRequestDialog
+          open={requestOpen}
+          onClose={() => setRequestOpen(false)}
+          organizationId={organizationId}
+          copy={billingCopy.requestForm}
+          tierNames={billingCopy.planSection.tierNames}
+          planCatalogue={planCatalogue}
+          vatLabel={billingCopy.planSection.vatSeparate}
+          locale={resolvedLocale}
+          initialIntent="plan_request"
+          surface="home_checklist"
+          onSuccess={({ intent }) => {
+            if (intent !== 'plan_question') setLocalRequested(true);
+          }}
+        />
+      ) : null}
     </section>
   );
 }

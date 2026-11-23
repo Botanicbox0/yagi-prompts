@@ -279,7 +279,12 @@ export function createReviseFlow(deps: ReviseDeps) {
       answer = { ok: false, code: "failed" };
     }
     if (!current()) return;
-    if (isFailure(answer)) return patchMark(key, { reading: false, label: null, what: null });
+    if (isFailure(answer)) {
+      if (answer.code === "allowance_closed" || answer.code === "allowance_exhausted") {
+        set({ note: answer.code });
+      }
+      return patchMark(key, { reading: false, label: null, what: null });
+    }
     patchMark(key, { reading: false, label: answer.label?.trim() || null, what: answer.what?.trim() || null });
   }
 

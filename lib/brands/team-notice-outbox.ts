@@ -40,6 +40,18 @@ export const TEAM_NOTICE_KIND_LABELS: Record<TeamNoticeKind, string> = {
   plan_request: 'B2B 플랜 요청',
 };
 
+const BILLING_PLAN_QUESTION_LABEL = 'B2B 플랜 문의';
+
+export function resolveTeamNoticeKindLabel(
+  kind: TeamNoticeKind,
+  surface?: string | null,
+): string {
+  if (kind === 'plan_request' && surface?.startsWith('billing:plan_question')) {
+    return BILLING_PLAN_QUESTION_LABEL;
+  }
+  return TEAM_NOTICE_KIND_LABELS[kind];
+}
+
 export type TeamNoticeSkipCode =
   | 'disabled'
   | 'non_production'
@@ -192,7 +204,7 @@ export function formatTeamNoticeSlackText(input: {
   transport: TeamNoticeTransport;
   isRetry?: boolean;
 }): string {
-  const label = TEAM_NOTICE_KIND_LABELS[input.kind];
+  const label = resolveTeamNoticeKindLabel(input.kind, input.surface);
   const lines: string[] = [`*[TWINGS · ${label}]${input.isRetry ? ' (재전송)' : ''}*`];
 
   if (input.organizationName) {

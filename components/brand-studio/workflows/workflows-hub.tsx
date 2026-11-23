@@ -19,18 +19,24 @@ import {
   type WorkflowWire,
 } from '@/lib/brand-studio/workflows/contracts';
 import { estimateRecipeCredits } from '@/lib/brand-studio/workflows/starters';
+import type { BillingPlanCatalogueItem } from '@/lib/brands/billing-ui';
+import type { BrandBillingCopy } from '@/messages/brand-billing';
 import type { StudioWorkflowsCopy } from '@/messages/studio-workflows';
 import { createStudioApi, isFailure, measureInBrowser, uploadKind, uploadProblem } from '../api';
+import { StudioAllowanceNotice } from '../studio-allowance-notice';
 import { McpConnectModal } from './mcp-connect-modal';
 import styles from './workflows.module.css';
 
 export interface WorkflowsHubProps {
   organizationId: string;
+  organizationName?: string | null;
   locale: 'ko' | 'en';
   canCreate: boolean;
   agentAccessAllowed?: boolean;
   mcpOrigin?: string;
   copy: StudioWorkflowsCopy;
+  billingCopy?: BrandBillingCopy['customer'];
+  planCatalogue?: readonly BillingPlanCatalogueItem[];
   imageStudioHref: string;
   videoStudioHref: string;
   assetsHref: string;
@@ -224,11 +230,14 @@ function WhyBlock({ title, rows }: { title: string; rows: ReadonlyArray<{ title:
 
 export function WorkflowsHub({
   organizationId,
+  organizationName,
   locale,
   canCreate,
   agentAccessAllowed = true,
   mcpOrigin,
   copy,
+  billingCopy,
+  planCatalogue,
   imageStudioHref,
   videoStudioHref,
   assetsHref,
@@ -243,6 +252,7 @@ export function WorkflowsHub({
   initialMcpTokens,
 }: WorkflowsHubProps) {
   const [allowance, setAllowance] = useState<StudioAllowanceView>(initialAllowance);
+  const [allowanceErrorCode, setAllowanceErrorCode] = useState<'allowance_closed' | 'allowance_exhausted' | null>(null);
   const [activeTab, setActiveTab] = useState<'starters' | 'team' | 'guides'>('starters');
   const [categoryFilter, setCategoryFilter] = useState<'all' | WorkflowCategory>('all');
 
@@ -390,9 +400,15 @@ export function WorkflowsHub({
         brief,
       });
       if (!ok) {
-        setBannerError(mapErrorCode(typeof json.code === 'string' ? json.code : undefined));
+        const errCode = typeof json.code === 'string' ? json.code : undefined;
+        if (errCode === 'allowance_closed' || errCode === 'allowance_exhausted') {
+          setAllowanceErrorCode(errCode);
+        } else {
+          setBannerError(mapErrorCode(errCode));
+        }
         return;
       }
+      setAllowanceErrorCode(null);
       const created = json.workflow as WorkflowWire;
       setWorkflows((prev) => [created, ...prev.filter((w) => w.id !== created.id)]);
       setActiveTab('team');
@@ -434,9 +450,15 @@ export function WorkflowsHub({
         },
       });
       if (!ok) {
-        setBannerError(mapErrorCode(typeof json.code === 'string' ? json.code : undefined));
+        const errCode = typeof json.code === 'string' ? json.code : undefined;
+        if (errCode === 'allowance_closed' || errCode === 'allowance_exhausted') {
+          setAllowanceErrorCode(errCode);
+        } else {
+          setBannerError(mapErrorCode(errCode));
+        }
         return;
       }
+      setAllowanceErrorCode(null);
       const runRes = json as unknown as WorkflowRunResult;
       setLastRunResult(runRes);
       if (runRes.allowance) setAllowance(runRes.allowance);
@@ -485,9 +507,15 @@ export function WorkflowsHub({
         summary: recentSummary.trim(),
       });
       if (!ok) {
-        setBannerError(mapErrorCode(typeof json.code === 'string' ? json.code : undefined));
+        const errCode = typeof json.code === 'string' ? json.code : undefined;
+        if (errCode === 'allowance_closed' || errCode === 'allowance_exhausted') {
+          setAllowanceErrorCode(errCode);
+        } else {
+          setBannerError(mapErrorCode(errCode));
+        }
         return;
       }
+      setAllowanceErrorCode(null);
       const created = json.workflow as WorkflowWire;
       setWorkflows((prev) => [created, ...prev.filter((w) => w.id !== created.id)]);
       setRecentModalOpen(false);
@@ -604,9 +632,15 @@ export function WorkflowsHub({
           });
 
       if (!ok) {
-        setBannerError(mapErrorCode(typeof json.code === 'string' ? json.code : undefined));
+        const errCode = typeof json.code === 'string' ? json.code : undefined;
+        if (errCode === 'allowance_closed' || errCode === 'allowance_exhausted') {
+          setAllowanceErrorCode(errCode);
+        } else {
+          setBannerError(mapErrorCode(errCode));
+        }
         return;
       }
+      setAllowanceErrorCode(null);
       const saved = json.workflow as WorkflowWire;
       setWorkflows((prev) => [saved, ...prev.filter((w) => w.id !== saved.id)]);
       setCustomModalOpen(false);
@@ -672,9 +706,15 @@ export function WorkflowsHub({
         status: guideStatus,
       });
       if (!ok) {
-        setBannerError(mapErrorCode(typeof json.code === 'string' ? json.code : undefined));
+        const errCode = typeof json.code === 'string' ? json.code : undefined;
+        if (errCode === 'allowance_closed' || errCode === 'allowance_exhausted') {
+          setAllowanceErrorCode(errCode);
+        } else {
+          setBannerError(mapErrorCode(errCode));
+        }
         return;
       }
+      setAllowanceErrorCode(null);
       const saved = json.playbook as PlaybookWire;
       setPlaybooks((prev) => [saved, ...prev.filter((p) => p.id !== saved.id)]);
       setGuideModalOpen(false);
@@ -859,6 +899,35 @@ export function WorkflowsHub({
             ))}
           </div>
         </section>
+
+        {canCreate && (allowance.capKrw <= 0 || allowanceErrorCode === 'allowance_closed') ? (
+          <StudioAllowanceNotice
+            kind="closed"
+            organizationId={organizationId}
+            organizationName={organizationName}
+            locale={locale}
+            billingCopy={billingCopy}
+            planCatalogue={planCatalogue}
+            surface="studio_workflows"
+            solidCta
+          />
+        ) : canCreate &&
+          (creditsLeft(allowance.capKrw, allowance.usedKrw) <= 0 ||
+            allowanceErrorCode === 'allowance_exhausted') ? (
+          <StudioAllowanceNotice
+            kind="exhausted"
+            organizationId={organizationId}
+            organizationName={organizationName}
+            locale={locale}
+            billingCopy={billingCopy}
+            planCatalogue={planCatalogue}
+            neededCredits={runnerEstimatedCredits > 0 ? runnerEstimatedCredits : null}
+            remainingCredits={creditsLeft(allowance.capKrw, allowance.usedKrw)}
+            resetsAt={allowance.resetsAt}
+            surface="studio_workflows"
+            solidCta={false}
+          />
+        ) : null}
 
         {bannerError && (
           <div className={styles.errorBanner} role="alert">

@@ -12,6 +12,7 @@ import { createStudioMediaStore } from '@/lib/brand-studio/media-store';
 import { assetView, assetsOf, jobsOf, viewsOf } from '@/lib/brand-studio/repo';
 import { allowanceView, loadAllowance } from '@/lib/brand-studio/usage';
 import { studioShowroomVisible, studioV2Visible } from '@/lib/brand-studio/visibility';
+import { billingPlanCatalogue } from '@/lib/brands/billing-page-data';
 import { scopedHref } from '@/lib/brands/workspace/selection';
 import { brandStudioEditorV2DefaultFor, brandStudioEditorV2Open, brandStudioV2Open, brandWorkspacePrototypeLayerOpen } from '@/lib/flags';
 
@@ -146,9 +147,12 @@ export default async function StudioComposePage({
   return (
     <VideoComposer
       organizationId={choice.id}
+      organizationName={choice.name}
       locale={locale}
       canCreate={canCreate}
       copy={copy}
+      billingCopy={dict.brandBilling.customer}
+      planCatalogue={billingPlanCatalogue()}
       videoStudioHref={scopedHref('/brand/studio/video', choice)}
       editorV2Href={opensEditorV2 ? scopedHref('/brand/studio/editor', choice) : brandStudioEditorV2Open() && brandWorkspacePrototypeLayerOpen() ? scopedHref('/brand/studio/editor?sample=1', choice) : null}
       initialAllowance={allowanceView(allowance)}

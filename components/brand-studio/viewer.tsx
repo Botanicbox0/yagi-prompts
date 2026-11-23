@@ -12,7 +12,9 @@
  */
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { copyImageUrlToClipboard, isEditableTextTarget } from "@/lib/brand-studio/clipboard-image";
-import type { RegionBox, StudioAssetView, StudioJobView, StudioOutputView } from "@/lib/brand-studio/contracts";
+import type { RegionBox, StudioAllowanceView, StudioAssetView, StudioJobView, StudioOutputView } from "@/lib/brand-studio/contracts";
+import type { BillingPlanCatalogueItem } from "@/lib/brands/billing-ui";
+import type { BrandBillingCopy } from "@/messages/brand-billing";
 import { studioModelOrLegacy, type StudioImageModel } from "@/lib/brand-studio/models";
 import { errorLine, fill, type StudioCopy, type StudioLocale } from "./copy";
 import { qualityOf, regionCredits, regionInstructionForForm, regionProblem, type RegionProblem } from "./dock-model";
@@ -96,6 +98,11 @@ export interface ViewerProps {
   index: number;
   copy: StudioCopy;
   locale?: StudioLocale;
+  organizationId?: string;
+  organizationName?: string | null;
+  billingCopy?: BrandBillingCopy["customer"];
+  planCatalogue?: readonly BillingPlanCatalogueItem[];
+  allowance?: StudioAllowanceView | null;
   /** Owner or editor: may save results, delete them and send them on. */
   canCreate: boolean;
   /** `canCreate` and an open allowance: may start new runs from here. */
@@ -405,6 +412,10 @@ function ViewerContent({
   item: openedItem,
   copy,
   locale = "ko",
+  organizationName,
+  billingCopy,
+  planCatalogue,
+  allowance,
   canCreate,
   canGenerate,
   busy,
@@ -855,6 +866,10 @@ function ViewerContent({
                 support={revise.talk}
                 copy={copy}
                 locale={locale}
+                organizationName={organizationName}
+                billingCopy={billingCopy}
+                planCatalogue={planCatalogue}
+                allowance={allowance}
                 draftClip={Boolean(output.draft)}
                 fallbackVersion={Math.max(1, ...chain.map((entry) => entry.version)) + 1}
                 stage={file.kind === "video" && !region ? { video: videoRef, host: mediaHost, url: file.url } : null}
@@ -901,6 +916,10 @@ function ViewerContent({
             support={revise}
             copy={copy}
             locale={locale}
+            organizationName={organizationName}
+            billingCopy={billingCopy}
+            planCatalogue={planCatalogue}
+            allowance={allowance}
             fallbackVersion={Math.max(1, ...chain.map((entry) => entry.version)) + 1}
             exclude={reviseExclude}
             stage={file.kind === "video" && !region ? { video: videoRef, host: mediaHost, url: file.url } : null}

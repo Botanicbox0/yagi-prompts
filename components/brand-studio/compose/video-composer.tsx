@@ -67,6 +67,9 @@ import {
   upscaleCredits,
   type UpscaleResolution,
 } from '@/lib/brand-studio/upscale/contracts';
+import type { BillingPlanCatalogueItem } from '@/lib/brands/billing-ui';
+import type { BrandBillingCopy } from '@/messages/brand-billing';
+import { StudioAllowanceNotice } from '@/components/brand-studio/studio-allowance-notice';
 import type { StudioComposeCopy } from '@/messages/studio-compose';
 import { AssistPanel, AssistPreviewBar } from './assist/assist-panel';
 import { useEditAssist } from './assist/use-edit-assist';
@@ -75,9 +78,12 @@ import s from './video-composer.module.css';
 
 export interface VideoComposerProps {
   organizationId: string;
+  organizationName?: string | null;
   locale: 'ko' | 'en';
   canCreate: boolean;
   copy: StudioComposeCopy;
+  billingCopy?: BrandBillingCopy['customer'];
+  planCatalogue?: readonly BillingPlanCatalogueItem[];
   videoStudioHref: string;
   /**
    * Where the editing studio v2 lives, or nothing. The page passes it only while
@@ -221,9 +227,12 @@ function waitMs(ms: number): Promise<void> {
 
 export function VideoComposer({
   organizationId,
+  organizationName,
   locale,
   canCreate,
   copy,
+  billingCopy,
+  planCatalogue,
   videoStudioHref,
   editorV2Href = null,
   initialAllowance,
@@ -242,6 +251,10 @@ export function VideoComposer({
 }: VideoComposerProps) {
   const api = useMemo(() => createStudioApi({ organizationId }), [organizationId]);
   const [allowance, setAllowance] = useState<StudioAllowanceView>(initialAllowance);
+  const [allowanceError, setAllowanceError] = useState<{
+    code: 'allowance_closed' | 'allowance_exhausted';
+    neededCredits: number | null;
+  } | null>(null);
   const [assets, setAssets] = useState<StudioAssetView[]>(initialAssets);
   const [localMediaItems, setLocalMediaItems] = useState<BrowserMediaItem[]>([]);
 
@@ -1087,6 +1100,7 @@ export function VideoComposer({
     if (!targetClip) return;
 
     setUpscaleBusy(true);
+    setAllowanceError(null);
     setUpscalePollStatus(null);
     try {
       const targetAssetId = targetClip.assetId;
@@ -1125,6 +1139,11 @@ export function VideoComposer({
       if (current.ok !== true || current.status !== 'succeeded') {
         if (current.allowance && typeof current.allowance === 'object') {
           setAllowance(current.allowance as StudioAllowanceView);
+        }
+        if (current.code === 'allowance_closed' || current.code === 'allowance_exhausted') {
+          setAllowanceError({ code: current.code, neededCredits: upscaleEstimateCredits });
+          setStatusMessage(null);
+          return;
         }
         setStatusMessage(copy.upscale.failed);
         return;
@@ -1197,6 +1216,7 @@ export function VideoComposer({
   const handleGenerateMusic = async () => {
     if (!canCreate || musicBusy) return;
     setMusicBusy(true);
+    setAllowanceError(null);
     try {
       const spec = MUSIC_STYLE_SPECS[musicStyle];
       const revealSec = clamp(roundTenths(musicRevealSec), 0.2, Math.max(0.3, musicDurationSec - 0.3));
@@ -1250,6 +1270,11 @@ export function VideoComposer({
       if (current.ok !== true || current.status !== 'succeeded') {
         if (current.allowance && typeof current.allowance === 'object') {
           setAllowance(current.allowance as StudioAllowanceView);
+        }
+        if (current.code === 'allowance_closed' || current.code === 'allowance_exhausted') {
+          setAllowanceError({ code: current.code, neededCredits: musicEstimateCredits });
+          setStatusMessage(null);
+          return;
         }
         setStatusMessage(copy.musicGen.generateFailed);
         return;
@@ -2016,6 +2041,35 @@ export function VideoComposer({
           </button>
         </div>
       </header>
+
+      {canCreate && (allowance.capKrw <= 0 || allowanceError?.code === 'allowance_closed') ? (
+        <StudioAllowanceNotice
+          kind="closed"
+          organizationId={organizationId}
+          organizationName={organizationName}
+          locale={locale}
+          billingCopy={billingCopy}
+          planCatalogue={planCatalogue}
+          surface="studio_compose"
+          solidCta
+        />
+      ) : canCreate &&
+        (creditsLeft(allowance.capKrw, allowance.usedKrw) <= 0 ||
+          allowanceError?.code === 'allowance_exhausted') ? (
+        <StudioAllowanceNotice
+          kind="exhausted"
+          organizationId={organizationId}
+          organizationName={organizationName}
+          locale={locale}
+          billingCopy={billingCopy}
+          planCatalogue={planCatalogue}
+          neededCredits={allowanceError?.neededCredits ?? null}
+          remainingCredits={creditsLeft(allowance.capKrw, allowance.usedKrw)}
+          resetsAt={allowance.resetsAt}
+          surface="studio_compose"
+          solidCta={false}
+        />
+      ) : null}
 
       {statusMessage ? (
         <div className={s.statusBanner} role="status" data-compose-status>

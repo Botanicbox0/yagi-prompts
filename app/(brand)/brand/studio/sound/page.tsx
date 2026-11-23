@@ -10,6 +10,7 @@ import { loadSoundStudio } from '@/lib/brand-studio/sound/load';
 import { studioEnv } from '@/lib/brand-studio/env';
 import { soundStudioVisible } from '@/lib/brand-studio/visibility';
 import { STUDIO_LIMITS } from '@/lib/brand-studio/contracts';
+import { billingPlanCatalogue } from '@/lib/brands/billing-page-data';
 import { assertBrandFeature, BrandFeatureDenied } from '@/lib/brands/entitlements';
 import { scopedHref } from '@/lib/brands/workspace/selection';
 import { brandSoundStudioOpen, brandStudioV2Open } from '@/lib/flags';
@@ -63,8 +64,11 @@ export default async function StudioSoundPage({
   return (
     <SoundStudio
       organizationId={choice.id}
+      organizationName={choice.name}
       locale={locale}
       copy={dict.studioSound}
+      billingCopy={dict.brandBilling.customer}
+      planCatalogue={billingPlanCatalogue()}
       initialTab={soundTabParam(params.tab)}
       creditsCopy={dict.brandStudio.credits}
       initialTracks={data.tracks}

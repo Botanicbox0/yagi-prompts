@@ -1,12 +1,16 @@
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import { loadPlanAssignment, planActiveOn } from '@/lib/brands/plans';
 
+export type ChecklistUsageState = 'not_requested' | 'requested' | 'ready';
+
 export interface FirstRunChecklistState {
   show: boolean;
   hasTeammate: boolean;
   hasLogo: boolean;
   hasUploads: boolean;
   usageApproved: boolean;
+  usageRequestSent?: boolean;
+  usageState?: ChecklistUsageState;
   hasFirstImage: boolean;
 }
 
@@ -85,6 +89,20 @@ export async function loadFirstRunChecklistState(
   const hasLogo = Boolean(context.logoUrl);
   const hasUploads = assetRow > 0;
   const usageApproved = (context.capKrw ?? 0) > 0 || planActiveOn(plan, todayKst(now));
+  const hasOutboxTable = await tableExists(sql, 'team_notice_deliveries');
+  const usageRequestSent = hasOutboxTable
+    ? await sql
+        .query<{ sent: boolean }>(
+          "select exists(select 1 from team_notice_deliveries where organization_id = $1 and (kind = 'allowance_request' or (kind = 'plan_request' and (surface is null or surface not like 'billing:plan_question%')))) as sent",
+          [organizationId],
+        )
+        .then((r) => Boolean(r.rows[0]?.sent))
+    : false;
+  const usageState: ChecklistUsageState = usageApproved
+    ? 'ready'
+    : usageRequestSent
+      ? 'requested'
+      : 'not_requested';
   const hasFirstImage = imageRow > 0;
 
   const show = isWithin30Days && !(hasTeammate && hasLogo && hasUploads && usageApproved && hasFirstImage);
@@ -95,6 +113,8 @@ export async function loadFirstRunChecklistState(
     hasLogo,
     hasUploads,
     usageApproved,
+    usageRequestSent,
+    usageState,
     hasFirstImage,
   };
 }

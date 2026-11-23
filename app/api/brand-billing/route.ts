@@ -3,6 +3,7 @@ import { getViewer } from '@/lib/auth/viewer';
 import { studioEnv } from '@/lib/brand-studio/env';
 import { loadCustomerBrandBilling } from '@/lib/brands/billing';
 import { billingJson, billingStatus } from '@/lib/brands/billing/http';
+import { loadCustomerExtraGrants } from '@/lib/brands/billing-page-data';
 import { getSqlRunner } from '@/lib/db/connect';
 
 /**
@@ -24,7 +25,8 @@ export async function GET(request: NextRequest) {
     if (!result.ok) {
       return billingJson({ ok: false, code: result.code }, billingStatus(result.code));
     }
-    return billingJson({ ok: true, ...result.billing }, 200);
+    const extraGrants = await loadCustomerExtraGrants(sql, result.billing.organizationId);
+    return billingJson({ ok: true, ...result.billing, extraGrants }, 200);
   } catch (error) {
     console.warn(
       '[brand-billing] overview_failed',

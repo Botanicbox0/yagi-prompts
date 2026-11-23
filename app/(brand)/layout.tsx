@@ -91,7 +91,7 @@ export default async function BrandLayout({
             {/* URL-derived: dynamic render resolves this on the server, the empty fallback never shows. */}
             <Suspense fallback={null}>
               {scope?<WorkspaceIdentity scope={scope} copy={b.identity} roles={b.roles}/>:<p className="bw-kicker">{b.title}</p>}
-              <WorkspaceNavigation home={b.home} members={b.members} settings={b.managed.settings} library={b.managed.library} studio={studioCopy?b.productionStudio.title:""} identity={undefined} creators={influencersOpen() ? b.creatorPool.nav : undefined} scope={scope} studioV2={studioV2} shell={studioCopy?d.studioShell:undefined} locale={locale==="en"?"en":"ko"} railExpanded={railExpanded} rooms={rooms} roomsCopy={rooms?d.roomsShell.nav:undefined} homeLabel={studioV2?d.brandHome.nav.home:undefined} railModes={railModes} soundStudio={studioV2&&brandSoundStudioOpen()}/>
+              <WorkspaceNavigation home={b.home} members={b.members} settings={b.managed.settings} billing={studioCopy ? d.brandBilling.customer.pageTitle : undefined} library={b.managed.library} studio={studioCopy?b.productionStudio.title:""} identity={undefined} creators={influencersOpen() ? b.creatorPool.nav : undefined} scope={scope} studioV2={studioV2} shell={studioCopy?d.studioShell:undefined} locale={locale==="en"?"en":"ko"} railExpanded={railExpanded} rooms={rooms} roomsCopy={rooms?d.roomsShell.nav:undefined} homeLabel={studioV2?d.brandHome.nav.home:undefined} railModes={railModes} soundStudio={studioV2&&brandSoundStudioOpen()}/>
             </Suspense>
             <div className="bw-sidebar-utilities">
               <WorkspaceLanguage locale={locale} label={d.nav.localeToggle} compact applyLabel={b.languageApply}/>

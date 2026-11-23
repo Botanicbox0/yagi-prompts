@@ -23,8 +23,11 @@ import type { StudioAllowanceView, StudioErrorCode, StudioJobView } from '@/lib/
 import { creditsLeft, formatCredits } from '@/lib/brand-studio/credits';
 import { filterTracks, mergeTracks, musicTracks, soundTracks, type SoundTab, type SoundTrackView } from '@/lib/brand-studio/sound/library';
 import { composeBgmHandoff, composeSfxHandoff, type SoundSendTrack } from '@/lib/brand-studio/sound/send';
+import type { BillingPlanCatalogueItem } from '@/lib/brands/billing-ui';
+import type { BrandBillingCopy } from '@/messages/brand-billing';
 import { interpolate } from '@/lib/i18n/format';
 import type { StudioSoundCopy } from '@/messages/studio-sound';
+import { StudioAllowanceNotice } from '../studio-allowance-notice';
 import { MusicComposer, type ComposerHandle, type ComposerInput } from './composer';
 import { SendToVideoDialog, type SendTarget } from './send-dialog';
 import { PendingRow, TrackRow, type RowActions } from './track-row';
@@ -32,8 +35,11 @@ import s from './sound.module.css';
 
 export interface SoundStudioProps {
   organizationId: string;
+  organizationName?: string | null;
   locale: 'ko' | 'en';
   copy: StudioSoundCopy;
+  billingCopy?: BrandBillingCopy['customer'];
+  planCatalogue?: readonly BillingPlanCatalogueItem[];
   /** `brandStudio.credits`: `{n} 크레딧`, `남은 크레딧 {n}`. */
   creditsCopy: { amount: string; left: string };
   initialTab: SoundTab;
@@ -107,6 +113,8 @@ export function SoundStudio(props: SoundStudioProps) {
   const [uploading, setUploading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [composerError, setComposerError] = useState<string | null>(null);
+  const [allowanceErrorCode, setAllowanceErrorCode] = useState<'allowance_closed' | 'allowance_exhausted' | null>(null);
+  const [lastNeededCredits, setLastNeededCredits] = useState<number | null>(null);
   const [notice, setNotice] = useState<Notice>(null);
   const [replace, setReplace] = useState<{ track: SoundTrackView; current: string } | null>(null);
   const [videoTarget, setVideoTarget] = useState<SendTarget | null>(null);
@@ -193,6 +201,8 @@ export function SoundStudio(props: SoundStudioProps) {
   const create = async (input: ComposerInput) => {
     setCreating(true);
     setComposerError(null);
+    setAllowanceErrorCode(null);
+    setLastNeededCredits(typeof input.quotedCredits === 'number' ? input.quotedCredits : null);
     // One id per draft: a retried press (double click, a dropped answer) is the same request on the server.
     draftRequest.current ??= newRequestId();
     let answer: unknown;
@@ -240,7 +250,9 @@ export function SoundStudio(props: SoundStudioProps) {
     if (result?.blocked === 'name') setComposerError(errorLine(copy, 'artist'));
     else if (result?.blocked === 'lyrics') setComposerError(copy.composer.lyricsBlocked);
     else if (result?.blocked === 'paused') setComposerError(copy.errors.paused);
-    else setComposerError(errorLine(copy, result?.code ?? 'failed'));
+    else if (result?.code === 'allowance_closed' || result?.code === 'allowance_exhausted') {
+      setAllowanceErrorCode(result.code);
+    } else setComposerError(errorLine(copy, result?.code ?? 'failed'));
     // A refused request reserved nothing: the next press is a new one.
     if (result?.code) draftRequest.current = null;
     return false;
@@ -423,6 +435,8 @@ export function SoundStudio(props: SoundStudioProps) {
   };
 
   const left = creditsLeft(allowance.capKrw, allowance.usedKrw);
+  const soundClosed = canCreate && (allowance.capKrw <= 0 || allowanceErrorCode === 'allowance_closed');
+  const soundExhausted = canCreate && !soundClosed && (left <= 0 || allowanceErrorCode === 'allowance_exhausted');
   const showComposer = canCreate && tab === 'music';
 
   // The dock's height, for the rows' scroll margin (an opened row comes into view above it).
@@ -565,6 +579,35 @@ export function SoundStudio(props: SoundStudioProps) {
         )}
       </section>
 
+      {soundClosed ? (
+        <StudioAllowanceNotice
+          kind="closed"
+          organizationId={organizationId}
+          organizationName={props.organizationName}
+          locale={locale}
+          billingCopy={props.billingCopy}
+          planCatalogue={props.planCatalogue}
+          surface="studio_sound"
+          solidCta
+        />
+      ) : null}
+
+      {soundExhausted ? (
+        <StudioAllowanceNotice
+          kind="exhausted"
+          organizationId={organizationId}
+          organizationName={props.organizationName}
+          locale={locale}
+          billingCopy={props.billingCopy}
+          planCatalogue={props.planCatalogue}
+          neededCredits={lastNeededCredits}
+          remainingCredits={left}
+          resetsAt={allowance.resetsAt}
+          surface="studio_sound"
+          solidCta={false}
+        />
+      ) : null}
+
       {showComposer ? (
         <MusicComposer
           ref={composer}
@@ -595,6 +638,11 @@ export function SoundStudio(props: SoundStudioProps) {
               ...(request.careful ? { careful: true } : {}),
             });
             if (!isFailure(answer)) return { design: answer.design };
+            if (answer.code === 'allowance_closed' || answer.code === 'allowance_exhausted') {
+              setAllowanceErrorCode(answer.code);
+              setLastNeededCredits(null);
+              return { allowanceCode: answer.code };
+            }
             const blocked = (answer as { blocked?: string }).blocked;
             if (blocked === 'name') return { error: copy.errors.artist };
             if (blocked === 'lyrics') return { error: copy.composer.lyricsBlocked };
@@ -603,6 +651,11 @@ export function SoundStudio(props: SoundStudioProps) {
           onDraft={async (request) => {
             const answer = await api.call('lyrics.draft', { organizationId, ...request });
             if (!isFailure(answer)) return { lyrics: answer.lyrics, model: answer.model, bpm: answer.bpm };
+            if (answer.code === 'allowance_closed' || answer.code === 'allowance_exhausted') {
+              setAllowanceErrorCode(answer.code);
+              setLastNeededCredits(null);
+              return { allowanceCode: answer.code };
+            }
             if ((answer as { blocked?: string }).blocked === 'name') return { error: request.flow === 'polish' ? copy.composer.lyricsBlocked : copy.errors.artist };
             if (answer.code === 'too_many_running') return { error: copy.composer.draftBusy };
             return { error: request.flow === 'polish' ? copy.lyricsKit.polishFailed : copy.composer.draftFailed };

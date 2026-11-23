@@ -77,6 +77,7 @@ export interface RailNavigationProps {
   sound?: boolean;
   identity: boolean;
   team: boolean;
+  billing?: boolean;
   settings: boolean;
   /** Owners and editors: the "+" create button and its menu. */
   canCreate: boolean;
@@ -416,8 +417,9 @@ export function RailNavigation(props: RailNavigationProps) {
   const move = (id: RailItemId, direction: -1 | 1) => saveOrder(groups ? moveInGroup(groups, id, direction) : moveItem(items, id, direction));
   const canDropOn = (id: RailItemId) => Boolean(dragged && dragged !== id && (!groups || RAIL_GROUP[dragged] === RAIL_GROUP[id]));
 
-  const utilities: Array<{ key: 'team' | 'settings'; href: string; shown: boolean }> = [
+  const utilities: Array<{ key: 'team' | 'billing' | 'settings'; href: string; shown: boolean }> = [
     { key: 'team', href: '/brand/members', shown: props.team },
+    { key: 'billing', href: '/brand/billing', shown: Boolean(props.billing) },
     { key: 'settings', href: '/brand/settings', shown: props.settings },
   ];
 
