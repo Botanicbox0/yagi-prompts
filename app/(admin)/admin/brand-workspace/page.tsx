@@ -1,53 +1,92 @@
 import { ManagedForm } from '@/components/brand-workspace/managed-form';
-import "@/app/(brand)/workspace.css";
-import { requireAdmin } from "@/lib/auth/viewer";
-import { getSqlRunner } from "@/lib/db/connect";
-import { getLocaleFromHeaders } from "@/lib/i18n/server";
-import { getDictionary } from "@/lib/i18n/dictionaries";
-import { loadStudioWorkspace } from "@/lib/brands/workspace/service";
-import { AdminShell } from "@/components/admin/chrome";
-import { AdminPageHeader, AdminTable, StatusPill } from "@/components/admin/patterns";
-import { formatCount } from "@/lib/admin/format";
-import { CampaignList } from "@/components/brand-workspace/campaign-list";
-import { loadStudioInbox } from "@/lib/brands/workspace/inbox";
-import { StudioInboxPanel } from "@/components/admin/studio-inbox";
-import { loadFeaturePolicies, type BrandFeature } from "@/lib/brands/entitlements";
-import { BRAND_PLANS, loadPlanAssignment } from "@/lib/brands/plans";
-import { loadBrandIdentity } from "@/lib/brands/identity/service";
-import { interpolate } from "@/lib/i18n/format";
-import { brandRoomsOpen } from "@/lib/flags";
+import '@/app/(brand)/workspace.css';
+import { requireAdmin } from '@/lib/auth/viewer';
+import { getSqlRunner } from '@/lib/db/connect';
+import { getLocaleFromHeaders } from '@/lib/i18n/server';
+import { getDictionary } from '@/lib/i18n/dictionaries';
+import { loadStudioWorkspace } from '@/lib/brands/workspace/service';
+import { AdminShell, OutcomeBanner } from '@/components/admin/chrome';
+import {
+  AdminPageHeader,
+  AdminTable,
+  FilterPills,
+  Pager,
+  StatusPill,
+} from '@/components/admin/patterns';
+import { formatAdminTime, formatCount, formatKrw } from '@/lib/admin/format';
+import { CampaignList } from '@/components/brand-workspace/campaign-list';
+import { loadStudioInbox } from '@/lib/brands/workspace/inbox';
+import { StudioInboxPanel } from '@/components/admin/studio-inbox';
+import { studioEnv } from '@/lib/brand-studio/env';
+import {
+  BRAND_ORG_FILTERS,
+  BRAND_ORG_PAGE_SIZE,
+  BRAND_ORG_SORTS,
+  brandOrgListFilter,
+  brandOrgListHref,
+  loadBrandOrgList,
+} from '@/lib/admin/brand-org-list';
+import { interpolate } from '@/lib/i18n/format';
+import { brandRoomsOpen } from '@/lib/flags';
 
-export const dynamic = "force-dynamic";
+export const dynamic = 'force-dynamic';
 
-export default async function StudioBrands() {
-  const [viewer, sql, locale] = await Promise.all([
+type SearchParams = Record<string, string | string[] | undefined>;
+const one = (params: SearchParams, key: string): string | undefined => {
+  const value = params[key];
+  return typeof value === 'string' ? value : undefined;
+};
+
+export default async function StudioBrands(props?: { searchParams?: Promise<SearchParams> }) {
+  const [viewer, sql, locale, params] = await Promise.all([
     requireAdmin(),
     getSqlRunner(),
     getLocaleFromHeaders(),
+    props?.searchParams ?? Promise.resolve({} as SearchParams),
   ]);
-  const dict = getDictionary(locale),
-    b = dict.brandWorkspace,
-    be = dict.adminConsole.brandEngine;
-  const [workspace, inbox] = sql ? await Promise.all([loadStudioWorkspace({ sql }, viewer), loadStudioInbox({ sql }, viewer)]) : [null, null];
-  const orgIds = workspace ? workspace.organizations.map((o) => o.id) : [];
-  const [policiesByOrg, plansByOrg, identitiesByOrg] =
-    sql && workspace
-      ? await Promise.all([
-          loadFeaturePolicies(sql, orgIds),
-          Promise.all(orgIds.map((orgId) => loadPlanAssignment(sql, orgId))),
-          Promise.all(orgIds.map((orgId) => loadBrandIdentity(sql, orgId))),
-        ])
-      : [{} as Record<string, BrandFeature[]>, [], []];
-  const krw = new Intl.NumberFormat("ko-KR");
+  const dict = getDictionary(locale);
+  const b = dict.brandWorkspace;
+  const c = dict.adminConsole;
+  const ol = c.brandOrgList;
+  const filter = brandOrgListFilter(params);
+  const env = studioEnv();
+
+  const [workspace, inbox, orgList] = sql
+    ? await Promise.all([
+        loadStudioWorkspace({ sql }, viewer),
+        loadStudioInbox({ sql }, viewer),
+        loadBrandOrgList(sql, viewer, filter, { env }),
+      ])
+    : [null, null, null];
+
+  const first = orgList && orgList.total > 0 ? (orgList.page - 1) * BRAND_ORG_PAGE_SIZE + 1 : 0;
+  const last = orgList ? Math.min(orgList.page * BRAND_ORG_PAGE_SIZE, orgList.total) : 0;
+
   return (
     <AdminShell dict={dict.admin} locale={locale} active="brandWorkspace">
       <div data-studio-brand-queue>
+        <OutcomeBanner
+          dict={dict.admin}
+          ok={one(params, 'ok')}
+          err={one(params, 'err')}
+          detail={one(params, 'detail')}
+          showDetailForOk
+        />
         <AdminPageHeader
           title={b.dashboard.studioTitle}
-          {...(workspace ? { count: formatCount(workspace.projects.length, locale) } : {})}
+          {...(orgList ? { count: formatCount(orgList.total, locale) } : {})}
           lede={b.dashboard.studioSubtitle}
           actions={
             <>
+              <a className="admin-btn" href="/admin/brand-billing" data-brand-billing-link>
+                {ol.billingLink} →
+              </a>
+              <a className="admin-btn" href="/admin/brand-billing/codes" data-brand-billing-codes-link>
+                {ol.discountCodesLink} →
+              </a>
+              <a className="admin-btn" href="/admin/brand-studio" data-brand-studio-ops-link>
+                {ol.studioOpsLink} →
+              </a>
               <a className="admin-btn" href="/admin/brand-workspace/usage" data-usage-queue-link>
                 {b.secondaryUsage.admin.openQueue} →
               </a>
@@ -111,84 +150,179 @@ export default async function StudioBrands() {
                 </details>
               )}
             </div>
-            {workspace.organizations.length > 0 && (
+
+            {orgList && (
               <div className="mt-4" data-brand-org-matrix>
+                <div className="admin-toolbar" style={{ marginBottom: 12 }}>
+                  <FilterPills
+                    label={ol.filters.all}
+                    pills={BRAND_ORG_FILTERS.map((key) => ({
+                      key,
+                      label: ol.filters[key],
+                      href: brandOrgListHref(filter, { filter: key }),
+                      current: filter.filter === key,
+                    }))}
+                  />
+                  <form method="get" action="/admin/brand-workspace" className="admin-search" role="search">
+                    {filter.filter !== 'all' && <input type="hidden" name="filter" value={filter.filter} />}
+                    <label className="flex items-center gap-1.5 text-xs">
+                      <span>{ol.sortLabel}</span>
+                      <select
+                        name="sort"
+                        defaultValue={filter.sort}
+                        className="admin-input"
+                        style={{ minHeight: 36, width: 'auto', padding: '0 10px' }}
+                      >
+                        {BRAND_ORG_SORTS.map((s) => (
+                          <option key={s} value={s}>
+                            {ol.sorts[s]}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <input
+                      type="search"
+                      name="q"
+                      defaultValue={filter.query}
+                      placeholder={ol.searchPlaceholder}
+                      aria-label={c.list.search}
+                    />
+                    <button type="submit" className="admin-btn">
+                      {c.list.find}
+                    </button>
+                    {(filter.query || filter.filter !== 'all' || filter.sort !== 'last_activity') && (
+                      <a href="/admin/brand-workspace" className="admin-btn">
+                        {c.list.clear}
+                      </a>
+                    )}
+                  </form>
+                </div>
+
                 <AdminTable
-                  caption={be.matrixHeading}
+                  caption={c.brandEngine.matrixHeading}
                   columns={[
-                    { key: "org", label: be.columns.org },
-                    { key: "plan", label: be.columns.plan },
-                    { key: "identity", label: be.columns.identity },
-                    { key: "blocked", label: be.columns.blocked },
-                    { key: "projects", label: be.columns.projects, numeric: true },
-                    { key: "actions", label: be.columns.actions },
+                    { key: 'org', label: ol.columns.org },
+                    { key: 'plan', label: ol.columns.plan },
+                    { key: 'allowance', label: ol.columns.allowance, numeric: true },
+                    { key: 'discount', label: ol.columns.discount },
+                    { key: 'invoice', label: ol.columns.invoice },
+                    { key: 'members', label: ol.columns.members, numeric: true },
+                    { key: 'lastActivity', label: ol.columns.lastActivity },
+                    { key: 'failures7d', label: ol.columns.failures7d, numeric: true },
+                    { key: 'created', label: ol.columns.created },
                   ]}
-                  rows={workspace.organizations.map((o, idx) => {
-                    const denied = policiesByOrg[o.id] ?? [];
-                    const plan = plansByOrg[idx] ?? null;
-                    const dna = identitiesByOrg[idx] ?? null;
-                    const projectCount = workspace.projects.filter(
-                      (p) => p.organizationId === o.id
-                    ).length;
+                  rows={orgList.rows.map((row) => {
+                    const planTone = !row.planId
+                      ? 'hold'
+                      : row.planInGrace
+                        ? 'action'
+                        : row.planExpired
+                          ? 'fail'
+                          : 'done';
+                    const planStateLabel = !row.planId
+                      ? ol.planStates.unassigned
+                      : row.planInGrace
+                        ? ol.planStates.grace
+                        : row.planExpired
+                          ? ol.planStates.expired
+                          : ol.planStates.active;
+
                     return {
-                      key: o.id,
-                      data: { "data-brand-org-row": o.id },
+                      key: row.id,
+                      data: { 'data-brand-org-row': row.id },
                       cells: {
                         org: (
-                          <a
-                            href={`/admin/brand-workspace/organizations/${o.id}`}
-                            className="admin-row-link"
-                          >
-                            <span>{o.name}</span>
-                            <span className="admin-cell-sub">{b.managed.access}</span>
+                          <a href={`/admin/brand-workspace/organizations/${row.id}`} className="admin-row-link">
+                            <span>{row.name}</span>
+                            <span className="admin-cell-sub">
+                              {row.projectCount > 0 ? `${formatCount(row.projectCount, locale)} · ` : ''}
+                              {row.hasUsageRequest && !row.planId ? ol.waitingPlanTag : b.managed.access}
+                            </span>
                           </a>
                         ),
-                        plan: plan ? (
-                          <span className="admin-nowrap">
-                            {b.planNames[plan.planId]} · ₩
-                            {krw.format(BRAND_PLANS[plan.planId].monthlyKrw)}
+                        plan: row.planId ? (
+                          <span>
+                            <StatusPill tone={planTone}>
+                              {b.planNames[row.planId]} · {planStateLabel}
+                            </StatusPill>
+                            <span className="admin-cell-sub">
+                              {row.planEndsOn ? `~ ${row.planEndsOn}` : row.planStartedOn ?? ''}
+                            </span>
                           </span>
                         ) : (
-                          <StatusPill tone="hold">{be.planUnassigned}</StatusPill>
+                          <StatusPill tone="hold">{ol.planStates.unassigned}</StatusPill>
                         ),
-                        identity: dna ? (
-                          <StatusPill
-                            tone={dna.status === "confirmed" ? "action" : "progress"}
-                          >
-                            {be.dnaStatus[dna.status]} · r{dna.revision}
+                        allowance: (
+                          <span className="admin-nowrap">
+                            {formatKrw(row.usedKrw, locale)} / {formatKrw(row.capKrw, locale)}
+                            {row.usagePercent !== null ? ` (${row.usagePercent}%)` : ''}
+                            <span className="admin-cell-sub">
+                              {ol.sources[row.allowanceSource]}
+                              {row.extraKrw > 0
+                                ? ` · ${interpolate(ol.extraBadge, { amount: formatKrw(row.extraKrw, locale) })}`
+                                : ''}
+                            </span>
+                          </span>
+                        ),
+                        discount: row.activeDiscount ? (
+                          <StatusPill tone="action">
+                            {row.activeDiscount.invoicesRemaining === null
+                              ? interpolate(ol.discountUnlimited, { percent: row.activeDiscount.percent })
+                              : interpolate(ol.discountRemaining, {
+                                  percent: row.activeDiscount.percent,
+                                  left: row.activeDiscount.invoicesRemaining,
+                                })}
                           </StatusPill>
                         ) : (
-                          <StatusPill tone="done">{be.dnaStatus.none}</StatusPill>
+                          <span className="admin-cell-sub">{ol.discountNone}</span>
                         ),
-                        blocked:
-                          denied.length === 0 ? (
-                            <StatusPill tone="done">{be.allOpen}</StatusPill>
+                        invoice:
+                          row.overdueInvoiceCount > 0 ? (
+                            <StatusPill tone="fail">
+                              {interpolate(ol.overdueFlag, { count: row.overdueInvoiceCount })}
+                            </StatusPill>
+                          ) : row.unpaidInvoiceCount > 0 ? (
+                            <StatusPill tone="action">
+                              {interpolate(ol.unpaidFlag, { count: row.unpaidInvoiceCount })}
+                            </StatusPill>
                           ) : (
-                            <span className="admin-cell-wrap">
-                              <StatusPill tone="hold">
-                                {interpolate(be.blockedCount, {
-                                  count: String(denied.length),
-                                })}
-                              </StatusPill>
-                              <span className="admin-cell-sub">
-                                {denied.map((f) => b.features[f]).join(", ")}
-                              </span>
-                            </span>
+                            <span className="admin-cell-sub">{ol.invoiceClear}</span>
                           ),
-                        projects: formatCount(projectCount, locale),
-                        actions: (
-                          <a
-                            href={`/admin/brand-workspace/organizations/${o.id}`}
-                            className="admin-btn"
-                          >
-                            {be.openOrg} →
-                          </a>
+                        members: formatCount(row.memberCount, locale),
+                        lastActivity: row.lastActivityAt ? (
+                          <span className="admin-nowrap">{formatAdminTime(row.lastActivityAt, locale)}</span>
+                        ) : (
+                          <span className="admin-cell-sub">{ol.noActivity}</span>
                         ),
+                        failures7d:
+                          row.failedJobs7d > 0 ? (
+                            <StatusPill tone="fail">{formatCount(row.failedJobs7d, locale)}</StatusPill>
+                          ) : (
+                            '0'
+                          ),
+                        created: <span className="admin-nowrap">{formatAdminTime(row.createdAt, locale)}</span>,
                       },
                     };
                   })}
-                  empty={b.studioEmpty}
+                  empty={
+                    filter.query || filter.filter !== 'all' ? ol.emptyFiltered : b.studioEmpty
+                  }
                 />
+
+                {orgList.total > 0 && (
+                  <Pager
+                    label={c.list.pages}
+                    summary={interpolate(c.list.range, {
+                      from: formatCount(first, locale),
+                      to: formatCount(last, locale),
+                      total: formatCount(orgList.total, locale),
+                    })}
+                    prev={orgList.page > 1 ? brandOrgListHref(filter, { page: orgList.page - 1 }) : null}
+                    next={last < orgList.total ? brandOrgListHref(filter, { page: orgList.page + 1 }) : null}
+                    prevLabel={c.list.prev}
+                    nextLabel={c.list.next}
+                  />
+                )}
               </div>
             )}
           </section>

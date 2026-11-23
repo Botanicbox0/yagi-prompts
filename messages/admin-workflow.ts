@@ -21,6 +21,26 @@ export const adminWorkflowEn = {
       hint: "Failures from the last seven days. Read the reason and the payment before a customer asks.",
       action: "Open render board",
     },
+    brandStudioLaneStale: {
+      title: "Check stale studio account worker",
+      hint: "The account-lane worker heartbeat stopped while jobs are waiting.",
+      action: "Open studio ops",
+    },
+    brandStudioFailures: {
+      title: "Check failed studio runs",
+      hint: "Brand studio runs that failed in the last 24 hours across organizations.",
+      action: "Open studio ops",
+    },
+    brandOverdueInvoices: {
+      title: "Follow up overdue B2B invoices",
+      hint: "Issued monthly invoices past 14 days without recorded payment.",
+      action: "Open overdue invoices",
+    },
+    brandWaitingForPlan: {
+      title: "Assign plans to waiting organizations",
+      hint: "Organizations created with a usage/plan request and no plan assigned yet.",
+      action: "Open waiting orgs",
+    },
     accountDeletions: {
       title: "Finish account deletions",
       hint: "A request something holds, or a cleanup that did not finish. The privacy policy promises deletion within 7 days.",
@@ -183,6 +203,26 @@ export const adminWorkflowKo: typeof adminWorkflowEn = {
       title: "실패한 렌더를 확인하세요",
       hint: "최근 7일 동안 실패한 렌더입니다. 고객이 묻기 전에 실패 사유와 결제 상태를 봅니다.",
       action: "렌더 보드 열기",
+    },
+    brandStudioLaneStale: {
+      title: "스튜디오 계정 워커 지연을 점검하세요",
+      hint: "대기 중인 작업이 있으나 계정 레인 워커의 하트비트가 멈춰 있습니다.",
+      action: "스튜디오 운영 열기",
+    },
+    brandStudioFailures: {
+      title: "브랜드 스튜디오 실패 작업을 확인하세요",
+      hint: "최근 24시간 동안 브랜드 스튜디오에서 실패한 작업입니다.",
+      action: "스튜디오 운영 열기",
+    },
+    brandOverdueInvoices: {
+      title: "미납·연체 B2B 청구서를 확인하세요",
+      hint: "발행 후 14일이 지난 미입금 청구서입니다.",
+      action: "연체 청구서 열기",
+    },
+    brandWaitingForPlan: {
+      title: "플랜 배정을 기다리는 조직을 확인하세요",
+      hint: "이용 신청을 보냈지만 아직 B2B 플랜이 배정되지 않은 조직입니다.",
+      action: "대기 조직 열기",
     },
     accountDeletions: {
       title: "계정 삭제를 마무리하세요",

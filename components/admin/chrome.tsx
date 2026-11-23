@@ -259,11 +259,13 @@ export function OutcomeBanner({
   ok,
   err,
   detail,
+  showDetailForOk = false,
 }: {
   dict: AdminDict;
   ok?: string;
   err?: string;
   detail?: string;
+  showDetailForOk?: boolean;
 }) {
   const successKey = ok
     ? SUCCESS_KEYS[ok as keyof typeof SUCCESS_KEYS]
@@ -277,7 +279,7 @@ export function OutcomeBanner({
     : dict[successKey as keyof AdminDict];
 
   const showDetail = Boolean(
-    detail && (failed || ok === "paymentRechecked" || ok === "paymentUnchanged"),
+    detail && (failed || showDetailForOk || ok === "prepared" || ok === "paymentRechecked" || ok === "paymentUnchanged"),
   );
 
   return (

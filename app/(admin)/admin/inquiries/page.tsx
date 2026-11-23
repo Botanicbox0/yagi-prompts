@@ -116,6 +116,7 @@ export default async function AdminInquiriesPage({ searchParams }: { searchParam
     noticeKind: teamFilters.noticeKind,
     deliveryStatus: teamFilters.deliveryStatus,
     awaitingOnly: teamFilters.awaiting,
+    organizationId: teamFilters.organizationId,
     query: filters.query,
     page: teamFilters.page,
     pageSize: 50,
@@ -371,6 +372,7 @@ export default async function AdminInquiriesPage({ searchParams }: { searchParam
           {teamFilters.noticeKind !== 'all' && <input type="hidden" name="noticeKind" value={teamFilters.noticeKind} />}
           {teamFilters.deliveryStatus !== 'all' && <input type="hidden" name="deliveryStatus" value={teamFilters.deliveryStatus} />}
           {teamFilters.awaiting && <input type="hidden" name="awaiting" value="1" />}
+          {teamFilters.organizationId && <input type="hidden" name="organizationId" value={teamFilters.organizationId} />}
           <label>{t.searchLabel}<input type="search" name="q" defaultValue={filters.query} maxLength={200} placeholder={t.searchPlaceholder} /></label>
           <button type="submit" className={BUTTON_PRIMARY}>{t.search}</button>
           <a href={ADMIN_INQUIRIES_PATH} className="text-sm underline underline-offset-4">{t.reset}</a>
@@ -473,6 +475,11 @@ export default async function AdminInquiriesPage({ searchParams }: { searchParam
                 >
                   {sCopy.awaitingOnlyLabel}
                 </a>
+                {teamFilters.organizationId && (
+                  <a href={teamNoticeHref(filters, teamFilters, { organizationId: null })}>
+                    {interpolate(sCopy.orgFilterActive, { id: shortId(teamFilters.organizationId) })}
+                  </a>
+                )}
               </nav>
               {teamInbox.rows.length === 0 ? (
                 <p className="border border-hairline p-4 text-sm opacity-75">{sCopy.empty}</p>

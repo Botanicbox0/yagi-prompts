@@ -13,6 +13,18 @@ const PATHS: Record<string, ReactNode> = {
       <path d="M7 6.1v3.8l3.2-1.9z" />
     </>
   ),
+  brandStudio: (
+    <>
+      <rect x="2.5" y="2.5" width="11" height="11" rx="1.6" />
+      <path d="M5 10.5V7.5M8 10.5V5.2M11 10.5V8.3" />
+    </>
+  ),
+  brandBilling: (
+    <>
+      <rect x="2.5" y="3" width="11" height="10" rx="1.6" />
+      <path d="M5 6.5h6M5 9.5h3.5" />
+    </>
+  ),
   prompts: (
     <>
       <rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1" />
