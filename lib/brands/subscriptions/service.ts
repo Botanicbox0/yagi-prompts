@@ -17,6 +17,7 @@ import {
   type InvoiceActor,
 } from '../billing/invoices';
 import {
+  daysInYearMonth,
   diffCalendarDays,
   invoiceAmounts,
   isValidCalendarDay,
@@ -546,6 +547,23 @@ async function refreshFutureSubscriptionDrafts(sql: SqlRunner, sub: BrandSubscri
     });
     if (!refreshed.ok) throw new BrandBillingDenied(refreshed.code, refreshed.detail ?? 'refresh_draft_failed');
   }
+}
+
+/** B1a-2: the latest subscription invoice of `period` (by creation) — the one a reissue replaces. */
+function latestSubscriptionInvoiceOfPeriod(rows: readonly ExtendedInvoiceRow[], period: string): ExtendedInvoiceRow | null {
+  const list = rows
+    .filter((r) => r.kind === 'subscription' && String(r.period) === period)
+    .sort((a, b) => String(stamp(a.created_at) ?? '').localeCompare(String(stamp(b.created_at) ?? '')) || String(a.id).localeCompare(String(b.id)));
+  return list.at(-1) ?? null;
+}
+
+/** The first day of `period` that gives `days` billed days (null = the full month). */
+function startDayForDayCount(days: number | null, period: string): string | null {
+  if (days == null) return null;
+  const total = daysInYearMonth(period);
+  const start = total - Number(days) + 1;
+  if (start <= 1) return null;
+  return `${period}-${String(start).padStart(2, '0')}`;
 }
 
 const MAX_BILLING_PASSES = 4;
@@ -1129,9 +1147,10 @@ export async function reconcileSubscriptionInTxIfExists(
 // B1: Runs AFTER `markPaid`/`void` commits in its own transaction (org lock first, same order as cron job).
 registerSubscriptionReconcileHook(async (rootSql, params) => {
   try {
-    await rootSql.transaction(async (txSql) => {
-      await reconcileSubscriptionInTxIfExists(txSql, params);
-    });
+    const summary = await rootSql.transaction((txSql) => reconcileSubscriptionInTxIfExists(txSql, params));
+    // B1a-2, item 3: report a failed step (the steps that worked are committed) so the admin sees it.
+    const failures = summary?.failures ?? [];
+    return { failed: failures.length > 0, accessAffected: failures.some((f) => f.startsWith('access:')) };
   } catch (error) {
     // Round 3, item 2: a reconcile that threw is counted on the row (fresh statement, outside the rolled-back
     // transaction); the caller logs it and the hourly job retries.
@@ -1944,13 +1963,29 @@ export async function reissueSubscriptionPeriod(
         return { ok: false as const, code: 'conflict' as const, detail: 'period_not_admin_voided' };
       }
 
-      const billableOnFirst = wasBillableOnDay({
-        targetDay: firstDayOfPeriod(v.period),
-        graceDays,
-        subscription: toEngineSubscription(sub),
-        invoices: engineInvoices,
-      });
-      const prorateFromDay = billableOnFirst ? null : todayKst;
+      // B1a-2, item 1: a reissue re-issues the SAME month — the same day count and due date as the invoice it
+      // replaces (a full month stays full, a resumed or first month keeps its days), never re-priced from today.
+      // Exception: nothing was ever paid AND the first-invoice rule applies (no early access) — a new first
+      // invoice, prorated from today when the month was not billable on its 1st, due by the first-invoice rule.
+      // With early access the customer had access from the start, so the voided invoice is copied as well.
+      // (Nothing of this period to copy — e.g. an earlier month's first invoice expired — keeps that behaviour.)
+      const freshFirstInvoice =
+        subscriptionNeedsReissue(toEngineSubscription(sub), engineInvoices) &&
+        firstInvoiceRuleApplies(toEngineSubscription(sub), engineInvoices);
+      const replaced = freshFirstInvoice ? null : latestSubscriptionInvoiceOfPeriod(invoiceRows, v.period);
+      let prorateFromDay: string | null;
+      if (replaced) {
+        prorateFromDay = startDayForDayCount(replaced.prorated_days, v.period);
+      } else {
+        const billableOnFirst = wasBillableOnDay({
+          targetDay: firstDayOfPeriod(v.period),
+          graceDays,
+          subscription: toEngineSubscription(sub),
+          invoices: engineInvoices,
+        });
+        prorateFromDay = billableOnFirst ? null : todayKst;
+      }
+      const billableOnFirst = prorateFromDay === null;
       const prorate = prorationFromDay(prorateFromDay, v.period);
 
       const effectiveFromPeriod =
@@ -1965,12 +2000,14 @@ export async function reissueSubscriptionPeriod(
       // Round 3, items 1 and 3: a subscription with nothing paid and no early access reissues a first invoice
       // (it expires the day after its month), due inside that month; otherwise max(today, 1st of the period) + 14.
       const firstInvoiceRule = firstInvoiceRuleApplies(toEngineSubscription(sub), engineInvoices);
-      const dueOn = dueOnForInvoice({
-        issueDay: todayKst,
-        period: v.period,
-        method: sub.collectionMethod,
-        ...(firstInvoiceRule ? { firstInvoiceWithoutEarlyAccess: { startedOn: sub.startedOn } } : {}),
-      });
+      const dueOn =
+        replaced?.due_on ??
+        dueOnForInvoice({
+          issueDay: todayKst,
+          period: v.period,
+          method: sub.collectionMethod,
+          ...(firstInvoiceRule ? { firstInvoiceWithoutEarlyAccess: { startedOn: sub.startedOn } } : {}),
+        });
       const amounts = await derivedInvoiceAmounts(sql, v.organizationId, planToBill, prorate);
       const previewValues = {
         organizationId: v.organizationId,

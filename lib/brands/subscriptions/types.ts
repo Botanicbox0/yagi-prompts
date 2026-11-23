@@ -123,6 +123,8 @@ export interface BrandSubscriptionTickResult {
   blockedByOlderEpoch?: number;
   /** The daily notice for organizations at 3 or more consecutive failed reconciles (once per KST day + count). */
   failureNoticeEnqueued?: boolean;
+  /** B1a-2: the daily notice of suspended subscriptions and pending ones waiting for a reissue. */
+  attentionNoticeEnqueued?: boolean;
   /** True when `BRAND_PLAN_GRACE_DAYS` is below 1: access then ends on the due date itself. */
   graceDaysBelowOne?: boolean;
   budgetExhausted?: boolean;

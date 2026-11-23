@@ -126,6 +126,9 @@ describe('brand subscription engine — property simulation (rounds 1 and 2)', (
       needsReissueDays: 0,
       memoEdits: 0,
       refusedAttempts: 0,
+      sameDayReissues: 0,
+      earlyAccessReissues: 0,
+      cappedReissues: 0,
       cancelChecks: 0,
       nullEpochVoids: 0,
       expiryChecks: 0,
@@ -158,6 +161,8 @@ describe('brand subscription engine — property simulation (rounds 1 and 2)', (
         epoch: 3,
       };
       const history = new Map<string, { status: string; basis: boolean; epoch: number }>();
+      /** B1a-2 review, item 4: access end just BEFORE an admin voided the month's issued invoice (cleared by payments). */
+      const accessBeforeVoid = new Map<string, string | null>();
       let prevActive = false;
 
       const epochInvoices = () => invoices.filter((i) => i.subscriptionEpoch === sub.epoch);
@@ -252,9 +257,11 @@ describe('brand subscription engine — property simulation (rounds 1 and 2)', (
         label: string,
         todayBillable = true,
         expectedDue = dueOnForInvoice({ issueDay: today, period: inv.period, method: 'transfer' }),
+        /** B1a-2: a reissue of a month keeps the replaced invoice's first billed day (undefined = the rule). */
+        replacedFrom?: string | null,
       ) => {
-        const billableFirst = billableOnFirstOracle(inv.period, today, before, todayBillable);
-        const expectedFrom = billableFirst ? null : today;
+        const billableFirst = replacedFrom !== undefined ? replacedFrom === null : billableOnFirstOracle(inv.period, today, before, todayBillable);
+        const expectedFrom = replacedFrom !== undefined ? replacedFrom : billableFirst ? null : today;
         const pendingApplies =
           billableFirst &&
           before.pendingPlanId !== null &&
@@ -300,6 +307,7 @@ describe('brand subscription engine — property simulation (rounds 1 and 2)', (
         const currentPeriod = periodOfDay(today);
         const cal = subscriptionCalendarForDay(today);
         let paidToday = false;
+        let reissueAccessCap: string | null = null;
         let lateFirstPaidToday = false;
         let eventToday = today === sub.startedOn; // the start itself opens early access
         const paidCoverEndAtDayStart = (() => {
@@ -312,6 +320,7 @@ describe('brand subscription engine — property simulation (rounds 1 and 2)', (
           const anyTaken = invoices.some((i) => i.kind === 'subscription' && i.status !== 'void' && i.period >= currentPeriod);
           if (!anyTaken && rand() < 0.03) {
             counts.restarts += 1;
+            accessBeforeVoid.clear();
             eventToday = true;
             sub = {
               status: 'pending',
@@ -360,10 +369,13 @@ describe('brand subscription engine — property simulation (rounds 1 and 2)', (
             const inv = pick(open);
             inv.status = 'paid';
             inv.paidAt = stampAt(today, 9);
+            accessBeforeVoid.clear();
             paidToday = true;
             eventToday = true;
           } else if (r >= 0.2 && r < 0.212 && voidable.length > 0) {
-            voidAs(pick(voidable), today, 'admin');
+            const target = pick(voidable);
+            if (target.status === 'issued') accessBeforeVoid.set(target.period, assignment?.endsOn ?? null);
+            voidAs(target, today, 'admin');
             counts.adminVoids += 1;
             eventToday = true;
           } else if (r >= 0.212 && r < 0.216 && !sub.cancelAtPeriodEnd) {
@@ -410,19 +422,35 @@ describe('brand subscription engine — property simulation (rounds 1 and 2)', (
               const before = { ...sub };
               // A subscription with nothing paid and nothing open is not billable (no access basis).
               const reissueBillableToday = !subscriptionNeedsReissue(sub, invoices);
-              const billableFirst = wasBillableOnDay({ targetDay: firstDayOfPeriod(currentPeriod), graceDays, subscription: sub, invoices });
-              const fromDay = billableFirst ? null : today;
+              // B1a-2, item 1: with something paid the reissue re-issues the replaced invoice — same first billed day
+              // (so the same day count) and the same due date; a never-paid subscription gets a new first invoice.
+              // B1a-2 review, item 1: only a never-paid subscription WITHOUT early access gets a new first invoice;
+              // with early access the voided invoice is copied like any other month.
+              const copies = reissueBillableToday || !firstInvoiceRuleApplies(sub, invoices);
+              if (!reissueBillableToday && copies) counts.earlyAccessReissues += 1;
+              const replaced = copies
+                ? [...epoch.filter((i) => i.kind === 'subscription' && i.period === currentPeriod)]
+                    .sort((x, y) => (x.createdAt ?? '').localeCompare(y.createdAt ?? '') || x.id.localeCompare(y.id))
+                    .at(-1) ?? null
+                : null;
+              const billableFirst = replaced
+                ? replaced.prorateFromDay === null
+                : wasBillableOnDay({ targetDay: firstDayOfPeriod(currentPeriod), graceDays, subscription: sub, invoices });
+              const fromDay = replaced ? replaced.prorateFromDay : billableFirst ? null : today;
               const applies =
                 billableFirst && sub.pendingPlanId !== null && sub.pendingPlanId !== sub.planId && currentPeriod >= effectiveFrom(sub);
               if (applies) sub = { ...sub, planId: sub.pendingPlanId!, pendingPlanId: null, pendingPlanEffectivePeriod: null };
               // Nothing paid and no early access: a first invoice (it expires after its month), due inside it.
               const firstInvoiceRule = firstInvoiceRuleApplies(sub, invoices);
-              const reissueDue = dueOnForInvoice({
-                issueDay: today,
-                period: currentPeriod,
-                method: 'transfer',
-                ...(firstInvoiceRule ? { firstInvoiceWithoutEarlyAccess: { startedOn: sub.startedOn } } : {}),
-              });
+              const reissueDue =
+                replaced?.dueOn ??
+                dueOnForInvoice({
+                  issueDay: today,
+                  period: currentPeriod,
+                  method: 'transfer',
+                  ...(firstInvoiceRule ? { firstInvoiceWithoutEarlyAccess: { startedOn: sub.startedOn } } : {}),
+                });
+              const accessBefore = assignment?.endsOn ?? null;
               const reissued = newInvoice({
                 period: currentPeriod,
                 status: 'issued',
@@ -436,7 +464,18 @@ describe('brand subscription engine — property simulation (rounds 1 and 2)', (
               });
               counts.reissues += 1;
               eventToday = true;
-              checkIssued(reissued, today, before, `seed=${seed} grace=${graceDays} day=${today} reissue`, reissueBillableToday, reissueDue);
+              const reissueLabel = `seed=${seed} grace=${graceDays} day=${today} reissue`;
+              checkIssued(reissued, today, before, reissueLabel, reissueBillableToday, reissueDue, replaced ? replaced.prorateFromDay : undefined);
+              if (replaced) {
+                // Same day count and due date as the replaced invoice; never a lower amount (same plan and discount).
+                expect(reissued.prorateFromDay, `${reissueLabel} day count`).toBe(replaced.prorateFromDay);
+                expect(reissued.dueOn, `${reissueLabel} due date`).toBe(replaced.dueOn);
+                expect(reissued.totalKrw >= replaced.totalKrw || reissued.planId !== replaced.planId, `${reissueLabel} lower amount`).toBe(true);
+                // The cap is the access end BEFORE the void (after an admin void the month is waived and access may
+                // already run further; a payment since then clears the cap).
+                reissueAccessCap = accessBeforeVoid.has(currentPeriod) ? (accessBeforeVoid.get(currentPeriod) ?? null) : (accessBefore ?? replaced.dueOn);
+                counts.sameDayReissues += 1;
+              }
             }
           } else if (r >= 0.33 && r < 0.345 && ownDrafts.length > 0) {
             // Round 4, A2: a memo-only edit of the job's draft — allowed, changes nothing the job decides.
@@ -700,6 +739,12 @@ describe('brand subscription engine — property simulation (rounds 1 and 2)', (
           expect(result.actions.some((a) => a.type === 'draft' || a.type === 'issue'), `${after} billed while restricted`).toBe(false);
         }
 
+        // B1a-2: a void + reissue of the same month never extends access beyond what the replaced invoice gave.
+        if (reissueAccessCap !== null && !paidToday && assignment?.endsOn) {
+          expect(assignment.endsOn <= reissueAccessCap, `${after} reissue extended access`).toBe(true);
+          counts.cappedReissues += 1;
+        }
+
         // Round 5, C (b): after a cancel nothing unpaid exists for a later month (a paid one would extend the end).
         if (sub.cancelAtPeriodEnd || (sub.status === 'ended' && before.status !== 'ended')) {
           const later = epochInvoices().filter((i) => i.period > currentPeriod && i.status !== 'void' && i.status !== 'paid');
@@ -739,6 +784,9 @@ describe('brand subscription engine — property simulation (rounds 1 and 2)', (
     expect(counts.needsReissueDays).toBeGreaterThan(20);
     expect(counts.memoEdits).toBeGreaterThan(10);
     expect(counts.refusedAttempts).toBeGreaterThan(100);
+    expect(counts.sameDayReissues).toBeGreaterThan(10);
+    expect(counts.earlyAccessReissues).toBeGreaterThan(5);
+    expect(counts.cappedReissues).toBeGreaterThan(5);
     expect(counts.cancelChecks).toBeGreaterThan(100);
     expect(counts.nullEpochVoids).toBeGreaterThan(5);
     expect(counts.expiryChecks).toBeGreaterThan(3);

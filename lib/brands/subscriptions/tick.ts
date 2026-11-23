@@ -5,6 +5,7 @@ import { addCalendarDays, kstDayOf } from '../billing/math';
 import { loadSubscriptionSchemaReady } from '../billing/schema-guard';
 import { periodOfDay } from './engine';
 import {
+  enqueueAttentionNotice,
   enqueueReconcileFailureNotice,
   enqueueSubscriptionNotice,
   subscriptionIssuesOfKstDay,
@@ -183,6 +184,14 @@ export async function runBrandSubscriptionTick(args: {
     warn(error);
   }
 
+  // B1a-2, item 5: suspended subscriptions and pending ones waiting for a reissue, once per KST day.
+  let attentionNoticeEnqueued = false;
+  try {
+    attentionNoticeEnqueued = await enqueueAttentionNotice(sql, todayKst);
+  } catch (error) {
+    warn(error);
+  }
+
   return {
     ok: true,
     period,
@@ -202,6 +211,7 @@ export async function runBrandSubscriptionTick(args: {
     noticeEnqueued,
     voidNoticeEnqueued,
     failureNoticeEnqueued,
+    attentionNoticeEnqueued,
     // Item 7: with grace 0 access ends on the due date itself; the operator sets BRAND_PLAN_GRACE_DAYS=14.
     graceDaysBelowOne: graceDays < 1,
     ...(budgetExhausted ? { budgetExhausted: true } : {}),
