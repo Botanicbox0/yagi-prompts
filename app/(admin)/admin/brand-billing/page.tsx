@@ -460,6 +460,19 @@ export default async function BrandBillingOverviewPage(props?: { searchParams?: 
                   </p>
                 ) : (
                   <>
+                    {data.taxInvoicePanel.attention && (
+                      <p
+                        className="admin-notice mb-3"
+                        data-subscription-attention
+                        data-suspended-count={data.taxInvoicePanel.attention.suspended}
+                        data-reissue-count={data.taxInvoicePanel.attention.pendingReissue}
+                      >
+                        {interpolate(bb.subscriptionAttention, {
+                          suspended: formatCount(data.taxInvoicePanel.attention.suspended, locale),
+                          reissue: formatCount(data.taxInvoicePanel.attention.pendingReissue, locale),
+                        })}
+                      </p>
+                    )}
                     <p className="admin-field-hint mb-3">{bb.taxInvoicesHint}</p>
                     <AdminTable
                       caption={interpolate(bb.taxInvoicesHeading, { period: data.period })}

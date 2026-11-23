@@ -112,21 +112,57 @@ export async function subscriptionIssuesOfKstDay(sql: SqlRunner, kstDay: string)
  * failed reconciles, or 1+ when the last failure cost the customer access the facts give them (`access:`).
  */
 export async function enqueueReconcileFailureNotice(sql: SqlRunner, kstDay: string): Promise<boolean> {
-  const stuck = Number(
-    (
-      await sql.query<{ n: number }>(
-        `select count(*)::int as n from brand_subscriptions
-          where status <> 'ended'
-            and (reconcile_failures >= 3 or (reconcile_failures >= 1 and last_reconcile_error like 'access:%'))`,
-      )
-    ).rows[0]?.n ?? 0,
+  const { rows } = await sql.query<{ organization_id: string }>(
+    `select organization_id::text as organization_id from brand_subscriptions
+      where status <> 'ended'
+        and (reconcile_failures >= 3 or (reconcile_failures >= 1 and last_reconcile_error like 'access:%'))`,
   );
+  const stuck = rows.length;
   if (stuck === 0) return false;
+  // B1a-2, item 2: keyed on the KST day + a hash of WHICH organizations fail (never shown), so "A recovers, B
+  // fails" on the same day is sent; an unchanged set is not.
   return enqueueSubscriptionNotice(sql, {
-    keyParts: ['reconcile_failures', kstDay, String(stuck)],
+    keyParts: ['reconcile_failures', kstDay, voidEventsKey(rows.map((r) => String(r.organization_id)))],
     preview: `[B2B 정기구독 확인 필요] 자동 정산이 실패한 조직이 ${stuck}곳입니다(3회 이상 연속 실패, 또는 이용 기간을 반영하지 못한 실패). 조직 구독 카드에서 오류 코드를 확인하고 다시 정산해 주세요.`,
     period: kstDay.slice(0, 7),
     surface: 'brand_billing:subscription_reconcile_failures',
+  });
+}
+
+/**
+ * B1a-2, item 5: subscriptions the team must look at — `suspended`, and `pending` with nothing paid and nothing
+ * open in the current epoch (the "reissue or cancel" alert). Counts only.
+ */
+export async function subscriptionAttentionCounts(sql: SqlRunner): Promise<{ suspended: number; pendingReissue: number }> {
+  const row = (
+    await sql.query<{ suspended: number; pending_reissue: number }>(
+      `select count(*) filter (where s.status = 'suspended')::int as suspended,
+              count(*) filter (
+                where s.status = 'pending'
+                  and not exists (
+                    select 1 from brand_invoices i
+                     where i.organization_id = s.organization_id
+                       and i.subscription_epoch = s.epoch
+                       and ((i.status = 'paid' and i.kind in ('subscription', 'prepay'))
+                         or (i.status = 'issued' and i.kind in ('subscription', 'adjustment')))
+                  )
+              )::int as pending_reissue
+         from brand_subscriptions s
+        where s.status <> 'ended'`,
+    )
+  ).rows[0];
+  return { suspended: Number(row?.suspended ?? 0), pendingReissue: Number(row?.pending_reissue ?? 0) };
+}
+
+/** Once per KST day, when anything is suspended or waiting for a reissue. */
+export async function enqueueAttentionNotice(sql: SqlRunner, kstDay: string): Promise<boolean> {
+  const { suspended, pendingReissue } = await subscriptionAttentionCounts(sql);
+  if (suspended === 0 && pendingReissue === 0) return false;
+  return enqueueSubscriptionNotice(sql, {
+    keyParts: ['attention', kstDay],
+    preview: `[B2B 정기구독 확인 필요] ${kstDay} 이용 정지 ${suspended}곳 · 다시 발행이 필요한 대기 ${pendingReissue}곳. 조직 구독 카드에서 확인해 주세요.`,
+    period: kstDay.slice(0, 7),
+    surface: 'brand_billing:subscription_attention',
   });
 }
 

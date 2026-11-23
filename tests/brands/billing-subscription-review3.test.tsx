@@ -173,7 +173,10 @@ describe('B1a review round 3', () => {
     const dec8 = await runBrandSubscriptionTick({ sql, now: at('2026-12-08T01:00:00Z') });
     expect(dec8).toMatchObject({ voided: 1, voidNoticeEnqueued: true });
     expect(await invoiceRow(s.firstInvoiceId)).toMatchObject({ status: 'void', void_reason: 'first_invoice_expired', voided_by: null });
-    const added = (await notices()).slice(before);
+    // B1a-2: the same run also sends the daily attention notice (this pending subscription now needs a reissue).
+    const all = (await notices()).slice(before);
+    expect(all.filter((n) => n.surface === 'brand_billing:subscription_attention')).toHaveLength(1);
+    const added = all.filter((n) => n.surface !== 'brand_billing:subscription_attention');
     expect(added).toHaveLength(1);
     expect(added[0]!.preview).toContain('시스템 취소 1건 (기한 지난 첫 청구서 1건)');
     expect(added[0]!.preview).toContain('세금계산서 발행 기록이 있는 취소 1건 — 수정 세금계산서 필요');
@@ -182,7 +185,7 @@ describe('B1a review round 3', () => {
     expect(added[0]!.preview).toContain('이후 입금이 확인되면 다시 발행');
     // A second run on the same day adds nothing.
     await runBrandSubscriptionTick({ sql, now: at('2026-12-08T03:00:00Z') });
-    expect((await notices()).length).toBe(before + 1);
+    expect((await notices()).length).toBe(before + 2);
 
     // The admin page marks the void row that had a tax invoice recorded.
     vi.useFakeTimers({ toFake: ['Date'] });

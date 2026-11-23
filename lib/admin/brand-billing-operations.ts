@@ -616,7 +616,11 @@ const invoiceMarkPaid: AdminOperation<{ invoiceId: string; paidAt?: string; paid
     if (!result.ok) return billingFailure(result);
     return ok('paid', {
       to: organizationPath(result.invoice.organizationId),
-      ...(result.reconcileDeferred ? { detail: 'subscription_reconcile_deferred' } : {}),
+      ...(result.accessNotUpdated
+        ? { detail: 'subscription_access_not_updated' }
+        : result.reconcileDeferred
+          ? { detail: 'subscription_reconcile_deferred' }
+          : {}),
     });
   },
 };
@@ -636,7 +640,7 @@ const invoiceVoid: AdminOperation<{ invoiceId: string; reason: string }> = {
     if (!result.ok) return billingFailure(result);
     return ok('saved', {
       to: organizationPath(result.invoice.organizationId),
-      ...(result.reconcileDeferred ? { detail: 'subscription_reconcile_deferred' } : {}),
+      ...(result.accessNotUpdated || result.reconcileDeferred ? { detail: 'subscription_void_not_updated' } : {}),
     });
   },
 };
