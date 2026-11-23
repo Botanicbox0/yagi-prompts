@@ -1,83 +1,60 @@
+import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
+import { freshDb, runner } from '@/tests/helpers/pglite';
+import { seedProfile } from '@/tests/helpers/billing';
 import {
-  brandSlackHandle,
   deterministicSlackMessageUuid,
-  formatOutboundSlackInquiry,
-  parseSlackConciergeReply,
-  resolveActiveConciergeChannel,
+  formatProjectRequestAlert,
+  notifySlackBrandConcierge,
+  resolveTeamNoticeConfig,
 } from '@/lib/brands/concierge-slack';
+import { createStudioOrganization } from '@/lib/brands/workspace/service';
+import { formatTeamNoticeSlackText } from '@/lib/brands/team-notice-outbox';
 
 const ORGS = [
-  { id: 'deb648e9-c2df-43d4-b2a7-7f9eff8180d9', name: 'Morphic' },
-  { id: 'd425c3b1-4066-4970-8a3b-93c52b3eef70', name: 'KAIPER' },
-  { id: 'f5a6993b-1951-497e-a4da-3f221892f85e', name: 'YAGI WORKSHOP TEST' },
+  { id: '11111111-1111-4111-8111-111111111101', name: 'Acme Studio' },
 ] as const;
 
-describe('brand concierge ↔ Slack bridge', () => {
-  it('normalizes brand names into @handles', () => {
-    expect(brandSlackHandle('Morphic')).toBe('@morphic');
-    expect(brandSlackHandle('KAIPER')).toBe('@kaiper');
-    expect(brandSlackHandle('YAGI WORKSHOP TEST')).toBe('@yagi-workshop-test');
-  });
-
-  it('formats outbound inquiries with client organization, sender identity, and @handle instructions', () => {
-    const text = formatOutboundSlackInquiry({
-      organizationId: ORGS[0].id,
-      organizationName: ORGS[0].name,
-      senderEmail: 'karina.lim@morphicbusiness.com',
-      senderRole: 'owner',
-      body: '이번 달 크리에이터 리스트 요청드립니다.',
-      messageId: '00000000-0000-4000-8000-000000000001',
-    });
-    expect(text).toContain('고객사:* *Morphic* (`@morphic`)');
-    expect(text).toContain('karina.lim@morphicbusiness.com (owner)');
-    expect(text).toContain('> 이번 달 크리에이터 리스트 요청드립니다.');
-    expect(text).toContain('`@morphic 답변내용`');
-    expect(text).toContain(`[org:${ORGS[0].id}]`);
-  });
-
-  it('parses @morphic and @brand replies from Slack into studio messages', () => {
-    expect(
-      parseSlackConciergeReply('@morphic 안녕하세요! 오늘 오후 4시에 리스트 전달드리겠습니다.', ORGS),
-    ).toEqual({
-      organizationId: ORGS[0].id,
-      body: '안녕하세요! 오늘 오후 4시에 리스트 전달드리겠습니다.',
+describe('brand concierge <-> Slack bridge (strict outbox & dual-transport)', () => {
+  it('formats outbound notices with slackSafe, adminUrl, display name only (no email/phone/user-id), and transport hint', () => {
+    const botText = formatTeamNoticeSlackText({
+      kind: 'support_message',
+      organizationName: 'Acme & <!channel>',
+      actorDisplayName: 'Alex <@U9999>',
+      surface: 'support_drawer',
+      preview: '문의합니다 <!here> & check <https://evil.example|link>',
+      adminPath: `/admin/brand-workspace/organizations/${ORGS[0].id}#support`,
+      transport: 'bot',
     });
 
-    expect(
-      parseSlackConciergeReply('[@Morphic]: 시안 v2 업로드 완료했습니다.', ORGS),
-    ).toEqual({
-      organizationId: ORGS[0].id,
-      body: '시안 v2 업로드 완료했습니다.',
-    });
+    expect(botText).toContain('Acme &amp; &lt;!channel&gt;');
+    expect(botText).toContain('Alex &lt;@U9999&gt;');
+    expect(botText).toContain('&lt;!here&gt; &amp; check &lt;https://evil.example|link&gt;');
+    expect(botText).not.toContain('<!channel>');
+    expect(botText).not.toContain('<!here>');
+    expect(botText).not.toContain('<@U9999>');
+    expect(botText).toContain(`https://admin.twings.app/admin/brand-workspace/organizations/${ORGS[0].id}#support`);
+    expect(botText).toContain('스레드에 답글을 남기면');
 
-    expect(
-      parseSlackConciergeReply('@kaiper 일정 확인 후 회신드립니다.', ORGS),
-    ).toEqual({
-      organizationId: ORGS[1].id,
-      body: '일정 확인 후 회신드립니다.',
+    const webhookText = formatTeamNoticeSlackText({
+      kind: 'support_message',
+      organizationName: 'Acme Studio',
+      actorDisplayName: 'Alex',
+      preview: '질문입니다',
+      adminPath: `/admin/brand-workspace/organizations/${ORGS[0].id}#support`,
+      transport: 'webhook',
+      isRetry: true,
     });
-  });
+    expect(webhookText).toContain('웹훅 단방향 알림');
+    expect(webhookText).toContain('(재전송)');
 
-  it('parses Slack thread replies under an outbound [org:UUID] inquiry message', () => {
-    const parent = formatOutboundSlackInquiry({
-      organizationId: ORGS[0].id,
-      organizationName: ORGS[0].name,
-      senderEmail: 'karina.lim@morphicbusiness.com',
-      senderRole: 'owner',
-      body: '문의드립니다',
-      messageId: '00000000-0000-4000-8000-000000000001',
+    const projectText = formatProjectRequestAlert({
+      organizationName: 'Acme <!channel>',
+      title: '봄 캠페인',
+      adminUrl: '/admin/brand-rooms/x',
     });
-
-    expect(
-      parseSlackConciergeReply('스레드에서 바로 답변드립니다!', ORGS, parent),
-    ).toEqual({
-      organizationId: ORGS[0].id,
-      body: '스레드에서 바로 답변드립니다!',
-    });
-
-    // Outbound message itself is never mistaken for an inbound reply
-    expect(parseSlackConciergeReply(parent, ORGS)).toBeNull();
+    expect(projectText).toContain('Acme &lt;!channel&gt;');
+    expect(projectText).toContain('https://admin.twings.app/admin/brand-rooms/x');
   });
 
   it('produces deterministic UUIDs for Slack message timestamps to guarantee idempotency', () => {
@@ -89,30 +66,154 @@ describe('brand concierge ↔ Slack bridge', () => {
     expect(a).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-a[0-9a-f]{3}-[0-9a-f]{12}$/);
   });
 
-  it('auto-discovers #twings-brand-concierge from Slack conversations.list instead of #sales-inbox', async () => {
-    const fakeFetcher: typeof fetch = async (url) => {
-      if (String(url).includes('conversations.list')) {
-        return new Response(
-          JSON.stringify({
-            ok: true,
-            channels: [
-              { id: 'C0C7V2PB079', name: 'sales-inbox', is_member: true },
-              { id: 'C0TWINGSCON', name: 'twings-brand-concierge', is_member: true },
-            ],
-          }),
-          { status: 200 },
-        );
-      }
-      return new Response(JSON.stringify({ ok: false }), { status: 200 });
-    };
+  it('resolves strict dual-transport config without channel auto-discovery or fallback names', () => {
+    expect(
+      resolveTeamNoticeConfig({
+        VERCEL_ENV: 'preview',
+        SLACK_BRAND_CONCIERGE_BOT_TOKEN: 'xoxb-123',
+        SLACK_BRAND_CONCIERGE_CHANNEL_ID: 'C0123456789',
+      }),
+    ).toEqual({ status: 'skipped', code: 'non_production' });
 
-    const resolved = await resolveActiveConciergeChannel(
-      { enabled: true, token: 'xoxb-test', channelId: 'twings-brand-concierge' },
-      fakeFetcher,
-    );
-    expect(resolved.channelId).toBe('C0TWINGSCON');
-    expect(resolved.channelName).toBe('twings-brand-concierge');
-    expect(resolved.isDedicated).toBe(true);
-    expect(resolved.isMember).toBe(true);
+    expect(
+      resolveTeamNoticeConfig({
+        VERCEL_ENV: 'production',
+        SLACK_BRAND_CONCIERGE_ENABLED: 'off',
+        SLACK_BRAND_CONCIERGE_BOT_TOKEN: 'xoxb-123',
+        SLACK_BRAND_CONCIERGE_CHANNEL_ID: 'C0123456789',
+        SLACK_TEAM_NOTICE_WEBHOOK_URL: 'https://hooks.slack.com/services/T1/B1/S1',
+      }),
+    ).toEqual({ status: 'skipped', code: 'disabled' });
+
+    expect(
+      resolveTeamNoticeConfig({
+        VERCEL_ENV: 'production',
+        SLACK_BRAND_CONCIERGE_BOT_TOKEN: 'xoxb-123',
+      }),
+    ).toEqual({ status: 'skipped', code: 'missing_channel_id' });
+
+    expect(
+      resolveTeamNoticeConfig({
+        VERCEL_ENV: 'production',
+        SLACK_BRAND_CONCIERGE_BOT_TOKEN: 'xoxb-123',
+        SLACK_BRAND_CONCIERGE_CHANNEL_ID: 'twings-brand-concierge',
+      }),
+    ).toEqual({ status: 'skipped', code: 'invalid_channel_id' });
+
+    expect(
+      resolveTeamNoticeConfig({
+        VERCEL_ENV: 'production',
+        SLACK_BOT_TOKEN: 'xoxb-fallback',
+        SLACK_BRAND_CONCIERGE_CHANNEL_ID: 'G0123456789',
+        SLACK_BRAND_INQUIRIES_ENABLED: 'on',
+        SLACK_BRAND_INQUIRIES_WEBHOOK_URL: 'https://hooks.slack.com/services/T1/B1/S1',
+      }),
+    ).toEqual({
+      status: 'configured',
+      transport: 'bot',
+      token: 'xoxb-fallback',
+      channelId: 'G0123456789',
+    });
+
+    expect(
+      resolveTeamNoticeConfig({
+        VERCEL_ENV: 'production',
+        SLACK_BRAND_INQUIRIES_ENABLED: 'on',
+        SLACK_BRAND_INQUIRIES_WEBHOOK_URL: 'https://hooks.slack.com/services/T1/B1/S1',
+      }),
+    ).toEqual({
+      status: 'configured',
+      transport: 'webhook',
+      webhookUrl: 'https://hooks.slack.com/services/T1/B1/S1',
+    });
+  });
+
+  it('labels pre-0178 fallback notices by kind and prints the admin link once without double escaping', async () => {
+    const db = await freshDb();
+    try {
+      const sql = runner(db);
+      const adminId = randomUUID();
+      await seedProfile(sql, { id: adminId, email: 'admin@example.test', isAdmin: true });
+      const org = await createStudioOrganization(
+        { sql },
+        { userId: adminId, isAdmin: true, tier: 'admin', email: 'admin@example.test', locale: 'ko' },
+        { name: 'Pre0178 Brand', requestId: randomUUID() },
+      );
+      if (!org.ok) throw new Error('org');
+
+      await db.exec('drop table if exists support_synced_replies, consumer_support_messages, team_notice_deliveries;');
+
+      const sentPayloads: string[] = [];
+      const fakeFetcher: typeof fetch = async (_u, init) => {
+        sentPayloads.push((JSON.parse(String(init?.body)) as { text: string }).text);
+        return new Response('ok', { status: 200 });
+      };
+      const prodEnv = {
+        VERCEL_ENV: 'production',
+        SLACK_TEAM_NOTICE_WEBHOOK_URL: 'https://hooks.slack.com/services/T1/B1/S1',
+      };
+
+      const boardId = randomUUID();
+      await notifySlackBrandConcierge(
+        sql,
+        {
+          organizationId: org.id,
+          userId: null,
+          kind: 'storyboard_approval',
+          body: `[스토리보드 승인] Hero &amp; Cut v1\n관리자 화면: https://admin.twings.app/admin/brand-rooms/storyboards/${boardId}`,
+          messageId: randomUUID(),
+        },
+        { env: prodEnv, fetcher: fakeFetcher },
+      );
+
+      await notifySlackBrandConcierge(
+        sql,
+        {
+          organizationId: org.id,
+          userId: null,
+          body: `[리뷰 코멘트] Film v1 · 0:02\nPlease fix &lt;!channel&gt;\n관리자 화면: https://admin.twings.app/admin/brand-studio/reviews/${randomUUID()}`,
+          messageId: randomUUID(),
+        },
+        { env: prodEnv, fetcher: fakeFetcher },
+      );
+
+      await notifySlackBrandConcierge(
+        sql,
+        {
+          organizationId: org.id,
+          userId: null,
+          body: `[공유 링크 의견] Film Review\nCheck colors\n관리자 화면: https://admin.twings.app/admin/brand-rooms/${org.id}/${randomUUID()}?review=r1`,
+          messageId: randomUUID(),
+        },
+        { env: prodEnv, fetcher: fakeFetcher },
+      );
+
+      await notifySlackBrandConcierge(
+        sql,
+        {
+          organizationId: org.id,
+          userId: null,
+          body: `[프로젝트 룸] General\nNeed update\n관리자 화면: https://admin.twings.app/admin/brand-rooms/${org.id}?channel=general`,
+          messageId: randomUUID(),
+        },
+        { env: prodEnv, fetcher: fakeFetcher },
+      );
+
+      expect(sentPayloads).toHaveLength(4);
+      expect(sentPayloads[0]).toContain('스토리보드 결정');
+      expect(sentPayloads[0]).not.toContain('실시간 문의');
+      expect(sentPayloads[0]).toContain(`/admin/brand-rooms/storyboards/${boardId}`);
+      expect(sentPayloads[1]).toContain('시안 리뷰 의견');
+      expect(sentPayloads[1]).not.toContain('실시간 문의');
+      expect(sentPayloads[1]).not.toContain('&amp;lt;');
+      expect(sentPayloads[2]).toContain('공유 링크 의견');
+      expect(sentPayloads[3]).toContain('프로젝트 룸 메시지');
+
+      for (const text of sentPayloads) {
+        expect(text.match(/관리자 화면/g)?.length ?? 0).toBe(1);
+      }
+    } finally {
+      await db.close();
+    }
   });
 });

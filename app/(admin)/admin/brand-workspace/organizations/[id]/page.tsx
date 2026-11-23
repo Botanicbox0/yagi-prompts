@@ -41,6 +41,7 @@ import { BRAND_LOOK_PRESET_IDS } from "@/lib/brands/finish/color-grading";
 import { resolveCategoryExperienceProfile } from "@/lib/brands/category-experience";
 import { BrandStudioAllowancePanel } from "@/lib/admin/brand-studio-allowance-panel";
 import { BrandStorageQuotaPanel } from "@/lib/admin/brand-storage-quota-panel";
+import { loadOrganizationSupportSyncMode } from "@/lib/brands/team-notice-inbox";
 
 export const dynamic = "force-dynamic";
 
@@ -58,7 +59,8 @@ export default async function StudioOrganization({
   const dict = getDictionary(locale),
     b = dict.brandWorkspace,
     c = b.managed,
-    be = dict.adminConsole.brandEngine;
+    be = dict.adminConsole.brandEngine,
+    sCopy = dict.adminConsole.supportInbox;
   if (!sql) return <p role="alert">{b.unavailable}</p>;
   const org = await loadStudioBrandAccess({ sql }, viewer, id);
   if (!org) notFound();
@@ -74,12 +76,13 @@ export default async function StudioOrganization({
     (p) => p.organizationId === id
   );
   // docs/BRAND-PRODUCT.md — the brand engine's studio controls: the deny-list, the plan, and the identity layer.
-  const [policy, plan, brandIdentity, looks, memoryEvents] = await Promise.all([
+  const [policy, plan, brandIdentity, looks, memoryEvents, supportSync] = await Promise.all([
     loadFeaturePolicy(sql, id),
     loadPlanAssignment(sql, id),
     loadBrandIdentity(sql, id),
     listLooks(sql, id),
     listMemory(sql, id, 12),
+    loadOrganizationSupportSyncMode(sql, id),
   ]);
   const activeIdentity = brandIdentity?.identity ?? twingsDefaultIdentity();
   const categoryProfile = resolveCategoryExperienceProfile({ organizationName: org.name });
@@ -516,6 +519,9 @@ export default async function StudioOrganization({
       <ProductionAdmin organizationId={id} projects={projects} previews={previews} workspace={production} b={b}/>
       <section className="bw-panel" id="support">
         <h2>{c.supportTitle}</h2>
+        <p className="bw-muted" data-support-sync-mode={supportSync.mode}>
+          {supportSync.mode === "bot_sync" ? sCopy.syncBot : sCopy.syncAdminOnly}
+        </p>
         <div className="bw-support-history">
           {messages.map((m) => (
             <article

@@ -56,6 +56,7 @@ import {
   notifySlackBrandProjectRequest,
   syncSlackConciergeReplies,
 } from "@/lib/brands/concierge-slack";
+import { runLiveTeamNoticeDeliveryPass } from "@/lib/brands/team-notice-outbox";
 import { IntakeBriefSchema } from "@/lib/brands/workspace/intake-brief";
 import { enqueueNotices } from "@/lib/brand-rooms/notices";
 import { brandOrgInviteEmailOpen, brandRoomInvitesOpen } from "@/lib/flags";
@@ -126,32 +127,56 @@ export async function POST(request: NextRequest) {
       case "support.send":
         result = await sendBrandSupport({sql},viewer,input,"client");
         if (result.ok && typeof input.organizationId === "string" && typeof input.body === "string") {
-          await notifySlackBrandConcierge(sql, {
-            organizationId: input.organizationId,
-            userId: viewer.userId,
-            body: input.body,
-            messageId: String((result as { id?: string }).id ?? ""),
-          }).catch(() => ({ sent: false }));
+          const messageId = String((result as { id?: string }).id ?? "");
+          await afterResponse(async () => {
+            const pass = await runLiveTeamNoticeDeliveryPass(sql, {
+              sourceKind: "support_message",
+              sourceId: messageId,
+            });
+            if (!pass.available) {
+              await notifySlackBrandConcierge(sql, {
+                organizationId: input.organizationId as string,
+                userId: viewer.userId,
+                body: input.body as string,
+                messageId,
+              });
+            }
+          });
         }
         break;
       case "organization.create":
         result = await createBrandOrganization({ sql }, viewer, input);
+        if (result.ok && typeof (result as { id?: unknown }).id === "string") {
+          const orgId = (result as { id: string }).id;
+          await afterResponse(() =>
+            runLiveTeamNoticeDeliveryPass(sql, {
+              sourceKind: "org_created",
+              sourceId: orgId,
+            }),
+          );
+        }
         break;
       case "project.create":
         result = await createBrandProject({ sql }, viewer, input);
         if (result.ok && typeof input.organizationId === "string" && typeof (result as { id?: unknown }).id === "string") {
           const projectId = (result as { id: string }).id;
           const brief = IntakeBriefSchema.safeParse(input.intakeBrief);
-          await afterResponse(() =>
-            notifySlackBrandProjectRequest(sql, {
-              organizationId: input.organizationId as string,
-              projectId,
-              title: typeof input.title === "string" ? input.title : "",
-              track: brief.success ? brief.data.track : null,
-              dueOn: brief.success ? brief.data.schedule.dueOn : null,
-              budgetBand: brief.success ? brief.data.budgetBand : null,
-            }),
-          );
+          await afterResponse(async () => {
+            const pass = await runLiveTeamNoticeDeliveryPass(sql, {
+              sourceKind: "project_request",
+              sourceId: projectId,
+            });
+            if (!pass.available) {
+              await notifySlackBrandProjectRequest(sql, {
+                organizationId: input.organizationId as string,
+                projectId,
+                title: typeof input.title === "string" ? input.title : "",
+                track: brief.success ? brief.data.track : null,
+                dueOn: brief.success ? brief.data.schedule.dueOn : null,
+                budgetBand: brief.success ? brief.data.budgetBand : null,
+              });
+            }
+          });
           // The receipt mail to the person who sent the request (docs/BRAND-ROOMS-FEEDBACK.md §2.1).
           // Off unless BRAND_ROOM_NOTIFY=on; never fails the request; a retried request is not mailed twice.
           await enqueueNotices(sql, { type: "intake", organizationId: input.organizationId as string, projectId, actorId: viewer.userId });

@@ -84,6 +84,7 @@ export function HumanHandoff({
             input: {
               organizationId,
               body: messageBody,
+              surface: "human_handoff",
               requestId:
                 typeof crypto !== "undefined" && "randomUUID" in crypto
                   ? crypto.randomUUID()

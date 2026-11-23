@@ -188,7 +188,12 @@ export function SupportDrawer({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           operation: "support.send",
-          input: { body, organizationId, requestId: attempt.current.id },
+          input: {
+            body,
+            organizationId,
+            requestId: attempt.current.id,
+            surface: "support_drawer",
+          },
         }),
       });
       const result = await r.json();
@@ -231,7 +236,7 @@ export function SupportDrawer({
   }
 
   const unreadCount = Math.max(0, messages.length - seenCount);
-  const canWrite = currentOrg?.role !== "viewer";
+  const canWrite = Boolean(currentOrg);
 
   return (
     <>
@@ -275,7 +280,7 @@ export function SupportDrawer({
             <div>
               <div className="bw-concierge-title-row">
                 <strong id={titleId}>{b.managed.support}</strong>
-                <span className="bw-concierge-slack-pill">
+                <span className="bw-concierge-pill">
                   1:1 · {brandHandle}
                 </span>
               </div>

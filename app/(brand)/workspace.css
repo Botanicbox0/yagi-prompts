@@ -1106,6 +1106,7 @@ body:has(.bw-triage-bulk) .bw-support-launch { translate:0 -76px; }
 .bw-concierge-online { position:absolute;right:-2px;bottom:-2px;width:11px;height:11px;border-radius:999px;background:var(--ys-accent);border:2px solid var(--ys-surface); }
 .bw-concierge-title-row { display:flex;align-items:center;gap:8px;flex-wrap:wrap; }
 .bw-support-dialog header strong { font-size:15px;font-weight:600;letter-spacing:-0.01em; }
+.bw-concierge-pill,
 .bw-concierge-slack-pill { font-family:var(--font-mono,monospace);font-size:10px;padding:2px 7px;border-radius:999px;background:color-mix(in srgb, var(--ys-ink) 7%, transparent);border:1px solid color-mix(in srgb, var(--ys-ink) 12%, transparent);color:var(--ys-ink-secondary); }
 .bw-support-dialog header p { font-size:11.5px;color:var(--ys-ink-secondary);margin-top:3px; }
 .bw-concierge-header-actions { display:flex;align-items:center;gap:4px;flex-shrink:0; }

@@ -338,6 +338,7 @@ export function BriefConcierge({
             input: {
               organizationId,
               body: payload,
+              surface: "brief_concierge",
               requestId:
                 typeof crypto !== "undefined" && "randomUUID" in crypto
                   ? crypto.randomUUID()

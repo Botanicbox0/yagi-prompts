@@ -27,6 +27,7 @@ import { studioShareDialogEn } from './studio-share-dialog';
 import { adminConsoleEn } from './admin-console';
 import { campaignHubEn } from './campaign-hub';
 import { brandHomeEn } from './brand-home';
+import { supportConciergeEn } from './support-concierge';
 /**
  * docs/PLATFORM-2.0.md §14.1 — the names live in this one object (founder decision 2026-10-24). Every
  * other string is composed from it, so a rename edits these values only. Users get no role name:
@@ -78,6 +79,7 @@ export const en = {
   studioWorkflows: studioWorkflowsEn,
   adminConsole: adminConsoleEn,
   brandHome: brandHomeEn,
+  supportConcierge: supportConciergeEn,
   landingMedia: {
     nav: 'Landing images',
     heading: 'Landing images',

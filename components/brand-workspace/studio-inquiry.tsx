@@ -46,7 +46,7 @@ export function StudioInquiry({ organizations, organizationId, b, allowSetup = f
     try {
       const response = await fetch("/api/brand-workspace", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ operation: "support.send", input: { ...input, requestId: attempt.current.id } }),
+        body: JSON.stringify({ operation: "support.send", input: { ...input, surface: "studio_inquiry", requestId: attempt.current.id } }),
       });
       const result = await response.json();
       if (!response.ok || !result.ok) {

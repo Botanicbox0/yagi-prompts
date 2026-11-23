@@ -81,6 +81,16 @@ export const adminWorkflowEn = {
       hint: "Check content and publication requirements.",
       action: "Review templates",
     },
+    supportDeliveryFailed: {
+      title: "Check failed team Slack deliveries",
+      hint: "These team notifications exceeded retry attempts and need attention or retry.",
+      action: "Open failed deliveries",
+    },
+    supportAwaitingReply: {
+      title: "Reply to waiting customer threads",
+      hint: "Customers wrote the latest message in these workspace or personal support threads.",
+      action: "Reply in inbox",
+    },
   },
   startHeading: "Setting up a brand campaign",
   startHint:
@@ -233,6 +243,16 @@ export const adminWorkflowKo: typeof adminWorkflowEn = {
       title: "제출된 템플릿을 검토하세요",
       hint: "콘텐츠와 게시에 필요한 항목을 확인합니다.",
       action: "템플릿 검토하기",
+    },
+    supportDeliveryFailed: {
+      title: "실패한 팀 알림 전송을 확인하세요",
+      hint: "재시도 상한에 도달한 알림입니다. 설정을 점검한 뒤 다시 전송하세요.",
+      action: "실패 목록 열기",
+    },
+    supportAwaitingReply: {
+      title: "답변을 기다리는 고객 문의가 있습니다",
+      hint: "고객이 마지막 메시지를 보낸 실시간 문의와 개인 상담 요청입니다.",
+      action: "문의함에서 답변하기",
     },
   },
   startHeading: "브랜드 캠페인을 처음 운영한다면",

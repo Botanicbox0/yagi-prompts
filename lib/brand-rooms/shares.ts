@@ -31,7 +31,10 @@ import { addGuestComment, reviewTarget, sharedReviewView } from '@/lib/brand-stu
 import type { ReviewComment, ReviewCommentAdded, ReviewItem } from '@/lib/brand-studio/review-contracts';
 import { RoomDenied, requireEdit, requireRoomProject, roomSeat, type RoomSeat } from './access';
 import { postRoomEvent } from './events';
-import { guestNoteNotice, type RoomTeamNotice, type RoomTeamNotify } from './team-notice';
+import { guestNoteNotice, guestNotePreview, type RoomTeamNotice, type RoomTeamNotify } from './team-notice';
+import { roomDeskPath } from './message-contracts';
+import { reviewAdminPath } from '@/lib/brand-studio/review';
+import { enqueueTeamNotice } from '@/lib/brands/team-notice-outbox';
 import { pulseStamp, type PulseScope, type SharePulseResult } from './pulse';
 import type { StoryboardView } from '@/components/brand-rooms/seams';
 import { storyboardForShare } from './storyboards';
@@ -638,7 +641,7 @@ export async function guestComment(
       });
       if (!added.ok) throw new ShareDenied(added.code === 'not_found' ? 'not_found' : added.code === 'invalid' ? 'invalid' : 'failed');
       // The team hears about it (docs/BRAND-ROOMS-FEEDBACK.md §3). Nothing of it goes back to the guest.
-      const target = deps.notify ? await reviewTarget(sql, String(row.organization_id), String(row.target_id)) : null;
+      const target = await reviewTarget(sql, String(row.organization_id), String(row.target_id));
       if (target && !added.comment.team) {
         teamNotice = guestNoteNotice({
           organizationId: String(row.organization_id),
@@ -646,6 +649,27 @@ export async function guestComment(
           review: { id: target.id, title: target.title },
           comment: { id: added.comment.id, body: added.comment.body, atMs: added.comment.atMs, spot: added.comment.x != null, reply: added.comment.parentId != null },
           guestName: v.name,
+        });
+        const where = row.project_id
+          ? roomDeskPath(String(row.organization_id), String(row.project_id), { review: target.id, t: added.comment.atMs })
+          : reviewAdminPath(target.id);
+        await enqueueTeamNotice(sql, 'share_guest_note', {
+          organizationId: String(row.organization_id),
+          sourceTable: 'brand_studio_review_comments',
+          sourceId: added.comment.id,
+          actorUserId: null,
+          actorLabel: v.name.slice(0, 60),
+          surface: 'share_link',
+          preview: guestNotePreview({
+            review: target,
+            comment: {
+              body: added.comment.body,
+              atMs: added.comment.atMs,
+              spot: added.comment.x != null,
+              reply: added.comment.parentId != null,
+            },
+          }),
+          adminPath: where,
         });
       }
       if (row.project_id) {

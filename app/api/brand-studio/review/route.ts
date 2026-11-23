@@ -55,7 +55,11 @@ function tellTheTeam(sql: ReviewDeps['sql'], notice: ReviewNotice | null): void 
   if (!notice) return;
   after(async () => {
     try {
-      await notifySlackBrandConcierge(sql, notice);
+      await notifySlackBrandConcierge(sql, {
+        ...notice,
+        kind: 'review_comment',
+        messageId: notice.deliverySourceId ?? notice.messageId,
+      });
     } catch (error) {
       studioLog('review_notice_failed', { message: error instanceof Error ? error.message.slice(0, 200) : 'unknown' });
     }

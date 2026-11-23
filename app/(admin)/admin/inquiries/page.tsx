@@ -9,10 +9,19 @@ const shortId = (id: string): string => id.slice(0, 8);
 import { listBrandInquiries, type BrandInquiry } from '@/lib/brands/repo';
 import { loadBrandInquiryDeliveryStates, type BrandInquiryDeliveryStatus } from '@/lib/brands/slack-delivery';
 import { listRenderFeedback, type RenderFeedbackRow } from '@/lib/renders/feedback';
-import { inboxFilters, inboxHref, matchesInboxItem, type InboxFilters } from '@/lib/admin/inbox-filters';
+import {
+  inboxFilters,
+  inboxHref,
+  matchesInboxItem,
+  teamNoticeFilters,
+  teamNoticeHref,
+  type InboxFilters,
+} from '@/lib/admin/inbox-filters';
+import { TEAM_NOTICE_KINDS } from '@/lib/brands/team-notice-outbox';
+import { loadTeamNoticeInbox, type TeamNoticeInboxItem } from '@/lib/brands/team-notice-inbox';
 import { ADMIN_INQUIRIES_PATH } from '@/lib/campaigns/links';
-import { AdminShell, BUTTON, BUTTON_PRIMARY, OpForm, OutcomeBanner, Panel } from '@/components/admin/chrome';
-import { AdminPageHeader } from '@/components/admin/patterns';
+import { AdminShell, BUTTON, BUTTON_PRIMARY, INPUT, OpForm, OutcomeBanner, Panel } from '@/components/admin/chrome';
+import { AdminPageHeader, StatusPill } from '@/components/admin/patterns';
 import { formatCount } from '@/lib/admin/format';
 import { IntakeBriefSummary } from '@/components/brand-workspace/intake-brief-summary';
 import { IntakeBriefSchema, type IntakeBrief } from '@/lib/brands/workspace/intake-brief';
@@ -90,8 +99,11 @@ export default async function AdminInquiriesPage({ searchParams }: { searchParam
   const a = dict.admin;
   const b = dict.campaigns.brands;
   const t = a.inbox;
+  const sCopy = dict.adminConsole.supportInbox;
   const filters = inboxFilters(params);
-  const back = `${inboxHref(filters)}#inbox-results`;
+  const teamFilters = teamNoticeFilters(params);
+  const back = `${teamNoticeHref(filters, teamFilters)}#inbox-results`;
+  const teamBack = `${teamNoticeHref(filters, teamFilters)}#team-notices`;
 
   const open: BrandInquiry[] = sql === null ? [] : await listBrandInquiries(sql, { statuses: ['new', 'contacted'], limit: 200 });
   const closed: BrandInquiry[] = sql === null ? [] : await listBrandInquiries(sql, { statuses: ['closed'], limit: 30 });
@@ -100,10 +112,21 @@ export default async function AdminInquiriesPage({ searchParams }: { searchParam
   // Result feedback (2026-09-11): the other kind of mail the studio owes an answer to.
   const feedback: RenderFeedbackRow[] = sql === null ? [] : await listRenderFeedback(sql, { statuses: ['new', 'replied'], limit: 200 });
   const workspaceBriefs = await loadRequestedWorkspaceBriefs(sql);
+  const teamInbox = await loadTeamNoticeInbox(sql, {
+    noticeKind: teamFilters.noticeKind,
+    deliveryStatus: teamFilters.deliveryStatus,
+    awaitingOnly: teamFilters.awaiting,
+    query: filters.query,
+    page: teamFilters.page,
+    pageSize: 50,
+  });
   const brandRows = [...open, ...closed];
   const brandMatches = (q: BrandInquiry, selection = filters) => matchesInboxItem('brand', q.status, [q.company, q.contactName, q.email, q.phone, q.message, q.templateSlug].filter(Boolean).join(' '), selection);
   const feedbackMatches = (f: RenderFeedbackRow, selection = filters) => matchesInboxItem('feedback', f.status, [f.email, f.templateSlug, f.message, f.renderId, f.userId, dict.renders.feedback.reasons[f.reason]].filter(Boolean).join(' '), selection);
-  const count = (selection: InboxFilters) => brandRows.filter(q => brandMatches(q, selection)).length + feedback.filter(f => feedbackMatches(f, selection)).length;
+  const count = (selection: InboxFilters) =>
+    (selection.kind === 'team' ? teamInbox.totalFiltered : 0) +
+    brandRows.filter(q => brandMatches(q, selection)).length +
+    feedback.filter(f => feedbackMatches(f, selection)).length;
   const fresh = open.filter(q => q.status === 'new' && brandMatches(q));
   const contacted = open.filter(q => q.status === 'contacted' && brandMatches(q));
   const closedMatches = closed.filter(q => brandMatches(q));
@@ -112,9 +135,108 @@ export default async function AdminInquiriesPage({ searchParams }: { searchParam
   const shown = count(filters);
   const forKind = (kind: InboxFilters['kind']) => inboxFilters({ kind, status: filters.status, q: filters.query });
   const statusOptions: InboxFilters['status'][] = filters.kind === 'feedback' ? ['new', 'ongoing', 'all'] : ['new', 'ongoing', 'all', 'closed'];
-  const kindLabels = { all: t.allKinds, brand: t.brand, feedback: t.feedback };
+  const kindLabels = { all: t.allKinds, brand: t.brand, feedback: t.feedback, team: sCopy.heading };
   const statusLabels = { all: t.allStatuses, new: t.new, ongoing: filters.kind === 'brand' ? a.inquiryStatuses.contacted : filters.kind === 'feedback' ? a.feedbackStatuses.replied : `${a.inquiryStatuses.contacted} · ${a.feedbackStatuses.replied}`, closed: a.inquiryStatuses.closed };
   const reasonLabel = dict.renders.feedback.reasons;
+
+  const statusTone = (st: TeamNoticeInboxItem['status']) =>
+    st === 'sent' ? 'done' : st === 'failed' ? 'fail' : st === 'skipped' ? 'hold' : 'progress';
+
+  const runtimeLabel =
+    teamInbox.runtimeConfig.status === 'configured'
+      ? teamInbox.runtimeConfig.transport === 'bot'
+        ? sCopy.runtimeBot
+        : sCopy.runtimeWebhook
+      : interpolate(sCopy.runtimeSkipped, { reason: teamInbox.runtimeConfig.code });
+
+  const TeamNoticeRow = ({ item }: { item: TeamNoticeInboxItem }) => (
+    <li id={`notice-${item.sourceId}`} data-team-notice={item.kind} data-delivery-status={item.status} className="flex flex-col gap-3 py-4">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0 max-w-detail">
+          <div className="flex flex-wrap items-center gap-2">
+            <StatusPill tone="hold">{sCopy.kinds[item.kind]}</StatusPill>
+            <StatusPill tone={statusTone(item.status)}>
+              {sCopy.deliveryStatuses[item.status]}
+              {item.attempts > 0 ? ` · ${interpolate(sCopy.attemptsLabel, { count: item.attempts })}` : ''}
+            </StatusPill>
+            <span data-reply-sync-mode={item.replySyncMode}>
+              <StatusPill tone={item.replySyncMode === 'bot_sync' ? 'done' : 'hold'}>
+                {item.replySyncMode === 'bot_sync' ? sCopy.syncBot : sCopy.syncAdminOnly}
+              </StatusPill>
+            </span>
+            {item.awaitingReply && <StatusPill tone="action">{sCopy.awaitingBadge}</StatusPill>}
+          </div>
+          <p className="mt-2 font-mono text-code">
+            {item.organizationId ? (
+              <a href={`/admin/brand-workspace/organizations/${item.organizationId}`} className="text-accent underline">
+                <strong>{item.organizationName ?? shortId(item.organizationId)}</strong>
+              </a>
+            ) : (
+              <strong>
+                {sCopy.consumerLabel} · #{item.actorUserId ? shortId(item.actorUserId) : shortId(item.sourceId)}
+              </strong>
+            )}
+            {' · '}
+            <span>{item.actorName ?? (item.kind === 'share_guest_note' ? sCopy.guestLabel : sCopy.unknownMember)}</span>
+            {item.surface ? ` · ${item.surface}` : ''}
+            {' · '}
+            {formatDate(item.createdAt, locale)}
+          </p>
+          {item.preview && <p className="mt-2 text-[0.85rem] leading-relaxed whitespace-pre-line opacity-80">{item.preview}</p>}
+          {item.lastErrorCode && (
+            <p className="mt-1 font-mono text-[0.72rem] opacity-65">
+              code: {item.lastErrorCode}
+            </p>
+          )}
+          {item.latestStaffReply && (
+            <p className="mt-2 border-l-2 border-hairline pl-3 text-[0.8rem] opacity-80">
+              <strong>{sCopy.latestReplyLabel}</strong>
+              {item.latestStaffReplyAt ? ` (${formatDate(item.latestStaffReplyAt, locale)})` : ''}: {item.latestStaffReply}
+            </p>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {item.organizationId && (
+            <a href={`/admin/brand-workspace/organizations/${item.organizationId}`} className={BUTTON}>
+              {sCopy.openOrg}
+            </a>
+          )}
+          <a href={item.adminPath} className={BUTTON}>
+            {sCopy.openDetail}
+          </a>
+          {(item.status === 'failed' || item.status === 'skipped') && (
+            <OpForm op="support.delivery.retry" back={teamBack}>
+              <input type="hidden" name="id" value={item.id} />
+              <button type="submit" className={BUTTON_PRIMARY}>
+                {sCopy.retryOne}
+              </button>
+            </OpForm>
+          )}
+        </div>
+      </div>
+      {(item.kind === 'support_message' || item.kind === 'concierge_escalation') &&
+        (item.kind === 'support_message' ? Boolean(item.organizationId) : Boolean(item.actorUserId)) && (
+        <OpForm op="support.reply" back={teamBack} className="flex flex-wrap items-center gap-2">
+          <input type="hidden" name="targetType" value={item.kind === 'support_message' ? 'brand' : 'consumer'} />
+          {item.organizationId && <input type="hidden" name="organizationId" value={item.organizationId} />}
+          {item.actorUserId && <input type="hidden" name="userId" value={item.actorUserId} />}
+          <input type="hidden" name="deliveryId" value={item.id} />
+          <input
+            type="text"
+            name="body"
+            required
+            maxLength={4000}
+            placeholder={sCopy.replyPlaceholder}
+            aria-label={sCopy.replyPlaceholder}
+            className={`${INPUT} max-w-md`}
+          />
+          <button type="submit" className={BUTTON_PRIMARY}>
+            {sCopy.replySubmit}
+          </button>
+        </OpForm>
+      )}
+    </li>
+  );
 
   const budgetLabel: Record<BrandInquiry['budgetBand'], string> = {
     under_3m: b.budgetUnder3m,
@@ -229,16 +351,26 @@ export default async function AdminInquiriesPage({ searchParams }: { searchParam
 
       <section className="admin-inbox-filters" aria-label={a.navInquiries} data-inbox-filters>
         <nav className="admin-filter-links" aria-label={t.kindLabel}>
-          {(['all', 'brand', 'feedback'] as const).map(kind => <a key={kind} href={inboxHref(forKind(kind))} aria-current={filters.kind === kind ? 'page' : undefined}>{kindLabels[kind]}<span>{count(forKind(kind))}</span></a>)}
+          {(['all', 'team', 'brand', 'feedback'] as const).map(kind => (
+            <a key={kind} href={inboxHref(forKind(kind))} aria-current={filters.kind === kind ? 'page' : undefined}>
+              {kindLabels[kind]}
+              <span>{kind === 'team' ? teamInbox.rows.length : count(forKind(kind))}</span>
+            </a>
+          ))}
         </nav>
-        <nav className="admin-filter-links" aria-label={t.statusLabel}>
-          {statusOptions.map(value => {
-            return <a key={value} href={inboxHref(filters, { status: value })} aria-current={filters.status === value ? 'page' : undefined}>{statusLabels[value]}<span>{count({ ...filters, status: value })}</span></a>;
-          })}
-        </nav>
+        {filters.kind !== 'team' && (
+          <nav className="admin-filter-links" aria-label={t.statusLabel}>
+            {statusOptions.map(value => {
+              return <a key={value} href={inboxHref(filters, { status: value })} aria-current={filters.status === value ? 'page' : undefined}>{statusLabels[value]}<span>{count({ ...filters, status: value })}</span></a>;
+            })}
+          </nav>
+        )}
         <form method="get" action={ADMIN_INQUIRIES_PATH} className="admin-inbox-search">
           <input type="hidden" name="kind" value={filters.kind} />
           <input type="hidden" name="status" value={filters.status} />
+          {teamFilters.noticeKind !== 'all' && <input type="hidden" name="noticeKind" value={teamFilters.noticeKind} />}
+          {teamFilters.deliveryStatus !== 'all' && <input type="hidden" name="deliveryStatus" value={teamFilters.deliveryStatus} />}
+          {teamFilters.awaiting && <input type="hidden" name="awaiting" value="1" />}
           <label>{t.searchLabel}<input type="search" name="q" defaultValue={filters.query} maxLength={200} placeholder={t.searchPlaceholder} /></label>
           <button type="submit" className={BUTTON_PRIMARY}>{t.search}</button>
           <a href={ADMIN_INQUIRIES_PATH} className="text-sm underline underline-offset-4">{t.reset}</a>
@@ -253,9 +385,144 @@ export default async function AdminInquiriesPage({ searchParams }: { searchParam
           {...(one(params, 'detail') ? { detail: one(params, 'detail')! } : {})}
         />
         <p role="status" className="mt-6 text-sm">{interpolate(t.resultCount, { count: shown })}</p>
-        {shown === 0 && workspaceBriefs.length === 0 && <p className="mt-5 border border-hairline p-6 text-sm">{t.noResults}</p>}
-        {shown === 0 && workspaceBriefs.length > 0 && <p className="mt-5 border border-hairline p-6 text-sm">{t.noResults}</p>}
-        {filters.kind !== 'feedback' && workspaceBriefs.length > 0 && (
+        {shown === 0 && workspaceBriefs.length === 0 && !teamInbox.available && <p className="mt-5 border border-hairline p-6 text-sm">{t.noResults}</p>}
+        {shown === 0 && (workspaceBriefs.length > 0 || teamInbox.available) && filters.kind !== 'team' && <p className="mt-5 border border-hairline p-6 text-sm">{t.noResults}</p>}
+        {(filters.kind === 'all' || filters.kind === 'team') && teamInbox.available && (
+          <Panel
+            id="team-notices"
+            title={`${sCopy.heading} (${teamInbox.rows.length})`}
+            action={
+              <div className="flex flex-wrap items-center gap-2">
+                {teamInbox.failedCount > 0 && (
+                  <OpForm op="support.delivery.retry" back={teamBack}>
+                    <input type="hidden" name="scope" value="all_failed" />
+                    <button type="submit" className={BUTTON_PRIMARY}>
+                      {sCopy.retryAllFailed}
+                    </button>
+                  </OpForm>
+                )}
+                <OpForm op="support.slack.connectionTest" back={teamBack} className="flex flex-wrap items-center gap-2">
+                  <label className="flex items-center gap-1.5 text-xs">
+                    <input type="checkbox" name="force" value="true" />
+                    <span>{sCopy.forceNonProd}</span>
+                  </label>
+                  <button type="submit" className={BUTTON}>
+                    {sCopy.testConnection}
+                  </button>
+                </OpForm>
+              </div>
+            }
+          >
+            <div data-admin-team-notices className="space-y-4">
+              {teamInbox.runtimeConfig.status === 'skipped' && (
+                <div
+                  data-support-sender-banner={teamInbox.runtimeConfig.code}
+                  role="status"
+                  className="flex flex-wrap items-center justify-between gap-2 border border-hairline px-3 py-2 text-xs"
+                >
+                  <span>
+                    {interpolate(sCopy.senderPausedBanner, { reason: teamInbox.runtimeConfig.code })}
+                  </span>
+                  <span className="font-mono">
+                    {interpolate(sCopy.pendingWaitingSummary, { count: teamInbox.pendingWaitingCount })}
+                  </span>
+                </div>
+              )}
+              <div className="flex flex-wrap items-center gap-3 text-xs">
+                <StatusPill tone={teamInbox.runtimeConfig.status === 'configured' ? 'done' : 'hold'}>
+                  {runtimeLabel}
+                </StatusPill>
+                <span className="font-mono">
+                  {interpolate(sCopy.failedSummary, { count: teamInbox.failedCount })}
+                </span>
+                <span className="font-mono">
+                  {interpolate(sCopy.awaitingSummary, { count: teamInbox.awaitingCount })}
+                </span>
+              </div>
+              <p className="text-xs opacity-70">{sCopy.lede}</p>
+              <nav className="admin-filter-links" aria-label={sCopy.kindFilterLabel}>
+                <a
+                  href={teamNoticeHref(filters, teamFilters, { noticeKind: 'all' })}
+                  aria-current={teamFilters.noticeKind === 'all' ? 'page' : undefined}
+                >
+                  {sCopy.allEvents}
+                </a>
+                {TEAM_NOTICE_KINDS.map((nk) => (
+                  <a
+                    key={nk}
+                    href={teamNoticeHref(filters, teamFilters, { noticeKind: nk })}
+                    aria-current={teamFilters.noticeKind === nk ? 'page' : undefined}
+                  >
+                    {sCopy.kinds[nk]}
+                  </a>
+                ))}
+              </nav>
+              <nav className="admin-filter-links" aria-label={sCopy.statusFilterLabel}>
+                {(['all', 'sent', 'pending', 'failed', 'skipped'] as const).map((st) => (
+                  <a
+                    key={st}
+                    href={teamNoticeHref(filters, teamFilters, { deliveryStatus: st })}
+                    aria-current={teamFilters.deliveryStatus === st ? 'page' : undefined}
+                  >
+                    {st === 'all' ? sCopy.allDeliveryStatuses : sCopy.deliveryStatuses[st]}
+                  </a>
+                ))}
+                <a
+                  href={teamNoticeHref(filters, teamFilters, { awaiting: !teamFilters.awaiting })}
+                  aria-current={teamFilters.awaiting ? 'page' : undefined}
+                >
+                  {sCopy.awaitingOnlyLabel}
+                </a>
+              </nav>
+              {teamInbox.rows.length === 0 ? (
+                <p className="border border-hairline p-4 text-sm opacity-75">{sCopy.empty}</p>
+              ) : (
+                <ul data-team-notice-list className="flex flex-col divide-y divide-hairline">
+                  {teamInbox.rows.map((item) => (
+                    <TeamNoticeRow key={item.id} item={item} />
+                  ))}
+                </ul>
+              )}
+              {teamInbox.totalPages > 1 && (
+                <nav
+                  data-team-notice-pagination
+                  aria-label="Team notices pagination"
+                  className="flex flex-wrap items-center justify-between gap-2 border-t border-hairline pt-3 text-xs"
+                >
+                  <span className="font-mono opacity-80">
+                    {interpolate(sCopy.paginationSummary, {
+                      page: teamInbox.page,
+                      totalPages: teamInbox.totalPages,
+                      total: teamInbox.totalFiltered,
+                    })}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    {teamInbox.page > 1 && (
+                      <a
+                        href={teamNoticeHref(filters, teamFilters, { page: teamInbox.page - 1 })}
+                        className={BUTTON}
+                      >
+                        {sCopy.prevPage}
+                      </a>
+                    )}
+                    {teamInbox.page < teamInbox.totalPages && (
+                      <a
+                        href={teamNoticeHref(filters, teamFilters, { page: teamInbox.page + 1 })}
+                        className={BUTTON}
+                      >
+                        {sCopy.nextPage}
+                      </a>
+                    )}
+                  </div>
+                </nav>
+              )}
+            </div>
+          </Panel>
+        )}
+        {filters.kind === 'team' && !teamInbox.available && (
+          <p className="mt-5 border border-hairline p-6 text-sm">{sCopy.unavailable}</p>
+        )}
+        {filters.kind !== 'feedback' && filters.kind !== 'team' && workspaceBriefs.length > 0 && (
           <Panel
             title={
               locale === 'en'

@@ -93,7 +93,7 @@ describe("a guest's note", () => {
     expect(notice.body).toContain('[공유 링크 의견] Spring film · 0:01');
     expect(notice.body).toContain('&lt;!channel&gt; brighter &amp; warmer');
     expect(notice.body).not.toContain('<!channel>');
-    expect(notice.body).toContain(`관리자 화면: /admin/brand-rooms/${f.orgId}/${f.projectId}?review=${reviewId}&t=1500`);
+    expect(notice.body).toContain(`관리자 화면: https://admin.twings.app/admin/brand-rooms/${f.orgId}/${f.projectId}?review=${reviewId}&t=1500`);
   });
 
   it('builds nothing when the note is refused, and the link limits are unchanged', async () => {
@@ -142,16 +142,23 @@ describe("a brand's decision on the team's storyboard", () => {
     const changes = await decide(viewerOf(f.ids.editor), id, 'changes_requested');
     expect(changes.result).toMatchObject({ ok: true });
     expect(changes.notify).toHaveBeenCalledTimes(1);
-    expect(changes.notify.mock.calls[0]![0]).toEqual({
+    expect(changes.notify.mock.calls[0]![0]).toMatchObject({
       organizationId: f.orgId,
       userId: f.ids.editor,
       messageId: id,
-      body: `[스토리보드 수정 요청] Launch film · v1\n관리자 화면: /admin/brand-rooms/storyboards/${id}`,
+      deliverySourceId: expect.stringMatching(/^[0-9a-f-]{36}$/),
+      body: `[스토리보드 수정 요청] Launch film · v1\n관리자 화면: https://admin.twings.app/admin/brand-rooms/storyboards/${id}`,
     });
     expect((await decide(viewerOf(f.ids.editor), id, 'changes_requested')).notify).not.toHaveBeenCalled();
     const approved = await decide(viewerOf(f.ids.owner), id, 'approved');
     expect(approved.notify.mock.calls[0]![0]).toMatchObject({ userId: f.ids.owner, body: expect.stringContaining('[스토리보드 승인] Launch film') });
     expect((await decide(viewerOf(f.ids.owner), id, 'shared')).notify).not.toHaveBeenCalled();
+    // F1: repeating the same decision after reopening emits a new distinct deliverySourceId so it is not suppressed
+    const repeatChanges = await decide(viewerOf(f.ids.editor), id, 'changes_requested');
+    expect(repeatChanges.notify).toHaveBeenCalledTimes(1);
+    expect((repeatChanges.notify.mock.calls[0]![0] as RoomTeamNotice).deliverySourceId).not.toBe(
+      (changes.notify.mock.calls[0]![0] as RoomTeamNotice).deliverySourceId,
+    );
     // A viewer may not decide: no notice either.
     const refused = await decide(viewerOf(f.ids.viewer), id, 'approved');
     expect(refused.result).toEqual({ ok: false, code: 'forbidden' });
@@ -172,7 +179,11 @@ describe("a brand's decision on the team's storyboard", () => {
     expect(mocks.notify).not.toHaveBeenCalled();
     await runAfter();
     expect(mocks.notify).toHaveBeenCalledTimes(1);
-    expect(mocks.notify.mock.calls[0]![1]).toMatchObject({ organizationId: f.orgId, userId: f.ids.owner, messageId: id });
+    expect(mocks.notify.mock.calls[0]![1]).toMatchObject({
+      organizationId: f.orgId,
+      userId: f.ids.owner,
+      messageId: expect.stringMatching(/^[0-9a-f-]{36}$/),
+    });
   });
 });
 

@@ -13,6 +13,8 @@ export type AdminQueueKey =
   | "accountDeletions"
   | "risk"
   | "feedback"
+  | "supportDeliveryFailed"
+  | "supportAwaitingReply"
   | "studio"
   | "inquiries"
   | "posts"
@@ -44,6 +46,8 @@ export const ADMIN_QUEUES: readonly AdminQueueDefinition[] = [
   { key: "accountDeletions", group: "customers", href: "/admin/account-deletions" },
   { key: "risk", group: "safety", href: "/admin/risk" },
   { key: "feedback", group: "customers", href: "/admin/inquiries?kind=feedback&status=new" },
+  { key: "supportDeliveryFailed", group: "customers", href: "/admin/inquiries?kind=team&deliveryStatus=failed" },
+  { key: "supportAwaitingReply", group: "customers", href: "/admin/inquiries?kind=team&awaiting=1" },
   { key: "studio", group: "brands", href: "/admin/brand-workspace#studio-inbox" },
   { key: "inquiries", group: "brands", href: "/admin/inquiries?kind=brand&status=new" },
   { key: "posts", group: "campaigns", href: "/admin/campaigns" },

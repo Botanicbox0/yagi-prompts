@@ -134,6 +134,8 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
       'campaign_risk_workers',
       'campaign_targets',
       'campaigns',
+      // 2026-11-23 — consumer AI concierge escalations and studio replies (0178).
+      'consumer_support_messages',
       // §14.1 (M9) — the contests pivot's three new tables. Atomic like `prompt_items`: no
       // revisions, no manifest, no constraint triggers. `contest_entry_writes` is the append-only
       // rate-limit ledger, because "≤10 entry writes/day/user" counts WRITES and an upserted entry
@@ -215,6 +217,9 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
       'store_iap_wallets',
       'stripe_events',
       'subscriptions',
+      // 2026-11-23 — durable team notice outbox (0178).
+      'support_synced_replies',
+      'team_notice_deliveries',
     ]);
     await db.close();
   });

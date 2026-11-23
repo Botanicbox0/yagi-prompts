@@ -472,6 +472,39 @@ export async function deleteAccountNow(
       }
       // `events.user_id` has no foreign key on purpose (analytics outlive the account), so it is emptied by hand.
       await tx.query('update events set user_id=null where user_id=$1', [userId]);
+      // F5: scrub personal notice text/labels before `profiles` delete cascades `consumer_support_messages` (0178).
+      if ((await tx.query<{ ready: boolean }>("select to_regclass('public.team_notice_deliveries') is not null as ready")).rows[0]?.ready) {
+        const hasConsumerSupport = (await tx.query<{ ready: boolean }>("select to_regclass('public.consumer_support_messages') is not null as ready")).rows[0]?.ready;
+        if (hasConsumerSupport) {
+          await tx.query(
+            `update team_notice_deliveries
+                set preview = '',
+                    actor_label = '',
+                    actor_user_id = null,
+                    updated_at = $2
+              where kind = 'concierge_escalation'
+                and (
+                  actor_user_id = $1
+                  or (
+                    source_table = 'consumer_support_messages'
+                    and source_id in (select id from consumer_support_messages where user_id = $1)
+                  )
+                )`,
+            [userId, now],
+          );
+        } else {
+          await tx.query(
+            `update team_notice_deliveries
+                set preview = '',
+                    actor_label = '',
+                    actor_user_id = null,
+                    updated_at = $2
+              where kind = 'concierge_escalation'
+                and actor_user_id = $1`,
+            [userId, now],
+          );
+        }
+      }
       try {
         await tx.query('delete from profiles where id=$1', [userId]);
       } catch (error) {

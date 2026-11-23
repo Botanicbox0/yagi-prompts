@@ -11,6 +11,7 @@ import { DEFAULT_SANDBOX_DENIED, isSandboxedClientOrganization, loadFeaturePolic
 import { adjustOrganizationStorageBytes, checkStorageQuotaForUpload } from '../storage-quota';
 import { isOrganizationUploadApproved } from '../upload-gate';
 import type { UploadLimitReason } from '../upload-limits-format';
+import { enqueueTeamNotice } from '../team-notice-outbox';
 import { UNKNOWN_POST_PRESENTATION } from './performance';
 import {
   BrandHttpsUrlSchema, BrandOrganizationSchema, BrandProjectSchema, BrandProjectStatusSchema, BrandContentSchema,
@@ -373,6 +374,15 @@ export async function createBrandOrganization(deps: BrandWorkspaceDeps, viewer: 
     const id = randomUUID();
     await sql.query('insert into brand_organizations(id,name,created_by,request_id) values($1,$2,$3,$4)', [id, v.name, userId, v.requestId]);
     await sql.query("insert into brand_memberships(organization_id,user_id,role) values($1,$2,'owner')", [id, userId]);
+    await enqueueTeamNotice(sql, 'org_created', {
+      organizationId: id,
+      sourceTable: 'brand_organizations',
+      sourceId: id,
+      actorUserId: userId,
+      surface: 'brand_onboarding',
+      preview: v.name,
+      adminPath: `/admin/brand-workspace/organizations/${id}`,
+    });
     return { id };
   });
 }
@@ -409,7 +419,25 @@ async function createProject(deps: BrandWorkspaceDeps, viewer: Viewer, input: un
       }
     }
     if(managed) await sql.query('update brand_projects set client_visible=false where id=$1',[id]);
-    else await event(sql, { id, organization_id: v.organizationId }, 'project_requested', id);
+    else {
+      await event(sql, { id, organization_id: v.organizationId }, 'project_requested', id);
+      const summaryLines = [
+        v.title,
+        v.intakeBrief?.track ? `트랙: ${v.intakeBrief.track}` : `모드: ${c.productionMode}`,
+        v.intakeBrief?.schedule?.dueOn ? `희망일: ${v.intakeBrief.schedule.dueOn}` : null,
+        v.intakeBrief?.budgetBand && v.intakeBrief.budgetBand !== 'undecided' ? `예산대: ${v.intakeBrief.budgetBand}` : null,
+        c.objective ? String(c.objective).slice(0, 400) : null,
+      ].filter(Boolean);
+      await enqueueTeamNotice(sql, 'project_request', {
+        organizationId: v.organizationId,
+        sourceTable: 'brand_projects',
+        sourceId: id,
+        actorUserId: userId,
+        surface: 'project_request',
+        preview: summaryLines.join('\n'),
+        adminPath: `/admin/brand-rooms/${v.organizationId}?channel=${id}`,
+      });
+    }
     return { id };
   });
 }
@@ -1091,15 +1119,28 @@ export async function loadBrandSupport(deps:BrandWorkspaceDeps,viewer:Viewer,id:
   return (await sql.query('select id,body,author_role,created_at from brand_support_messages where organization_id=$1 order by created_at,id',[id])).rows.map(r=>({id:String(r.id),body:String(r.body),authorRole:r.author_role as BrandMessage['authorRole'],createdAt:stamp(r.created_at)}));
  });}catch(e){if(e instanceof Denied)return null;throw e}
 }
-/** `entry` as for `sendBrandMessage`: server-provided, never from the request. */
+/** `entry` as for `sendBrandMessage`: server-provided, never from the request. Viewer-role organization members may send support messages. */
 export async function sendBrandSupport(deps:BrandWorkspaceDeps,viewer:Viewer,input:unknown,entry:BrandWriteEntry='client'):Promise<BrandOutcome> {
- return mutation(deps,viewer,z.object({organizationId:z.uuid(),body:z.string().trim().min(1).max(4000),requestId:z.uuid()}),input,async(sql,userId,v)=>{
+ return mutation(deps,viewer,z.object({organizationId:z.uuid(),body:z.string().trim().min(1).max(4000),requestId:z.uuid(),surface:z.string().trim().max(80).optional()}),input,async(sql,userId,v)=>{
   const isStudio=entry==='studio'?(await studio(sql,userId),true)
-   :(await clientOrStudio(sql,userId,()=>member(sql,userId,v.organizationId,true),async()=>undefined)).studio;
+   :(await clientOrStudio(sql,userId,()=>member(sql,userId,v.organizationId,false),async()=>undefined)).studio;
   const org=(await sql.query('select id from brand_organizations where id=$1 for update',[v.organizationId])).rows[0];if(!org)throw new Denied('not_found');
   const old=(await sql.query('select id from brand_support_messages where organization_id=$1 and created_by=$2 and request_id=$3',[v.organizationId,userId,v.requestId])).rows[0];if(old)return{id:String(old.id)};
-  const count=(await sql.query("select count(*)::int as n from brand_support_messages where created_by=$1 and created_at>now()-interval '1 hour'",[userId])).rows[0];if(Number(count?.n)>=30)throw new Denied('rate_limited');
-  const id=randomUUID();await sql.query('insert into brand_support_messages(id,organization_id,body,author_role,created_by,request_id) values($1,$2,$3,$4,$5,$6)',[id,v.organizationId,v.body,isStudio?'studio':'brand',userId,v.requestId]);return{id};
+  const hasSyncedLedger=(await sql.query<{ready:boolean}>("select to_regclass('public.support_synced_replies') is not null as ready")).rows[0]?.ready===true;
+  const count=(await sql.query(hasSyncedLedger?"select count(*)::int as n from brand_support_messages m where m.created_by=$1 and m.created_at>now()-interval '1 hour' and not exists (select 1 from support_synced_replies s where s.message_id=m.id)":"select count(*)::int as n from brand_support_messages where created_by=$1 and created_at>now()-interval '1 hour' and id<>request_id",[userId])).rows[0];if(Number(count?.n)>=30)throw new Denied('rate_limited');
+  const id=randomUUID();await sql.query('insert into brand_support_messages(id,organization_id,body,author_role,created_by,request_id) values($1,$2,$3,$4,$5,$6)',[id,v.organizationId,v.body,isStudio?'studio':'brand',userId,v.requestId]);
+  if (!isStudio) {
+    await enqueueTeamNotice(sql, 'support_message', {
+      organizationId: v.organizationId,
+      sourceTable: 'brand_support_messages',
+      sourceId: id,
+      actorUserId: userId,
+      surface: v.surface ?? 'support_drawer',
+      preview: v.body,
+      adminPath: `/admin/brand-workspace/organizations/${v.organizationId}#support`,
+    });
+  }
+  return{id};
  });
 }
 
