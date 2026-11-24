@@ -489,6 +489,23 @@ export interface ToStoredOptions {
   tentative?: boolean;
 }
 
+/**
+ * Whether the earlier editor plays this cut at another speed than this editor (audit B5). The seconds both
+ * editors read carry the speed clamped to the earlier editor's 0.25–4 and a curve as its average speed
+ * (`secondsOf`), so a cut slower than 0.25×, faster than 4× or on a speed curve runs another length there and
+ * shows other pictures at the same moment (measured: tests/brand-studio/editor-v2/old-editor-speed.test.ts).
+ * Exact on the speed's fraction: 0.25× and 4× themselves are the earlier editor's own.
+ */
+export function speedTheOldEditorChanges(clip: Pick<FrameClip, 'speedNum' | 'speedDen' | 'speedCurve'>): boolean {
+  if (clip.speedCurve) return true;
+  return clip.speedNum * 4 < clip.speedDen || clip.speedNum > clip.speedDen * 4;
+}
+
+/** The film has at least one such cut: the links to the earlier editor say so (audit B5). */
+export function filmHasSpeedTheOldEditorChanges(sequence: Pick<FrameSequence, 'clips'>): boolean {
+  return sequence.clips.some(speedTheOldEditorChanges);
+}
+
 /** The seconds a cut covers on its footage, on the film's frame grid. */
 function secondsOf(clip: FrameClip, fps: number): Pick<ComposeClip, 'trimStartSec' | 'trimEndSec' | 'playbackRate'> {
   const rawRate = clip.speedCurve ? curveAverageSpeed(clip.speedCurve) : clip.speedNum / clip.speedDen;

@@ -480,6 +480,8 @@ export const studioEditorEn = {
       classicColor: 'Color presets and matching a reference are in the earlier editor.',
       classicSound: 'Adding your own music and setting its level are in the earlier editor.',
       classicCaptions: 'Adding and editing captions are in the earlier editor.',
+      /** Beside the links to the earlier editor when a cut is outside its speeds (audit B5, measured). */
+      classicSpeed: 'Cuts slower than 0.25×, faster than 4× or on a speed curve play at a different speed in the earlier editor, so their length differs there. A caption or sound added to them there may land on other pictures here.',
     },
     assistUnknown: 'For now it follows cut sentences like the examples below.',
     assistNotReady: 'That part is not ready yet. For now it follows cut sentences only.',
@@ -976,6 +978,8 @@ export const studioEditorKo: typeof studioEditorEn = {
       classicColor: '색 프리셋과 참고 화면 색 맞추기는 예전 편집기에 있습니다.',
       classicSound: '내 음원 넣기와 음악 크기 조절은 예전 편집기에 있습니다.',
       classicCaptions: '자막 넣기와 고치기는 예전 편집기에 있습니다.',
+      // 대표 확인 대기 (Gemma 미실행)
+      classicSpeed: '0.25×보다 느리거나 4×보다 빠른 컷, 속도 곡선을 넣은 컷은 예전 편집기에서 다른 속도로 재생돼 길이가 달라집니다. 예전 편집기에서 그 컷에 넣은 자막이나 소리는 이 편집기에서 다른 장면에 놓일 수 있습니다.',
     },
     assistUnknown: '지금은 컷 편집만 말로 할 수 있습니다. 아래 예시처럼 적어 주세요.',
     assistNotReady: '그 작업은 아직 준비 중입니다. 지금은 컷 편집만 말로 할 수 있습니다.',

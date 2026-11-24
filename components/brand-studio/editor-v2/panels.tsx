@@ -15,6 +15,7 @@ import {
 import { filmContents } from '@/lib/brand-studio/editor-v2/film-contents';
 import { clipFrameAt, formatTimecode, type FrameCaption } from '@/lib/brand-studio/editor-v2/frames';
 import { sourceSeconds } from '@/lib/brand-studio/editor-v2/sources';
+import { filmHasSpeedTheOldEditorChanges } from '@/lib/brand-studio/editor-v2/stored';
 import { formatBinding, type ShortcutAction } from '@/lib/brand-studio/editor-v2/shortcuts';
 import {
   CAPTION_OUTPUTS,
@@ -229,6 +230,8 @@ function LockedPanel({ api, classicHref }: { api: EditorApi; classicHref?: strin
   const { copy, workspace } = api;
   const name = copy.workspaces[workspace];
   const inClassic = workspace === 'color' ? copy.real.locked.classicColor : workspace === 'sound' ? copy.real.locked.classicSound : copy.real.locked.classicCaptions;
+  // A cut the earlier editor plays at another speed: what is placed on it there may land elsewhere here (audit B5).
+  const speedDiffers = filmHasSpeedTheOldEditorChanges(api.sequence);
   return (
     <>
       <PanelHead title={name} />
@@ -243,6 +246,11 @@ function LockedPanel({ api, classicHref }: { api: EditorApi; classicHref?: strin
       {classicHref && workspace !== 'cut' && (
         <section className={styles.lockedCard} data-editor-locked-classic={workspace}>
           <p className={styles.note}>{inClassic}</p>
+          {speedDiffers && (
+            <p className={styles.note} data-editor-classic-speed>
+              {copy.real.locked.classicSpeed}
+            </p>
+          )}
           <a className={styles.sampleLink} href={classicHref} data-editor-classic-link={workspace}>
             {copy.notice.current}
           </a>

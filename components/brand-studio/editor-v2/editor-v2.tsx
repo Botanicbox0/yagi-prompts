@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { fill } from '@/components/brand-studio/copy';
 import type { ExportPathOverride } from '@/lib/brand-studio/editor-v2/decode-plan';
 import { EDITOR_WORKSPACES, type EditorWorkspace } from '@/lib/brand-studio/editor-v2/model';
+import { filmHasSpeedTheOldEditorChanges } from '@/lib/brand-studio/editor-v2/stored';
 import { actionFor, bindingFromEvent, formatBinding, typingTarget } from '@/lib/brand-studio/editor-v2/shortcuts';
 import type { StudioEditorCopy } from '@/messages/studio-editor';
 import { Assistant } from './assistant';
@@ -81,7 +82,7 @@ export function EditorV2({ copy, currentEditorHref, initialWorkspace, exportPath
     >
       <header className={styles.top}>
         <div className={styles.topLeft}>
-          <a className={styles.iconBtn} href={currentEditorHref} aria-label={copy.notice.current} title={copy.notice.current} data-editor-current>
+          <a className={styles.iconBtn} href={currentEditorHref} aria-label={copy.notice.current} title={oldEditorLinkTitle(copy, api.real && filmHasSpeedTheOldEditorChanges(api.sequence))} data-editor-current>
             <EditorIcon name="back" />
           </a>
           {real ? (
@@ -175,6 +176,14 @@ export function EditorV2({ copy, currentEditorHref, initialWorkspace, exportPath
       {api.toast && <p className={styles.toast} role="status" data-editor-toast>{api.toast}</p>}
     </div>
   );
+}
+
+/**
+ * The header's way back to the earlier editor, as its tooltip: on the organization's film with a cut the
+ * earlier editor plays at another speed, the same warning the locked workspaces' link carries (audit B5).
+ */
+export function oldEditorLinkTitle(copy: StudioEditorCopy, speedDiffers: boolean): string {
+  return speedDiffers ? `${copy.notice.current} · ${copy.real.locked.classicSpeed}` : copy.notice.current;
 }
 
 /**
