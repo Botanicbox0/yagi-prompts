@@ -39,7 +39,6 @@ import {
 } from '@/lib/brand-studio/editor-v2/fixture';
 import {
   addCaption,
-  applyClipSpeedCurve,
   clipMaxFrames,
   frameStateAt,
   insertClips,
@@ -52,7 +51,6 @@ import {
   resetClipSpeed as resetSequenceClipSpeed,
   setClipConstantSpeed as setSequenceClipConstantSpeed,
   setClipSpeed as setSequenceClipSpeed,
-  setClipSpeedCurve as setSequenceClipSpeedCurve,
   type SpeedCurveRefusal,
   type SpeedPoint,
   spansOf,
@@ -64,6 +62,7 @@ import {
   type FrameClip,
   type FrameSequence,
 } from '@/lib/brand-studio/editor-v2/frames';
+import { applyChange, mergeWindow, runCurveEdit } from '@/lib/brand-studio/editor-v2/edit-steps';
 import { cloneSpeedCurve } from '@/lib/brand-studio/editor-v2/speed-curve';
 import {
   DEFAULT_REFRAME,
@@ -73,7 +72,6 @@ import {
   balanceLooks,
   captionFindings,
   colorFindings,
-  commit,
   filmTarget,
   interpretUtterance,
   redo as redoHistory,
@@ -392,14 +390,9 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
   const change = useCallback((mutate: (current: EditorDoc) => EditorDoc | null, coalesce?: string) => {
     // A real film that is still loading, or that this person may only look at, takes no edits.
     if (blockedRef.current) return;
-    const now = Date.now();
-    const merge = !!coalesce && lastChange.current?.key === coalesce && now - lastChange.current.at < 900;
-    lastChange.current = coalesce ? { key: coalesce, at: now } : null;
-    setStored((current) => {
-      const next = mutate(current.doc);
-      if (!next || next === current.doc) return current;
-      return { doc: next, history: merge ? current.history : commit(current.history, current.doc) };
-    });
+    const { merge, mark } = mergeWindow(lastChange.current, coalesce, Date.now());
+    lastChange.current = mark;
+    setStored((current) => applyChange(current, mutate(current.doc), merge));
   }, []);
 
   /** A change to the cuts. `inherit` pairs each new cut with the cut whose look and framing it keeps. */
@@ -758,13 +751,12 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
   const setSpeedCurve = useCallback(
     (index: number, points: readonly SpeedPoint[], coalesce = false) => {
       if (blockedRef.current) return;
-      // A shape the cut cannot take leaves it as it is and says why, instead of a button that seems dead (audit A2).
-      const { refused } = applyClipSpeedCurve(docRef.current.sequence, index, points);
-      if (refused) return say(curveRefusalLine(copy, refused));
+      // A shape the cut cannot take leaves it as it is and says why (audit A2); the refused move still keeps a
+      // drag's undo window open, and the retime is worked out once (review item 8, lib/brand-studio/editor-v2/edit-steps.ts).
       const clipKey = speedUndoKey(docRef.current.sequence.clips[index]?.id ?? String(index));
-      edit((current) => setSequenceClipSpeedCurve(current, index, points), undefined, coalesce ? clipKey : undefined);
+      runCurveEdit({ doc: docRef.current, change, say: (refused) => say(curveRefusalLine(copy, refused)) }, index, points, coalesce ? clipKey : undefined);
     },
-    [edit, say, copy],
+    [change, say, copy],
   );
   const resetSpeed = useCallback((index: number) => edit((current) => resetSequenceClipSpeed(current, index)), [edit]);
   const setClipAudio = useCallback(
