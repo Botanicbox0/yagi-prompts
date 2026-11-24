@@ -7,9 +7,11 @@ import {
   pendingFoldNotice,
   readSheetTurnAnswer,
   sheetNoticeText,
+  visibleSheetQuestion,
   type EditSheetCopy,
   type SheetNotice
 } from './edit-sheet-card';
+import { SHEET_BLOCK_LIMITS } from '@/lib/revision/sheet-core';
 import {
   chipsFromSheet,
   dropRef,
@@ -511,6 +513,9 @@ export function TemplateDirectorPanel({
   const [sheetNotice, setSheetNotice] = useState<SheetNotice | null>(null);
   const sheetChips = useMemo(() => chipsFromSheet(sheetState.sheet), [sheetState.sheet]);
   const chips = editSheet ? sheetChips : chipsState;
+  const sheetQuestion = visibleSheetQuestion(sheetState.question, locale);
+  // Sheet mode: a typed request becomes one sheet line, so the box takes no more than a line holds.
+  const inputMaxChars = editSheet ? SHEET_BLOCK_LIMITS.itemMax : MAX_DIRECTOR_INPUT_CHARS;
   const [assistantMessage, setAssistantMessage] = useState<string | null>(initialAssistantMessage);
   const [turnAccepted, setTurnAccepted] = useState<boolean>(true);
   const [fileError, setFileError] = useState<string | null>(null);
@@ -771,7 +776,7 @@ export function TemplateDirectorPanel({
     const hasPhoto = outfitSlot !== null || propSlot !== null || sceneSlot !== null;
     if ((!message && !hasPhoto) || submitting || disabled) return;
     if (!templateId || typeof fetch !== 'function') {
-      setSheetNotice({ kind: 'copy', key: 'retry' });
+      setSheetNotice({ key: 'retry' });
       return;
     }
     const myEpoch = ++requestEpochRef.current;
@@ -807,14 +812,14 @@ export function TemplateDirectorPanel({
         message,
         status: res.status,
         payload,
-        // The studio's reply is written in Korean; other locales get dictionary copy instead.
-        replyReadable: locale === 'ko'
+        // The studio's note on a softened request is written in Korean; other locales show the dictionary line only.
+        adjustmentReadable: locale === 'ko'
       });
       setSheetState(outcome.state);
       setSheetNotice(outcome.notice);
       if (outcome.accepted && fromInput) setUserMessage('');
     } catch {
-      if (requestEpochRef.current === myEpoch) setSheetNotice({ kind: 'copy', key: 'retry' });
+      if (requestEpochRef.current === myEpoch) setSheetNotice({ key: 'retry' });
     } finally {
       if (requestEpochRef.current === myEpoch) {
         setSubmitting(false);
@@ -2407,7 +2412,7 @@ export function TemplateDirectorPanel({
               data-director-char-count
               className="font-mono text-[0.68rem] text-[#71717A] tabular-nums"
             >
-              {userMessage.length}/{MAX_DIRECTOR_INPUT_CHARS}
+              {userMessage.length}/{inputMaxChars}
             </span>
           </div>
           <div className="mt-1.5 flex flex-col gap-2 sm:flex-row sm:items-end">
@@ -2416,7 +2421,7 @@ export function TemplateDirectorPanel({
               id={inputId}
               data-director-input
               rows={2}
-              maxLength={MAX_DIRECTOR_INPUT_CHARS}
+              maxLength={inputMaxChars}
               disabled={disabled || submitting}
               value={userMessage}
               placeholder={copy.inputPlaceholder}
@@ -2479,14 +2484,15 @@ export function TemplateDirectorPanel({
         sheetDraft &&
         (expanded ||
           hasSheetContent(sheetDraft.fold.sheet) ||
-          sheetState.question !== null ||
+          sheetQuestion !== null ||
           sheetNotice !== null) && (
           <EditSheetCard
             copy={editSheet}
             sheet={sheetDraft.fold.sheet}
             pendingIndex={sheetDraft.fold.pendingIndex}
-            question={sheetState.question}
+            question={sheetQuestion}
             notice={sheetNoticeText(sheetNotice, editSheet)}
+            noticeDetail={sheetNotice?.detail ?? null}
             foldNotice={pendingFoldNotice(sheetDraft.fold, editSheet)}
             disabled={disabled || submitting}
             onRemove={(block, index) => editSheetLocally((sheet) => removeLine(sheet, block, index))}

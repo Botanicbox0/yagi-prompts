@@ -120,8 +120,14 @@ export type SheetNoticeKey =
   | 'refusedUnsupported'
   | 'refusedTooLarge';
 
-/** The live line under the card: the studio's own reply (only when it is in the viewer's language) or dictionary copy. */
-export type SheetNotice = { kind: 'reply'; text: string } | { kind: 'copy'; key: SheetNoticeKey };
+/**
+ * The live line under the card: always dictionary copy (the studio's own reply is not shown — it repeats the request
+ * and is written in Korean). `detail` is the studio's note on a softened request, kept only where it is readable.
+ */
+export interface SheetNotice {
+  key: SheetNoticeKey;
+  detail?: string;
+}
 
 /** `turn.refusal` as dictionary copy; the server's Korean sentence is never shown in sheet mode. */
 export function sheetRefusalNotice(refusal: unknown): SheetNoticeKey {
@@ -147,21 +153,22 @@ export interface SheetTurnOutcome {
 
 /**
  * Reads one `/api/template-director` answer in sheet mode. A rate limit (429) or any failure leaves the state as it
- * was; an answer adopts the server's sheet, question and `asked`, and appends the turn to the kept conversation. The
- * answer is checked again here (`cleanPersonalSheetState`), as the server checks what the screen sends.
+ * was; an answer adopts the server's sheet, question and `asked`, and appends the turn to the kept conversation (the
+ * studio's reply travels back as context but is never shown). The answer is checked again here
+ * (`cleanPersonalSheetState`), as the server checks what the screen sends.
  */
 export function readSheetTurnAnswer(input: {
   prior: PersonalSheetState;
   message: string;
   status: number;
   payload: unknown;
-  /** The studio writes its reply in Korean; true when that is the viewer's language. */
-  replyReadable: boolean;
+  /** The studio writes `guardrailAdjustmentKo` in Korean; true when that is the viewer's language. */
+  adjustmentReadable: boolean;
 }): SheetTurnOutcome {
   const { prior } = input;
   const kept = (key: SheetNoticeKey): SheetTurnOutcome => ({
     state: prior,
-    notice: { kind: 'copy', key },
+    notice: { key },
     accepted: false,
     changed: false,
   });
@@ -180,23 +187,35 @@ export function readSheetTurnAnswer(input: {
   });
   const accepted = turn.approved === true && turn.refusal === 'none';
   if (!accepted) {
-    return { state, notice: { kind: 'copy', key: sheetRefusalNotice(turn.refusal) }, accepted: false, changed: false };
+    return { state, notice: { key: sheetRefusalNotice(turn.refusal) }, accepted: false, changed: false };
   }
   const changed = turn.changed === true;
-  const notice: SheetNotice | null =
-    input.replyReadable && reply
-      ? { kind: 'reply', text: reply }
-      : changed
-        ? { kind: 'copy', key: 'updated' }
-        : state.question
-          ? null
-          : { kind: 'copy', key: 'unchanged' };
+  const adjustment = typeof turn.guardrailAdjustmentKo === 'string' ? turn.guardrailAdjustmentKo.trim() : '';
+  const notice: SheetNotice = {
+    key: changed ? 'updated' : 'unchanged',
+    ...(input.adjustmentReadable && adjustment ? { detail: adjustment } : {}),
+  };
   return { state, notice, accepted: true, changed };
 }
 
 export function sheetNoticeText(notice: SheetNotice | null, copy: EditSheetCopy): string | null {
-  if (!notice) return null;
-  return notice.kind === 'reply' ? notice.text : copy[notice.key];
+  return notice ? copy[notice.key] : null;
+}
+
+const HANGUL = /[가-힣]/;
+
+/**
+ * The question the card may show. Temporary guard: the studio writes its question in Korean for now (server
+ * follow-up: localize `question` in lib/template-director/flash-director.ts), so the English screen leaves a Korean
+ * question out instead of showing it untranslated. Never blocks ordering — the question is optional anyway.
+ */
+export function visibleSheetQuestion(
+  question: PersonalSheetQuestion | null,
+  locale: string,
+): PersonalSheetQuestion | null {
+  if (!question) return null;
+  if (locale === 'en' && [question.text, ...question.options].some((text) => HANGUL.test(text))) return null;
+  return question;
 }
 
 /** What the card says about typed text it could not carry; null when there is nothing to say. */
@@ -229,8 +248,10 @@ export interface EditSheetCardProps {
   /** The change line that holds typed text not sent yet; its remove button clears the input instead. */
   pendingIndex?: number | null;
   question?: PersonalSheetQuestion | null;
-  /** The turn's live line (reply, refusal, rate limit, failure), already resolved to text. */
+  /** The turn's live line (taken, unchanged, refusal, rate limit, failure), already resolved to text. */
   notice?: string | null;
+  /** A second line under it: the studio's note on a softened request, when readable. */
+  noticeDetail?: string | null;
   /** What the card says about typed text it could not carry. */
   foldNotice?: string | null;
   disabled?: boolean;
@@ -246,6 +267,7 @@ export function EditSheetCard({
   pendingIndex = null,
   question = null,
   notice = null,
+  noticeDetail = null,
   foldNotice = null,
   disabled = false,
   onRemove,
@@ -290,6 +312,8 @@ export function EditSheetCard({
           {PERSONAL_SHEET_BLOCKS.map((block) => {
             const headingId = `${baseId}-${block}`;
             const count = sheet[block].length;
+            // "Change" stands whenever the sheet has content; keep and exclude appear only with lines.
+            if (block !== 'change' && count === 0) return null;
             return (
               <section
                 key={block}
@@ -300,9 +324,7 @@ export function EditSheetCard({
                 <h4 id={headingId} className="text-xs font-medium text-[#52525B]">
                   {copy[HEADING[block]]}
                 </h4>
-                {count === 0 ? (
-                  <p className="mt-0.5 pb-1 text-xs text-[#71717A]">{copy.blockEmpty}</p>
-                ) : (
+                {count > 0 && (
                   <ul className="mt-0.5">
                     {block === 'change'
                       ? sheet.change.map((line, index) => {
@@ -402,7 +424,16 @@ export function EditSheetCard({
       )}
 
       <div role="status" aria-live="polite" data-edit-sheet-status="">
-        {notice && <p className="mt-2 rounded-xl bg-[#F4F4F5] px-3 py-2 text-xs leading-relaxed">{notice}</p>}
+        {notice && (
+          <div data-edit-sheet-notice className="mt-2 rounded-xl bg-[#F4F4F5] px-3 py-2 text-xs leading-relaxed">
+            <p>{notice}</p>
+            {noticeDetail && (
+              <p data-edit-sheet-adjustment className="mt-0.5 text-[#52525B]">
+                {noticeDetail}
+              </p>
+            )}
+          </div>
+        )}
         {foldNotice && (
           <p data-edit-sheet-full className="mt-2 text-xs leading-relaxed text-[#52525B]">
             {foldNotice}

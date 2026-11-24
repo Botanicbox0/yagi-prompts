@@ -19,6 +19,7 @@ import { signInHref } from '@/lib/billing/links';
 import { identityVerifyHref } from '@/lib/identity/links';
 import { templateMetadata, unresolvedTemplateMetadata } from '@/lib/seo/template-metadata';
 import { storefrontOpen } from '@/lib/auth/purchase-gate';
+import { personalEditSheetOpen } from '@/lib/flags';
 import { FaqSection } from '@/lib/seo/faq-section';
 import { JsonLd } from '@/lib/seo/json-ld';
 import { siteUrl } from '@/lib/seo/site-url';
@@ -414,10 +415,8 @@ export default async function TemplatePage({ params }: RouteParams) {
                             selfie: dict.selfie,
                             cast: dict.cast.photo,
                             subscription: { copy: dict.creatorSubscription, editorCopy: dict.premiumEditor },
-                            // docs/PERSONAL-STUDIO.md §3.1 — the sheet card only with the server flag on: the rule of
-                            // `personalEditSheetOpen()` (lib/flags.ts, exactly `on`), read inline because this page's
-                            // tests mock `@/lib/flags` with the render flags only.
-                            ...(process.env.TWINGS_PERSONAL_EDIT_SHEET === 'on' ? { editSheet: dict.editSheet } : {}),
+                            // docs/PERSONAL-STUDIO.md §3.1 — the sheet card only with the server flag on.
+                            ...(personalEditSheetOpen() ? { editSheet: dict.editSheet } : {}),
                             labels: {
                               badge: dict.renders.studio.badge,
                               operatorBadge: dict.renders.studio.operatorBadge,

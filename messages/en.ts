@@ -5993,8 +5993,6 @@ export const en = {
     keepHeading: 'Keep as is',
     /** Heading of the block of things that must not appear. */
     excludeHeading: 'Leave out',
-    /** Quiet line inside a block that has no items yet. */
-    blockEmpty: 'Nothing yet',
     /** Name of the part of the template a change line edits, shown above the line's text (looked up by slot). */
     slots: {
       outfit: 'Outfit',
@@ -6005,7 +6003,7 @@ export const en = {
       lighting_mood: 'Mood',
     },
     /** Marker on a change line that takes from a photo the customer attached. */
-    photoAttached: 'Your photo',
+    photoAttached: 'Attached photo',
     /** Marker on a change limited to one shot; {n} is the shot number. */
     shotOne: 'Shot {n}',
     /** Marker on a change limited to a run of shots; {from} and {to} are shot numbers. */
@@ -6023,10 +6021,10 @@ export const en = {
     /** Small label above the studio's one clarifying question. */
     questionLabel: 'One quick question',
     /** Under the question: answering is optional and does not hold up the order. */
-    questionOptional: 'You can order without answering.',
-    /** Live line after a request changed the list. */
+    questionOptional: 'You can go ahead without answering.',
+    /** Live line after a request changed the list (the studio's own reply is not shown). */
     updated: 'Added to your changes.',
-    /** Live line after a request was read but nothing on the list changed. */
+    /** Live line after a request was taken but nothing on the list changed. */
     unchanged: 'Nothing changed. Try putting it another way.',
     /** Live line when requests came too fast (rate limit); the list is unchanged. */
     rateLimited: 'Too many requests at once. Wait a moment, then send it again.',
@@ -6034,10 +6032,10 @@ export const en = {
     retry: "We couldn't add that. Please send it again.",
     /** Refusal: a request to use someone else's face. Only the customer's own face is used. */
     refusedIdentity: "Only your own face can be used. We can't swap in someone else's.",
-    /** Refusal: a request outside changes to outfits, props and scenes. */
-    refusedUnsafe: 'We can only change outfits, props and scenes.',
-    /** Refusal: this part of this template cannot be changed. */
-    refusedUnsupported: "That part of this template can't be changed.",
+    /** Refusal: a request outside changes to the scene (outfit, hair, props, action). */
+    refusedUnsafe: 'We can only take requests about the scene, such as outfit, hair, props and action.',
+    /** Refusal: this part of this scene cannot be changed. */
+    refusedUnsupported: "That part of this scene can't be changed.",
     /** Refusal: the request is too long. */
     refusedTooLarge: 'That request is too long. Send it in shorter parts.',
   },

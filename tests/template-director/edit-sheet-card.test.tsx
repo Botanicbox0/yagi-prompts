@@ -10,8 +10,10 @@ import {
   readSheetTurnAnswer,
   sheetNoticeText,
   sheetRefusalNotice,
+  visibleSheetQuestion,
   type EditSheetCopy
 } from '@/components/twings/edit-sheet-card';
+import { SHEET_BLOCK_LIMITS } from '@/lib/revision/sheet-core';
 import { TemplateDirectorPanel } from '@/components/twings/template-director-panel';
 import { chipsFromSheet, emptyPersonalSheet, emptyPersonalSheetState } from '@/lib/template-director/sheet';
 import type { PersonalEditSheet, PersonalSheetState } from '@/lib/template-director/schema';
@@ -31,7 +33,7 @@ const filled: PersonalEditSheet = {
 const count = (html: string, needle: string): number => html.split(needle).length - 1;
 
 describe('EditSheetCard markup', () => {
-  it('shows change, keep and exclude blocks in that order', () => {
+  it('shows change, keep and exclude blocks in that order when all three have lines', () => {
     const html = renderToStaticMarkup(<EditSheetCard copy={ko.editSheet} sheet={filled} />);
     expect(html).toContain('data-edit-sheet');
     expect(count(html, 'data-edit-sheet-block=')).toBe(3);
@@ -43,6 +45,30 @@ describe('EditSheetCard markup', () => {
     expect(exclude).toBeGreaterThan(keep);
     expect(html.indexOf(ko.editSheet.changeHeading)).toBeLessThan(html.indexOf(ko.editSheet.keepHeading));
     expect(count(html, 'data-edit-sheet-line=')).toBe(5);
+  });
+
+  it('leaves out empty keep and exclude blocks, and always shows the change block once there is content', () => {
+    const changesOnly = renderToStaticMarkup(
+      <EditSheetCard copy={ko.editSheet} sheet={{ change: filled.change, keep: [], exclude: [] }} />
+    );
+    expect(count(changesOnly, 'data-edit-sheet-block=')).toBe(1);
+    expect(changesOnly).toContain('data-edit-sheet-block="change"');
+    expect(changesOnly).not.toContain(ko.editSheet.keepHeading);
+    expect(changesOnly).not.toContain(ko.editSheet.excludeHeading);
+
+    const keepOnly = renderToStaticMarkup(
+      <EditSheetCard copy={ko.editSheet} sheet={{ change: [], keep: ['내 머리 길이'], exclude: [] }} />
+    );
+    expect(count(keepOnly, 'data-edit-sheet-block=')).toBe(2);
+    expect(keepOnly.indexOf('data-edit-sheet-block="change"')).toBeLessThan(keepOnly.indexOf('data-edit-sheet-block="keep"'));
+    expect(keepOnly).not.toContain('data-edit-sheet-block="exclude"');
+    expect(keepOnly).not.toContain('data-edit-sheet-empty');
+  });
+
+  it('writes shot ranges with the dictionary in each language', () => {
+    const html = renderToStaticMarkup(<EditSheetCard copy={ko.editSheet} sheet={filled} />);
+    expect(html).toContain('2~3번째 컷');
+    expect(html).toContain('4번째 컷');
   });
 
   it('offers revert only on a change line with an earlier value, and remove on every line', () => {
@@ -101,6 +127,14 @@ describe('EditSheetCard markup', () => {
     expect(html).toMatch(/role="status" aria-live="polite" data-edit-sheet-status[^>]*>[\s\S]*담았어요/);
     // The pending line's text belongs to the input, so it has no revert.
     expect(html).not.toContain('data-edit-sheet-revert="2"');
+    expect(html).not.toContain('data-edit-sheet-adjustment');
+  });
+
+  it('puts the studio note on a softened request on a second line under the live line', () => {
+    const html = renderToStaticMarkup(
+      <EditSheetCard copy={ko.editSheet} sheet={filled} notice={ko.editSheet.updated} noticeDetail="표정은 자연스럽게 다듬었어요." />
+    );
+    expect(html).toMatch(/data-edit-sheet-notice[^>]*><p>고칠 내용에 담았어요\.<\/p><p data-edit-sheet-adjustment[^>]*>표정은 자연스럽게 다듬었어요\.<\/p>/);
   });
 });
 
@@ -125,11 +159,12 @@ describe('edit sheet copy', () => {
         sheet={filled}
         pendingIndex={2}
         question={{ point: 'p', text: 'Q?', options: ['O1'] }}
-        notice={sheetNoticeText({ kind: 'copy', key: 'updated' }, copy)}
+        notice={sheetNoticeText({ key: 'updated' }, copy)}
+        noticeDetail="NOTE"
         foldNotice={pendingFoldNotice({ status: 'full' }, copy)}
       />
     );
-    const data = ['블랙 실크 원피스', '카메라를 보며 웃기', '마지막 컷 손 인사', '내 머리 길이', '자막', 'Q?', 'O1'];
+    const data = ['블랙 실크 원피스', '카메라를 보며 웃기', '마지막 컷 손 인사', '내 머리 길이', '자막', 'Q?', 'O1', 'NOTE'];
     const strip = (text: string) =>
       data.reduce((rest, d) => rest.split(d).join(''), text.replace(/@es\.[\w.]+@/g, ''));
     const visible = strip(html.replace(/<[^>]+>/g, ' '));
@@ -170,6 +205,37 @@ describe('the panel in sheet mode', () => {
     const html = renderToStaticMarkup(<TemplateDirectorPanel locale="ko" editSheet={ko.editSheet} />);
     expect(html).not.toContain('data-edit-sheet');
     expect(html).toContain('data-director-toggle');
+  });
+
+  it('caps the request box at one sheet line in sheet mode, and keeps 320 without it', () => {
+    const sheet = renderToStaticMarkup(
+      <TemplateDirectorPanel locale="ko" editSheet={ko.editSheet} initialExpanded={true} />
+    );
+    expect(SHEET_BLOCK_LIMITS.itemMax).toBe(120);
+    expect(sheet).toContain(`maxLength="${SHEET_BLOCK_LIMITS.itemMax}"`);
+    expect(sheet).toContain(`0/${SHEET_BLOCK_LIMITS.itemMax}`);
+    expect(sheet).not.toContain('0/320');
+    const chips = renderToStaticMarkup(<TemplateDirectorPanel locale="ko" initialExpanded={true} />);
+    expect(chips).toContain('maxLength="320"');
+    expect(chips).toContain('0/320');
+  });
+});
+
+describe('visibleSheetQuestion (temporary guard until questions are localized)', () => {
+  const korean = { point: '범위', text: '모든 컷에서 바꿀까요?', options: ['모든 컷', '첫 컷만'] };
+  const koreanOption = { point: 'range', text: 'Change it in every shot?', options: ['Every shot', '첫 컷만'] };
+  const english = { point: 'range', text: 'Change it in every shot?', options: ['Every shot', 'First shot only'] };
+
+  it('keeps every question in Korean', () => {
+    expect(visibleSheetQuestion(korean, 'ko')).toBe(korean);
+    expect(visibleSheetQuestion(english, 'ko')).toBe(english);
+  });
+
+  it('leaves a question with Hangul in its text or options out of the English screen', () => {
+    expect(visibleSheetQuestion(korean, 'en')).toBeNull();
+    expect(visibleSheetQuestion(koreanOption, 'en')).toBeNull();
+    expect(visibleSheetQuestion(english, 'en')).toBe(english);
+    expect(visibleSheetQuestion(null, 'en')).toBeNull();
   });
 });
 
@@ -253,16 +319,16 @@ describe('buildSheetDirectorSpec (what the order carries)', () => {
   });
 });
 
-describe('readSheetTurnAnswer (refusals, 429 and failures)', () => {
+describe('readSheetTurnAnswer (refusals, 429, failures and the live line)', () => {
   const prior: PersonalSheetState = { sheet: filled, turns: [], question: null, asked: false };
   const okTurn = (turn: Record<string, unknown>) => ({ ok: true, model: 'heuristic', turn });
   const nextSheet: PersonalEditSheet = { change: [{ text: '빨간 립', slot: 'makeup' }], keep: [], exclude: [] };
 
   it('leaves the sheet unchanged and says "try again shortly" on 429', () => {
-    const out = readSheetTurnAnswer({ prior, message: 'x', status: 429, payload: { ok: false, code: 'rate_limited' }, replyReadable: true });
+    const out = readSheetTurnAnswer({ prior, message: 'x', status: 429, payload: { ok: false, code: 'rate_limited' }, adjustmentReadable: true });
     expect(out.state).toBe(prior);
     expect(out.accepted).toBe(false);
-    expect(out.notice).toEqual({ kind: 'copy', key: 'rateLimited' });
+    expect(out.notice).toEqual({ key: 'rateLimited' });
   });
 
   it('leaves the sheet unchanged with a generic retry on any other failure', () => {
@@ -273,9 +339,9 @@ describe('readSheetTurnAnswer (refusals, 429 and failures)', () => {
       [200, okTurn({ approved: true, refusal: 'none', replyKo: '반영', summaryChips: [] })],
       [200, 'not json']
     ] as const) {
-      const out = readSheetTurnAnswer({ prior, message: 'x', status, payload, replyReadable: true });
+      const out = readSheetTurnAnswer({ prior, message: 'x', status, payload, adjustmentReadable: true });
       expect(out.state).toBe(prior);
-      expect(out.notice).toEqual({ kind: 'copy', key: 'retry' });
+      expect(out.notice).toEqual({ key: 'retry' });
     }
   });
 
@@ -290,46 +356,69 @@ describe('readSheetTurnAnswer (refusals, 429 and failures)', () => {
       prior,
       message: '연예인 얼굴로 바꿔줘',
       status: 200,
-      payload: okTurn({ approved: false, refusal: 'identity', replyKo: '본인 얼굴만…', summaryChips: [], sheet: filled, question: null, asked: false, changed: false }),
-      replyReadable: true
+      payload: okTurn({ approved: false, refusal: 'identity', replyKo: '본인 얼굴만…', guardrailAdjustmentKo: '조정', summaryChips: [], sheet: filled, question: null, asked: false, changed: false }),
+      adjustmentReadable: true
     });
     expect(out.accepted).toBe(false);
-    expect(out.notice).toEqual({ kind: 'copy', key: 'refusedIdentity' });
+    expect(out.notice).toEqual({ key: 'refusedIdentity' });
     expect(out.state.sheet).toEqual(filled);
     expect(sheetNoticeText(out.notice, en.editSheet)).toBe(en.editSheet.refusedIdentity);
   });
 
-  it('takes the new sheet, question and turns from an accepted answer', () => {
+  it('takes the new sheet, question and turns from an accepted answer, and never shows the reply', () => {
     const answer = okTurn({
       approved: true,
       refusal: 'none',
       replyKo: '메이크업을 빨간 립으로 바꿨어요.',
+      guardrailAdjustmentKo: null,
       summaryChips: chipsFromSheet(nextSheet),
       sheet: nextSheet,
       question: { point: '립', text: '매트로 할까요?', options: ['매트', '글로시'] },
       asked: true,
       changed: true
     });
-    const en1 = readSheetTurnAnswer({ prior, message: '립 빨갛게', status: 200, payload: answer, replyReadable: false });
-    expect(en1.accepted).toBe(true);
-    expect(en1.state.sheet).toEqual(nextSheet);
-    expect(en1.state.question).toEqual({ point: '립', text: '매트로 할까요?', options: ['매트', '글로시'] });
-    expect(en1.state.asked).toBe(true);
-    expect(en1.state.turns).toEqual([
-      { role: 'customer', text: '립 빨갛게' },
-      { role: 'studio', text: '메이크업을 빨간 립으로 바꿨어요.' }
-    ]);
-    expect(en1.notice).toEqual({ kind: 'copy', key: 'updated' });
-    const ko1 = readSheetTurnAnswer({ prior, message: '립 빨갛게', status: 200, payload: answer, replyReadable: true });
-    expect(ko1.notice).toEqual({ kind: 'reply', text: '메이크업을 빨간 립으로 바꿨어요.' });
-    expect(sheetNoticeText(ko1.notice, ko.editSheet)).toBe('메이크업을 빨간 립으로 바꿨어요.');
+    for (const adjustmentReadable of [true, false]) {
+      const out = readSheetTurnAnswer({ prior, message: '립 빨갛게', status: 200, payload: answer, adjustmentReadable });
+      expect(out.accepted).toBe(true);
+      expect(out.state.sheet).toEqual(nextSheet);
+      expect(out.state.question).toEqual({ point: '립', text: '매트로 할까요?', options: ['매트', '글로시'] });
+      expect(out.state.asked).toBe(true);
+      // The reply travels back to the studio as context, but is not shown.
+      expect(out.state.turns).toEqual([
+        { role: 'customer', text: '립 빨갛게' },
+        { role: 'studio', text: '메이크업을 빨간 립으로 바꿨어요.' }
+      ]);
+      expect(out.notice).toEqual({ key: 'updated' });
+      expect(sheetNoticeText(out.notice, ko.editSheet)).toBe(ko.editSheet.updated);
+    }
   });
 
-  it('says nothing changed, unless the studio asked a question instead', () => {
-    const same = okTurn({ approved: true, refusal: 'none', replyKo: '', summaryChips: [], sheet: filled, question: null, asked: false, changed: false });
-    expect(readSheetTurnAnswer({ prior, message: 'x', status: 200, payload: same, replyReadable: true }).notice).toEqual({ kind: 'copy', key: 'unchanged' });
+  it('says "unchanged" whenever the sheet did not change', () => {
+    const same = okTurn({ approved: true, refusal: 'none', replyKo: '그대로예요', summaryChips: [], sheet: filled, question: null, asked: false, changed: false });
+    expect(readSheetTurnAnswer({ prior, message: 'x', status: 200, payload: same, adjustmentReadable: true }).notice).toEqual({ key: 'unchanged' });
     const asked = okTurn({ approved: true, refusal: 'none', replyKo: '', summaryChips: [], sheet: filled, question: { point: 'p', text: '어느 쪽?', options: [] }, asked: true, changed: false });
-    expect(readSheetTurnAnswer({ prior, message: 'x', status: 200, payload: asked, replyReadable: false }).notice).toBeNull();
+    expect(readSheetTurnAnswer({ prior, message: 'x', status: 200, payload: asked, adjustmentReadable: false }).notice).toEqual({ key: 'unchanged' });
+  });
+
+  it('adds the studio note on a softened request only where it is readable (Korean)', () => {
+    const softened = okTurn({
+      approved: true,
+      refusal: 'none',
+      replyKo: '반영했어요.',
+      guardrailAdjustmentKo: '  크게 소리치는 표정은 자연스러운 미소로 다듬었어요.  ',
+      summaryChips: chipsFromSheet(nextSheet),
+      sheet: nextSheet,
+      question: null,
+      asked: false,
+      changed: true
+    });
+    expect(readSheetTurnAnswer({ prior, message: 'x', status: 200, payload: softened, adjustmentReadable: true }).notice).toEqual({
+      key: 'updated',
+      detail: '크게 소리치는 표정은 자연스러운 미소로 다듬었어요.'
+    });
+    expect(readSheetTurnAnswer({ prior, message: 'x', status: 200, payload: softened, adjustmentReadable: false }).notice).toEqual({ key: 'updated' });
+    const blank = okTurn({ approved: true, refusal: 'none', replyKo: '', guardrailAdjustmentKo: '   ', summaryChips: [], sheet: nextSheet, question: null, asked: false, changed: true });
+    expect(readSheetTurnAnswer({ prior, message: 'x', status: 200, payload: blank, adjustmentReadable: true }).notice).toEqual({ key: 'updated' });
   });
 
   it('starts from an empty state', () => {
