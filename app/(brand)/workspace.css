@@ -5514,7 +5514,8 @@ html[data-brand-workspace]::view-transition-group(bw-tab-indicator) { animation-
     border-right: 0;
     border-bottom: 1px solid var(--ys-hairline);
     border-radius: 18px 18px 0 0;
-    background: rgba(255, 255, 255, 0.95);
+    /* The theme's own surface, not a literal white: the words on the bar follow the theme's ink. */
+    background: color-mix(in srgb, var(--ys-surface) 95%, transparent);
     -webkit-backdrop-filter: blur(18px) saturate(160%);
     backdrop-filter: blur(18px) saturate(160%);
   }
@@ -6516,7 +6517,7 @@ button.tws-thumb:hover, .tws-thumb:has(.tws-thumb-hit:hover) { background: var(-
     padding: 10px 12px 8px;
     row-gap: 8px;
     column-gap: 8px;
-    background: rgba(255, 255, 255, 0.96);
+    background: color-mix(in srgb, var(--ys-surface) 96%, transparent);
     -webkit-backdrop-filter: blur(14px);
     backdrop-filter: blur(14px);
     box-shadow: inset 0 -1px 0 var(--ys-hairline);
