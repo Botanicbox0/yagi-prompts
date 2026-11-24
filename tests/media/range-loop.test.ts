@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { RANGE_LOOP_SLACK, rangeLoopReducer, rangeLoopSeek, type RangeLoop } from '@/lib/media/range-loop';
+import { RANGE_LOOP_SLACK, playerMostlyHidden, rangeLoopReducer, rangeLoopSeek, type RangeLoop } from '@/lib/media/range-loop';
 
 /**
  * docs/PERSONAL-STUDIO.md §3.4.4 (T1a) — tapping a fixed part replays its range: seek to `from`, play, jump back at
@@ -32,6 +32,19 @@ describe('rangeLoopReducer', () => {
 
   it('refuses a tap with no start', () => {
     expect(rangeLoopReducer(null, { type: 'tap', id: 'sound', from: Number.NaN, to: null })).toBeNull();
+  });
+});
+
+describe('playerMostlyHidden', () => {
+  it('is true when most of the clip is off screen (the fixed row on a phone)', () => {
+    expect(playerMostlyHidden({ top: -600, bottom: 100, height: 700 }, 844)).toBe(true);
+    expect(playerMostlyHidden({ top: 900, bottom: 1600, height: 700 }, 844)).toBe(true);
+  });
+
+  it('is false when the clip is on screen, or there is nothing to measure', () => {
+    expect(playerMostlyHidden({ top: 96, bottom: 796, height: 700 }, 1000)).toBe(false);
+    expect(playerMostlyHidden({ top: -100, bottom: 600, height: 700 }, 844)).toBe(false);
+    expect(playerMostlyHidden({ top: 0, bottom: 0, height: 0 }, 844)).toBe(false);
   });
 });
 

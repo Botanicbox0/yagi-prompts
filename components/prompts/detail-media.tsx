@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { observeCardArming } from '@/lib/media/card-arming';
-import { rangeLoopReducer, rangeLoopSeek, type RangeLoop, type RangeLoopAction } from '@/lib/media/range-loop';
+import { playerMostlyHidden, rangeLoopReducer, rangeLoopSeek, type RangeLoop, type RangeLoopAction } from '@/lib/media/range-loop';
 import { VideoKeyframeStrip } from './video-keyframe-strip';
 import { TemplateFixedStrip, type TemplateFixedCopy } from './template-fixed-strip';
 import type { VideoKeyframe } from '@/lib/prompts/keyframes';
@@ -241,6 +241,10 @@ export function PromptDetailMedia({
       el.currentTime = next.from;
     } catch {
       // Unready media ignores the seek; the loop pulls it into range once it plays.
+    }
+    // On a phone the row sits below the clip: bring the clip back on screen (the playback pool pauses it off screen).
+    if (typeof window !== 'undefined' && playerMostlyHidden(el.getBoundingClientRect(), window.innerHeight)) {
+      el.scrollIntoView({ block: 'center', behavior: reducedMotion ? 'auto' : 'smooth' });
     }
     if (reducedMotion) return;
     setIntent('playing');

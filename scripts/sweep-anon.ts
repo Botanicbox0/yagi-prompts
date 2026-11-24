@@ -1165,10 +1165,10 @@ async function sweepTemplates(): Promise<void> {
     else fail(`${locale}: fixed row order`, 'expected the fixed row after the keyframe strip');
     for (const part of ['outfit', 'prop', 'lighting_mood']) expectPresent(`${locale}: …names ${part}`, fixedPage.body, `data-fixed-part="${part}"`);
     expectPresent(`${locale}: …a marked range is tappable`, fixedPage.body, 'data-fixed-item="outfit"');
-    expectPresent(`${locale}: …with its range`, fixedPage.body, '0:01–0:03');
+    expectPresent(`${locale}: …with its range`, fixedPage.body, '0:02–0:03');
     expectPresent(`${locale}: …the heading`, fixedPage.body, locale === 'ko' ? '이 템플릿에서 정해진 것' : 'What this template decides');
     expectPresent(`${locale}: …the description`, fixedPage.body, locale === 'ko' ? '은색 붐박스' : 'Silver boombox');
-    for (const word of ['Template locks', 'Keep exactly as in the template', 'powder-blue studio world', 'studded belts and navy mesh', FIXED_PARTS_PROMPT_FIXTURES[0]!.sentinel]) {
+    for (const word of ['Template locks', 'Keep exactly as in the template', 'powder-blue studio world', 'rhinestone denim, studded belts', FIXED_PARTS_PROMPT_FIXTURES[0]!.sentinel]) {
       expectAbsent(`${locale}: …no word of the template's prompt (${word})`, fixedPage.body, word);
     }
   }

@@ -31,6 +31,17 @@ export function rangeLoopReducer(state: RangeLoop | null, action: RangeLoopActio
  */
 export const RANGE_LOOP_SLACK = 0.3;
 
+/**
+ * Whether the player should be scrolled into view before a range replays: on a phone the fixed row sits a screen
+ * below the clip, and a clip off screen is paused by the playback pool, so the tap would show nothing. True when less
+ * than `min` of the clip's height is on screen.
+ */
+export function playerMostlyHidden(rect: { top: number; bottom: number; height: number }, viewportHeight: number, min = 0.6): boolean {
+  if (!(rect.height > 0) || !(viewportHeight > 0)) return false;
+  const visible = Math.max(0, Math.min(rect.bottom, viewportHeight) - Math.max(rect.top, 0));
+  return visible / rect.height < min;
+}
+
 /** Where to seek now, or null to leave playback alone. */
 export function rangeLoopSeek(loop: RangeLoop | null, currentTime: number): number | null {
   if (!loop || loop.to === null || !Number.isFinite(currentTime)) return null;
