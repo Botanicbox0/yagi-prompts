@@ -4015,6 +4015,12 @@ export const en = {
       needPet: 'Choose your pet’s photo.',
       needPartner: 'Choose the other person’s photo.',
       needConsent: 'Confirm they agreed.',
+      // docs/PERSONAL-STUDIO.md §6.1 — shown only while the Sunra face switch is on. Provisional: founder confirms the wording.
+      birthYearLabel: 'Year of birth',
+      birthYearPlaceholder: 'Choose a year',
+      adultAttest: 'I am 19 or older.',
+      adultHint: 'We ask once. After that, only our support team can change it.',
+      needAdult: 'Choose your year of birth and confirm you are 19 or older.',
     },
   },
   studio: {
@@ -4206,6 +4212,14 @@ export const en = {
         partner_consent_required: 'Confirm the other person agreed.',
         not_a_pet: 'Only a photo of your pet can go here. Choose one with no people in it.',
         pet_check_unavailable: 'We could not check the photo just now. Try again in a moment.',
+        // docs/PERSONAL-STUDIO.md §6.1–6.2 — only while the Sunra face switch is on. Provisional: founder confirms the wording.
+        adult_confirmation_required: 'Choose your year of birth and confirm you are 19 or older.',
+        adult_only: 'Videos and images with another person are for ages 19 and up.',
+        partner_not_one_person: 'Use a photo with only the person who will appear with you.',
+        partner_unclear: 'Use a photo where their face is easy to see.',
+        partner_minor: 'The person who appears with you must be an adult too.',
+        partner_screen: 'A photo of a screen or a printed picture cannot be used.',
+        partner_check_unavailable: 'We could not check the photo. Upload it again in a moment.',
         generic: 'Could not start. Try again in a moment.',
       },
     },

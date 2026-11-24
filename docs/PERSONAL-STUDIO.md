@@ -551,11 +551,21 @@ Template styling:
 
 약관 문안은 `legal-drafts/PERSONAL-OPEN-CAST-TERMS.md`에 있다. 여기에는 코드가 해야 할 일만 적는다.
 
+**구현 상태 (P2).**
+
+- PR A (#341, 병합): 0188/0189 스키마(`adult_confirmations`, `render_slot_inputs.photo_check`·`photo_checked_at`, `render_provider_state`, 제공사 값 `sunra`), 스위치 `TWINGS_PERSONAL_SUNRA_FACES`(`personalSunraFacesOpen()`), Sunra 어댑터와 게이트. 아직 아무 데서도 부르지 않는다. 클라우드 적용 필요.
+- PR B (`claude/personal-sunra-lane-b`): 아래 6.1의 만 19세 확인과 6.2의 함께 나올 사람 사진 검사. **스위치가 켜져 있을 때만 적용한다.** 꺼져 있으면 묻지도 읽지도 않고 지금과 똑같다. 새 마이그레이션은 없다.
+- 화면 문구(`messages/*.ts`의 `cast.photo`·`renders.studio.errors`)는 임시다. 대표가 문구를 확정하기 전에는 스위치를 켜지 않는다.
+
 ### 6.1 나이
 
 - 함께 나올 사람 자리와 B는 만 19세 이상만 쓴다. 가입과 기존 템플릿은 만 14세 그대로다.
 - 그 기능을 처음 쓸 때 출생연도를 받고 "만 19세 이상입니다" 확인을 기록한다(제안, 확정 전). 신고나 이상 징후가 있으면 본인 인증을 요구한다.
 - 서버가 막는다. 화면에서만 가리지 않는다.
+- **PR B 구현**: 기준은 "만 19세 이상이에요" 체크 **그리고** (한국 시간 기준 올해 − 출생 연도) ≥ 19다. 생일이 아니라 연도 차이로 센다(2008년생은 2027년 1월 1일 0시 KST부터). 청소년보호법 제2조 제1호 단서("만 19세가 되는 해의 1월 1일을 맞이한 사람은 제외")와 같은 셈법이다. **이 기준을 쓸지는 대표 확인이 필요하다.**
+- 답은 계정마다 한 줄(`adult_confirmations`)로, 처음 한 번만 쓴다. 처음 답이 기준에 못 미쳐도 그대로 남고, 다음에 다른 연도를 보내도 바뀌지 않는다. 바꾸는 길은 관리자 작업 `account.adultConfirmation.correct`(출생 연도만, 체크는 못 바꾼다, `platform_audit`에 운영자·사유·전후 연도 기록) 하나다(`lib/account/adult-confirmation.ts`, `lib/admin/adult-confirmation-operations.ts`).
+- 거절 코드: 답이 없으면 `adult_confirmation_required`, 기준 미달이면 `adult_only`, 표가 없거나 읽지 못하면 `adult_check_unavailable`(fail-closed).
+- 막는 곳(전부 저장·주문·차감 전): 결제 주문 `orderPhotos`(주문을 만들기 전), 다시 결제하기 `planRetryPhotos`(새 주문 전), 운영자 무료 렌더와 앱 크레딧 렌더(`createAuthorizedRender`, 사진 저장과 크레딧 차감 전), 결제 확정 뒤 작업 생성(저장된 확인을 다시 본다. 없으면 기존 환불 흐름). 화면은 `/api/renders/access`의 `adultConfirmed`(스위치가 켜져 있을 때만 있다)가 거짓일 때만, 함께 나올 사람이 있는 템플릿에서만 연도와 체크를 묻는다.
 
 ### 6.2 사진 검사
 
@@ -563,6 +573,9 @@ Template styling:
 - 함께 나올 사람: 동의 체크와 시각 기록(이미 있음)에 사진 검사를 더한다. 한 사람만 또렷이 보이는지, 미성년자로 보이지 않는지, 화면을 다시 찍은 사진이 아닌지를 본다. 확인을 못 하면 거절한다. 모델의 판단이라 완전하지 않으므로 신고 24시간 검토와 함께 간다.
 - 반려동물: 지금 그대로다.
 - 얼굴 각도 판정은 권고만 한다는 결정(2026-10-15)은 본인 사진에 계속 적용한다.
+- **PR B 구현** (`lib/renders/partner-photo-check.ts`, `lib/renders/partner-rules.ts`): 반려동물 검사와 같은 Gemini 호출 한 번으로 네 가지만 묻는다. 사람 수, 얼굴 하나가 또렷한지, 미성년자일 수 있는지(애매하면 그렇다고 본다), 화면·인쇄물을 다시 찍었는지. 누구인지 알아내거나 생김새를 묘사하라고 하지 않으며, 지시문이 그것을 금지하고, 답 형식은 네 칸뿐이고, 다른 칸이 붙은 답은 받지 않는다. 키 없음·HTTP 오류·이상한 답·30초 초과는 거절이다(fail-closed). 거절 코드는 `partner_not_one_person`, `partner_unclear`, `partner_minor`, `partner_screen`, `partner_check_unavailable`.
+- 순서: 나이 확인을 먼저 하고, 통과한 계정의 사진만 검사로 보낸다. 통과 기록은 `render_slot_inputs.photo_check`·`photo_checked_at`에 남고(0188 칸이 없으면 검사 전에 거절), 결제 확정 뒤 작업을 만들 때와 다시 결제하기에서 이 통과 기록이 있어야 한다. 검사를 다시 부르지 않는다.
+- **검사는 함께 나올 사람의 사진을 Google(Gemini API)로 보낸다.** 출시 전에 개인정보 처리방침의 처리 위탁·국외 이전 표에 이 처리를 적어야 한다(대표).
 
 ### 6.3 참고 영상 검사
 
@@ -618,21 +631,21 @@ Creator 플랜 표의 월 1,890크레딧으로는 그대로 따라가기 720p가
 
 ## 8. 데이터 (제안)
 
-번호는 구현할 때 `origin/main`에서 다시 확인한다. 2026-11-24 기준 가장 높은 번호는 0187이다.
+번호는 구현할 때 `origin/main`에서 다시 확인한다. 2026-11-24 기준 가장 높은 번호는 0187이었고, 0188·0189는 P2 PR A가 썼다.
 
 | 무엇 | 내용 |
 | --- | --- |
 | `render_jobs.provider` | 허용값에 `sunra` 추가 |
 | 컴파일 경로 기록 | `render_jobs`에 어느 경로로 프롬프트를 만들었는지 한 칸(§4-4) |
 | 나이 확인 | 이용자마다 출생연도와 확인 시각 |
-| `render_slot_inputs` | 지금 그대로. 함께 나올 사람 사진 검사 결과를 남길 칸 하나 |
+| `render_slot_inputs` | 지금 그대로. 함께 나올 사람 사진 검사 결과를 남길 칸(`photo_check`, `photo_checked_at`, 0188) |
 | 스튜디오 프로젝트 | 이용자, 참고 영상 저장 키, 구간, 영상 읽기 결과, 방식, 권리 확인 시각, 삭제 예정일 |
 | 스튜디오 버전 | 프로젝트, 기준 버전, 지시서, 자리 구성, 초안 여부, 해상도(480p 포함), 제공사 작업 번호, 초안 작업 번호, 초안 만료 시각, 견적·확정 크레딧, 상태, 결과 저장 키 |
 | 안내 자료 작업 | 브랜드와 함께 쓰는 표 하나: 소유자 종류, 원본 키와 구간, 상태, 워커 심박, 결과 키 |
 
 - B의 버전을 `render_jobs`에 넣지 않는다. `render_jobs`는 템플릿과 주문에 묶여 있고 버전 가지·초안·만료가 없다. "내 작품"은 두 표에서 함께 읽는다.
 - A의 2인 영상은 `render_jobs`에 그대로 두고 제공사 값만 `sunra`가 된다.
-- 새 표는 전부 본인만 읽는 RLS를 건다(glue 마이그레이션).
+- 새 표는 전부 deny-all RLS를 건다(glue 마이그레이션, 0153 모양). 이용자도 직접 읽지 못하고 서버만 읽고 쓴다. 저장소 규칙이 이것이고(`tests/db/migrations.test.ts`), 0189가 그렇게 구현했다.
 
 ## 9. 플래그
 

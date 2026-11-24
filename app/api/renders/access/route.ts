@@ -20,6 +20,8 @@ import { getDictionary } from '@/lib/i18n/dictionaries';
 import { loadPublicRecipe, recordRecipeOpen, type PublicRecipe } from '@/lib/recipes/public';
 import { loadTemplateRecipe } from '@/lib/recipes/repo';
 import { recipeNeedsIdentity } from '@/lib/recipes/schema';
+import { personalSunraFacesOpen } from '@/lib/flags';
+import { isAdultConfirmed } from '@/lib/account/adult-confirmation';
 
 /**
  * `GET /api/renders/access?template=slug` — what THIS viewer's make button should do on THIS
@@ -34,6 +36,8 @@ import { recipeNeedsIdentity } from '@/lib/recipes/schema';
  *   identity          where this viewer stands on that: none · pending · active · failed · not_needed
  *   selfie            the saved photo every order reuses (docs/IDENTITY-SELFIE.md), or null to upload inline
  *   recipe            the full "만드는 법" for a signed-in member — the one recipe gate (§20.3); null otherwise
+ *   adultConfirmed    ONLY while the Sunra face switch is on (docs/PERSONAL-STUDIO.md §6.1): has this account
+ *                     a stored, passing 19+ answer. Absent when the switch is off, so the make card asks nothing.
  *
  * A viewer who forges any of this only reaches the refusals the enqueue route already carries.
  */
@@ -64,6 +68,8 @@ export async function GET(request: Request): Promise<NextResponse> {
   let editFields: EditScope[] = [];
   let premiumEditBudget: PremiumEditBudget | null = null;
   let recipe: PublicRecipe | null = null;
+  const askAdult = personalSunraFacesOpen();
+  let adultConfirmed = false;
   const localeParam = new URL(request.url).searchParams.get('locale');
   const locale = localeParam === 'ko' ? 'ko' : 'en';
   if (viewer.userId !== null) {
@@ -76,6 +82,7 @@ export async function GET(request: Request): Promise<NextResponse> {
       ]);
       selfie = selfieRow ? selfieView(selfieRow) : null;
       interest = prefs?.newPlaybook === true;
+      if (askAdult) adultConfirmed = await isAdultConfirmed(sql, viewer.userId);
       const template = candidate?.audience === 'brand' ? null : candidate;
       if (template !== null) {
         const mr = getDictionary(locale).makerRecipe;
@@ -123,5 +130,5 @@ export async function GET(request: Request): Promise<NextResponse> {
     }
   }
 
-  return NextResponse.json({ open: storefrontOpen(), live, charge: canStartRender(viewer) && !viewer.isAdmin, identityRequired, identity, signedIn, interest, selfie, subscription, subscriptionEligible, subscriptionUsePercent, subscriptionUseByResolution, editing, editFields, premiumEditBudget, recipe }, { headers: HEADERS });
+  return NextResponse.json({ open: storefrontOpen(), live, charge: canStartRender(viewer) && !viewer.isAdmin, identityRequired, identity, signedIn, interest, selfie, subscription, subscriptionEligible, subscriptionUsePercent, subscriptionUseByResolution, editing, editFields, premiumEditBudget, recipe, ...(askAdult ? { adultConfirmed } : {}) }, { headers: HEADERS });
 }

@@ -4006,6 +4006,12 @@ export const ko: Dictionary = {
       needPet: '반려동물 사진을 골라 주세요.',
       needPartner: '상대방 사진을 골라 주세요.',
       needConsent: '동의 여부를 확인해 주세요.',
+      // docs/PERSONAL-STUDIO.md §6.1 — shown only while the Sunra face switch is on. Provisional: founder confirms the wording.
+      birthYearLabel: '출생 연도',
+      birthYearPlaceholder: '연도를 골라 주세요',
+      adultAttest: '만 19세 이상이에요.',
+      adultHint: '처음 한 번만 물어봐요. 저장한 뒤에는 문의로만 바꿀 수 있어요.',
+      needAdult: '출생 연도를 고르고 만 19세 이상인지 확인해 주세요.',
     },
   },
   studio: {
@@ -4196,6 +4202,14 @@ export const ko: Dictionary = {
         partner_consent_required: '상대방의 동의를 확인해 주세요.',
         not_a_pet: '반려동물 사진만 올릴 수 있어요. 사람이 함께 나오지 않은 사진으로 골라 주세요.',
         pet_check_unavailable: '지금은 사진을 확인하지 못했어요. 잠시 후 다시 시도해 주세요.',
+        // docs/PERSONAL-STUDIO.md §6.1–6.2 — only while the Sunra face switch is on. Provisional: founder confirms the wording.
+        adult_confirmation_required: '출생 연도를 고르고 만 19세 이상인지 확인해 주세요.',
+        adult_only: '함께 나오는 영상과 이미지는 만 19세 이상만 만들 수 있어요.',
+        partner_not_one_person: '함께 나올 한 분만 나온 사진을 올려 주세요.',
+        partner_unclear: '얼굴이 잘 보이는 사진을 올려 주세요.',
+        partner_minor: '함께 나오는 분도 성인이어야 해요.',
+        partner_screen: '화면이나 인쇄물을 찍은 사진은 쓸 수 없어요.',
+        partner_check_unavailable: '사진을 확인하지 못했어요. 잠시 뒤에 다시 올려 주세요.',
         generic: '시작하지 못했습니다. 잠시 후 다시 시도해 주세요.',
       },
     },

@@ -9,6 +9,7 @@ import { identityVerifyHref } from '@/lib/identity/links';
 import { getRenderStore } from '@/lib/renders/store';
 import { savedSelfiePhoto } from '@/lib/identity/selfie-service';
 import { castFormPhotos } from '@/lib/renders/cast-form';
+import { recordAdultAnswerFromForm } from '@/lib/account/adult-confirmation';
 import { parseDirectorSpecInput } from '@/lib/template-director/schema';
 import { parseSelectedFrames } from '@/lib/twings/selective-frames';
 
@@ -49,6 +50,15 @@ const STATUS: Record<CreateRenderFailure, number> = {
   partner_consent_required: 400,
   not_a_pet: 400,
   pet_check_unavailable: 503,
+  // docs/PERSONAL-STUDIO.md §6.1–6.2 — only while the Sunra face switch is on.
+  adult_confirmation_required: 400,
+  adult_only: 403,
+  adult_check_unavailable: 503,
+  partner_not_one_person: 400,
+  partner_unclear: 400,
+  partner_minor: 400,
+  partner_screen: 400,
+  partner_check_unavailable: 503,
 };
 
 function json(body: unknown, status: number): NextResponse {
@@ -78,6 +88,8 @@ export async function POST(request: Request): Promise<NextResponse> {
   // is the one photo. The service checks the template's cast (couples 404 while their flag is off).
   const cast = await castFormPhotos(form);
   const primary = saved ?? (photo instanceof File ? { bytes: new Uint8Array(await photo.arrayBuffer()), mime: photo.type } : null) ?? (selfieId ? null : cast.slots.pet ?? null);
+  // docs/PERSONAL-STUDIO.md §6.1 — switch on only: the 19+ answer is stored once, here; the service reads it.
+  await recordAdultAnswerFromForm(sql, viewer.userId, form);
 
   const outcome = await createRenderJob({ sql, store }, viewer, {
     templateSlug: String(form.get('template') ?? ''),
