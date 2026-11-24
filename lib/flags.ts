@@ -282,6 +282,19 @@ export function coupleTemplatesOpen(env: Record<string, string | undefined> = pr
 }
 
 /**
+ * docs/PERSONAL-STUDIO.md §5.1, §9 — the personal Sunra lane: a person's face (the buyer's verified selfie
+ * and a consenting partner's photo) may go to Sunra as a short-lived signed URL. Default OFF: open only when
+ * the server environment says exactly `TWINGS_PERSONAL_SUNRA_FACES=on`. This is the one switch for
+ * `sunraSignedFaceAllowed`; off means no job is routed to Sunra and the adapter refuses to submit
+ * (lib/renders/engines-sunra.ts). A Sunra job already submitted is still polled to its end.
+ * Turning it on waits for the founder and the conditions in §5.1 (DPA, training opt-out or a true policy line,
+ * revised terms in force, the 19+ check working).
+ */
+export function personalSunraFacesOpen(env: Record<string, string | undefined> = process.env): boolean {
+  return env.TWINGS_PERSONAL_SUNRA_FACES === 'on';
+}
+
+/**
  * docs/CAST-CATEGORIES.md §3 — pet templates. Default OFF: open only when the server environment says
  * exactly `TWINGS_PET_TEMPLATES=on`. Off means the same as couples off: the catalogue drops pet
  * templates, `/{locale}/pet` and their template pages answer 404, and the make and render APIs refuse.
