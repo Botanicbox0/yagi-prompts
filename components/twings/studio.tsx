@@ -11,6 +11,7 @@ import { PremiumEditor } from './premium-editor';
 import { TemplateDirectorPanel, type DirectorImageSetSpec } from './template-director-panel';
 import type { PublicRecipe } from '@/lib/recipes/public';
 import type { CustomDirectorRefSlot, PersonalDirectorSpec } from '@/lib/template-director/schema';
+import type { PublicTemplateLocks } from '@/lib/template-director/locks';
 import { shrinkPhoto } from '@/lib/images/client-photo';
 export { shrinkPhoto } from '@/lib/images/client-photo';
 import type { EditScope } from '@/lib/premium-editing/contract';
@@ -134,6 +135,12 @@ export interface StudioLive {
    * is on. Present, the director panel shows the sheet card and the order carries the sheet; absent, chips as before.
    */
   editSheet?: Dictionary['editSheet'];
+  /**
+   * docs/PERSONAL-STUDIO.md §3.3 (C2) — the template's locked parts (the catalogue card's public projection) and the
+   * words that name them, handed in only when the template has a `Template locks:` block, with the flag on or off.
+   */
+  locks?: PublicTemplateLocks;
+  lockCopy?: Dictionary['editSheet'];
   labels: {
     badge: string;
     /** Operators render for real without a charge (founder, 2026-09-10). */
@@ -961,6 +968,8 @@ export function TwingsStudio({
                   disclosedRecipe={disclosedRecipe}
                   onDraftChange={setDirectorDraft}
                   editSheet={live.editSheet}
+                  locks={live.locks ?? null}
+                  lockCopy={live.lockCopy ?? null}
                   onSelectedFramesChange={(indices, quote) => {
                     setSelectedFrames(indices);
                     if (quote.isPartialSelection) {

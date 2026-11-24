@@ -290,6 +290,59 @@ export function parseTemplateLocks(promptText: string): TemplateLocks {
   return freezeLocks({ any: true, malformed: false, named, slots, shots, refs, block, notes });
 }
 
+// --- The public projection (C2) -------------------------------------------------------------------------------------
+
+/**
+ * docs/PERSONAL-STUDIO.md §3.3 (C2) — the only lock shape that leaves the server: WHICH parts a template fixes, never
+ * the words. `block` and `notes` are part of the template's prompt text, which can be hidden from customers, so they
+ * never reach the browser, the cached public catalogue or an API answer. Built by naming every field (no spread).
+ */
+export interface PublicTemplateLocks {
+  named: readonly TemplateLockName[];
+  slots: readonly DirectorEditableSlot[];
+  shots: ReadonlyArray<{ from: number; to: number }>;
+  refs: readonly CustomDirectorRefSlot[];
+  /** The block did not parse: everything is locked. */
+  all: boolean;
+}
+
+/** The public projection of a template's locks; null when it has none. */
+export function publicLocks(locks: TemplateLocks): PublicTemplateLocks | null {
+  if (!locks.any) return null;
+  return {
+    named: [...locks.named],
+    slots: [...locks.slots],
+    shots: locks.shots.map((r) => ({ from: r.from, to: r.to })),
+    refs: [...locks.refs],
+    all: locks.malformed,
+  };
+}
+
+/**
+ * The browser's side of the projection: the verdict functions in this file over a `PublicTemplateLocks`, with no
+ * block and no notes (the browser never has them). Unknown values are dropped. Null or absent = `NO_LOCKS`.
+ */
+export function locksFromPublic(locks: PublicTemplateLocks | null | undefined): TemplateLocks {
+  if (!locks) return NO_LOCKS;
+  const known = <T extends string>(list: readonly T[], values: unknown): T[] =>
+    Array.isArray(values) ? list.filter((value) => values.includes(value)) : [];
+  const shots = Array.isArray(locks.shots)
+    ? locks.shots.filter(
+        (r) => Number.isInteger(r?.from) && Number.isInteger(r?.to) && r.from >= 1 && r.from <= r.to && r.to <= PERSONAL_SHEET_LIMITS.shotMax,
+      )
+    : [];
+  return freezeLocks({
+    any: true,
+    malformed: locks.all === true,
+    named: known(TEMPLATE_LOCK_NAMED, locks.named),
+    slots: known(DIRECTOR_EDITABLE_SLOTS, locks.slots),
+    shots: mergeRanges(shots),
+    refs: known(CUSTOM_DIRECTOR_REF_SLOTS, locks.refs),
+    block: '',
+    notes: [],
+  });
+}
+
 /** The parts that are locked, as short English phrases ("the product", "the wardrobe", "shots 2–3"). */
 export function lockPhrases(locks: TemplateLocks): string[] {
   if (!locks.any) return [];

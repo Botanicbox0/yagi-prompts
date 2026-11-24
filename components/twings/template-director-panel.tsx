@@ -3,7 +3,9 @@
 import { useEffect, useId, useMemo, useRef, useState, useTransition } from 'react';
 import {
   EditSheetCard,
+  TemplateLockGlyph,
   buildSheetDirectorSpec,
+  lockedPartsOf,
   pendingFoldNotice,
   readSheetTurnAnswer,
   sheetNoticeText,
@@ -12,6 +14,12 @@ import {
   type EditSheetCopy,
   type SheetNotice
 } from './edit-sheet-card';
+import {
+  REF_OF_SLOT,
+  lockChips,
+  locksFromPublic,
+  type PublicTemplateLocks
+} from '@/lib/template-director/locks';
 import {
   chipsFromSheet,
   dropRef,
@@ -377,10 +385,33 @@ export interface TemplateDirectorPanelProps {
    * chips row, sends it with every turn and hands it to the order. Absent, the panel is exactly the chips panel.
    */
   editSheet?: EditSheetCopy | null;
+  /**
+   * docs/PERSONAL-STUDIO.md §3.3 (C2) — the template's locked parts (the public projection only), handed in whenever
+   * the template carries a `Template locks:` block, with the edit-sheet flag on or off. Present, the panel names the
+   * real locked parts instead of the guessed ones, hides the pickers of closed photos, the presets that change a
+   * closed part and (sound) the audio option, and the sheet card shows "can't be changed" from the start. Absent,
+   * the panel is exactly as before.
+   */
+  locks?: PublicTemplateLocks | null;
+  /** The words for the locked parts (the `editSheet` dictionary section); `editSheet` is used when absent. */
+  lockCopy?: EditSheetCopy | null;
 }
 
 const FOCUS_RING =
   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#09090B]';
+
+type ReferencePicker = 'outfit' | 'prop' | 'scene';
+const REF_OF_PICKER: Readonly<Record<ReferencePicker, 'look_ref' | 'prop_ref' | 'scene_ref'>> = {
+  outfit: 'look_ref',
+  prop: 'prop_ref',
+  scene: 'scene_ref'
+};
+/** With locks the picker grid has as many columns as open pickers (literal classes for Tailwind). */
+const PICKER_GRID_COLS: Readonly<Record<number, string>> = {
+  1: 'sm:grid-cols-1',
+  2: 'sm:grid-cols-2',
+  3: 'sm:grid-cols-3'
+};
 
 export function TemplateDirectorPanel({
   locale = 'ko',
@@ -411,7 +442,9 @@ export function TemplateDirectorPanel({
   onRequestReupload,
   onSubmitTurn,
   onChipsChange,
-  editSheet = null
+  editSheet = null,
+  locks = null,
+  lockCopy = null
 }: TemplateDirectorPanelProps) {
   const baseId = useId();
   const drawerId = `${baseId}-drawer`;
@@ -421,6 +454,26 @@ export function TemplateDirectorPanel({
   const resolvedBaseline: TemplateBaselineSpec =
     templateBaseline ??
     (templateId ? resolveTemplateBaseline(templateId) : DEFAULT_EDITORIAL_TEMPLATE_BASELINE);
+
+  // docs/PERSONAL-STUDIO.md §3.3 (C2) — the template's real locks. Null = no lock block: everything below that reads
+  // these is skipped and the panel is exactly as before. The server enforces the same locks on every turn and order.
+  const lockWords = lockCopy ?? editSheet;
+  const activeLocks = locks && lockWords ? locks : null;
+  const lockState = locksFromPublic(activeLocks);
+  const slotOpen = (slot: DirectorEditableSlot): boolean => !lockState.slots.includes(slot);
+  const pickerOpen = (picker: ReferencePicker): boolean => !lockState.refs.includes(REF_OF_PICKER[picker]);
+  const soundLocked = lockState.named.includes('sound');
+  const openPickers = (['outfit', 'prop', 'scene'] as const).filter(pickerOpen);
+  const visibleBaselineSlots = resolvedBaseline.baselineSlots.filter((slotSpec) => slotOpen(slotSpec.slot));
+  // A preset is not offered when its part is closed or it works from a closed photo. The quick pills carry no photo
+  // field; the outfit and prop pills ask for an attached photo, so they follow that photo.
+  const visiblePredictivePresets = resolvedBaseline.predictivePresets.filter(
+    (preset) => slotOpen(preset.slot) && (!preset.opensReferenceSlot || pickerOpen(preset.opensReferenceSlot))
+  );
+  const visibleQuickPresets = copy.quickPresets.filter((preset) => {
+    const ref = REF_OF_SLOT[preset.slot];
+    return slotOpen(preset.slot) && (!ref || !lockState.refs.includes(ref));
+  });
 
   const totalSetFrames =
     imageSetSpec && imageSetSpec.totalFrames > 1
@@ -553,10 +606,11 @@ export function TemplateDirectorPanel({
               ...(outfitSlot ? (['look_ref'] as const) : []),
               ...(propSlot ? (['prop_ref'] as const) : []),
               ...(sceneSlot ? (['scene_ref'] as const) : [])
-            ]
+            ],
+            locks: activeLocks
           })
         : null,
-    [audioMode, bgmMood, editSheet, isVideoContext, outfitSlot, propSlot, sceneSlot, sheetState.sheet, userMessage]
+    [activeLocks, audioMode, bgmMood, editSheet, isVideoContext, outfitSlot, propSlot, sceneSlot, sheetState.sheet, userMessage]
   );
 
   // Sheet mode: tell a listener when the derived chips change (the first render is not a change).
@@ -625,6 +679,8 @@ export function TemplateDirectorPanel({
     file: File | null | undefined
   ) => {
     if (!file) return;
+    // A photo for a reference the template closed is never taken (its picker is not shown).
+    if (!pickerOpen(slotName)) return;
     if (!ALLOWED_REFERENCE_MIMES.has(file.type) || file.size > MAX_REFERENCE_FILE_BYTES) {
       setFileError(copy.fileInvalidError);
       return;
@@ -722,10 +778,16 @@ export function TemplateDirectorPanel({
       const item = items[i];
       if (item && item.kind === 'file' && ALLOWED_REFERENCE_MIMES.has(item.type)) {
         const pastedFile = item.getAsFile();
-        if (pastedFile) {
+        // With template locks only an open picker takes a pasted photo; with none open the paste is left alone.
+        if (pastedFile && openPickers.length > 0) {
           event.preventDefault();
-          const targetSlot: 'outfit' | 'prop' | 'scene' =
-            outfitSlot === null ? 'outfit' : propSlot === null ? 'prop' : 'scene';
+          const filled: Record<ReferencePicker, boolean> = {
+            outfit: outfitSlot !== null,
+            prop: propSlot !== null,
+            scene: sceneSlot !== null
+          };
+          const targetSlot: ReferencePicker =
+            openPickers.find((picker) => !filled[picker]) ?? openPickers[openPickers.length - 1]!;
           const targetRole: 'look' | 'product' | 'scene' =
             targetSlot === 'outfit' ? 'look' : targetSlot === 'prop' ? 'product' : 'scene';
           assignReferenceSlot(targetSlot, targetRole, pastedFile);
@@ -897,12 +959,33 @@ export function TemplateDirectorPanel({
           if (requestEpochRef.current !== myEpoch) return;
           const payload = (await res.json().catch(() => null)) as {
             ok?: boolean;
+            code?: string;
             turn?: {
               approved?: boolean;
               replyKo?: string;
               summaryChips?: DirectorSummaryChip[];
+              lockedHit?: boolean;
             };
           } | null;
+          // docs/PERSONAL-STUDIO.md §3.3 — a request that touched a fixed part answers in dictionary words (the reply
+          // may still name the part it left out), and a refused one adds no chip of its own.
+          if (activeLocks && lockWords && payload?.code === 'locked_slot_photo') {
+            setTurnAccepted(false);
+            setAssistantMessage(lockWords.refusedLocked);
+            return;
+          }
+          if (activeLocks && lockWords && res.ok && payload?.ok && payload.turn?.lockedHit === true) {
+            const approved = payload.turn.approved === true;
+            setTurnAccepted(approved);
+            setAssistantMessage(approved ? lockWords.updatedLocked : lockWords.refusedLocked);
+            if (approved && Array.isArray(payload.turn.summaryChips)) {
+              const next = upsertSummaryChips(chips, payload.turn.summaryChips);
+              setChips(next);
+              onChipsChange?.(next);
+            }
+            setUserMessage('');
+            return;
+          }
           if (res.ok && payload?.ok && payload.turn) {
             setTurnAccepted(Boolean(payload.turn.approved));
             if (payload.turn.replyKo) setAssistantMessage(payload.turn.replyKo);
@@ -923,7 +1006,7 @@ export function TemplateDirectorPanel({
         }
       }
 
-      const next = upsertSummaryChips(chips, generatedChips);
+      const next = upsertSummaryChips(chips, activeLocks ? lockChips(generatedChips, lockState) : generatedChips);
       setChips(next);
       setUserMessage('');
       onChipsChange?.(next);
@@ -1616,8 +1699,8 @@ export function TemplateDirectorPanel({
         </section>
       )}
 
-      {/* Seedance 2.5 Native Audio Option (Ambient voice/foley default vs Optional scene BGM) */}
-      {isVideoContext && (
+      {/* Seedance 2.5 Native Audio Option (Ambient voice/foley default vs Optional scene BGM) — not under a sound lock */}
+      {isVideoContext && !soundLocked && (
         <section
           data-director-audio-toggle
           aria-label={locale === 'en' ? 'Video audio option' : '영상 사운드 설정'}
@@ -1820,8 +1903,9 @@ export function TemplateDirectorPanel({
             </span>
           </div>
 
+          {(!activeLocks || visibleBaselineSlots.length > 0) && (
           <div className="mt-2.5 grid grid-cols-1 gap-2 sm:grid-cols-2">
-            {resolvedBaseline.baselineSlots.map((slotSpec) => {
+            {visibleBaselineSlots.map((slotSpec) => {
               const slotLabel = locale === 'en' ? slotSpec.labelEn : slotSpec.labelKo;
               const defaultSetting =
                 locale === 'en' ? slotSpec.defaultSettingEn : slotSpec.defaultSettingKo;
@@ -1932,7 +2016,44 @@ export function TemplateDirectorPanel({
               );
             })}
           </div>
+          )}
 
+          {activeLocks && lockWords ? (
+            /* docs/PERSONAL-STUDIO.md §3.4.4 — the template's own locked parts replace the guessed ones: the skeleton
+               every template keeps, then one quiet pill per locked part (read-only, no controls). */
+            <div
+              data-template-locked-elements
+              data-template-locks={activeLocks.all ? 'all' : 'parts'}
+              className="mt-2.5 border-t border-[#E4E4E7] pt-2.5"
+            >
+              <p className="flex items-center gap-1.5 text-[0.72rem] font-semibold text-[#52525B]">
+                <TemplateLockGlyph />
+                {lockWords.lockedHeading}
+              </p>
+              {activeLocks.all ? (
+                <p data-template-lock-all className="mt-1 text-xs leading-[1.5] text-[#09090B]">
+                  {lockWords.lockedAll}
+                </p>
+              ) : (
+                <>
+                  <p data-template-lock-skeleton className="mt-1 text-xs leading-[1.5] text-[#52525B]">
+                    {lockWords.skeleton}
+                  </p>
+                  <ul className="mt-1.5 flex flex-wrap gap-1.5">
+                    {lockedPartsOf(activeLocks, lockWords).map((part) => (
+                      <li
+                        key={part.key}
+                        data-template-lock-part={part.key}
+                        className="inline-flex items-center rounded-full border border-[#E4E4E7] bg-white px-2.5 py-0.5 text-[0.7rem] font-medium text-[#09090B] tabular-nums"
+                      >
+                        {part.label}
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </div>
+          ) : (
           <div
             data-template-locked-elements
             className="mt-2.5 flex flex-wrap items-center gap-1.5 border-t border-[#E4E4E7] pt-2.5"
@@ -1952,15 +2073,17 @@ export function TemplateDirectorPanel({
               </span>
             ))}
           </div>
+          )}
         </section>
 
         {/* Predictive 1-Tap Revision Presets (Grounded in Real Campaign Revision Data) */}
+        {(!activeLocks || visiblePredictivePresets.length > 0) && (
         <div data-director-predictive-presets className="mt-3.5">
           <p className="text-[0.72rem] font-semibold text-[#52525B]">
             {copy.predictivePresetsLabel}
           </p>
           <div className="mt-1.5 flex flex-wrap gap-1.5">
-            {resolvedBaseline.predictivePresets.map((preset) => {
+            {visiblePredictivePresets.map((preset) => {
               const targetSample =
                 locale === 'en' ? preset.samplePromptEn : preset.samplePromptKo;
               const isPresetActive =
@@ -2008,10 +2131,12 @@ export function TemplateDirectorPanel({
             })}
           </div>
         </div>
+        )}
 
         {/* Quick 1-Tap Category Pills */}
+        {(!activeLocks || visibleQuickPresets.length > 0) && (
         <div data-director-presets className="mt-2.5 flex flex-wrap gap-1.5">
-          {copy.quickPresets.map((preset) => {
+          {visibleQuickPresets.map((preset) => {
             const isQuickActive = userMessage.trim() === preset.samplePrompt.trim();
             return (
               <button
@@ -2037,8 +2162,11 @@ export function TemplateDirectorPanel({
             );
           })}
         </div>
+        )}
 
-        {/* Recessed Tactile Wells for Optional User Reference Images */}
+        {/* Recessed Tactile Wells for Optional User Reference Images (only the pickers a template leaves open) */}
+        {(!activeLocks || openPickers.length > 0) && (
+        <>
         <div
           data-direct-upload-mode="true"
           className="mt-3.5 rounded-[14px] border border-[#E4E4E7] bg-[#F4F4F5] px-3.5 py-2.5"
@@ -2049,7 +2177,10 @@ export function TemplateDirectorPanel({
               : '직접 이미지 업로드 · AI가 임의로 변형하지 않고, 직접 올리신 사진 속 의상·소품·배경 분위기를 장면에 반영합니다.'}
           </p>
         </div>
-        <div className="mt-2.5 grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+        <div
+          className={`mt-2.5 grid grid-cols-1 gap-2.5 ${activeLocks ? PICKER_GRID_COLS[openPickers.length] : 'sm:grid-cols-3'}`}
+        >
+          {pickerOpen('outfit') && (
           <input
             ref={outfitInputRef}
             type="file"
@@ -2060,6 +2191,8 @@ export function TemplateDirectorPanel({
             disabled={disabled || submitting}
             onChange={(e) => assignReferenceSlot('outfit', 'look', e.currentTarget.files?.[0])}
           />
+          )}
+          {pickerOpen('prop') && (
           <input
             ref={propInputRef}
             type="file"
@@ -2070,6 +2203,8 @@ export function TemplateDirectorPanel({
             disabled={disabled || submitting}
             onChange={(e) => assignReferenceSlot('prop', 'product', e.currentTarget.files?.[0])}
           />
+          )}
+          {pickerOpen('scene') && (
           <input
             ref={sceneInputRef}
             type="file"
@@ -2080,8 +2215,10 @@ export function TemplateDirectorPanel({
             disabled={disabled || submitting}
             onChange={(e) => assignReferenceSlot('scene', 'scene', e.currentTarget.files?.[0])}
           />
+          )}
 
           {/* Slot 1: Outfit Reference */}
+          {pickerOpen('outfit') && (
           <div
             data-director-slot="outfit"
             data-slot-filled={outfitSlot ? 'true' : 'false'}
@@ -2157,8 +2294,10 @@ export function TemplateDirectorPanel({
               </button>
             )}
           </div>
+          )}
 
           {/* Slot 2: Prop / Product Reference */}
+          {pickerOpen('prop') && (
           <div
             data-director-slot="prop"
             data-slot-filled={propSlot ? 'true' : 'false'}
@@ -2234,8 +2373,10 @@ export function TemplateDirectorPanel({
               </button>
             )}
           </div>
+          )}
 
           {/* Slot 3: Scene / Backdrop Reference */}
+          {pickerOpen('scene') && (
           <div
             data-director-slot="scene"
             data-slot-filled={sceneSlot ? 'true' : 'false'}
@@ -2313,7 +2454,10 @@ export function TemplateDirectorPanel({
               </button>
             )}
           </div>
+          )}
         </div>
+        </>
+        )}
 
         {(outfitSlot !== null || propSlot !== null || sceneSlot !== null) && !userMessage.trim() && (
           <p
@@ -2478,9 +2622,11 @@ export function TemplateDirectorPanel({
       </div>
 
       {/* Sheet mode: the edit sheet card, right above the studio's price and its one button (docs §3.1). */}
+      {/* With template locks the card stands from the start: "can't be changed" is seen before anything is asked. */}
       {editSheet &&
         sheetDraft &&
-        (expanded ||
+        (activeLocks !== null ||
+          expanded ||
           hasSheetContent(sheetDraft.fold.sheet) ||
           sheetQuestion !== null ||
           sheetNotice !== null) && (
@@ -2493,6 +2639,7 @@ export function TemplateDirectorPanel({
             notice={sheetNoticeText(sheetNotice, editSheet)}
             noticeDetail={sheetNotice?.detail ?? null}
             foldNotice={pendingFoldNotice(sheetDraft.fold, editSheet)}
+            locks={activeLocks}
             disabled={disabled || submitting}
             onRemove={(block, index) => editSheetLocally((sheet) => removeLine(sheet, block, index))}
             onRevert={(index) => editSheetLocally((sheet) => revertChange(sheet, index))}

@@ -13,6 +13,13 @@ import type { Dictionary } from '@/lib/i18n/dictionaries';
 import { interpolate } from '@/lib/i18n/format';
 import { normSheetText, sheetTextKey } from '@/lib/revision/sheet-core';
 import {
+  heuristicSlotOf,
+  locksFromPublic,
+  lockVerdict,
+  type PublicTemplateLocks,
+  type TemplateLocks
+} from '@/lib/template-director/locks';
+import {
   appendSheetTurns,
   chipsFromSheet,
   cleanPersonalSheetState,
@@ -45,7 +52,8 @@ export type EditSheetCopy = Dictionary['editSheet'];
  * - `folded`: it joins the sheet (a new whole-video action line, or appended to the last one when the block is full);
  * - `present`: the same request is already listed;
  * - `full`: six change lines and none to append to — it cannot travel, so the screen says so and keeps the text;
- * - `blocked`: the text guard refuses it (another person's face, instructions to the system).
+ * - `blocked`: the text guard refuses it (another person's face, instructions to the system), or a template lock
+ *   would drop it (`locked`, docs/PERSONAL-STUDIO.md §3.3) — the screen says so instead of folding it in silently.
  */
 export type PendingFoldStatus = 'none' | 'folded' | 'present' | 'full' | 'blocked';
 
@@ -56,19 +64,36 @@ export interface PendingFold {
   /** The change line that holds the typed text, or null. */
   pendingIndex: number | null;
   /** Why a `blocked` note was refused. */
-  blockedAs?: 'identity' | 'unsafe';
+  blockedAs?: 'identity' | 'unsafe' | 'locked';
   /** `folded`, but the line holds only part of the typed text (a sheet line is at most `itemMax` characters). */
   truncated?: boolean;
 }
 
 const isUnrangedAction = (l: PersonalSheetChange): boolean => l.slot === 'shot_action' && !l.shots && !l.ref;
 
-export function foldPendingForOrder(sheet: PersonalEditSheet, note: string): PendingFold {
+/**
+ * docs/PERSONAL-STUDIO.md §3.3 — whether a template lock would keep typed text out of the video: the line it folds
+ * into (an unranged action) is closed or names a locked part, or the text is about a closed part by the same keyword
+ * lists the server reads a note with. Over-blocking is acceptable here, under-blocking is not.
+ */
+function lockedPendingText(text: string, locks: TemplateLocks): boolean {
+  if (!locks.any) return false;
+  return lockVerdict({ slot: 'shot_action', text }, locks) !== 'ok' || locks.slots.includes(heuristicSlotOf(text));
+}
+
+export function foldPendingForOrder(
+  sheet: PersonalEditSheet,
+  note: string,
+  locks: PublicTemplateLocks | null = null
+): PendingFold {
   const full = normSheetText(note).trim();
   const text = full.slice(0, PERSONAL_SHEET_LIMITS.itemMax).trim();
   if (!text) return { sheet, status: 'none', pendingIndex: null };
   const verdict = guardSheetText(text);
   if (verdict !== 'ok') return { sheet, status: 'blocked', pendingIndex: null, blockedAs: verdict };
+  if (locks && lockedPendingText(full, locksFromPublic(locks))) {
+    return { sheet, status: 'blocked', pendingIndex: null, blockedAs: 'locked' };
+  }
   const next = foldPendingNote(sheet, text);
   if (next === sheet) {
     const listed = sheet.change.some((l) => isUnrangedAction(l) && sheetTextKey(l.text) === sheetTextKey(text));
@@ -85,7 +110,9 @@ export function foldPendingForOrder(sheet: PersonalEditSheet, note: string): Pen
  * The director spec an order carries in sheet mode: the sheet without history, the chips derived from it (a compile
  * with the flag off is built from them), and the change texts as the note (the chips path reads only hair, makeup,
  * outfit and prop, so the rest travels in `userMessage`). Typed text that was not sent is folded in first. Null when
- * nothing is asked for — the same rule as the chips path.
+ * nothing is asked for — the same rule as the chips path. With template locks (docs/PERSONAL-STUDIO.md §3.3) locked
+ * typed text, closed photos and, under a sound lock, background music stay out of the order (the compile drops them
+ * again); without locks the spec is exactly as before.
  */
 export function buildSheetDirectorSpec(input: {
   sheet: PersonalEditSheet;
@@ -93,10 +120,16 @@ export function buildSheetDirectorSpec(input: {
   audioMode: PersonalAudioMode;
   bgmMood: PersonalBgmMood | null;
   slotOverrides: readonly CustomDirectorRefSlot[];
+  locks?: PublicTemplateLocks | null;
 }): { spec: PersonalDirectorSpec | null; fold: PendingFold } {
-  const fold = foldPendingForOrder(input.sheet, input.pendingNote);
+  const locks = input.locks ?? null;
+  const soundLocked = locks !== null && locks.named.includes('sound');
+  const audioMode: PersonalAudioMode = soundLocked ? 'ambient' : input.audioMode;
+  const bgmMood = soundLocked ? null : input.bgmMood;
+  const slotOverrides = locks ? input.slotOverrides.filter((ref) => !locks.refs.includes(ref)) : input.slotOverrides;
+  const fold = foldPendingForOrder(input.sheet, input.pendingNote, locks);
   const hasSheet = hasSheetContent(fold.sheet);
-  const hasAny = hasSheet || input.audioMode === 'bgm' || input.slotOverrides.length > 0;
+  const hasAny = hasSheet || audioMode === 'bgm' || slotOverrides.length > 0;
   if (!hasAny) return { spec: null, fold };
   const order = sheetForOrder(fold.sheet);
   const note = order.change.map((l) => l.text).join('\n').trim();
@@ -105,10 +138,10 @@ export function buildSheetDirectorSpec(input: {
     spec: {
       userMessage: note || null,
       summaryChips: chipsFromSheet(order),
-      audioMode: input.audioMode,
-      bgmMood: input.audioMode === 'bgm' ? input.bgmMood : null,
+      audioMode,
+      bgmMood: audioMode === 'bgm' ? bgmMood : null,
       structuredIntent: null,
-      slotOverrides: [...input.slotOverrides],
+      slotOverrides: [...slotOverrides],
       ...(hasSheet ? { sheet: order } : {}),
     },
   };
@@ -124,7 +157,11 @@ export type SheetNoticeKey =
   | 'refusedIdentity'
   | 'refusedUnsafe'
   | 'refusedUnsupported'
-  | 'refusedTooLarge';
+  | 'refusedTooLarge'
+  /** docs/PERSONAL-STUDIO.md §3.3 — the turn asked to change a fixed part: nothing else changed. */
+  | 'refusedLocked'
+  /** The turn changed something, and its part about a fixed part was left out. */
+  | 'updatedLocked';
 
 /**
  * The live line under the card: always dictionary copy (the studio's own reply is not shown — it repeats the request
@@ -183,6 +220,8 @@ export function readSheetTurnAnswer(input: {
   });
   const body = input.payload && typeof input.payload === 'object' ? (input.payload as Record<string, unknown>) : null;
   if (input.status === 429 || body?.code === 'rate_limited') return kept('rateLimited');
+  // docs/PERSONAL-STUDIO.md §3.3 — a photo for a reference the template closed (the screen hides those pickers).
+  if (body?.code === 'locked_slot_photo') return kept('refusedLocked');
   if (input.status < 200 || input.status >= 300 || body?.ok !== true) return kept('retry');
   const turn = body.turn && typeof body.turn === 'object' ? (body.turn as Record<string, unknown>) : null;
   if (!turn || !turn.sheet || typeof turn.sheet !== 'object') return kept('retry');
@@ -195,18 +234,24 @@ export function readSheetTurnAnswer(input: {
     asked: prior.asked || turn.asked === true,
   });
   const accepted = turn.approved === true && turn.refusal === 'none';
+  // docs/PERSONAL-STUDIO.md §3.3 — the turn asked to change a part the template fixes; that part was left out.
+  const lockedHit = turn.lockedHit === true;
   if (!accepted) {
-    return { state, notice: { key: sheetRefusalNotice(turn.refusal) }, accepted: false, changed: false };
+    const key = lockedHit && turn.refusal === 'unsupported' ? 'refusedLocked' : sheetRefusalNotice(turn.refusal);
+    return { state, notice: { key }, accepted: false, changed: false };
   }
   const changed = turn.changed === true;
+  const adjustment = typeof turn.guardrailAdjustmentKo === 'string' ? turn.guardrailAdjustmentKo.trim() : '';
+  const detail = input.locale === 'ko' && adjustment ? { detail: adjustment } : {};
+  // A locked request is always answered, even next to a question: the customer must know it was left out.
+  if (lockedHit) return { state, notice: { key: changed ? 'updatedLocked' : 'refusedLocked', ...detail }, accepted: true, changed };
   // A turn that asked a question the card will show: no "unchanged" line, the question stands alone (and "updated"
   // only when the sheet did change). A question the guard hides does not count.
   const asksQuestion = visibleSheetQuestion(state.question, input.locale) !== null;
   if (!changed && asksQuestion) return { state, notice: null, accepted: true, changed };
-  const adjustment = typeof turn.guardrailAdjustmentKo === 'string' ? turn.guardrailAdjustmentKo.trim() : '';
   const notice: SheetNotice = {
     key: changed ? 'updated' : 'unchanged',
-    ...(input.locale === 'ko' && adjustment ? { detail: adjustment } : {}),
+    ...detail,
   };
   return { state, notice, accepted: true, changed };
 }
@@ -239,8 +284,44 @@ export function pendingLineNotice(fold: Pick<PendingFold, 'status' | 'truncated'
 /** What the card says about typed text it could not carry; null when there is nothing to say. */
 export function pendingFoldNotice(fold: Pick<PendingFold, 'status' | 'blockedAs'>, copy: EditSheetCopy): string | null {
   if (fold.status === 'full') return interpolate(copy.full, { max: PERSONAL_SHEET_LIMITS.changeMax });
-  if (fold.status === 'blocked') return fold.blockedAs === 'identity' ? copy.refusedIdentity : copy.refusedUnsafe;
+  if (fold.status === 'blocked') {
+    if (fold.blockedAs === 'locked') return copy.refusedLocked;
+    return fold.blockedAs === 'identity' ? copy.refusedIdentity : copy.refusedUnsafe;
+  }
   return null;
+}
+
+// --- Template locks (docs/PERSONAL-STUDIO.md §3.3, §3.4.4) ----------------------------------------------------------
+
+/** One part the template fixes, as the screen names it. `key`: 'product' | 'logo' | 'sound' | <slot> | 'shots-2-3'. */
+export interface LockedPart {
+  key: string;
+  label: string;
+}
+
+/**
+ * The template's locked parts in the screen's words: the named parts, then the closed slots, then the shot ranges.
+ * The prop is part of the product, so it is not listed again when the product is locked. Empty when everything is
+ * locked (`all`): the screen says so in one line instead.
+ */
+export function lockedPartsOf(locks: PublicTemplateLocks, copy: EditSheetCopy): LockedPart[] {
+  if (locks.all) return [];
+  const product = locks.named.includes('product');
+  return [
+    ...locks.named.map((kind) => ({ key: kind, label: copy.locks[kind] })),
+    ...locks.slots.filter((slot) => !(slot === 'prop' && product)).map((slot) => ({ key: slot, label: copy.slots[slot] })),
+    ...locks.shots.map((range) => ({ key: `shots-${range.from}-${range.to}`, label: shotLabel(range, copy) })),
+  ];
+}
+
+/** A small padlock drawn like the one in components/playbook/blocks.tsx; decorative, the words carry the meaning. */
+export function TemplateLockGlyph({ className = 'size-3.5 shrink-0' }: { className?: string }) {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2">
+      <rect x="4" y="10" width="16" height="10" rx="2" />
+      <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+    </svg>
+  );
 }
 
 // --- The card -----------------------------------------------------------------------------------------------------
@@ -274,6 +355,11 @@ export interface EditSheetCardProps {
   noticeDetail?: string | null;
   /** What the card says about typed text it could not carry. */
   foldNotice?: string | null;
+  /**
+   * docs/PERSONAL-STUDIO.md §3.3 — the template's locked parts. Present, the card opens with "can't be changed" (even
+   * on an empty sheet), above everything the customer changes. Absent, the card is exactly as before.
+   */
+  locks?: PublicTemplateLocks | null;
   disabled?: boolean;
   onRemove?: (block: PersonalSheetBlock, index: number) => void;
   onRevert?: (index: number) => void;
@@ -290,6 +376,7 @@ export function EditSheetCard({
   notice = null,
   noticeDetail = null,
   foldNotice = null,
+  locks = null,
   disabled = false,
   onRemove,
   onRevert,
@@ -300,6 +387,8 @@ export function EditSheetCard({
   const titleId = `${baseId}-title`;
   const empty = !hasSheetContent(sheet);
   const options = question ? question.options.slice(0, PERSONAL_SHEET_LIMITS.optionsMax) : [];
+  const lockedId = `${baseId}-locked`;
+  const lockedParts = locks ? lockedPartsOf(locks, copy) : [];
 
   const removeButton = (block: PersonalSheetBlock, index: number, item: string, pending: boolean) => (
     <button
@@ -324,12 +413,46 @@ export function EditSheetCard({
         {copy.title}
       </h3>
 
+      {/* Fixed parts: read-only, on the wash, no line controls — they never look like a line the customer can edit. */}
+      {locks && (
+        <section
+          data-edit-sheet-block="locked"
+          aria-labelledby={lockedId}
+          className="mt-2 rounded-[14px] bg-[#F4F4F5] px-3 pt-2.5 pb-2.5"
+        >
+          <h4 id={lockedId} className="flex items-center gap-1.5 text-xs font-medium text-[#52525B]">
+            <TemplateLockGlyph />
+            {copy.lockedHeading}
+          </h4>
+          {locks.all ? (
+            <p data-edit-sheet-locked-all className="mt-1 text-sm leading-[1.5] text-[#09090B]">
+              {copy.lockedAll}
+            </p>
+          ) : (
+            <>
+              <ul className="mt-1.5 flex flex-wrap gap-1.5">
+                {lockedParts.map((part) => (
+                  <li
+                    key={part.key}
+                    data-edit-sheet-locked={part.key}
+                    className="inline-flex min-h-7 items-center rounded-full border border-[#E4E4E7] bg-white px-2.5 text-xs font-medium text-[#09090B] tabular-nums"
+                  >
+                    {part.label}
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-1.5 text-xs leading-relaxed text-[#71717A]">{copy.lockedNote}</p>
+            </>
+          )}
+        </section>
+      )}
+
       {empty ? (
-        <p data-edit-sheet-empty className="mt-1 text-[0.8125rem] leading-[1.55] text-[#71717A]">
+        <p data-edit-sheet-empty className={`${locks ? 'mt-2.5' : 'mt-1'} text-[0.8125rem] leading-[1.55] text-[#71717A]`}>
           {copy.empty}
         </p>
       ) : (
-        <div className="mt-1.5">
+        <div className={locks ? 'mt-2.5' : 'mt-1.5'}>
           {PERSONAL_SHEET_BLOCKS.map((block) => {
             const headingId = `${baseId}-${block}`;
             const count = sheet[block].length;

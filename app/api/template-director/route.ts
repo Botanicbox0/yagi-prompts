@@ -12,12 +12,15 @@ import {
   runHeuristicDirectorTurn,
   toClientDirectorTurnResponse,
 } from '@/lib/template-director/flash-director';
+import { editableSlotsFor, lockChipsTurn, parseTemplateLocks, publicLocks } from '@/lib/template-director/locks';
 import { takeDirectorTurnSlot } from '@/lib/template-director/rate-limit';
 import { cleanPersonalSheetState } from '@/lib/template-director/sheet';
 import {
   DIRECTOR_EDITABLE_SLOTS,
   PERSONAL_AUDIO_MODES,
   PERSONAL_BGM_MOODS,
+  type CustomDirectorRefSlot,
+  type DirectorChatTurnResult,
   type DirectorReferenceAttachment,
   type PersonalAudioMode,
   type PersonalBgmMood,
@@ -92,8 +95,12 @@ export async function POST(request: Request): Promise<NextResponse> {
     return json({ ok: false, code: 'not_found' }, 404);
   }
 
+  // docs/PERSONAL-STUDIO.md §3.3 — the template's own locks, read from its prompt. Without a `Template locks:` block
+  // this is NO_LOCKS and every branch below that uses it is skipped: the turn and the answer are exactly as before.
+  const locks = parseTemplateLocks(template.promptText);
+
   const references: DirectorReferenceAttachment[] = [];
-  const slotFields: Array<{ field: string; slotName: string; role: 'look' | 'product' | 'scene' }> = [
+  const slotFields: Array<{ field: string; slotName: CustomDirectorRefSlot; role: 'look' | 'product' | 'scene' }> = [
     { field: 'slot_look_ref', slotName: 'look_ref', role: 'look' },
     { field: 'slot_prop_ref', slotName: 'prop_ref', role: 'product' },
     { field: 'slot_scene_ref', slotName: 'scene_ref', role: 'scene' },
@@ -102,6 +109,10 @@ export async function POST(request: Request): Promise<NextResponse> {
   for (const { field, slotName, role } of slotFields) {
     const file = form.get(field);
     if (file instanceof File && file.size > 0) {
+      // A photo for a reference the template closed is refused before any model sees it (the screen hides its picker).
+      if (locks.any && locks.refs.includes(slotName)) {
+        return json({ ok: false, code: 'locked_slot_photo' }, 400);
+      }
       if (!ALLOWED_MIMES.has(file.type) || file.size > MAX_REF_BYTES) {
         return json({ ok: false, code: 'bad_slot_photo' }, 400);
       }
@@ -135,27 +146,34 @@ export async function POST(request: Request): Promise<NextResponse> {
   const sheetField = personalEditSheetOpen() ? form.get('sheet') : null;
   const sheetState = typeof sheetField === 'string' ? cleanPersonalSheetState(parseJsonOrNull(sheetField)) : null;
 
-  // A sheet turn answers in the screen's language; a chips turn gets no locale and stays as it was.
+  // A sheet turn answers in the screen's language; a chips turn gets no locale and stays as it was. With locks the
+  // closed slots leave `editableSlots`, and a sheet turn gets the locks (a locked line never lands on the sheet).
   const turnInput = {
     templateId: template.id,
     templateSummaryKo: templateSummaryKo || template.slug,
-    editableSlots: DIRECTOR_EDITABLE_SLOTS,
+    editableSlots: locks.any ? editableSlotsFor(locks) : DIRECTOR_EDITABLE_SLOTS,
     userMessage: effectiveMessage,
     references,
-    ...(sheetState ? { sheetState, locale } : {}),
+    ...(sheetState ? { sheetState, locale, ...(locks.any ? { locks } : {}) } : {}),
   };
+
+  // A chips turn (flag off, or no sheet) has the locked chips and overrides taken out; with nothing left it is refused.
+  const settle = (result: DirectorChatTurnResult): DirectorChatTurnResult =>
+    locks.any && !sheetState ? lockChipsTurn(result, locks) : result;
+  // The answer names the locked parts (the public projection only) so the screen can show them; absent without locks.
+  const lockField = locks.any ? { locks: publicLocks(locks) } : {};
 
   const config = directorConfigFromEnv();
   if (config) {
     try {
       const director = createFlashTemplateDirector(config);
-      const result = await director.runChatTurn(turnInput);
-      return json({ ok: true, model: director.model, turn: toClientDirectorTurnResponse(result) }, 200);
+      const result = settle(await director.runChatTurn(turnInput));
+      return json({ ok: true, model: director.model, turn: toClientDirectorTurnResponse(result), ...lockField }, 200);
     } catch {
       // Fall back to deterministic Stage 1 parser if Gemini API is temporarily unreachable.
     }
   }
 
-  const fallback = runHeuristicDirectorTurn({ ...turnInput, audioMode, bgmMood });
-  return json({ ok: true, model: 'heuristic', turn: toClientDirectorTurnResponse(fallback) }, 200);
+  const fallback = settle(runHeuristicDirectorTurn({ ...turnInput, audioMode, bgmMood }));
+  return json({ ok: true, model: 'heuristic', turn: toClientDirectorTurnResponse(fallback), ...lockField }, 200);
 }

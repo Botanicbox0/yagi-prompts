@@ -8,6 +8,7 @@ import { loadPublicMakerRows } from '@/lib/makers/profile';
 import { makerAvatarSrc, makerCoverSrc } from '@/lib/makers/links';
 import type { MakerLink } from '@/lib/makers/fields';
 import { recipeSchemaReady } from '@/lib/recipes/repo';
+import { parseTemplateLocks, publicLocks, type PublicTemplateLocks } from '@/lib/template-director/locks';
 
 /**
  * PLAN §13.2 — the public card projection: "cards carry NO prompt text".
@@ -90,6 +91,12 @@ export interface PromptCard {
    * on). A flag only — the text itself stays with `lib/recipes/public.ts`. Optional like `gallery`.
    */
   recipeOpen?: boolean;
+  /**
+   * docs/PERSONAL-STUDIO.md §3.3 (C2) — which parts the template fixes, read from the `Template locks:` block in its
+   * prompt. Present ONLY on a template that has a block, so every other card is exactly as before. The public
+   * projection: never the block or a line's words.
+   */
+  locks?: PublicTemplateLocks;
 }
 
 export interface PromptTotals {
@@ -222,6 +229,8 @@ export function toPromptCard(
   });
   const origin = promptOrigin(row);
   const makerHandle = row.authorId === null ? null : makerHandles.get(row.authorId) ?? null;
+  // The prompt text is read for one thing only, the lock block, and only its public projection lands on the card.
+  const locks = publicLocks(parseTemplateLocks(row.promptText));
   return {
     id: row.id,
     slug: row.slug,
@@ -250,6 +259,7 @@ export function toPromptCard(
     featured: row.featured,
     publishedAt: row.publishedAt,
     recipeOpen: openRecipes.has(row.id),
+    ...(locks ? { locks } : {}),
   };
 }
 

@@ -5979,5 +5979,16 @@ export const ko: Dictionary = {
     refusedUnsafe: '의상, 헤어, 소품, 연출 같은 장면 요청만 담을 수 있어요.',
     refusedUnsupported: '이 장면에서는 바꿀 수 없는 부분이에요.',
     refusedTooLarge: '요청이 너무 길어요. 짧게 나눠서 보내 주세요.',
+    lockedHeading: '바꿀 수 없는 것',
+    lockedNote: '이 템플릿에서 고정된 부분이에요.',
+    lockedAll: '이 템플릿은 모든 부분이 고정돼 있어요.',
+    skeleton: '카메라와 컷 리듬, 조명과 색, 장면의 타이밍',
+    locks: {
+      product: '제품',
+      logo: '로고',
+      sound: '소리',
+    },
+    refusedLocked: '이 템플릿에서 고정된 부분이라 바꿀 수 없어요.',
+    updatedLocked: '고칠 내용에 담았어요. 고정된 부분은 그대로 둬요.',
   },
 };
