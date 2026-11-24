@@ -174,6 +174,9 @@ export function PromptCreateFeedback({ children, labels }: { children: ReactNode
       const form = wrapperRef.current?.querySelector('form');
       if (!form) return;
       restoreFormFromDraft(form, draft);
+      // Fields set from the draft fire no event; listeners already mounted (the styling helper, which hides once the
+      // restored prompt declares its styling) hear the restore like typing. Autosave is attached after this effect.
+      form.dispatchEvent(new Event('input', { bubbles: true }));
       setRestoredTime(draft.savedAt ? formatIsoTime(draft.savedAt) : '');
     } catch {
       // private mode or storage blocked
