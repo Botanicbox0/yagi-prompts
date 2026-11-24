@@ -1,7 +1,7 @@
 import { createElement as h } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { oldEditorLinkTitle } from '@/components/brand-studio/editor-v2/editor-v2';
+import { OldEditorLink, oldEditorLinkTitle } from '@/components/brand-studio/editor-v2/editor-v2';
 import { ActionPanel } from '@/components/brand-studio/editor-v2/panels';
 import { useEditor, type RealFilmOptions } from '@/components/brand-studio/editor-v2/use-editor';
 import { setClipSpeedCurve, type FrameClip, type FrameSequence } from '@/lib/brand-studio/editor-v2/frames';
@@ -115,6 +115,35 @@ describe('the header’s way back to the earlier editor carries the same line, i
       expect(oldEditorLinkTitle(copy, false)).toBe(copy.notice.current);
       expect(oldEditorLinkTitle(copy, true)).toContain(copy.notice.current);
       expect(oldEditorLinkTitle(copy, true)).toContain(copy.real.locked.classicSpeed);
+    });
+  }
+});
+
+describe('the header’s way back reaches keyboard and screen-reader users too (review item 4)', () => {
+  /** Text as React writes it into markup. */
+  const esc = (text: string) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#x27;');
+  const HREF = '/brand/studio/compose?classic=1';
+
+  for (const copy of [studioEditorKo, studioEditorEn]) {
+    it(`${copy === studioEditorKo ? 'ko' : 'en'}: with such a cut the link is described by hidden text holding the warning`, () => {
+      const html = renderToStaticMarkup(h(OldEditorLink, { copy, href: HREF, speedDiffers: true }));
+      const describedBy = /aria-describedby="([^"]+)"/.exec(html)?.[1] ?? '';
+      expect(describedBy).not.toBe('');
+      const at = html.indexOf(`id="${describedBy}"`);
+      expect(at).toBeGreaterThan(-1);
+      const open = html.lastIndexOf('<span', at);
+      const element = html.slice(open, html.indexOf('</span>', at));
+      expect(element).toMatch(/class="[^"]*srOnly/);
+      expect(element).toContain(`>${esc(copy.real.locked.classicSpeed)}`);
+      expect(html).toContain(`aria-label="${esc(copy.notice.current)}"`);
+      expect(html).toContain(`title="${esc(oldEditorLinkTitle(copy, true))}"`);
+    });
+
+    it(`${copy === studioEditorKo ? 'ko' : 'en'}: without such a cut, no description and no hidden text`, () => {
+      const html = renderToStaticMarkup(h(OldEditorLink, { copy, href: HREF, speedDiffers: false }));
+      expect(html).not.toContain('aria-describedby');
+      expect(html).not.toContain(esc(copy.real.locked.classicSpeed));
+      expect(html).toContain(`title="${esc(copy.notice.current)}"`);
     });
   }
 });
