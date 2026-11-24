@@ -138,6 +138,23 @@ export function deviceUploadRuns(run: (file: DeviceFileLike, measured: MeasuredD
   };
 }
 
+/**
+ * A switched timeline is the same timeline: only where a file plays from changed. Each project an adoption makes
+ * remembers the one it came from (followed to the first), so a screen that compares timelines by identity
+ * ("말로 편집": a patch answer's base, its history marks) can ask `sameTimeline` instead and never notices
+ * an upload landing.
+ */
+const adoptedFrom = new WeakMap<ComposerProject, ComposerProject>();
+
+function originOf(project: ComposerProject): ComposerProject {
+  return adoptedFrom.get(project) ?? project;
+}
+
+/** True for the same timeline, or one an upload switched in place (in either direction or both). */
+export function sameTimeline(a: ComposerProject, b: ComposerProject): boolean {
+  return a === b || originOf(a) === originOf(b);
+}
+
 function adoptedClip<T extends ComposeClip | TimelineClipTake>(item: T, a: DeviceUploadAdoption): T {
   const { outputId: _output, ...rest } = item;
   return { ...rest, sourceKind: 'asset', assetId: a.assetId, srcUrl: a.srcUrl, thumbUrl: item.thumbUrl ?? a.thumbUrl } as T;
@@ -169,13 +186,15 @@ export function adoptDeviceUpload(project: ComposerProject, blobUrl: string, a: 
   });
   const sfxClips = adoptList<ComposeSfxClip>(project.sfxClips, blobUrl, (sfx) => ({ ...sfx, sourceKind: 'asset', assetId: a.assetId, srcUrl: a.srcUrl }));
   if (!changed && bgm === project.bgm && !overlays && !sfxClips) return project;
-  return {
+  const next: ComposerProject = {
     ...project,
     clips: changed ? clips : project.clips,
     bgm,
     ...(overlays ? { overlays } : {}),
     ...(sfxClips ? { sfxClips } : {}),
   };
+  adoptedFrom.set(next, originOf(project));
+  return next;
 }
 
 /** `adoptDeviceUpload` for every finished upload (a timeline committed from an older copy, e.g. a "말로 편집" draft). */

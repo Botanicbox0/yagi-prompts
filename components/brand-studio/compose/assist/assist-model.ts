@@ -18,6 +18,7 @@ import {
   type ComposerProject,
   type TimelinePatch,
 } from '@/lib/brand-studio/compose';
+import { sameTimeline } from '@/lib/brand-studio/compose/device-files';
 import { applyEditSteps, stepSubjects, type ResolvedStep } from '@/lib/brand-studio/edit-assist/apply';
 import { diffTimelines, isInstantEdit, patchSubjects, sameValue, type EditDelta } from '@/lib/brand-studio/edit-assist/diff';
 import { ASK_ABOUT, CANNOT_REASONS, type AskAbout, type AskChoice, type CannotReason } from '@/lib/brand-studio/edit-assist/plan';
@@ -142,7 +143,8 @@ export function draftFrom(real: ComposerProject, source: DraftSource): DraftOutc
     }
     draft = result.project;
   } else {
-    if (source.base !== real) return { type: 'stale' };
+    // A device upload landing in between switches the timeline in place; that is not an edit (A8).
+    if (!sameTimeline(source.base, real)) return { type: 'stale' };
     const result = applyTimelinePatches(real, source.patches);
     if (result.appliedCount === 0) return { type: 'nothing' };
     draft = result.project;
@@ -325,9 +327,10 @@ export interface HistoryView {
 export type MarkState = 'top' | 'buried' | 'undone' | 'gone';
 
 export function markState(mark: ComposerProject, view: HistoryView): MarkState {
-  if (view.current === mark) return 'top';
-  if (view.redo.includes(mark)) return 'undone';
-  if (view.undo.includes(mark)) return 'buried';
+  // By `sameTimeline`: a device upload that landed switched the steps in place without moving them (A8).
+  if (sameTimeline(view.current, mark)) return 'top';
+  if (view.redo.some((step) => sameTimeline(step, mark))) return 'undone';
+  if (view.undo.some((step) => sameTimeline(step, mark))) return 'buried';
   return 'gone';
 }
 
