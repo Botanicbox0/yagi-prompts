@@ -218,7 +218,8 @@ describe('plan upgrade preview and confirm', () => {
     const html = await renderOrg(orgId, { ok: 'prepared', detail });
     const preview = previewBlock(html);
     expect(preview).toContain('data-plan-upgrade-mode="subscription"');
-    expect(preview).toContain('새 플랜 크레딧: 입금 전까지 23,000 · 입금 후 46,000');
+    // B1c-2 fix round: full until the due date, half only once the new invoice is overdue and unpaid.
+    expect(preview).toContain('새 플랜 크레딧 46,000 · 납기(12월 9일)가 지나도 미납이면 23,000');
     expect(preview).toContain('오늘 바로 발행됩니다');
     expect(preview).toContain('이전 플랜의 남은 기간은 환불하지 않습니다');
     expect(html.indexOf('data-plan-upgrade-preview')).toBeGreaterThan(html.indexOf('id="billing-subscription"'));

@@ -8,6 +8,7 @@ import {
   evaluateSubscription,
   findAdminVoidedCycles,
   firstInvoiceRuleApplies,
+  pendingPlanCarriedByInvoice,
   periodOfDay,
   subscriptionNeedsReissue,
   type EngineInvoice,
@@ -48,7 +49,7 @@ const fullPrice = (planId: PaidBrandPlanId, discountPct: number) =>
 
 describe('brand subscription engine — property simulation on billing cycles (B1c-2)', () => {
   it('holds every invariant on every day for 620+ days, grace 0/1/7/14, anchors on 1/15/28–31', () => {
-    const counts = { days: 0, issued: 0, restarts: 0, resumes: 0, waived: 0, reissues: 0, cancels: 0, expired: 0, firstPayments: 0, latePaid: 0, downgrades: 0, gapDays: 0, nullEpochVoids: 0 };
+    const counts = { days: 0, issued: 0, restarts: 0, resumes: 0, waived: 0, reissues: 0, cancels: 0, expired: 0, firstPayments: 0, latePaid: 0, downgrades: 0, gapDays: 0, nullEpochVoids: 0, outages: 0, outageRestarts: 0 };
 
     for (let seed = 1; seed <= 32; seed++) {
       const rand = mulberry32(seed * 7919);
@@ -149,9 +150,34 @@ describe('brand subscription engine — property simulation on billing cycles (B
 
       const lastDay = addCalendarDays(firstStart, 640);
       let prevActive = false;
+      // Fix round 1, B3: job outages (the flag off) longer than a cycle. The job does not run; payments are still recorded.
+      let outageUntil: string | null = null;
       for (let today: string = firstStart; today <= lastDay; today = addCalendarDays(today, 1)) {
         let eventToday = today === sub.startedOn;
         let paidToday: SimInvoice | null = null;
+        if (outageUntil === null && sub.status !== 'ended' && rand() < 0.002) {
+          outageUntil = addCalendarDays(today, 35 + Math.floor(rand() * 60));
+          counts.outages += 1;
+        }
+        if (outageUntil !== null && today < outageUntil) {
+          const open = epochInvoices().filter((i) => i.status === 'issued');
+          if (open.length > 0 && rand() < payChance) {
+            const inv = pick(open);
+            const issueDay = inv.issuedAt!.slice(0, 10);
+            let paidDay = addCalendarDays(today, -Math.floor(rand() * 7));
+            if (paidDay < issueDay) paidDay = issueDay;
+            for (const key of [...gapDays]) if (key.startsWith(`${sub.epoch}:`) && key.slice(key.indexOf(':') + 1) >= paidDay) gapDays.delete(key);
+            inv.status = 'paid';
+            inv.paidAt = stampAt(paidDay, 9);
+          }
+          counts.days += 1;
+          continue;
+        }
+        const returning = outageUntil !== null;
+        if (returning) {
+          outageUntil = null;
+          eventToday = true; // the job's first run after the outage is the event that restores access
+        }
         const epochAtStart = epochInvoices();
         const paidEndAtStart = epochAtStart.filter((i) => i.status === 'paid' && i.cycleEnd).map((i) => i.cycleEnd!).sort().at(-1) ?? null;
 
@@ -199,7 +225,11 @@ describe('brand subscription engine — property simulation on billing cycles (B
                 voidAs(inv, today, 'system');
               }
             }
-            sub = { ...sub, cancelAtPeriodEnd: true, pendingPlanId: null, pendingPlanEffectivePeriod: null };
+            // Fix round 1, B5: a scheduled downgrade survives the cancel; one an issued/paid invoice carries is applied.
+            const carried = pendingPlanCarriedByInvoice(sub, epoch, today);
+            sub = carried
+              ? { ...sub, cancelAtPeriodEnd: true, planId: carried, pendingPlanId: null, pendingPlanEffectivePeriod: null }
+              : { ...sub, cancelAtPeriodEnd: true };
           } else if (r >= 0.216 && r < 0.236 && sub.cancelAtPeriodEnd) {
             sub = { ...sub, cancelAtPeriodEnd: false };
             eventToday = true;
@@ -242,9 +272,11 @@ describe('brand subscription engine — property simulation on billing cycles (B
               const live = epoch.some((i) => i.status !== 'void' && i.cycleStart === current.start);
               const voided = findAdminVoidedCycles(epoch).includes(current.start);
               if (!live && (voided || needs)) {
-                const replaced = [...epoch.filter((i) => i.cycleStart === current.start)].sort((a, b) => (a.createdAt ?? '').localeCompare(b.createdAt ?? '')).at(-1) ?? null;
-                const due = replaced?.dueOn ?? dueOnForInvoice({ issueDay: today, cycleStart: current.start, method: 'transfer' });
-                newInvoice({ period: periodOfDay(current.start), status: 'issued', planId: sub.planId, dueOn: due, issuedAt: stampAt(today, 9), createdAt: stampAt(today, 9), createdVia: 'admin', cycleStart: current.start, cycleEnd: current.end, totalKrw: fullPrice(sub.planId as PaidBrandPlanId, discountPct) });
+                // Fix round 1: waiting with early access and the current cycle never billed → a new cycle from today.
+                const target = needs && !epoch.some((i) => i.cycleStart === current.start) ? { start: today, end: cycleStartAt(today, 1) } : current;
+                const replaced = [...epoch.filter((i) => i.cycleStart === target.start)].sort((a, b) => (a.createdAt ?? '').localeCompare(b.createdAt ?? '')).at(-1) ?? null;
+                const due = replaced?.dueOn ?? dueOnForInvoice({ issueDay: today, cycleStart: target.start, method: 'transfer' });
+                newInvoice({ period: periodOfDay(target.start), status: 'issued', planId: sub.planId, dueOn: due, issuedAt: stampAt(today, 9), createdAt: stampAt(today, 9), createdVia: 'admin', cycleStart: target.start, cycleEnd: target.end, totalKrw: fullPrice(sub.planId as PaidBrandPlanId, discountPct) });
                 if (replaced) expect(due, 'reissue keeps the due date').toBe(replaced.dueOn);
                 counts.reissues += 1;
                 eventToday = true;
@@ -275,8 +307,7 @@ describe('brand subscription engine — property simulation on billing cycles (B
             const inv = invoices.find((i) => i.id === action.invoiceId)!;
             expect(action.cycleStart, `${label} first cycle starts on the paid day`).toBe(inv.paidAt!.slice(0, 10));
             inv.cycleStart = action.cycleStart;
-            inv.cycleEnd = action.cycleEnd;
-            inv.period = periodOfDay(action.cycleStart);
+            inv.cycleEnd = action.cycleEnd; // fix round 1, B7: `period` stays the month it was issued for
             counts.firstPayments += 1;
           } else if (action.type === 'void') {
             const inv = invoices.find((i) => i.id === action.invoiceId)!;
@@ -292,10 +323,12 @@ describe('brand subscription engine — property simulation on billing cycles (B
             sub = { ...sub, planId: action.toPlanId, pendingPlanId: null, pendingPlanEffectivePeriod: null };
             counts.downgrades += 1;
           } else if (action.type === 'draft') {
+            expect(action.cycleEnd > today, `${label} drafted a cycle that already ended`).toBe(true);
             newInvoice({ period: action.period, status: 'draft', planId: action.planId, createdAt: stampAt(today, 10), cycleStart: action.cycleStart, cycleEnd: action.cycleEnd, totalKrw: fullPrice(action.planId, discountPct) });
           } else if (action.type === 'issue') {
             const draft = epochInvoices().find((i) => i.status === 'draft' && i.cycleStart === action.cycleStart)!;
             expect(draft, `${label} issue without a draft`).toBeDefined();
+            expect(draft.cycleEnd! > today, `${label} issued a cycle that already ended`).toBe(true);
             draft.planId = sub.planId;
             draft.totalKrw = fullPrice(sub.planId as PaidBrandPlanId, discountPct);
             draft.status = 'issued';
@@ -311,7 +344,10 @@ describe('brand subscription engine — property simulation on billing cycles (B
                 ...epochInvoices().filter((i) => i.status === 'paid').map((i) => i.paidAt!.slice(0, 10)),
                 ...epochInvoices().filter((i) => i.status === 'void' && i.voidedBy === 'admin').map((i) => i.voidedAt!.slice(0, 10)),
               ]);
-              expect(liftDays.has(action.cycleStart), `${label} restart on ${action.cycleStart}, not on a paid or waiver day`).toBe(true);
+              // ... or, the first run after an outage longer than a cycle, today (fix round 1, B3).
+              const outageRestart = returning && action.cycleStart === today;
+              expect(liftDays.has(action.cycleStart) || outageRestart, `${label} restart on ${action.cycleStart}, not on a paid or waiver day or today after an outage`).toBe(true);
+              if (outageRestart) counts.outageRestarts += 1;
               counts.resumes += 1;
             }
             counts.issued += 1;
@@ -322,7 +358,7 @@ describe('brand subscription engine — property simulation on billing cycles (B
           } else if (action.type === 'setStatus') {
             sub = { ...sub, status: action.to };
           } else if (action.type === 'end') {
-            sub = { ...sub, status: 'ended' };
+            sub = { ...sub, status: 'ended', pendingPlanId: null, pendingPlanEffectivePeriod: null };
           }
         }
         const after = `${label}->${sub.status} assignment=${JSON.stringify(assignment)}`;
@@ -409,6 +445,8 @@ describe('brand subscription engine — property simulation on billing cycles (B
     expect(counts.cancels).toBeGreaterThan(10);
     expect(counts.gapDays).toBeGreaterThan(20);
     expect(counts.nullEpochVoids).toBeGreaterThan(5);
+    expect(counts.outages).toBeGreaterThan(10);
+    expect(counts.outageRestarts).toBeGreaterThan(3);
   });
 });
 

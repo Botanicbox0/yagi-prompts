@@ -77,6 +77,7 @@ export async function runBrandSubscriptionTick(args: {
   let errors = 0;
   let partialFailures = 0;
   let adopted = 0;
+  let held = 0;
   let blockedByOlderEpoch = 0;
   let budgetExhausted = false;
   const issuedInvoiceIds: string[] = [];
@@ -112,6 +113,7 @@ export async function runBrandSubscriptionTick(args: {
       issuedInvoiceIds.push(...summary.issuedInvoiceIds);
       voided += summary.voidedInvoiceIds.length;
       adopted += summary.adoptedInvoiceIds.length;
+      held += summary.heldInvoiceIds.length;
       blockedByOlderEpoch += summary.blockedByOlderEpoch.length;
       if (summary.failures.length > 0) partialFailures += 1;
       if (summary.ended) {
@@ -187,7 +189,7 @@ export async function runBrandSubscriptionTick(args: {
   // B1a-2, item 5: suspended subscriptions and pending ones waiting for a reissue, once per KST day.
   let attentionNoticeEnqueued = false;
   try {
-    attentionNoticeEnqueued = await enqueueAttentionNotice(sql, todayKst);
+    attentionNoticeEnqueued = await enqueueAttentionNotice(sql, todayKst, held);
   } catch (error) {
     warn(error);
   }
@@ -207,6 +209,8 @@ export async function runBrandSubscriptionTick(args: {
     errors,
     partialFailures,
     adopted,
+    // Fix round 1, B4: null-epoch invoices the job could not place into a cycle (shown on the subscription card).
+    held,
     blockedByOlderEpoch,
     noticeEnqueued,
     voidNoticeEnqueued,

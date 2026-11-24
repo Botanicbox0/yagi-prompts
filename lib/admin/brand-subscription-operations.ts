@@ -44,7 +44,6 @@ const subscriptionStart: AdminOperation<{
   organizationId: string;
   planId: string;
   collectionMethod: string;
-  startedOn?: string;
   activateBeforePayment: boolean;
   confirm: boolean;
   /** The `ConfirmCheck` box (`_confirm`) the invoice-issue form uses: starting a subscription issues an invoice. */
@@ -52,13 +51,11 @@ const subscriptionStart: AdminOperation<{
   /** Item 9: digest from the step-1 preview. */
   previewDigest?: string;
   previewPlanId?: string;
-  previewStartedOn?: string;
   previewActivateBeforePayment?: boolean;
 }> = {
+  // Fix round 1, B2: a subscription always starts today (KST); the form sends no date and a posted one is ignored.
   parse(form) {
-    const startedOn = f.str(form, 'startedOn');
     const previewPlanId = f.str(form, 'previewPlanId');
-    const previewStartedOn = f.str(form, 'previewStartedOn');
     const hasPreviewEarly = form.has('previewActivateBeforePayment');
     return {
       ok: true,
@@ -66,13 +63,11 @@ const subscriptionStart: AdminOperation<{
         organizationId: f.str(form, 'organizationId'),
         planId: f.str(form, 'planId'),
         collectionMethod: f.str(form, 'collectionMethod') || 'transfer',
-        ...(startedOn ? { startedOn } : {}),
         activateBeforePayment: boolAll(form, 'activateBeforePayment'),
         confirm: boolAll(form, 'confirm'),
         confirmCheck: f.str(form, '_confirm') === '1',
         ...(f.str(form, 'previewDigest') ? { previewDigest: f.str(form, 'previewDigest') } : {}),
         ...(previewPlanId ? { previewPlanId } : {}),
-        ...(previewStartedOn ? { previewStartedOn } : {}),
         ...(hasPreviewEarly ? { previewActivateBeforePayment: boolAll(form, 'previewActivateBeforePayment') } : {}),
       },
     };
@@ -89,14 +84,12 @@ const subscriptionStart: AdminOperation<{
       if (
         input.previewDigest === undefined ||
         input.previewPlanId === undefined ||
-        input.previewStartedOn === undefined ||
         input.previewActivateBeforePayment === undefined
       ) {
         return fail('invalid', 'preview_required');
       }
       if (
         input.previewPlanId !== input.planId ||
-        input.previewStartedOn !== (input.startedOn ?? '') ||
         input.previewActivateBeforePayment !== input.activateBeforePayment
       ) {
         return fail('invalid', 'preview_mismatch');
@@ -108,7 +101,6 @@ const subscriptionStart: AdminOperation<{
       organizationId: input.organizationId,
       planId: input.planId,
       collectionMethod: input.collectionMethod,
-      ...(input.startedOn ? { startedOn: input.startedOn } : {}),
       activateBeforePayment: input.activateBeforePayment,
       confirm: input.confirm,
       previewOnly: !input.confirm,

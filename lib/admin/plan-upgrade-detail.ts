@@ -14,7 +14,7 @@ export interface PlanUpgradeDetail {
   carryKrw: number;
   carryValidUntil: string;
   newPlanCapKrw: number;
-  /** Subscribed organizations: the new plan's credits while the new invoice is unpaid. */
+  /** Subscribed organizations: the new plan's credits if the new invoice is still unpaid after its due date. */
   newPlanCapUnpaidKrw: number | null;
   supplyKrw: number;
   vatKrw: number;

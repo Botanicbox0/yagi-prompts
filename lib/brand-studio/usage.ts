@@ -72,8 +72,9 @@ export interface StudioAllowance {
    */
   cycle?: { anchor: string; index: number; start: string; end: string; startAt: string; endAt: string };
   /**
-   * B1c-2 (flag on only): present and true while the current cycle's subscription invoice is issued and unpaid; the
-   * plan part (`baseCapKrw`) is then half the plan cap, rounded down to 10 won. Grants (`extraKrw`) are never halved.
+   * B1c-2 (flag on only): present and true while an issued subscription invoice of the current epoch is past its due
+   * date and unpaid; the plan part (`baseCapKrw`) is then half the plan cap, rounded down to 10 won. Grants (`extraKrw`)
+   * are never halved.
    */
   planCapHalvedUnpaid?: true;
 }
@@ -149,33 +150,37 @@ const floor10 = (krw: number): number => Math.floor(krw / 10) * 10;
  * counted in two cycles and a cycle always starts from the full plan cap. A grant whose start day is before the plan
  * start belongs to no cycle (the range runs from the cycle start, which is never before the anchor). One statement.
  *
- * B1c-2 (`withUnpaidCheck`, flag on only): the same statement also says whether this cycle's subscription invoice of the
- * current epoch of a non-ended subscription is issued and unpaid — no extra statement.
+ * B1c-2 (`withUnpaidCheck`, flag on only): the same statement also says whether the current epoch of a non-ended
+ * subscription has an issued invoice whose due date has passed (`today > due_on`, KST; founder decision 2026-11-24 —
+ * ANY overdue invoice of the epoch, so paying only a newer one does not lift the cap) — no extra statement.
  */
 async function planCycleTotals(
   sql: SqlRunner,
   organizationId: string,
-  input: { cycle: BillingCycle; withGrants: boolean; rangeColumns: boolean; withUnpaidCheck: boolean },
-): Promise<{ usedKrw: number; grantsKrw: number; cycleInvoiceUnpaid: boolean }> {
+  input: { cycle: BillingCycle; withGrants: boolean; rangeColumns: boolean; withUnpaidCheck: boolean; todayKst: string },
+): Promise<{ usedKrw: number; grantsKrw: number; overdueUnpaid: boolean }> {
   const { start, end } = cycleWindow(input.cycle);
   const eff = grantEffectiveStartSql(input.rangeColumns);
+  const params: unknown[] = [organizationId, start.toISOString(), end.toISOString()];
   const grants = input.withGrants
     ? `,
               (select coalesce(sum(amount_krw), 0)::bigint from brand_allowance_grants
                 where organization_id = $1 and revoked_at is null and ${eff} >= $4::date and ${eff} < $5::date) as attached`
     : '';
-  const unpaid = input.withUnpaidCheck
-    ? `,
+  if (input.withGrants) params.push(input.cycle.start, input.cycle.end);
+  let unpaid = '';
+  if (input.withUnpaidCheck) {
+    params.push(input.todayKst);
+    const today = `$${params.length}::date`;
+    unpaid = `,
               exists (select 1 from brand_subscriptions s
                         join brand_invoices i on i.organization_id = s.organization_id and i.subscription_epoch = s.epoch
                        where s.organization_id = $1 and s.status <> 'ended'
-                         and i.kind = 'subscription' and i.status = 'issued' and i.cycle_start = $4::date) as cycle_unpaid`
-    : '';
-  const params: unknown[] = [organizationId, start.toISOString(), end.toISOString()];
-  if (input.withGrants) params.push(input.cycle.start, input.cycle.end);
-  else if (input.withUnpaidCheck) params.push(input.cycle.start);
+                         and i.kind = 'subscription' and i.status = 'issued'
+                         and coalesce(i.due_on, ((i.issued_at at time zone 'UTC') + interval '9 hours')::date + 14) < ${today}) as overdue_unpaid`;
+  }
   const row = (
-    await sql.query<{ used: string | number; attached?: string | number; cycle_unpaid?: boolean }>(
+    await sql.query<{ used: string | number; attached?: string | number; overdue_unpaid?: boolean }>(
       `select (select coalesce(sum(${jobUsageKrwSql()}), 0)::bigint from brand_studio_jobs
                 where organization_id = $1 and status not in ('failed','canceled') and created_at >= $2 and created_at < $3) as used${grants}${unpaid}`,
       params,
@@ -184,7 +189,7 @@ async function planCycleTotals(
   return {
     usedKrw: Number(row?.used ?? 0),
     grantsKrw: Math.max(0, Number(row?.attached ?? 0)),
-    cycleInvoiceUnpaid: row?.cycle_unpaid === true,
+    overdueUnpaid: row?.overdue_unpaid === true,
   };
 }
 
@@ -392,9 +397,11 @@ export async function loadAllowance(
     rangeColumns,
     // B1c-2: only once 0186 is there (the cycle columns) and with the flag on.
     withUnpaidCheck: rangeColumns && (await unpaidCycleCheckReady(sql)),
+    todayKst: today,
   });
-  // B1c-2, the unpaid 50% cap: while this cycle's invoice is issued and unpaid the PLAN part is halved (grants never).
-  const planCap = totals.cycleInvoiceUnpaid ? floor10((Math.max(0, baseCapKrw) * 50) / 100) : Math.max(0, baseCapKrw);
+  // B1c-2, the unpaid 50% cap (founder 2026-11-24): while an issued invoice of the epoch is past its due date and unpaid,
+  // the PLAN part is halved; before the due date it is full. Grants are never halved.
+  const planCap = totals.overdueUnpaid ? floor10((Math.max(0, baseCapKrw) * 50) / 100) : Math.max(0, baseCapKrw);
   extraKrw = totals.grantsKrw;
   const cycleAt = cycleWindow(planCycle);
   return {
@@ -406,7 +413,7 @@ export async function loadAllowance(
     resetsAt: cycleAt.end.toISOString(),
     preferredLane,
     configured: true,
-    ...(totals.cycleInvoiceUnpaid ? { planCapHalvedUnpaid: true as const } : {}),
+    ...(totals.overdueUnpaid ? { planCapHalvedUnpaid: true as const } : {}),
     cycle: {
       anchor: planStartedOn,
       index: planCycle.index,

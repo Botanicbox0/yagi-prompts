@@ -52,7 +52,10 @@ export interface PlanUpgradePreview {
   carryKrw: number;
   carryValidUntil: string;
   newPlanCapKrw: number;
-  /** Subscribed organizations: the new plan's credits while the new invoice is unpaid (the 50% rule). Manual: null. */
+  /**
+   * Subscribed organizations: the new plan's credits if the new invoice is still unpaid after its due date (the 50% rule
+   * applies only once an invoice is overdue; until then the full plan credits). Manual: null (no 50% rule).
+   */
   newPlanCapUnpaidKrw: number | null;
   oldCapKrw: number;
   oldUsedKrw: number;

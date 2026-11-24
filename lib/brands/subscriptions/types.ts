@@ -103,6 +103,8 @@ export interface SubscriptionPanelFacts {
   nothingPaid: boolean;
   /** Round 3, item 2: periods an older epoch's invoice occupies. */
   blockedByOlderEpoch: string[];
+  /** Fix round 1, B4: null-epoch issued/paid invoices the job cannot adopt, and why. */
+  heldInvoices?: Array<{ invoiceId: string; period: string; status: string; reason: 'no_assignment' | 'no_free_cycle' }>;
   graceDays: number;
 }
 
@@ -126,6 +128,8 @@ export interface BrandSubscriptionTickResult {
   partialFailures?: number;
   /** Null-epoch issued or paid invoices adopted into a current epoch. */
   adopted?: number;
+  /** Fix round 1, B4: null-epoch issued or paid invoices the job could not place into a cycle (held, not adopted). */
+  held?: number;
   /** The daily notice of system voids (from the invoice events of the KST day, whichever path wrote them). */
   voidNoticeEnqueued?: boolean;
   /** Periods held because an older epoch's invoice occupies them. */

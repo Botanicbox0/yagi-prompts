@@ -204,22 +204,32 @@ describe('subscribed organization (automatic billing, flag on)', () => {
     ]);
     await expectNoOverlap(orgId);
 
-    // The new plan's credits are halved while the new invoice is unpaid; the carried credits never are.
-    expect(await load(orgId, '2026-11-25T02:00:00Z')).toMatchObject({
+    // Unpaid but not yet due: the new plan's full credits (the 50% rule applies only after the due date, B1c-2 fix
+    // round). The carried credits are never halved.
+    const upgradeDay = await load(orgId, '2026-11-25T02:00:00Z');
+    expect(upgradeDay).toMatchObject({
       source: 'plan',
+      baseCapKrw: 460_000,
+      extraKrw: 170_000,
+      capKrw: 630_000,
+      usedKrw: 0,
+      cycle: { start: '2026-11-25', end: '2026-12-25' },
+    });
+    expect(upgradeDay.planCapHalvedUnpaid).toBeUndefined();
+    // The due date itself (Dec 9) is still full; from Dec 10 00:00 KST, still unpaid, only the new plan's part is halved.
+    expect(await load(orgId, '2026-12-09T14:59:59Z')).toMatchObject({ baseCapKrw: 460_000, capKrw: 630_000 });
+    expect(await load(orgId, '2026-12-09T15:00:00Z')).toMatchObject({
       baseCapKrw: 230_000,
       extraKrw: 170_000,
       capKrw: 400_000,
-      usedKrw: 0,
       planCapHalvedUnpaid: true,
-      cycle: { start: '2026-11-25', end: '2026-12-25' },
     });
-    expect(await reserve(orgId, 400_000, '2026-11-25T02:00:00Z')).toMatchObject({ ok: true });
-    expect(await reserve(orgId, 400_010, '2026-11-25T02:00:00Z')).toEqual({ ok: false, code: 'allowance_exhausted' });
+    expect(await reserve(orgId, 400_000, '2026-12-09T15:00:00Z')).toMatchObject({ ok: true });
+    expect(await reserve(orgId, 400_010, '2026-12-09T15:00:00Z')).toEqual({ ok: false, code: 'allowance_exhausted' });
 
-    const paid = await markBrandInvoicePaid({ sql, now: at('2026-11-26T02:00:00Z') }, ADMIN_VIEWER, { invoiceId: fresh!.id, paidMethod: 'transfer' });
+    const paid = await markBrandInvoicePaid({ sql, now: at('2026-12-10T02:00:00Z') }, ADMIN_VIEWER, { invoiceId: fresh!.id, paidMethod: 'transfer' });
     expect(paid.ok).toBe(true);
-    expect(await load(orgId, '2026-11-26T03:00:00Z')).toMatchObject({ baseCapKrw: 460_000, extraKrw: 170_000, capKrw: 630_000 });
+    expect(await load(orgId, '2026-12-10T03:00:00Z')).toMatchObject({ baseCapKrw: 460_000, extraKrw: 170_000, capKrw: 630_000 });
 
     // The next cycle follows the new anchor; at the new cycle's end the carry is gone.
     await runBrandSubscriptionTick({ sql, now: at('2026-12-18T01:00:00Z') });
@@ -237,7 +247,7 @@ describe('subscribed organization (automatic billing, flag on)', () => {
     await used(orgId, 20_000, '2026-11-25T00:30:00Z'); // 09:30 KST on the upgrade day
     const done = await upgradeConfirmed(upgradeSubscriptionPlan, '2026-11-25T01:00:00Z', orgId, 'b2b_49');
     expect(done).toMatchObject({ ok: true, applied: true, preview: { carryKrw: 170_000, oldUsedKrw: 100_000 } });
-    expect(await load(orgId, '2026-11-25T02:00:00Z')).toMatchObject({ capKrw: 400_000, usedKrw: 20_000 });
+    expect(await load(orgId, '2026-11-25T02:00:00Z')).toMatchObject({ capKrw: 630_000, usedKrw: 20_000 });
   });
 
   it('refusals: unpaid current cycle, waived cycle, first day of the cycle, a downgrade, sandboxed, flag off, the manual operation', async () => {

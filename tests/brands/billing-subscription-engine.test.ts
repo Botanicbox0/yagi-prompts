@@ -153,7 +153,7 @@ describe('brand subscription engine on billing cycles (B1c-2)', () => {
     expect(feb10.actions.some((a) => a.type === 'applyPendingPlan')).toBe(false);
     const draft = inv('draft', ['2027-02-17', '2027-03-17'], { planId: 'b2b_29', createdAt: '2027-02-10T08:00:00+09:00' });
     const feb17 = evaluateSubscription({ todayKst: '2027-02-17', graceDays: 14, subscription: down, invoices: [paid, draft], assignment: assignment('2027-01-17', '2027-02-17') });
-    expect(feb17.actions[0]).toEqual({ type: 'applyPendingPlan', fromPlanId: 'b2b_69', toPlanId: 'b2b_29' });
+    expect(feb17.actions[0]).toEqual({ type: 'applyPendingPlan', fromPlanId: 'b2b_69', toPlanId: 'b2b_29', cycleStart: '2027-02-17' });
     expect(feb17.actions).toContainEqual({ type: 'issue', cycleStart: '2027-02-17', period: '2027-02', dueOn: '2027-03-03' });
     const canceled = evaluateSubscription({ todayKst: '2027-02-16', graceDays: 14, subscription: sub({ cancelAtPeriodEnd: true }), invoices: [paid], assignment: assignment('2027-01-17', '2027-02-17') });
     expect(canceled.status).toBe('active');
@@ -223,6 +223,44 @@ describe('brand subscription engine on billing cycles (B1c-2)', () => {
     const legacyRes = evaluateSubscription({ todayKst: '2027-02-20', graceDays: 14, subscription: sub(), invoices: [paid, legacy], assignment: assignment('2027-01-17', '2027-02-26') });
     expect(legacyRes.oldestUnpaid?.id).toBe(legacy.id);
     expect(legacyRes.accessEnd).toBe('2027-02-26');
+  });
+
+  // Fix round 1, B8: restores the engine-level skip assertions the B1a table had (sandboxed / project_only).
+  it('a sandboxed organization and a project_only plan are skipped with their reason and no actions, even with work due', () => {
+    const paid = inv('paid', ['2027-01-17', '2027-02-17']);
+    const sandboxed = evaluateSubscription({ todayKst: '2027-02-17', graceDays: 14, subscription: sub(), invoices: [paid], assignment: assignment('2027-01-17', '2027-02-17'), sandboxed: true });
+    expect(sandboxed).toMatchObject({ skippedReason: 'sandboxed', actions: [] });
+    const projectOnly = evaluateSubscription({ todayKst: '2027-02-17', graceDays: 14, subscription: sub({ planId: 'project_only' as never }), invoices: [paid], assignment: null });
+    expect(projectOnly).toMatchObject({ skippedReason: 'project_only', actions: [] });
+  });
+
+  it('fix round 1, B3: a next cycle that already ended is never billed — the subscription restarts on today', () => {
+    const paid = inv('paid', ['2026-11-17', '2026-12-17']);
+    const res = evaluateSubscription({ todayKst: '2027-02-01', graceDays: 14, subscription: sub({ startedOn: '2026-11-17' }), invoices: [paid], assignment: assignment('2026-11-17', '2026-12-17') });
+    expect(res.actions.filter((a) => a.type === 'draft' || a.type === 'issue')).toEqual([
+      { type: 'draft', cycleStart: '2027-02-01', cycleEnd: '2027-03-01', period: '2027-02', planId: 'b2b_69' },
+      { type: 'issue', cycleStart: '2027-02-01', period: '2027-02', dueOn: '2027-02-15' },
+    ]);
+    expect(res.actions).toContainEqual({ type: 'syncAssignment', planId: 'b2b_69', billingMode: 'invoice', startedOn: '2027-02-01', endsOn: '2027-02-15' });
+    expect(res.status).toBe('active');
+    // A draft of the ended cycle is voided by the system in the same evaluation.
+    const staleDraft = inv('draft', ['2026-12-17', '2027-01-17'], { createdAt: '2026-12-10T08:00:00+09:00' });
+    const withDraft = evaluateSubscription({ todayKst: '2027-02-01', graceDays: 14, subscription: sub({ startedOn: '2026-11-17' }), invoices: [paid, staleDraft], assignment: assignment('2026-11-17', '2026-12-17') });
+    expect(withDraft.actions).toContainEqual({ type: 'void', invoiceId: staleDraft.id, period: staleDraft.period, cycleStart: '2026-12-17', reason: 'stale_system_draft' });
+    // One day short of a whole cycle: billed late, not restarted.
+    const late = evaluateSubscription({ todayKst: '2027-01-16', graceDays: 14, subscription: sub({ startedOn: '2026-11-17' }), invoices: [paid], assignment: assignment('2026-11-17', '2026-12-17') });
+    expect(late.actions.filter((a) => a.type === 'issue')).toEqual([{ type: 'issue', cycleStart: '2026-12-17', period: '2026-12', dueOn: '2027-01-30' }]);
+    // ... and the following cycle's D-7 window is already open: drafted in the same evaluation (one run settles it).
+    expect(late.actions.filter((a) => a.type === 'draft').map((a) => (a as { cycleStart: string }).cycleStart)).toEqual(['2026-12-17', '2027-01-17']);
+  });
+
+  it('fix round 1, B6: a plan change carried by an issued invoice names that invoice\'s cycle', () => {
+    const paid = inv('paid', ['2027-01-17', '2027-02-17']);
+    const febIssued = inv('issued', ['2027-02-17', '2027-03-17'], { planId: 'b2b_29', dueOn: '2027-03-03' });
+    const res = evaluateSubscription({ todayKst: '2027-02-18', graceDays: 14, subscription: sub({ pendingPlanId: 'b2b_29', pendingPlanEffectivePeriod: '2027-02' }), invoices: [paid, febIssued], assignment: assignment('2027-01-17', '2027-03-03') });
+    expect(res.actions[0]).toEqual({ type: 'applyPendingPlan', fromPlanId: 'b2b_69', toPlanId: 'b2b_29', cycleStart: '2027-02-17' });
+    const held = evaluateSubscription({ todayKst: '2027-02-18', graceDays: 14, subscription: sub({ pendingPlanId: 'b2b_29', pendingPlanEffectivePeriod: '2027-02' }), invoices: [paid, febIssued], assignment: assignment('2027-01-17', '2027-03-03'), suppressBillingFor: ['2027-02-17'] });
+    expect(held.actions.some((a) => a.type === 'applyPendingPlan')).toBe(false);
   });
 
   it('a draft without a cycle, or of a cycle that ended unbilled while not billable, is voided by the system', () => {

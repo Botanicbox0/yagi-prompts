@@ -350,6 +350,7 @@ export default async function StudioOrganization({
                 ? interpolate(od.billing.planUpgradeCapSubscription, {
                     capUnpaid: credits(preview.newPlanCapUnpaidKrw),
                     cap: credits(preview.newPlanCapKrw),
+                    due: dayLabel(preview.dueOn, locale),
                   })
                 : interpolate(od.billing.planUpgradeCap, { cap: credits(preview.newPlanCapKrw) })}
             </p>
@@ -1474,6 +1475,20 @@ export default async function StudioOrganization({
                         })}
                       </p>
                     )}
+                    {subPanel.facts?.heldInvoices && subPanel.facts.heldInvoices.length > 0 && (
+                      <div className="admin-notice" data-subscription-held>
+                        <p className="font-semibold">{od.billing.subscriptionHeldHeading}</p>
+                        <ul className="mt-1 grid gap-0.5">
+                          {subPanel.facts.heldInvoices.map((held) => (
+                            <li key={held.invoiceId} data-subscription-held-invoice={held.invoiceId}>
+                              {held.period} · {held.status} ·{' '}
+                              {held.reason === 'no_assignment' ? od.billing.subscriptionHeldNoAssignment : od.billing.subscriptionHeldNoFreeCycle}
+                            </li>
+                          ))}
+                        </ul>
+                        <p className="mt-1 opacity-80">{od.billing.subscriptionHeldHint}</p>
+                      </div>
+                    )}
                     {subPanel.facts && subPanel.facts.blockedByOlderEpoch.length > 0 && (
                       <p className="admin-notice" data-subscription-older-epoch>
                         {interpolate(od.billing.subscriptionBlockedByOlderEpoch, {
@@ -1614,7 +1629,6 @@ export default async function StudioOrganization({
                     {startPreviewMatch && (
                       <>
                         <input type="hidden" name="previewPlanId" value={startPreviewPlan} />
-                        <input type="hidden" name="previewStartedOn" value={startPreviewDate} />
                         <input
                           type="hidden"
                           name="previewActivateBeforePayment"
@@ -1634,16 +1648,11 @@ export default async function StudioOrganization({
                           ))}
                         </select>
                       </label>
-                      <label className="text-xs">
+                      <div className="text-xs">
                         <span className="font-semibold block mb-1">{od.billing.subscriptionStartDate}</span>
-                        <input
-                          name="startedOn"
-                          type="date"
-                          defaultValue={startPreviewDate ?? todayKst}
-                          required
-                          className={INPUT}
-                        />
-                      </label>
+                        {/* Fix round 1, B2: a subscription always starts today (KST); no date input. */}
+                        <span data-subscription-start-today>{interpolate(od.billing.subscriptionStartsToday, { date: startPreviewDate ?? todayKst })}</span>
+                      </div>
                       <div className="text-xs flex flex-col gap-1.5 justify-end">
                         <label className="flex items-center gap-1.5">
                           <input

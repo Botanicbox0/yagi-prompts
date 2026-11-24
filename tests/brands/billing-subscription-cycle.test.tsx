@@ -410,11 +410,27 @@ describe('B1c-2 — billing cycles from the plan start day (real service)', () =
     expect(await inv(legacy.rows[0]!.id)).toMatchObject({ status: 'issued', cycle_start: '2027-02-17', cycle_end: '2027-03-17', due_on: '2027-03-03' });
   });
 
-  it('two overlapping runs on the same day leave exactly one invoice per cycle', async () => {
+  // Fix round 1, B8: PGlite has ONE connection, so the two runs below execute one after the other — this proves the job is
+  // idempotent within a day, NOT that two real connections cannot race. The lock path is pinned by statement order.
+  it('two runs started together on the same day leave one invoice per cycle (idempotency on one connection, not concurrency); the job locks the organization, then the subscription, before reading invoices', async () => {
     const orgId = await makeOrg('Overlap Runs Fixture');
     await paidFrom(orgId, '2027-01-17');
     await Promise.all([tick('2027-02-17T01:00:00Z'), tick('2027-02-17T01:00:01Z')]);
     expect((await cycleInvoices(orgId)).filter((i) => i.cycle_start === '2027-02-17' && i.status !== 'void')).toHaveLength(1);
+
+    const { makeSingleConnectionRunner } = await import('@/lib/db/sql-runner');
+    const texts: string[] = [];
+    const rec = makeSingleConnectionRunner(async <T = Record<string, unknown>>(text: string, params: unknown[] = []) => {
+      texts.push(text.replace(/\s+/g, ' ').trim());
+      return sql.query<T>(text, params);
+    });
+    await runBrandSubscriptionTick({ sql: rec, now: at('2027-02-17T02:00:00Z') });
+    const iOrg = texts.findIndex((t) => /from brand_organizations where id = \$1 for no key update$/.test(t));
+    const iSub = texts.findIndex((t, i) => i > iOrg && /from brand_subscriptions where organization_id = \$1 for update$/.test(t));
+    const iInvoices = texts.findIndex((t, i) => i > iOrg && /from brand_invoices/.test(t));
+    expect(iOrg).toBeGreaterThanOrEqual(0);
+    expect(iSub).toBeGreaterThan(iOrg);
+    expect(iInvoices).toBeGreaterThan(iSub);
   });
 });
 
