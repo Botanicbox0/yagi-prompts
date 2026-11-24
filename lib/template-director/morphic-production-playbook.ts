@@ -286,6 +286,19 @@ export const MORPHIC_MODIFICATION_PLAYBOOK: readonly ModificationExecutionPatter
 ] as const;
 
 /**
+ * docs/PERSONAL-STUDIO.md §3.4.9 — the canonical wording for a buyer who keeps their own hair or makeup on a template
+ * that styles it (`own` in the spec). The server writes it; nothing the customer sent becomes prompt text. Taken from
+ * `hair_updo_or_bangs_lock` and `makeup_daily_clean_deblush` above, cut to the part itself: no eyewear stripping, no
+ * assumed skin tone, and no blush or pink term (doctrine item 3 names none, not even negated). `{subject}` is "the
+ * person" or "each person"; `{photo}` is "@Image 1" (video), "the reference photo" (image steps, whose prompt
+ * `lib/renders/prompt.ts` speaks without handles) or "their own photo" (two people).
+ */
+export const OWN_STYLE_RULE_EN = {
+  hair: "{subject}'s own hairstyle exactly as in {photo} (length, parting, bangs, colour, tied or loose) in every shot, never the template's hairstyle; do not default to long loose hair when {photo} shows a low bun or short bob",
+  makeup: "{subject}'s own clean daily makeup as in {photo} (eye and brow styling, natural muted lip tone) in every shot, never the template's makeup",
+} as const;
+
+/**
  * Deterministic post-processor that guarantees every rewritten or compiled personal video prompt
  * enforces the Morphic production guardrails + Universal Personal No-BGM Audio Rule.
  */
