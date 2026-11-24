@@ -35,6 +35,13 @@ const cut = (extra: Partial<FrameClip> = {}): FrameClip => ({
 });
 const film = (clips: FrameClip[]): FrameSequence => ({ fps: FPS, aspect: '9:16', captions: [], clips });
 const curved = (): FrameClip => setClipSpeedCurve(film([cut()]), 0, SPEED_PRESETS.find((preset) => preset.id === 'slowMiddle')!.points).clips[0]!;
+/** What pressing "곡선" makes: three points at the cut's speed, a curve held at one speed. */
+const flat = (speed: number): FrameClip =>
+  setClipSpeedCurve(film([cut()]), 0, [
+    { pos: 0, speed },
+    { pos: 0.5, speed },
+    { pos: 1, speed },
+  ]).clips[0]!;
 
 describe('the one rule that decides the warning next to the old-editor link', () => {
   it('0.25× and 4× are the old editor’s own range, and so is everything between: no warning', () => {
@@ -53,11 +60,23 @@ describe('the one rule that decides the warning next to the old-editor link', ()
     expect(speedTheOldEditorChanges(curved())).toBe(true);
   });
 
+  it('a curve held at one speed inside 0.25–4 (what pressing "곡선" makes) reads the same in the earlier editor: no warning (review item 5)', () => {
+    for (const speed of [1, 0.5, 0.25, 4, 2.37]) {
+      expect(flat(speed).speedCurve, String(speed)).toBeDefined();
+      expect(speedTheOldEditorChanges(flat(speed)), String(speed)).toBe(false);
+    }
+  });
+
+  it('a curve held at one speed outside 0.25–4: warning', () => {
+    for (const speed of [0.24, 0.1, 4.01, 10]) expect(speedTheOldEditorChanges(flat(speed)), String(speed)).toBe(true);
+  });
+
   it('a film warns when at least one of its cuts does', () => {
     expect(filmHasSpeedTheOldEditorChanges(film([]))).toBe(false);
     expect(filmHasSpeedTheOldEditorChanges(film([cut(), cut({ speedNum: 4, speedDen: 1 })]))).toBe(false);
     expect(filmHasSpeedTheOldEditorChanges(film([cut(), cut({ speedNum: 6, speedDen: 25 })]))).toBe(true);
     expect(filmHasSpeedTheOldEditorChanges(film([cut(), curved()]))).toBe(true);
+    expect(filmHasSpeedTheOldEditorChanges(film([cut(), flat(1), flat(0.5)]))).toBe(false);
   });
 });
 

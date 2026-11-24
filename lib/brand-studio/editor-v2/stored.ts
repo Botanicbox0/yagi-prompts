@@ -45,6 +45,7 @@ import {
   curveRawDurationFrames,
   curveStartMedia,
   curveTotalFrames,
+  isFlatCurve,
   isValidSpeedCurve,
   type SpeedCurve,
 } from './speed-curve';
@@ -490,14 +491,20 @@ export interface ToStoredOptions {
 }
 
 /**
- * Whether the earlier editor plays this cut at another speed than this editor (audit B5). The seconds both
- * editors read carry the speed clamped to the earlier editor's 0.25–4 and a curve as its average speed
- * (`secondsOf`), so a cut slower than 0.25×, faster than 4× or on a speed curve runs another length there and
- * shows other pictures at the same moment (measured: tests/brand-studio/editor-v2/old-editor-speed.test.ts).
- * Exact on the speed's fraction: 0.25× and 4× themselves are the earlier editor's own.
+ * Whether the earlier editor plays this cut differently from this editor (audit B5). The seconds both editors read
+ * carry the speed clamped to the earlier editor's 0.25–4, and a curve as its average speed (`secondsOf`). So it
+ * differs for a constant speed below 0.25× or above 4× (another length there), and for a curve whose speed
+ * changes inside the cut (played at one average speed there: other pictures at the same moment, and a length
+ * rounded from that average). A curve held at one speed inside 0.25–4, which is what pressing "곡선" makes, reads
+ * exactly the same and does not count (review item 5); held outside that range it does. Measured:
+ * tests/brand-studio/editor-v2/old-editor-speed.test.ts. Exact on the speed's fraction: 0.25× and 4× themselves are
+ * the earlier editor's own.
  */
 export function speedTheOldEditorChanges(clip: Pick<FrameClip, 'speedNum' | 'speedDen' | 'speedCurve'>): boolean {
-  if (clip.speedCurve) return true;
+  if (clip.speedCurve) {
+    const held = isFlatCurve(clip.speedCurve);
+    return held === null || held < 0.25 || held > 4;
+  }
   return clip.speedNum * 4 < clip.speedDen || clip.speedNum > clip.speedDen * 4;
 }
 

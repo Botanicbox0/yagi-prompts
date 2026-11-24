@@ -100,3 +100,22 @@ describe('a film the new editor retimed, read by the old editor (measured, B5)',
     expect(shownNew).toBe(72);
   });
 });
+
+describe('a curve held at one speed (what pressing "곡선" makes) reads the same in the old editor (review item 5)', () => {
+  it('flat 0.5×: both editors lay it out at 20 s and show the same picture 5 s in', () => {
+    const film = storedFilm();
+    const measured = Object.fromEntries(SRC.map((src) => [src, { fps: FPS, frames: 240, counted: true }]));
+    const sequence = setClipSpeedCurve(fromStored(film, measured).sequence, 0, [
+      { pos: 0, speed: 0.5 },
+      { pos: 0.5, speed: 0.5 },
+      { pos: 1, speed: 0.5 },
+    ]);
+    expect(sequence.clips[0]!.speedCurve).toBeDefined();
+    const { saved, spans } = throughOldEditor(sequence, film);
+    expect(sequence.clips[0]!.frames).toBe(480);
+    expect(spans[0]!.durationSec).toBe(20);
+    const oldPicture = Math.floor(frameStateAtTime(saved, 5).activeClip!.mediaTimeSec * FPS);
+    const newPicture = clipFrameAt(sequence.clips[0]!, 5 * FPS, FPS).mediaFrame;
+    expect([oldPicture, newPicture]).toEqual([60, 60]);
+  });
+});
