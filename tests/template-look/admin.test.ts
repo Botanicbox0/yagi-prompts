@@ -6,6 +6,7 @@ import { getDictionary } from '@/lib/i18n/dictionaries';
 import { loadPromptBySlug, loadPromptLook } from '@/lib/prompts/repo';
 import { adminHarness, upload, type AdminHarness } from '../helpers/admin';
 import { runner } from '../helpers/pglite';
+import { TEMPLATE_STYLING_DEFAULT_BLOCK } from '@/lib/template-director/styling';
 
 /**
  * docs/PERSONAL-STUDIO.md §3.4.10 — "대상: 누구나 / 여성 스타일 / 남성 스타일" on the admin template form, saved through
@@ -22,7 +23,8 @@ describe('the template style on the admin form', () => {
   const authoring = {
     title: 'Look test',
     titleKo: '스타일 테스트',
-    promptText: 'A long enough prompt text for the authoring schema to accept it as a real prompt body.',
+    // A new person template declares its hair and makeup (docs/PERSONAL-STUDIO.md §3.4.9, rule 3).
+    promptText: `A long enough prompt text for the authoring schema to accept it as a real prompt body.\n\n${TEMPLATE_STYLING_DEFAULT_BLOCK}`,
     useCase: 'brand-ad',
     textVisibility: 'public',
     models: ['seedance-2.5'],
