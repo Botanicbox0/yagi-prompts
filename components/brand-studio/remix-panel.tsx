@@ -113,7 +113,10 @@ export function RemixPanel({
     if (method === "reference") return v.reference;
     return v.edit;
   };
-  const hint = effectiveMethod === "blueprint" ? (unreadable ? v.unreadable : v.blueprintHint) : r.methodHints[effectiveMethod];
+  // An unread clip greys out both "(추천)" choices (the remake and the 30 s plan): the reason stays visible
+  // whichever method is on, and the greyed controls point at it.
+  const hint = effectiveMethod === "blueprint" ? (unreadable ? null : v.blueprintHint) : r.methodHints[effectiveMethod];
+  const unreadableId = unreadable ? `${id}-unreadable` : undefined;
 
   const toggleKeep = (key: StudioKeepKey) =>
     onChange({ keep: draft.keep.includes(key) ? draft.keep.filter((k) => k !== key) : [...draft.keep, key] });
@@ -215,6 +218,7 @@ export function RemixPanel({
               data-director-chip="30"
               data-selected={plannedClips === 2 && plannedTotal === 30 ? "" : undefined}
               aria-pressed={plannedClips === 2 && plannedTotal === 30}
+              aria-describedby={unreadableId}
               disabled={disabled || unreadable}
               onClick={() => selectDurationPlan(30, 2)}
             >
@@ -227,6 +231,7 @@ export function RemixPanel({
                 data-director-chip="ref"
                 data-selected={plannedClips === refSplitPlan.clipCount && plannedTotal === refSplitTarget ? "" : undefined}
                 aria-pressed={plannedClips === refSplitPlan.clipCount && plannedTotal === refSplitTarget}
+                aria-describedby={unreadableId}
                 disabled={disabled || unreadable}
                 onClick={() => selectDurationPlan(refSplitTarget, refSplitPlan.clipCount)}
               >
@@ -316,6 +321,7 @@ export function RemixPanel({
                     value={method}
                     checked={effectiveMethod === method}
                     disabled={methodDisabled}
+                    aria-describedby={method === "blueprint" ? unreadableId : undefined}
                     onChange={() =>
                       onChange({
                         method,
@@ -329,7 +335,12 @@ export function RemixPanel({
               );
             })}
           </div>
-          <p className="bs-muted">{hint}</p>
+          {hint && <p className="bs-muted">{hint}</p>}
+          {unreadable && (
+            <p className="bs-muted" id={unreadableId} data-studio-remix-unreadable>
+              {v.unreadable}
+            </p>
+          )}
         </div>
       </div>
       <div className="bs-remix-row">

@@ -5824,6 +5824,18 @@ export const en = {
     /** {max}: lock lines per block, {shots}: shot lines per block, {keys}: the parts a line may name. */
     lockRules:
       'A block starts with the line Template locks: and each line under it is "- Keep exactly as in the template: " followed by one part. End the block with a blank line. Up to {max} lines, {shots} of them shot lines. Parts: {keys}',
+    /** docs/PERSONAL-STUDIO.md §3.4.9: a save refused because of the Template styling: block, then one sentence per problem. */
+    stylingRefused: 'Not saved: the template styling block has a problem.',
+    stylingProblemUnknownLine:
+      'Line {line}: not a styling line, a part that cannot be declared, or a description that is missing, too long or has an @ handle. If text follows the block directly, put a blank line between them.',
+    stylingProblemEmptyBlock: 'Line {line}: there is no styling line under the header.',
+    stylingProblemSecondHeader: 'Line {line}: a second styling block. A prompt can have only one.',
+    stylingProblemDuplicatePart: 'Line {line}: this part is already declared above. One line per part.',
+    stylingProblemLockedPart: 'Line {line}: this part is also in the lock block. A part is either locked or styled, not both.',
+    stylingProblemTooManyLines: 'The block has {count} styling lines. Up to {max} are allowed.',
+    /** {max}: lines per block, {tail}: characters per description, {keys}: the parts a line may name. */
+    stylingRules:
+      'A block starts with the line Template styling: and each line under it is either "- Styled by the template: " followed by one part, a dash and how the template styles it (up to {tail} characters, no @ handle), or "- Taken from the photo: " followed by one part. End the block with a blank line. Up to {max} lines, one per part. Parts: {keys}',
     promptInputsRetained: 'Your entries and attached files are still here on this page.',
     promptDraftRestored: 'Your saved draft for this template has been restored.',
     promptDraftDiscard: 'Clear saved draft',
