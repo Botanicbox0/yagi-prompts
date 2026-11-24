@@ -462,9 +462,14 @@ describe('durable team notice outbox (S1)', () => {
     });
     if (!sentMsg.ok) throw new Error('sentMsg');
 
-    const now = new Date('2026-11-23T12:00:00.000Z');
+    // The thread is read in time order and a synced reply takes its time from the Slack timestamp. Derive the clock and
+    // the Slack timestamps from the real time, so the customer's message (written just above) always comes first. With
+    // fixed values the order flipped once the calendar passed them (2026-11-24T06:00Z).
+    const now = new Date();
+    const slackBase = Math.floor(now.getTime() / 1000) + 60;
+    const slackTs = (offsetSeconds: number) => `${slackBase + offsetSeconds}.000100`;
     const postFetcher: typeof fetch = async () =>
-      new Response(JSON.stringify({ ok: true, channel: 'C0123456789', ts: '1795500000.000100' }), { status: 200 });
+      new Response(JSON.stringify({ ok: true, channel: 'C0123456789', ts: slackTs(0) }), { status: 200 });
     await runTeamNoticeDeliveryPass({ sql, env: botEnv, fetcher: postFetcher, now });
 
     // Also insert a stale (>7 day) bot thread and a webhook-only sent row: neither should be polled
@@ -490,15 +495,15 @@ describe('durable team notice outbox (S1)', () => {
           ok: true,
           messages: [
             // Parent message -> ignore
-            { ts: '1795500000.000100', thread_ts: '1795500000.000100', text: 'parent' },
+            { ts: slackTs(0), thread_ts: slackTs(0), text: 'parent' },
             // Bot message -> ignore
-            { ts: '1795500001.000100', thread_ts: '1795500000.000100', bot_id: 'B1', text: 'bot echo' },
+            { ts: slackTs(1), thread_ts: slackTs(0), bot_id: 'B1', text: 'bot echo' },
             // Wrong thread_ts -> ignore
-            { ts: '1795500002.000100', thread_ts: '1799999999.000100', text: 'wrong thread' },
+            { ts: slackTs(2), thread_ts: '1799999999.000100', text: 'wrong thread' },
             // Non-thread message -> ignore
-            { ts: '1795500003.000100', text: 'top level chatter' },
+            { ts: slackTs(3), text: 'top level chatter' },
             // Valid staff reply -> keep once
-            { ts: '1795500004.000100', thread_ts: '1795500000.000100', text: '<@U11> 안내드립니다!' },
+            { ts: slackTs(4), thread_ts: slackTs(0), text: '<@U11> 안내드립니다!' },
           ],
         }),
         { status: 200 },
@@ -508,7 +513,7 @@ describe('durable team notice outbox (S1)', () => {
     const res = await syncSlackSupportReplies(sql, { env: botEnv, fetcher: repliesFetcher, now, force: true });
     expect(res).toEqual({ available: true, skipped: false, checked: 1, synced: 1, errors: [] });
     expect(polledUrls).toHaveLength(1);
-    expect(polledUrls[0]).toContain('ts=1795500000.000100');
+    expect(polledUrls[0]).toContain(`ts=${slackTs(0)}`);
 
     // Poll again -> idempotent (synced: 0)
     const repeat = await syncSlackSupportReplies(sql, { env: botEnv, fetcher: repliesFetcher, now, force: true });
