@@ -24,6 +24,19 @@
  */
 import { interpolate } from '@/lib/i18n/format';
 import {
+  TEMPLATE_LOCKS_HEADER_LINE,
+  TEMPLATE_STYLING_HEADER_LINE,
+  TEMPLATE_STYLING_KEY_PHRASES,
+  TEMPLATE_STYLING_LIMITS,
+  dashBlockRanges,
+  ensureHeaderBlock,
+  headerBlockRefusalDetail,
+  headerLineIndexes,
+  readHeaderBlock,
+  withoutLineRanges,
+} from './header-block';
+import type { StylingBlockProblem } from './styling';
+import {
   CUSTOM_DIRECTOR_REF_SLOTS,
   DIRECTOR_EDITABLE_SLOTS,
   PERSONAL_SHEET_LIMITS,
@@ -213,8 +226,8 @@ export function renderLockBlock(locks: readonly TemplateLock[]): string {
 
 // --- Parse ----------------------------------------------------------------------------------------------------------
 
-/** A `Template locks:` header line (any case, surrounding spaces allowed). */
-export const TEMPLATE_LOCKS_HEADER_LINE = /^[ \t]*template locks:[ \t]*\r?$/i;
+/** A `Template locks:` header line (any case, surrounding spaces allowed); defined with the shared block reader. */
+export { TEMPLATE_LOCKS_HEADER_LINE };
 const KEEP_PREFIX_SOURCE = TEMPLATE_KEEP_LINE_PREFIX.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/ /g, '[ \\t]+');
 const LOCK_LINE = new RegExp(`^[ \\t]*${KEEP_PREFIX_SOURCE}[ \\t]*(.*?)[ \\t\\r]*$`);
 /** A key ends where no letter or digit follows ("the prop" is not "the product"). */
@@ -269,19 +282,18 @@ export type LockBlockProblem =
 const problemText = (line: string): string => line.trim().slice(0, 120);
 
 /** The 0-based indexes of the `Template locks:` header lines. */
-const headerLines = (lines: readonly string[]): number[] => lines.flatMap((l, i) => (TEMPLATE_LOCKS_HEADER_LINE.test(l) ? [i] : []));
+const headerLines = (lines: readonly string[]): number[] => headerLineIndexes(lines, TEMPLATE_LOCKS_HEADER_LINE);
 
 /**
- * The block that starts at the first header: the header line, then every line up to the next blank line (or the end).
- * Any problem makes the block malformed. `parseTemplateLocks` and `checkLockBlock` both read it here, so the save-time
- * check can never call "valid" a block the renders read as malformed, or the other way round.
+ * The block that starts at the first header: the header line, then every line up to the next blank line, a
+ * `Template styling:` header (docs/PERSONAL-STUDIO.md §3.4.9: the two blocks may sit back to back), or the end.
+ * Any problem makes the block malformed. `parseTemplateLocks` and `checkLockBlock` both read it here (through the shared
+ * `readHeaderBlock`), so the save-time check can never call "valid" a block the renders read as malformed, or the other
+ * way round. A prompt with no styling header reads exactly as before.
  */
 function readBlock(lines: readonly string[], headers: readonly number[]) {
   const at = headers[0]!;
-  let end = at + 1;
-  while (end < lines.length && lines[end]!.trim() !== '') end += 1;
-  const block = lines.slice(at, end).join('\n').trimEnd();
-  const body = lines.slice(at + 1, end);
+  const { block, body } = readHeaderBlock(lines, at, TEMPLATE_STYLING_HEADER_LINE);
 
   const entries: TemplateLock[] = [];
   const notes: TemplateLockNote[] = [];
@@ -475,10 +487,15 @@ const LOCK_BLOCK_PROBLEM_KINDS: ReadonlySet<string> = new Set<LockBlockProblem['
   'header_typo',
   'lock_lines_without_header',
 ]);
-/** Problems named in a refusal; the rest are counted. */
-const REFUSAL_SHOWN = 3;
-/** The admin keeps 200 characters of a refusal's detail in the address it returns to (`outcomeUrl`). */
-const REFUSAL_MAX = 200;
+/** docs/PERSONAL-STUDIO.md §3.4.9 — the problems a styling-block refusal names (`checkStylingBlock` in ./styling). */
+const STYLING_BLOCK_PROBLEM_KINDS: ReadonlySet<string> = new Set<StylingBlockProblem['kind']>([
+  'unknown_line',
+  'empty_block',
+  'too_many_lines',
+  'second_header',
+  'duplicate_part',
+  'locked_part',
+]);
 
 /**
  * The detail an admin save returns when it refuses a block: `<field>: template locks: line 4 unknown_line,
@@ -486,29 +503,31 @@ const REFUSAL_MAX = 200;
  * reads it back so the page can say it in the admin's language.
  */
 export function lockBlockRefusalDetail(field: string, problems: readonly LockBlockProblem[]): string {
-  const tokens = problems.slice(0, REFUSAL_SHOWN).map((p) => ('line' in p ? `line ${p.line} ${p.kind}` : `${p.kind} ${p.count}/${p.max}`));
-  if (problems.length > REFUSAL_SHOWN) tokens.push(`+${problems.length - REFUSAL_SHOWN}`);
-  const head = `${field}: template locks: ${tokens.join(', ')}`;
-  const first = problems[0];
-  const said = first && 'text' in first ? first.text.replace(/"/g, "'").replace(/\s+/g, ' ').trim() : '';
-  const room = Math.min(60, REFUSAL_MAX - head.length - 5);
-  if (!said || room < 12) return head;
-  return `${head} — "${said.length > room ? `${said.slice(0, room - 1)}…` : said}"`;
+  return headerBlockRefusalDetail(field, 'template locks', problems);
 }
 
-/** A refusal detail read back: the problems it names (no text of their own), how many more there were, the quoted line. */
+/** A problem kind a refusal names: a lock-block kind or a styling-block kind. */
+export type BlockRefusalKind = LockBlockProblem['kind'] | StylingBlockProblem['kind'];
+
+/**
+ * A refusal detail read back: the problems it names (no text of their own), how many more there were, the quoted line.
+ * `block` is present (as 'styling') only for a `Template styling:` refusal (docs/PERSONAL-STUDIO.md §3.4.9).
+ */
 export interface LockBlockRefusal {
   field: string;
-  items: Array<{ kind: LockBlockProblem['kind']; line?: number; count?: number; max?: number }>;
+  items: Array<{ kind: BlockRefusalKind; line?: number; count?: number; max?: number }>;
   more: number;
   text: string;
+  block?: 'styling';
 }
 
-/** Reads a `lockBlockRefusalDetail` back (also one cut short); null for any other detail. */
+/** Reads a `lockBlockRefusalDetail` or `stylingBlockRefusalDetail` back (also one cut short); null for any other detail. */
 export function readLockBlockRefusal(detail: string): LockBlockRefusal | null {
   const value = String(detail ?? '');
-  const head = /^([\w ]+): template locks: /.exec(value);
+  const head = /^([\w ]+): template (locks|styling): /.exec(value);
   if (!head) return null;
+  const styling = head[2] === 'styling';
+  const kinds = styling ? STYLING_BLOCK_PROBLEM_KINDS : LOCK_BLOCK_PROBLEM_KINDS;
   const rest = value.slice(head[0].length);
   const quote = rest.indexOf(' — "');
   const items: LockBlockRefusal['items'] = [];
@@ -517,13 +536,19 @@ export function readLockBlockRefusal(detail: string): LockBlockRefusal | null {
     const lined = /^line (\d+) ([a-z_]+)$/.exec(token);
     const counted = /^([a-z_]+) (\d+)\/(\d+)$/.exec(token);
     const extra = /^\+(\d+)$/.exec(token);
-    if (lined && LOCK_BLOCK_PROBLEM_KINDS.has(lined[2]!)) items.push({ kind: lined[2] as LockBlockProblem['kind'], line: Number(lined[1]) });
-    else if (counted && LOCK_BLOCK_PROBLEM_KINDS.has(counted[1]!)) {
-      items.push({ kind: counted[1] as LockBlockProblem['kind'], count: Number(counted[2]), max: Number(counted[3]) });
+    if (lined && kinds.has(lined[2]!)) items.push({ kind: lined[2] as BlockRefusalKind, line: Number(lined[1]) });
+    else if (counted && kinds.has(counted[1]!)) {
+      items.push({ kind: counted[1] as BlockRefusalKind, count: Number(counted[2]), max: Number(counted[3]) });
     } else if (extra) more = Number(extra[1]);
   }
   if (items.length === 0) return null;
-  return { field: head[1]!, items, more, text: quote < 0 ? '' : rest.slice(quote + 4).replace(/"$/, '') };
+  return {
+    field: head[1]!,
+    items,
+    more,
+    text: quote < 0 ? '' : rest.slice(quote + 4).replace(/"$/, ''),
+    ...(styling ? { block: 'styling' as const } : {}),
+  };
 }
 
 /** The key phrases a lock line may name, in the order an author reads them (the admin's help and refusal). */
@@ -544,7 +569,7 @@ export const TEMPLATE_LOCK_EXAMPLE = renderLockBlock([
 
 /**
  * The admin copy a refusal is said in: the `admin` dictionary keys of these names. `lockRefusalCopy` picks just these
- * from the dictionary, so the new-template screen (a client component) is handed ten strings, not the whole section.
+ * from the dictionary, so the new-template screen (a client component) is handed these strings, not the whole section.
  */
 export const LOCK_REFUSAL_COPY_KEYS = [
   'lockRefused',
@@ -557,6 +582,15 @@ export const LOCK_REFUSAL_COPY_KEYS = [
   'lockProblemTooManyShotRanges',
   'lockProblemMore',
   'lockRules',
+  // docs/PERSONAL-STUDIO.md §3.4.9 — a `Template styling:` refusal.
+  'stylingRefused',
+  'stylingProblemUnknownLine',
+  'stylingProblemEmptyBlock',
+  'stylingProblemSecondHeader',
+  'stylingProblemDuplicatePart',
+  'stylingProblemLockedPart',
+  'stylingProblemTooManyLines',
+  'stylingRules',
 ] as const;
 export type LockRefusalCopy = Record<(typeof LOCK_REFUSAL_COPY_KEYS)[number], string>;
 
@@ -574,12 +608,31 @@ const PROBLEM_COPY: Readonly<Record<LockBlockProblem['kind'], keyof LockRefusalC
   too_many_shot_ranges: 'lockProblemTooManyShotRanges',
 };
 
+/** docs/PERSONAL-STUDIO.md §3.4.9 — the copy each styling-block problem is said in. */
+const STYLING_PROBLEM_COPY: Readonly<Record<StylingBlockProblem['kind'], keyof LockRefusalCopy>> = {
+  unknown_line: 'stylingProblemUnknownLine',
+  empty_block: 'stylingProblemEmptyBlock',
+  second_header: 'stylingProblemSecondHeader',
+  duplicate_part: 'stylingProblemDuplicatePart',
+  locked_part: 'stylingProblemLockedPart',
+  too_many_lines: 'stylingProblemTooManyLines',
+};
+
 /** How a block is written, with the parts a line may name and the limits filled in (`lockRules` copy). */
 export function lockRulesText(template: string): string {
   return interpolate(template, {
     keys: TEMPLATE_LOCK_KEY_PHRASES.join(', '),
     max: TEMPLATE_LOCK_LIMITS.max,
     shots: TEMPLATE_LOCK_LIMITS.shotRangesMax,
+  });
+}
+
+/** How a `Template styling:` block is written, with its key phrases and limits filled in (`stylingRules` copy, §3.4.9). */
+export function stylingRulesText(template: string): string {
+  return interpolate(template, {
+    keys: TEMPLATE_STYLING_KEY_PHRASES.join(', '),
+    max: TEMPLATE_STYLING_LIMITS.max,
+    tail: TEMPLATE_STYLING_LIMITS.tailMax,
   });
 }
 
@@ -598,11 +651,21 @@ export interface LockRefusalLines {
 export function lockRefusalLines(detail: string, copy: LockRefusalCopy): LockRefusalLines | null {
   const refusal = readLockBlockRefusal(detail);
   if (refusal === null) return null;
+  const styling = refusal.block === 'styling';
   const items = refusal.items.map((item) =>
-    interpolate(copy[PROBLEM_COPY[item.kind]], { line: item.line ?? '', count: item.count ?? '', max: item.max ?? '' }),
+    interpolate(
+      copy[
+        styling
+          ? STYLING_PROBLEM_COPY[item.kind as StylingBlockProblem['kind']]
+          : PROBLEM_COPY[item.kind as LockBlockProblem['kind']]
+      ],
+      { line: item.line ?? '', count: item.count ?? '', max: item.max ?? '' },
+    ),
   );
   if (refusal.more > 0) items.push(interpolate(copy.lockProblemMore, { n: refusal.more }));
-  return { title: copy.lockRefused, items, text: refusal.text, rules: lockRulesText(copy.lockRules) };
+  return styling
+    ? { title: copy.stylingRefused, items, text: refusal.text, rules: stylingRulesText(copy.stylingRules) }
+    : { title: copy.lockRefused, items, text: refusal.text, rules: lockRulesText(copy.lockRules) };
 }
 
 // --- Verdicts -------------------------------------------------------------------------------------------------------
@@ -775,35 +838,11 @@ export function lockChipsTurn(result: DirectorChatTurnResult, locks: TemplateLoc
 
 // --- The block in a compiled prompt ---------------------------------------------------------------------------------
 
-/** Line ranges [start, end) of every header-led block of lock lines (header plus the `-` lines right after it). */
-function lockBlockRanges(lines: readonly string[]): Array<[number, number]> {
-  const ranges: Array<[number, number]> = [];
-  for (let i = 0; i < lines.length; i += 1) {
-    if (!TEMPLATE_LOCKS_HEADER_LINE.test(lines[i]!)) continue;
-    let end = i + 1;
-    while (end < lines.length && /^[ \t]*-/.test(lines[end]!)) end += 1;
-    ranges.push([i, end]);
-    i = end - 1;
-  }
-  return ranges;
-}
-
-/** Removes the given line ranges and closes the gap they leave. */
-function withoutRanges(text: string, lines: readonly string[], ranges: ReadonlyArray<[number, number]>): string {
-  if (ranges.length === 0) return text;
-  const drop = new Set(ranges.flatMap(([s, e]) => Array.from({ length: e - s }, (_, k) => s + k)));
-  return lines
-    .filter((_, i) => !drop.has(i))
-    .join('\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-}
-
 /** The text with every `Template locks:` block taken out (used to check a rewrite without the template's own words). */
 export function stripTemplateLockBlocks(text: string): string {
   if (!/template locks:/i.test(text)) return text;
   const lines = text.split('\n');
-  return withoutRanges(text, lines, lockBlockRanges(lines));
+  return withoutLineRanges(text, lines, dashBlockRanges(lines, TEMPLATE_LOCKS_HEADER_LINE));
 }
 
 /**
@@ -813,15 +852,5 @@ export function stripTemplateLockBlocks(text: string): string {
  */
 export function ensureTemplateLocks(prompt: string, locks: TemplateLocks): string {
   if (!locks.any || !locks.block) return prompt;
-  const at = prompt.indexOf(locks.block);
-  const lines = prompt.split('\n');
-  let offset = 0;
-  const starts = lines.map((l) => {
-    const s = offset;
-    offset += l.length + 1;
-    return s;
-  });
-  const foreign = lockBlockRanges(lines).filter(([s]) => at < 0 || starts[s]! < at || starts[s]! >= at + locks.block.length);
-  const cleaned = withoutRanges(prompt, lines, foreign);
-  return cleaned.includes(locks.block) ? cleaned : `${cleaned.trimEnd()}\n\n${locks.block}`;
+  return ensureHeaderBlock(prompt, locks.block, TEMPLATE_LOCKS_HEADER_LINE);
 }

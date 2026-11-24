@@ -155,13 +155,21 @@ const bodiesOf = (fetchMock: { mock: { calls: unknown[][] } }, normalizeBody: Bo
 
 export const digest = (value: string): string => createHash('sha256').update(value, 'utf8').digest('hex').slice(0, 32);
 
-/** Every compile case: id → the exact string of everything the compile produced or sent. */
-export async function collectCompileOutputs(normalizeBody: BodyNormalizer = AS_SENT): Promise<Record<string, string>> {
+/**
+ * Every compile case: id → the exact string of everything the compile produced or sent. `specExtra` (absent for the
+ * goldens) adds fields to every spec, a null spec included (docs/PERSONAL-STUDIO.md §3.4.9: `own` on a base without a
+ * `Template styling:` block must change nothing).
+ */
+export async function collectCompileOutputs(
+  normalizeBody: BodyNormalizer = AS_SENT,
+  specExtra?: Partial<PersonalDirectorSpec>,
+): Promise<Record<string, string>> {
   const out: Record<string, string> = {};
   const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
   try {
     for (const [baseId, basePrompt] of Object.entries(PARITY_BASES)) {
-      for (const [specId, { spec, refs }] of Object.entries(PARITY_SPECS)) {
+      for (const [specId, { spec: baseSpec, refs }] of Object.entries(PARITY_SPECS)) {
+        const spec = specExtra ? ({ ...(baseSpec ?? {}), ...specExtra } as PersonalDirectorSpec) : baseSpec;
         for (const medium of ['video', 'image'] as const) {
           for (const [castId, cast] of Object.entries(PARITY_CASTS)) {
             for (const [flagId, flagEnv] of Object.entries({ off: {}, on: ON })) {

@@ -427,6 +427,29 @@ T1은 자유 작업이 없어도 쓸모가 있다. 지금 크리에이티브 스
 4. 남의 영상을 따라 만든 작업을 템플릿으로 낼 수 있게 할지(§3.4.6).
 5. 회원이 만든 템플릿에 맞춘 약관 제2조·제6조 문안(§15).
 
+#### 3.4.9 템플릿이 꾸민 헤어·메이크업 — 구매자의 선택
+
+> 대표 결정(2026-11-24): "템플릿이 헤어·메이크업을 정해 두었으면 구매자가 만들 때 템플릿 스타일로 갈지 자기 것으로 갈지 고를 수 있어야 한다."
+
+항목마다 상태는 셋이다: **잠금**(`Template locks:`, 바뀌지 않는다) / **템플릿이 꾸밈**(구매자가 "내 것 그대로"를 고를 수 있다, 헤어·메이크업만) / **사진 따름**. 꾸밈은 잠금 블록 옆의 두 번째 블록으로 적는다.
+
+```
+Template styling:
+- Styled by the template: the hairstyle — a sleek low bun.
+- Styled by the template: the makeup — 1990s smoky plum eyes and lips.
+- Taken from the photo: the wardrobe.
+```
+
+- 항목은 잠금 블록과 같은 말(`the hairstyle`, `the makeup`, `the wardrobe`)이고 항목마다 한 줄, 4줄까지다. "Styled" 줄은 대시 뒤에 설명이 있어야 한다(120자 이내, `@` 없음). "Taken from the photo" 줄에는 설명이 없다.
+- 잘못 적은 블록은 아무것도 주장하지 않는다(`NO_STYLING`). 잠금이 전부 잠그는 것과 반대로 조용히 실패한다. 관리자 저장(`prompt.create`, `prompt.update`, `prompt.createSet`)은 잠금 검사 다음에 이 블록을 검사해 거절한다(`checkStylingBlock`, 사유 `promptText: template styling: line N …`). 같은 항목이 잠금에도 있으면 저장을 거절하고, 읽을 때는 잠금이 이긴다.
+- 블록 구분: 스타일 머리줄이 잠금 블록을 끝내고 그 반대도 같다(빈 줄 없이 붙어도 두 블록). 스타일 머리줄이 없는 프롬프트의 잠금 읽기는 그대로다. 두 블록은 같은 읽기(`lib/template-director/header-block.ts`)를 쓴다.
+- 선택은 지시서의 `own` 하나로 간다(`own: ('hair' | 'makeup')[]`, `personalDirectorSpecSchema`, `director_spec`에 실린다, 마이그레이션 없음). 이름만 오고, 프롬프트 문구는 서버가 playbook 정본(`OWN_STYLE_RULE_EN`)으로 쓴다.
+- **기본값은 템플릿 스타일**이다. 예시 영상과 같고, 아무것도 고르지 않으면 지금과 같다.
+- 잠금이 이긴다. 명시 요청(지시서 줄, 칩, 구조화된 지시)이 `own`보다 이긴다. 반려동물이나 사람이 없는 템플릿은 `own`을 무시한다.
+- 컴파일: `own`이면 블록의 그 줄을 "Taken from the photo"로 바꾸고, 사진을 따르는 줄과 템플릿 스타일을 적은 `[Exclusions]` 줄을 더한다. 고쳐 쓰기 모델에는 `templateStyling`(항목, `template`/`own`, 템플릿의 줄)과 지시문 한 줄을 준다. `template`인 항목은 사진에 맞추지 말고 템플릿 문구를 지키게 한다(다른 것을 바꿀 때 헤어가 사진으로 바뀌는 것을 막는다). 잠긴 컷이 있으면 `own`도 다른 스타일 변경처럼 잠긴 컷의 인물에 들어간다(§3.3).
+- 한계: 구독 렌더는 지시서를 받지 않아 컴파일러를 거치지 않으므로 선택이 걸리지 않는다(토스 주문과 크레딧 주문만). 오프라인 조립은 컷 본문의 원래 헤어 문구를 고쳐 쓰지 못하고, 이기는 줄과 제외 줄을 더하는 데서 그친다. 지시서 없는 작업은 블록이 적힌 그대로 제공사로 간다.
+- 조각: **S1 완료**(브랜치 `claude/personal-styling-s1`: 파서, 저장 검사, 블록 구분, `own`, 컴파일. 화면 변화 없음) → S2(카탈로그 투영, 만들기 카드의 선택, 지시서 카드와 패널) → T1a(핵심 프레임 구간, 고정 항목 줄, `prompt.marks`) → A(기존 템플릿의 블록 제안 스크립트와 관리자 미리보기). 운영 템플릿에는 아직 두 블록이 없으므로 S1으로 바뀌는 운영 결과는 없다.
+
 ## 4. 프롬프트 컴파일러 — 먼저 고칠 것
 
 `lib/template-director/flash-director.ts`와 `morphic-production-playbook.ts`에 정본과 어긋난 규칙이 있다. 줄 번호는 `14d21d56` 기준이다.

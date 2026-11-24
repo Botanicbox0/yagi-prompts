@@ -494,6 +494,28 @@ export interface DirectorRewriteInput {
    * Present only when the base has one: then the payload carries `templateLocks` and the doctrine one more line.
    */
   locks?: string[];
+  /**
+   * docs/PERSONAL-STUDIO.md §3.4.9 — the parts the base prompt's `Template styling:` block styles (not locked, not
+   * changed by the customer), each kept as the template styles it or taken from the photo. Present only when there is
+   * at least one: then the payload carries `templateStyling` and the doctrine one more line.
+   */
+  styling?: TemplateStylingUse[];
+}
+
+/** docs/PERSONAL-STUDIO.md §3.4.9 — the parts of a template's styling a buyer may keep as their own. */
+export const PERSONAL_OWN_STYLE_PARTS = ['hair', 'makeup'] as const;
+export type PersonalOwnStylePart = (typeof PERSONAL_OWN_STYLE_PARTS)[number];
+
+/**
+ * docs/PERSONAL-STUDIO.md §3.4.9 — one part the template styles, as the rewrite is told it: kept as the template wrote
+ * it ('template') or taken from the photo ('own'). `line` is the template's own line for that part (its words).
+ */
+export interface TemplateStylingUse {
+  part: 'hair' | 'makeup' | 'outfit';
+  use: 'template' | 'own';
+  line: string;
+  /** 'own' only: the canonical rule the server wrote for the part (not sent as its own field). */
+  rule?: string;
 }
 
 /**
@@ -544,6 +566,12 @@ export const personalDirectorSpecSchema = z.object({
    * The chips are written alongside it, so a compile with the flag off still honours the order.
    */
   sheet: PersonalEditSheetSchema.optional().catch(undefined),
+  /**
+   * docs/PERSONAL-STUDIO.md §3.4.9 — the parts the buyer keeps as their own on a template whose `Template styling:`
+   * block styles them ("내 것 그대로"). Names only: the server writes the prompt text. Anything malformed becomes
+   * undefined and the rest of the spec stands; an absent key stays absent. Ignored on a template without the block.
+   */
+  own: z.array(z.enum(PERSONAL_OWN_STYLE_PARTS)).max(2).optional().catch(undefined),
 });
 
 export type PersonalDirectorSpec = z.infer<typeof personalDirectorSpecSchema>;

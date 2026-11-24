@@ -14,7 +14,8 @@
  *  - Structure: `Reference authority:` -> `Visual style:` (`#Hex` palette roles, motivated light & shadow floor,
  *    lens/material texture) -> seconds-based timeline (`0.0s–Xs` with `hard cut`, `match cut`, `continuous` handoffs).
  *  - Self-contained visible action/camera/lighting prose for `blueprint` adaptations (never `"same as original video"`).
- *  - Anti-plastic skin (`natural skin texture faithful to @Image 1, zero plastic/waxy beauty-filter glare` — bans
+ *  - Anti-plastic skin (`natural skin texture faithful to @Image 1, zero plastic/waxy beauty-filter glare`; with no
+ *    image attached no `@Image` token at all — bans
  *    `"glass-skin"` / `"dewy highlighter"` tokens that cause SeedVR2 boiling).
  *  - Anti-composite lighting (`match ambient shadow floor and color spill, never pasted-on or flat front-lit`).
  *  - Off-axis eyelines & angle alternation (`18° / 45° / 90° / OTS`).
@@ -341,15 +342,26 @@ ${modeGuidance}
 Mandatory Seedance 2.5 Grammar & Quality Rules:
 1. OMIT all redundant boilerplate headers: never write "Create a Seedance video", aspect ratio (9:16, 16:9), resolution (480p, 1080p, 4K), FPS, or model names.
 2. Exact block order separated by line breaks:
-   - "Reference authority:" (when references are attached) locking identity, exact facial bone structure, wardrobe, and product geometry/labels to @Image 1${options.hasImageRefs ? ' (and any additional @Image N tokens)' : ''}.
+   - "Reference authority:" (when references are attached) locking identity, exact facial bone structure, wardrobe, and product geometry/labels to ${options.hasImageRefs ? '@Image 1 (and any additional @Image N tokens)' : 'the attached references only'}.
    - "Visual style:" concrete #Hex color palette roles (shadow floor, primary surface/wardrobe, key/accent), motivated light source & grounded shadow floor, lens feel, and material texture.
    - Anti-composite lighting: match ambient shadow floor and color spill across subject and environment — never pasted-on or flat front-lit.
-   - Anti-plastic skin: enforce natural skin texture faithful to @Image 1, zero plastic/waxy beauty-filter glare. NEVER write "glass-skin", "poreless porcelain", or "dewy highlighter" (causes upscaler boiling).
+   - Anti-plastic skin: enforce natural skin texture${options.hasImageRefs ? ' faithful to @Image 1' : ' when people appear (no image is attached: write no @Image token)'}, zero plastic/waxy beauty-filter glare. NEVER write "glass-skin", "poreless porcelain", or "dewy highlighter" (causes upscaler boiling).
    - Seconds-based timeline from 0.0s to ${options.seconds.toFixed(1)}s ("0.0s–Xs: …") with contiguous ranges, off-axis eyelines & camera angle alternation across cuts (18° / 45° / 90° / OTS — never repetitive flat passport front-stares), concrete camera start-to-end movement, and an explicit cut handoff at the end of every shot except the final shot ("hard cut", "match cut on …", or "continuous").
    - ${audioInstruction}
 3. ${blueprintRule}
 4. Spoken dialogue only when the user's brief provides words; keep spoken lines verbatim in quotes. Never expose internal tool, provider, or infrastructure names.
 Return JSON matching { "prompt": string, "notes": string } where "notes" is one concise sentence in the user's language.`;
+}
+
+/** `@Image 1` / `@video2` tokens in `text`, as `image1` / `video2`. */
+function referenceTokens(text: string): Set<string> {
+  return new Set([...text.matchAll(/@(image|video)\s?(\d{1,2})\b/gi)].map((m) => `${m[1]!.toLowerCase()}${m[2]}`));
+}
+
+/** True when `written` names an `@Image N` / `@Video N` the customer's own words do not. */
+function inventsReferenceToken(written: string, userText: string): boolean {
+  const own = referenceTokens(userText);
+  return [...referenceTokens(written)].some((token) => !own.has(token));
 }
 
 function buildPassthroughPrompt(input: DirectorCompileInput, binding: Binding): string {
@@ -464,7 +476,8 @@ export function composeDirectorFallbackPrompt(
   const skinClause =
     imageTokens.length > 0
       ? `Natural skin texture faithful to ${imageTokens[0]}, zero plastic/waxy beauty-filter glare.`
-      : 'Natural skin texture faithful to @Image 1 when people appear, zero plastic/waxy beauty-filter glare.';
+      : // No image attached: name no reference (a bare `@Image 1` is refused by the bar and sent to the provider).
+        'Natural skin texture when people appear, zero plastic/waxy beauty-filter glare.';
 
   lines.push(
     `Visual style: palette anchored by ${shadowHex} shadow floor, ${surfaceHex} primary surfaces, and ${accentHex} key accents; ${lightingDesc}, match ambient shadow floor and color spill, never pasted-on or flat front-lit; ${textureDesc}. ${skinClause}`,
@@ -714,6 +727,12 @@ export class DefaultPromptCompiler implements PromptCompiler {
       if (containsInternalTerm(cleaned, userText)) return fallback('internal_term');
 
       cleaned = enforceDirectorAudioPolicy(cleaned, audioMode, userText);
+
+      // A run with no image or video reference at all (start/end frames are image references, so they are
+      // untouched): a token the model invented is refused by the bar and sent to the provider as is.
+      if (!input.references.some((r) => r.kind === 'image' || r.kind === 'video') && inventsReferenceToken(cleaned, userText)) {
+        return fallback('unbound_token');
+      }
 
       return {
         prompt: cleaned,
