@@ -1,7 +1,8 @@
 import type { Viewer } from '@/lib/auth/identity';
 import { creditsLeft, creditsOf } from '@/lib/brand-studio/credits';
 import type { StudioEnv } from '@/lib/brand-studio/env';
-import { loadAllowance } from '@/lib/brand-studio/usage';
+import { allowanceWindowView } from '@/lib/brand-studio/allowance-window';
+import { grantEffectiveStartSql, loadAllowance } from '@/lib/brand-studio/usage';
 import {
   listExtraAllowanceGrants,
   loadActiveBrandDiscount,
@@ -11,12 +12,13 @@ import {
 } from '@/lib/brands/billing';
 import { listBrandInvoices } from '@/lib/brands/billing/invoices';
 import {
+  addCalendarDays,
   BRAND_PLAN_GRACE_DAYS_DEFAULT,
   kstDayOf,
   PAID_BRAND_PLAN_IDS,
   planActiveWithGrace,
 } from '@/lib/brands/billing/math';
-import { hasTable, hasTables } from '@/lib/brands/billing/schema-guard';
+import { hasColumn, hasTable, hasTables } from '@/lib/brands/billing/schema-guard';
 import { BrandBillingDenied } from '@/lib/brands/billing/access';
 import { isSandboxedClientOrganization } from '@/lib/brands/features';
 import { BRAND_PLANS, loadPlanAssignment } from '@/lib/brands/plans';
@@ -70,6 +72,30 @@ export async function loadCustomerExtraGrants(
       validMonth: grant.validMonth,
       expiresOn: grantExpiryDay(grant.validMonth),
     }))
+    .filter((grant) => grant.credits > 0);
+}
+
+/**
+ * R1: a plan organization's extra credits as its allowance counts them (B1c, `planCycleTotals` in
+ * lib/brand-studio/usage.ts): the unrevoked grants whose effective start day falls inside the current billing cycle,
+ * each lasting until the cycle's last day. Organizations on the calendar month keep `loadCustomerExtraGrants`.
+ */
+export async function loadCustomerCycleExtraGrants(
+  sql: SqlRunner,
+  organizationId: string,
+  cycle: { start: string; end: string },
+): Promise<CustomerExtraGrantView[]> {
+  if (!(await hasTable(sql, 'brand_allowance_grants'))) return [];
+  const effectiveStart = grantEffectiveStartSql(await hasColumn(sql, 'brand_allowance_grants', 'valid_from'));
+  const { rows } = await sql.query<{ id: string; amount_krw: string | number; valid_month: string }>(
+    `select id::text as id, amount_krw, valid_month from brand_allowance_grants
+      where organization_id = $1 and revoked_at is null and ${effectiveStart} >= $2::date and ${effectiveStart} < $3::date
+      order by created_at desc, id desc`,
+    [organizationId, cycle.start, cycle.end],
+  );
+  const lastDay = addCalendarDays(cycle.end, -1);
+  return rows
+    .map((row) => ({ id: String(row.id), credits: creditsOf(Number(row.amount_krw)), validMonth: String(row.valid_month), expiresOn: lastDay }))
     .filter((grant) => grant.credits > 0);
 }
 
@@ -159,6 +185,8 @@ export async function loadBrandBillingPageState(
     const today = kstDayOf(now);
     const graceDays = deps.env.planGraceDays ?? BRAND_PLAN_GRACE_DAYS_DEFAULT;
     const planStatus = planActiveWithGrace(assignment, today, graceDays);
+    // R1: a plan organization lists the grants its cycle counts; the calendar month keeps the list loaded above.
+    const shownGrants = allowance.cycle ? await loadCustomerCycleExtraGrants(deps.sql, choice.id, allowance.cycle) : extraGrants;
 
     return {
       kind: 'ready',
@@ -193,6 +221,7 @@ export async function loadBrandBillingPageState(
           source: allowance.source,
           resetsOn: kstDayOf(new Date(allowance.resetsAt)),
           resetsAt: allowance.resetsAt,
+          window: allowanceWindowView(allowance),
         },
         activeDiscount: activeDiscount
           ? {
@@ -240,7 +269,7 @@ export async function loadBrandBillingPageState(
               updatedAt: profile.updatedAt,
             }
           : null,
-        extraGrants,
+        extraGrants: shownGrants,
       },
     };
   }
@@ -263,11 +292,16 @@ export async function loadBrandBillingPageState(
   }
 
   const now = deps.now ? deps.now() : new Date();
-  const extraGrants = await loadCustomerExtraGrants(
-    deps.sql,
-    choice.id,
-    now,
-  );
+  // R1: a plan organization lists the grants its cycle counts (the window `loadCustomerBrandBilling` loaded).
+  const window = res.billing.allowance.window;
+  const extraGrants =
+    window?.kind === 'cycle'
+      ? await loadCustomerCycleExtraGrants(deps.sql, choice.id, window)
+      : await loadCustomerExtraGrants(
+          deps.sql,
+          choice.id,
+          now,
+        );
   return {
     kind: 'ready',
     staffReadOnly: false,

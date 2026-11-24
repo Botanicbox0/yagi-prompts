@@ -74,6 +74,10 @@ export const studioShellEn = {
     share: '{percent}% of the team',
     formerMember: 'Former member',
     empty: 'Nobody has used credits this month yet.',
+    // 대표 확인 대기 (2026-11-24): 로컬 Gemma 초안, 용어 "이번 이용 기간"
+    titleCycle: 'Credit use this usage period',
+    hintCycle: 'Credits each member has used since {date}. Failed or cancelled work isn’t counted.',
+    emptyCycle: 'No credits used yet in this usage period.',
   },
   showroom: {
     eyebrow: 'Brand Studio · Subscription workspace',
@@ -207,6 +211,10 @@ export const studioShellKo: typeof studioShellEn = {
     share: '팀 사용량의 {percent}%',
     formerMember: '이전 멤버',
     empty: '이번 달에는 아직 쓴 크레딧이 없어요.',
+    // 대표 확인 대기 (2026-11-24): 로컬 Gemma 초안, 용어 "이번 이용 기간"
+    titleCycle: '이번 이용 기간 크레딧 사용',
+    hintCycle: '{date}부터 멤버마다 쓴 크레딧이에요. 실패하거나 취소한 작업은 세지 않아요.',
+    emptyCycle: '이번 이용 기간에는 아직 쓴 크레딧이 없어요.',
   },
   showroom: {
     eyebrow: 'TWINGS BRAND STUDIO · 구독 전용 워크스페이스',

@@ -1866,6 +1866,8 @@ export const ko: Dictionary = {
       draft: '480p 초안',
       draftNote: '480p 초안을 먼저 만들어요. 마음에 들면 1080p로 완성하세요.',
       usage: '이번 달 크레딧',
+      // 대표 확인 대기 (2026-11-24): 로컬 Gemma 초안, 용어 "이번 이용 기간"
+      usageCycle: '이번 이용 기간 크레딧',
       resets: '{date}에 다시 채워져요',
       closedTitle: '아직 이용 한도가 활성화되지 않았어요',
       closedBody: '크레딧은 이미지나 영상을 만들 때 사용해요. 플랜이 확정되면 바로 제작할 수 있어요. 아래에서 이용 신청을 해주시면 워크스페이스 채팅으로 안내해 드릴게요.',
@@ -2209,6 +2211,10 @@ export const ko: Dictionary = {
       region_misaligned: '영역이 정확히 일치하지 않아요. 수정할 부위만 조금 더 작게 선택해 주세요.',
       model_unavailable: '고른 모델 중 지금 쓸 수 없는 모델이 있어요. 모델을 다시 골라 주세요.',
       failed: '이미지를 생성하지 못했어요. 다시 시도해 주세요.',
+    },
+    // 대표 확인 대기 (2026-11-24): 로컬 Gemma 초안, 용어 "이번 이용 기간"
+    errorsCycle: {
+      allowance_exhausted: '이번 이용 기간 한도를 넘어서 만들 수 없어요.',
     },
     unapprovedUpload: {
       quotaExceeded: `플랜 확정 전에는 총 ${formatLimitMb(UNAPPROVED_UPLOAD_QUOTA_BYTES)} MB, 최대 ${UNAPPROVED_UPLOAD_MAX_FILES}개까지 올릴 수 있어요. 안 쓰는 파일을 지우거나 대화창에서 야기 팀에 문의해 주세요.`,

@@ -1855,6 +1855,8 @@ export const en = {
       draft: '480p draft',
       draftNote: 'A 480p draft comes first. If you like it, finish it at 1080p.',
       usage: 'Credits this month',
+      // 대표 확인 대기 (2026-11-24): 로컬 Gemma 초안, 용어 "이번 이용 기간"
+      usageCycle: 'Credits for this usage period',
       resets: 'Refills on {date}',
       closedTitle: 'Studio access is not active yet',
       closedBody: 'Credits are used when creating images or videos. Once your plan is confirmed, you can start right away. Request access below and our team will follow up in your workspace chat.',
@@ -2197,6 +2199,10 @@ export const en = {
       region_misaligned: 'We could not align this area cleanly. Select a slightly smaller box around just the part to change and try again.',
       model_unavailable: 'One of the models you picked is no longer offered. Pick your models again.',
       failed: 'It did not work this time. Please try again.',
+    },
+    // 대표 확인 대기 (2026-11-24): 로컬 Gemma 초안, 용어 "이번 이용 기간"
+    errorsCycle: {
+      allowance_exhausted: 'You’ve reached this usage period’s limit, so nothing can be made right now.',
     },
     unapprovedUpload: {
       quotaExceeded: `Before your plan is confirmed, uploads are limited to ${formatLimitMb(UNAPPROVED_UPLOAD_QUOTA_BYTES)} MB and ${UNAPPROVED_UPLOAD_MAX_FILES} files. Delete unused files or ask the YAGI team in chat.`,

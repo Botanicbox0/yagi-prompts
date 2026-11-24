@@ -140,6 +140,8 @@ export const studioVideoEn = {
       started: "Started. You can follow it in the gallery.",
       finalNote: 'If you like the draft, finish it at 1080p from the result.',
       closed: 'Your team has no credits this month, so nothing can be made right now.',
+      // 대표 확인 대기 (2026-11-24): 로컬 Gemma 초안, 용어 "이번 이용 기간"
+      closedCycle: 'Your team has no credits, so nothing can be made right now.',
       readOnly: 'You can view the studio but not make anything.',
       needVideo: 'Pick a reference video first.',
       needReading: 'Remaking from the blueprint needs the video to be read first.',
@@ -658,6 +660,8 @@ export const studioVideoKo: typeof studioVideoEn = {
       started: '시작했어요. 갤러리에서 진행 상황을 볼 수 있어요.',
       finalNote: '초안이 마음에 들면 결과에서 1080p로 완성할 수 있어요.',
       closed: '이번 달 크레딧이 없어서 지금은 만들 수 없어요.',
+      // 대표 확인 대기 (2026-11-24): 로컬 Gemma 초안, 용어 "이번 이용 기간"
+      closedCycle: '크레딧이 없어서 지금은 만들 수 없어요.',
       readOnly: '보기 권한이라 만들 수는 없어요.',
       needVideo: '참고 영상을 먼저 골라 주세요.',
       needReading: '설계도로 재현하려면 영상을 먼저 읽어야 해요.',

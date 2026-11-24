@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { BillingRequestDialog } from '@/components/brand-billing/billing-request-form';
 import s from '@/components/brand-billing/brand-billing.module.css';
+import { isCycleWindow, windowText, type AllowanceWindowView } from '@/lib/brand-studio/allowance-window';
 import { formatKstDateLabel, type BillingPlanCatalogueItem } from '@/lib/brands/billing-ui';
 import { formatCredits } from '@/lib/brand-studio/credits';
 import type { BrandBillingCopy } from '@/messages/brand-billing';
@@ -25,6 +26,10 @@ function minimalFallbackStudioStates(locale: 'ko' | 'en'): BrandBillingCopy['cus
         exhaustedWithQuote:
           'Not enough credits this month ({needed} needed · {left} left). Resets on {resetDate}.',
         exhaustedGeneric: 'This month’s credits are used up. Resets on {resetDate}.',
+        // R1 cycle siblings: the same text as `studioStates` in messages/brand-billing.ts.
+        exhaustedWithQuoteCycle:
+          'Not enough credits for this usage period ({needed} needed · {left} left). Resets on {resetDate}.',
+        exhaustedGenericCycle: 'This usage period’s credits are used up. Resets on {resetDate}.',
         exhaustedCta: 'Request extra credits',
       }
     : {
@@ -32,6 +37,9 @@ function minimalFallbackStudioStates(locale: 'ko' | 'en'): BrandBillingCopy['cus
         closedCta: '이용 신청',
         exhaustedWithQuote: '이번 달 크레딧이 부족합니다 (필요 {needed} · 남음 {left}). 다음 초기화일은 {resetDate}입니다.',
         exhaustedGeneric: '이번 달 크레딧을 모두 사용했습니다. 다음 초기화일은 {resetDate}입니다.',
+        // R1 cycle siblings: the same text as `studioStates` in messages/brand-billing.ts.
+        exhaustedWithQuoteCycle: '이번 이용 기간 크레딧이 부족합니다 (필요 {needed} · 남음 {left}). 다음 초기화일은 {resetDate}입니다.',
+        exhaustedGenericCycle: '이번 이용 기간 크레딧을 모두 사용했습니다. 다음 초기화일은 {resetDate}입니다.',
         exhaustedCta: '추가 크레딧 요청',
       };
 }
@@ -48,6 +56,11 @@ export interface StudioAllowanceNoticeProps {
   remainingCredits?: number | null;
   resetsOn?: string | null;
   resetsAt?: string | null;
+  /**
+   * R1: the allowance window (`StudioAllowanceView.window`). A billing cycle reads "this usage period" and resets on the
+   * cycle's end day; without it, or for the calendar month, the words are today's.
+   */
+  allowanceWindow?: AllowanceWindowView | null;
   surface: string;
   solidCta?: boolean;
   className?: string;
@@ -64,6 +77,7 @@ export function StudioAllowanceNotice({
   remainingCredits,
   resetsOn,
   resetsAt,
+  allowanceWindow,
   surface,
   solidCta = false,
   className,
@@ -71,8 +85,11 @@ export function StudioAllowanceNotice({
   const [open, setOpen] = useState(false);
   const c = billingCopy ?? copy;
   const statesCopy = c?.studioStates ?? minimalFallbackStudioStates(locale);
+  const cycle = isCycleWindow(allowanceWindow);
   const rawReset = resetsOn?.trim() || (resetsAt ? formatKstDateLabel(resetsAt) : '');
-  const resetDate = rawReset && rawReset !== '-' ? rawReset : fallbackResetDateKst();
+  // A cycle refills on its own end day, never on the calendar's next 1st.
+  const resetDate =
+    rawReset && rawReset !== '-' ? rawReset : cycle && allowanceWindow?.end ? allowanceWindow.end : fallbackResetDateKst();
 
   let message: string;
   let ctaLabel: string;
@@ -86,12 +103,12 @@ export function StudioAllowanceNotice({
     intent = 'allowance_request';
     ctaLabel = statesCopy.exhaustedCta;
     if (typeof neededCredits === 'number' && typeof remainingCredits === 'number') {
-      message = statesCopy.exhaustedWithQuote
+      message = windowText(allowanceWindow, statesCopy.exhaustedWithQuote, statesCopy.exhaustedWithQuoteCycle)
         .replace('{needed}', formatCredits(neededCredits, locale))
         .replace('{left}', formatCredits(remainingCredits, locale))
         .replace('{resetDate}', resetDate);
     } else {
-      message = statesCopy.exhaustedGeneric.replace('{resetDate}', resetDate);
+      message = windowText(allowanceWindow, statesCopy.exhaustedGeneric, statesCopy.exhaustedGenericCycle).replace('{resetDate}', resetDate);
     }
   }
 

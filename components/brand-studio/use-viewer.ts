@@ -161,7 +161,7 @@ export function useViewer(input: {
       ...(input.regionV2 ? { v2: true } : {}),
     });
     const result = await studio.createJob(body);
-    const line = isFailure(result) ? errorLine(copy, result.code) : null;
+    const line = isFailure(result) ? errorLine(copy, result.code, studio.store.state?.allowance.window) : null;
     input.onRegionSending({ done: key, line });
     return !line;
   };
@@ -175,14 +175,14 @@ export function useViewer(input: {
           const again = reviseRerunInput(job, { organizationId, requestId: newRequestId() });
           if (!again) return errorLine(copy, "not_found");
           const result = await studio.createJob(again);
-          return isFailure(result) ? errorLine(copy, result.code) : copy.state.started;
+          return isFailure(result) ? errorLine(copy, result.code, studio.store.state?.allowance.window) : copy.state.started;
         });
       if (job.kind === "region_edit" || job.kind === "video_remix") return reuse(job);
       void run("rerun", async () => {
         const again = rerunInput(job, { organizationId, requestId: newRequestId() });
         if (!again) return null;
         const result = await studio.createJob(again);
-        return isFailure(result) ? errorLine(copy, result.code) : copy.state.started;
+        return isFailure(result) ? errorLine(copy, result.code, studio.store.state?.allowance.window) : copy.state.started;
       });
     },
     toVideo: (item) => {
@@ -210,7 +210,7 @@ export function useViewer(input: {
     finalize: (output) =>
       void run("finalize", async () => {
         const result = await studio.createJob(finalInput({ organizationId, requestId: newRequestId() }, output.id));
-        return isFailure(result) ? errorLine(copy, result.code) : copy.state.started;
+        return isFailure(result) ? errorLine(copy, result.code, studio.store.state?.allowance.window) : copy.state.started;
       }),
     reuse,
     remove: async (output) => {
