@@ -17,6 +17,7 @@ import { creditsOf } from '@/lib/brand-studio/credits';
 import { thumbnailWebp } from '@/lib/brand-studio/files';
 import { readyAsset, readyOutput } from '@/lib/brand-studio/repo';
 import type { StudioDeps } from '@/lib/brand-studio/types';
+import { allowanceViewWithRefill, loadAllowanceViewWithRefill } from '@/lib/brand-studio/allowance-refill';
 import { allowanceView, loadAllowance, reserveAllowance } from '@/lib/brand-studio/usage';
 import {
   planUpscaleSegments,
@@ -172,7 +173,7 @@ async function refundUpscaleJob(
       [jobId, organizationId, errorCode, now.toISOString()],
     );
     const updated = await loadAllowance(tx, organizationId, deps.env, now);
-    return allowanceView(updated);
+    return allowanceViewWithRefill(tx, organizationId, updated, { now });
   });
 }
 
@@ -269,7 +270,7 @@ export async function submitUpscaleJob(
       ).rows[0];
 
       if (existing) {
-        const allowance = allowanceView(await loadAllowance(tx, v.organizationId, deps.env, now));
+        const allowance = await loadAllowanceViewWithRefill(tx, v.organizationId, deps.env, now);
         if (existing.status === 'succeeded' && existing.params?.source === 'upscale') {
           const p = existing.params;
           return {
@@ -357,7 +358,7 @@ export async function submitUpscaleJob(
         ],
       );
 
-      const allowance = allowanceView(await loadAllowance(tx, v.organizationId, deps.env, now));
+      const allowance = await loadAllowanceViewWithRefill(tx, v.organizationId, deps.env, now);
       return {
         kind: 'created' as const,
         jobId: inserted.rows[0]!.id,
@@ -562,7 +563,7 @@ export async function getUpscaleJobStatus(
       if (!row || row.params?.source !== 'upscale') {
         throw new StudioDenied('not_found');
       }
-      const allowance = allowanceView(await loadAllowance(tx, v.organizationId, deps.env, now));
+      const allowance = await loadAllowanceViewWithRefill(tx, v.organizationId, deps.env, now);
       return {
         userId: seat.userId,
         status: row.status,

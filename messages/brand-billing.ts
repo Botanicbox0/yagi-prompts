@@ -116,6 +116,11 @@ export const brandBillingEn = {
       extraHeading: 'Extra credits',
       extraGrantItem: '{credits} credits · expires {expiryDate}',
       requestCreditsCta: 'Request extra credits',
+      // 대표 확인 대기 (2026-11-24): 로컬 Gemma 2패스 초안, 체험 크레딧만 있는 조직용
+      resetTrial: 'Trial credit expiration date: {resetDate} (KST)',
+      explainerTrial:
+        'Credits are used to create images, videos, sounds, and workflows. Trial credits are available until {date}. To continue creating after that, please start a plan.',
+      extraGrantItemTrial: 'Trial credits {credits} · Expires {expiryDate}',
     },
     discountSection: {
       summaryRemaining: '{base} · {count} billing cycles remaining',
@@ -171,6 +176,9 @@ export const brandBillingEn = {
       exhaustedWithQuoteCycle: 'Not enough credits for this usage period ({needed} needed · {left} left). Resets on {resetDate}.',
       exhaustedGenericCycle: 'This usage period’s credits are used up. Resets on {resetDate}.',
       exhaustedCta: 'Request extra credits',
+      // 대표 확인 대기 (2026-11-24): 로컬 Gemma 2패스 초안, 체험 크레딧만 있는 조직용
+      exhaustedWithQuoteTrial: 'Not enough trial credits ({needed} needed · {left} left). Please start a plan to continue.',
+      exhaustedGenericTrial: "You've used all your trial credits. Please start a plan to continue.",
     },
   },
   // 대표 확인 대기 — 작업 공간 문의 스레드 기록 문구
@@ -333,6 +341,11 @@ export const brandBillingKo: typeof brandBillingEn = {
       extraHeading: '추가 크레딧',
       extraGrantItem: '{credits} 크레딧 · 만료일 {expiryDate}',
       requestCreditsCta: '추가 크레딧 요청',
+      // 대표 확인 대기 (2026-11-24): 로컬 Gemma 2패스 초안, 체험 크레딧만 있는 조직용
+      resetTrial: '체험 크레딧 만료일: {resetDate} (한국 시간 기준)',
+      explainerTrial:
+        '크레딧은 이미지, 영상, 사운드, 워크플로우 제작 시 사용합니다. 체험 크레딧은 {date}까지 사용할 수 있습니다. 이후에도 계속 제작하시려면 플랜을 시작해 주세요.',
+      extraGrantItemTrial: '체험 크레딧 {credits} · 만료일 {expiryDate}',
     },
     discountSection: {
       summaryRemaining: '{base} · 앞으로 {count}회 청구 시 적용',
@@ -387,6 +400,9 @@ export const brandBillingKo: typeof brandBillingEn = {
       exhaustedWithQuoteCycle: '이번 이용 기간 크레딧이 부족합니다 (필요 {needed} · 남음 {left}). 다음 초기화일은 {resetDate}입니다.',
       exhaustedGenericCycle: '이번 이용 기간 크레딧을 모두 사용했습니다. 다음 초기화일은 {resetDate}입니다.',
       exhaustedCta: '추가 크레딧 요청',
+      // 대표 확인 대기 (2026-11-24): 로컬 Gemma 2패스 초안, 체험 크레딧만 있는 조직용
+      exhaustedWithQuoteTrial: '체험 크레딧이 부족합니다 (필요 {needed} · 남음 {left}). 계속 제작하려면 플랜을 시작해 주세요.',
+      exhaustedGenericTrial: '체험 크레딧을 모두 사용했습니다. 계속 제작하려면 플랜을 시작해 주세요.',
     },
   },
   // 대표 확인 대기 — 작업 공간 문의 스레드 기록 문구

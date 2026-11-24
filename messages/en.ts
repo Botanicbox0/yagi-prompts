@@ -1861,9 +1861,15 @@ export const en = {
       // 대표 확인 대기 (2026-11-24): 로컬 Gemma 초안, 용어 "이번 이용 기간"
       usageCycle: 'Credits for this usage period',
       resets: 'Refills on {date}',
+      // 대표 확인 대기 (2026-11-24): 로컬 Gemma 2패스 초안, 체험 크레딧만 있는 조직용
+      resetsTrial: 'Available until {date}',
       closedTitle: 'Studio access is not active yet',
       closedBody: 'Credits are used when creating images or videos. Once your plan is confirmed, you can start right away. Request access below and our team will follow up in your workspace chat.',
       closedAction: 'Request access',
+      // 대표 확인 대기 — the closed studio after an access request was sent
+      closedRequestedTitle: 'We received your request',
+      closedRequestedBody: 'Our team will open the studio once they have reviewed it. We will follow up in your workspace chat.',
+      closedRequestedAction: 'Send a follow-up',
       closedRequestOrgFallback: 'Our brand',
       closedRequestDraft: 'Brand: {organization}\nRequesting studio access.\nWhat we plan to make: (e.g. product photos, short-form videos, expected volume)',
       readOnly: 'You can look through results and assets. Owners and editors can create.',
@@ -2206,6 +2212,10 @@ export const en = {
     // 대표 확인 대기 (2026-11-24): 로컬 Gemma 초안, 용어 "이번 이용 기간"
     errorsCycle: {
       allowance_exhausted: 'You’ve reached this usage period’s limit, so nothing can be made right now.',
+    },
+    // 대표 확인 대기 (2026-11-24): 로컬 Gemma 2패스 초안, 체험 크레딧만 있는 조직용
+    errorsTrial: {
+      allowance_exhausted: 'Cannot create more as trial credits are exhausted.',
     },
     unapprovedUpload: {
       quotaExceeded: `Before your plan is confirmed, uploads are limited to ${formatLimitMb(UNAPPROVED_UPLOAD_QUOTA_BYTES)} MB and ${UNAPPROVED_UPLOAD_MAX_FILES} files. Delete unused files or ask the YAGI team in chat.`,

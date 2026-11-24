@@ -16,6 +16,9 @@ profile and talks only to the address below. Not part of the vitest suite.
 
   EDITOR_BASE_URL=http://localhost:3611 EDITOR_ORG_ID=<organization id> python scripts/editor-v2-export-check.py <out-dir>
 
+The server needs BRAND_STUDIO_V2=on and BRAND_STUDIO_EDITOR_V2=on, and BRAND_WORKSPACE_PROTOTYPE_LAYER=on when the
+organization is listed in BRAND_STUDIO_EDITOR_V2_ORGS: without it a listed organization's `?sample=1` opens its own film.
+
 Keeps the exported file and 1440x900 captures of the sheet during and after the export in <out-dir>.
 """
 import json

@@ -455,43 +455,8 @@ export function estimateImageUsd(input: {
   }
 }
 
-/** Pixel budget Seedance spends per frame at each resolution (independent of the aspect ratio). */
-const SEEDANCE_PIXELS: Record<StudioVideoResolution, number> = {
-  '480p': 409_920, // 854 x 480
-  '720p': 921_600, // 1280 x 720
-  '1080p': 2_073_600, // 1920 x 1080
-};
-const SEEDANCE_FPS = 24;
-/** USD per million tokens: [without an input video, with one]. */
-const SEEDANCE_USD_PER_M: Record<StudioVideoResolution, readonly [number, number]> = {
-  '480p': [10.7, 6.4],
-  '720p': [10.7, 6.4],
-  '1080p': [11.7, 7.0],
-};
-
 /**
- * What one Seedance 2.5 run is billed, in USD (docs.sunra.ai/platform/pricing, "Seedance video token
- * pricing"), rounded up to the cent like every account-lane charge:
- *
- *   frames = 24 x output seconds + 1, plus 24 x billed input seconds with a reference video
- *   tokens = floor(frames x width x height / 1024)
- *
- * The input is billed for its own length, at least ceil(output x 2/3) seconds, and a run that carries a
- * video takes the lower rate for the whole request. No allowance on top: this is the provider's own
- * estimate to the credit (60 settings compared on 2026-11-18, tests/brand-studio/server/quote-parity).
+ * What one Seedance 2.5 run is billed, in USD. The estimator moved to lib/sunra/seedance.ts so the personal
+ * Sunra lane prices with the same formula (docs/PERSONAL-STUDIO.md §5.1); this name stays for the studio.
  */
-export function estimateVideoUsd(input: {
-  resolution: StudioVideoResolution;
-  /** Output seconds; for an edit that follows the source, pass the source length. */
-  seconds: number;
-  /** Seconds of reference video attached, 0 when none. */
-  referenceVideoSeconds: number;
-}): number {
-  const seconds = Math.max(1, input.seconds);
-  const withVideo = input.referenceVideoSeconds > 0;
-  const billedInput = withVideo ? Math.max(input.referenceVideoSeconds, Math.ceil((seconds * 2) / 3)) : 0;
-  const frames = SEEDANCE_FPS * seconds + 1 + SEEDANCE_FPS * billedInput;
-  const tokens = Math.floor((SEEDANCE_PIXELS[input.resolution] * frames) / 1024);
-  const rate = SEEDANCE_USD_PER_M[input.resolution][withVideo ? 1 : 0];
-  return billedUsd((tokens / 1_000_000) * rate);
-}
+export { estimateSeedanceUsd as estimateVideoUsd } from '@/lib/sunra/seedance';

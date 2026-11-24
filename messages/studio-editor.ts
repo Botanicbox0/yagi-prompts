@@ -464,6 +464,8 @@ export const studioEditorEn = {
     locked: {
       heading: '{workspace} is still being built',
       body: 'It cannot change your film yet. You can try it on the sample film.',
+      /** The body when the sample film is not offered (`BRAND_WORKSPACE_PROTOTYPE_LAYER` off): no word of it. */
+      bodyNoSample: 'You cannot use it yet.',
       materials: 'Nothing to bring in here yet.',
       captionsKept: 'Captions already in this film stay as they are and show on the timeline.',
       open: 'Try it on the sample film',
@@ -943,6 +945,7 @@ export const studioEditorKo: typeof studioEditorEn = {
     locked: {
       heading: '{workspace} 작업 공간은 만드는 중입니다',
       body: '이 영상에서는 아직 쓸 수 없습니다. 예시 필름에서 먼저 써 보세요.',
+      bodyNoSample: '아직 쓸 수 없습니다.', // 대표 확인 대기 (Gemma 2패스, 2026-11-24)
       materials: '여기서 넣을 재료는 아직 없습니다.',
       captionsKept: '이 영상에 이미 있는 자막은 그대로 남고 타임라인에 보입니다.',
       open: '예시 필름에서 써 보기',
