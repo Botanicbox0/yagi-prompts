@@ -39,7 +39,7 @@ import { loadWorkspaceApprovalPanel } from '@/lib/brands/billing/workspace-appro
 import { BrandWorkspaceApprovalCard } from '@/components/admin/brand-workspace-approval-card';
 import { formatBillingOutcomeDetail } from '@/lib/admin/brand-billing-console';
 import { parsePlanUpgradeDetail, type PlanUpgradeDetail } from '@/lib/admin/plan-upgrade-detail';
-import { listPlanUpgradeCarries } from '@/lib/brands/billing/plan-upgrade-apply';
+import { hasLiveSubscription, listPlanUpgradeCarries, upgradedCycleAwaitingIssue } from '@/lib/brands/billing/plan-upgrade-apply';
 import { formatAdminTime, formatCount, formatKrw, shortId } from '@/lib/admin/format';
 import { interpolate } from '@/lib/i18n/format';
 import {
@@ -153,6 +153,8 @@ export default async function StudioOrganization({
     approvalPanel,
     cycleColumnReady,
     upgradeCarries,
+    liveSubscription,
+    upgradeAwaitingIssue,
   ] = await Promise.all([
     loadBrandSupport({ sql }, viewer, id, true).then((r) => r ?? []),
     sql.query<{ id: string; project_id: string; name: string }>(
@@ -175,6 +177,10 @@ export default async function StudioOrganization({
     hasColumn(sql, 'brand_invoices', 'cycle_start').catch(() => false),
     // B1c-3: carry grants from a plan upgrade (a date range that ends with the new cycle).
     listPlanUpgradeCarries(sql, id).catch(() => []),
+    // B1c-3 fix round 1: a non-ended subscription hides the manual upgrade even with the flag off; a manual upgrade whose
+    // new cycle has no issued invoice yet shows a warning on the plan panel.
+    hasLiveSubscription(sql, id).catch(() => false),
+    upgradedCycleAwaitingIssue(sql, id).catch(() => null),
   ]);
 
   const previews = previewsRes.rows;
@@ -240,7 +246,10 @@ export default async function StudioOrganization({
   const upgradePreview: PlanUpgradeDetail | null = rawOk === 'prepared' ? parsePlanUpgradeDetail(rawDetail) : null;
   const outcomeDetail = upgradePreview
     ? undefined
-    : rawDetail?.includes('cycle_already_invoiced')
+    : rawOk === 'saved' && rawDetail?.startsWith('upgrade_manual_draft:')
+      ? // Fix round 1: a manual upgrade opens the credits at once; the new cycle's invoice is a draft the admin issues.
+        od.billing.planUpgradeManualSaved
+      : rawDetail?.includes('cycle_already_invoiced')
       ? `${od.billing.cycleAlreadyInvoiced} (${rawDetail})`
       : formattedDetail;
   const defaultAllowanceMode = detailOps?.allowanceRow
@@ -860,8 +869,14 @@ export default async function StudioOrganization({
               </div>
             </OpForm>
             {/* B1c-3: a manual paid plan (no live subscription) is upgraded here; a subscribed one on its card. */}
+            {upgradeAwaitingIssue && !liveSubscription && (
+              <p className="mt-3" data-plan-upgrade-unissued={upgradeAwaitingIssue.cycleStart}>
+                <StatusPill tone="hold">{od.billing.planUpgradeUnissued}</StatusPill>
+              </p>
+            )}
             {paidPlan &&
               !(sub && sub.status !== 'ended') &&
+              !liveSubscription &&
               planUpgradeBlock('manual', paidPlan.planId, 'billing-plan-allowance')}
           </Panel>
 

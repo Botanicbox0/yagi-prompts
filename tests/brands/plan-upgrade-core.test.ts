@@ -156,11 +156,12 @@ function prng(seed: number) {
 }
 
 describe('planUpgradeEffect — property (seeded)', () => {
-  it('carry ≤ unused, the new cycle gets new cap + carry + its own grants, and no upgrade creates unpaid plan credits', () => {
+  it('carry ≤ unused; new cycle = new cap + carry; plan credits come only with an issued/drafted invoice; a never-paid upgrade exposes at most one cycle', () => {
     const random = prng(20261124);
     const pick = <T,>(list: readonly T[]): T => list[Math.floor(random() * list.length)]!;
     const int = (lo: number, hi: number) => lo + Math.floor(random() * (hi - lo + 1));
     let upgrades = 0;
+    let neverPaid = 0;
     for (let run = 0; run < 400; run += 1) {
       const anchorDay = pick([1, 15, 17, 28, 29, 30, 31]);
       const month = int(1, 12);
@@ -171,17 +172,23 @@ describe('planUpgradeEffect — property (seeded)', () => {
       let cycle = { start: anchor, end: cycleStartAt(anchor, 1) };
       let plan: PaidBrandPlanId = pick(['b2b_29', 'b2b_49']);
       let carryIn = 0;
+      // Fix round 1, stated honestly: plan credits are made usable by an ISSUED (subscribed) or DRAFTED (manual) invoice,
+      // paid or not. Fees are received only for paid ones; the margin is checked over paid cycles, and a never-paid
+      // upgrade invoice is bounded by the normal rules (full until the due date, half after, nothing once suspended).
       let planCreditsMadeUsableKrw = 0;
+      let paidPlanCreditsKrw = 0;
       let feesNetKrw = 0;
       let usedTotalKrw = 0;
       let giftsTotalKrw = 0;
       const discount = pick([0, 0, 5, 10, 20]);
-      const pay = (p: PaidBrandPlanId) => {
+      const invoice = (p: PaidBrandPlanId, paid = true) => {
+        planCreditsMadeUsableKrw += CAPS[p];
+        if (!paid) return;
         const price = BRAND_PLAN_LIST_KRW[p];
         feesNetKrw += price - cardFeeKrw(price);
-        planCreditsMadeUsableKrw += CAPS[p];
+        paidPlanCreditsKrw += CAPS[p];
       };
-      pay(plan);
+      invoice(plan);
       for (let step = 0; step < int(2, 7); step += 1) {
         const gifts = random() < 0.3 ? int(1, 5) * 10_000 : 0;
         giftsTotalKrw += gifts;
@@ -231,25 +238,41 @@ describe('planUpgradeEffect — property (seeded)', () => {
           });
           usedTotalKrw += usedBefore;
           plan = to;
-          pay(plan);
+          // The new cycle's credits: the new plan's full cap + the carry (+ whatever is granted in it, next step).
+          expect(CAPS[plan] + effect.carryKrw).toBe(effect.newPlanCapKrw + effect.carryKrw);
+          if (random() < 0.2) {
+            // The upgrade invoice is never paid. Until its due date the full new cap + carry is usable; after it, the plan
+            // part is halved (grants and the carry never are); after grace the subscription is suspended and nothing more
+            // is usable. The plan credits used without payment are at most one cycle's plan cap.
+            invoice(plan, false);
+            neverPaid += 1;
+            const usedBeforeDue = int(0, CAPS[plan] + effect.carryKrw);
+            const halvedCap = Math.floor((CAPS[plan] * 50) / 100 / 10) * 10 + effect.carryKrw;
+            const usedInCycle = Math.max(usedBeforeDue, Math.min(halvedCap, usedBeforeDue + int(0, CAPS[plan])));
+            const planCreditsUsedUnpaid = Math.max(0, usedInCycle - effect.carryKrw);
+            expect(planCreditsUsedUnpaid).toBeLessThanOrEqual(CAPS[plan]);
+            usedTotalKrw += usedInCycle;
+            break;
+          }
+          invoice(plan);
           carryIn = effect.carryKrw;
           cycleAnchor = day;
           cycle = effect.newCycle;
-          // The new cycle's credits: the new plan's full cap + the carry (+ whatever is granted in it, next step).
-          expect(CAPS[plan] + carryIn).toBe(effect.newPlanCapKrw + effect.carryKrw);
         } else {
           usedTotalKrw += int(0, cap);
           carryIn = 0; // unused credits never roll over at a normal cycle end
           cycle = cycleContaining(cycleAnchor, cycle.end)!;
-          pay(plan);
+          invoice(plan);
         }
       }
-      // Margin: plan credits are only ever made usable by a paid invoice (a carried credit was already granted by one),
-      // so everything used beyond the gifts is covered, and at the costliest model it leaves the margin floor.
+      // Upgrades never make more plan credits usable than the plan caps of cycles with an issued/drafted invoice (a carried
+      // credit was already made usable by the old cycle's invoice), so everything used beyond the gifts is covered by them.
       expect(usedTotalKrw).toBeLessThanOrEqual(planCreditsMadeUsableKrw + giftsTotalKrw);
-      const worstCost = (planCreditsMadeUsableKrw / 10) * worstCostKrwPerCredit();
+      // Over the paid cycles, the costliest use of their plan credits leaves the margin floor.
+      const worstCost = (paidPlanCreditsKrw / 10) * worstCostKrwPerCredit();
       expect(worstCost).toBeLessThanOrEqual(feesNetKrw * (1 - BRAND_MARGIN_FLOOR));
     }
-    expect(upgrades).toBeGreaterThan(200);
+    expect(upgrades).toBeGreaterThan(150);
+    expect(neverPaid).toBeGreaterThan(20);
   });
 });

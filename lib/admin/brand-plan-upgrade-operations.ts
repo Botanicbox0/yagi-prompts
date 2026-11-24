@@ -30,11 +30,17 @@ function truthy(form: FormData, name: string): boolean {
   return form.getAll(name).some((value) => ['1', 'true', 'on'].includes(typeof value === 'string' ? value.trim().toLowerCase() : ''));
 }
 
+/**
+ * Fix round 1: every refusal of the two upgrade operations carries the `upgrade:` prefix, so the upgrade lines
+ * (lib/admin/plan-upgrade-detail.ts) apply to them only and shared codes of other operations keep their own lines.
+ */
+const UPGRADE = 'upgrade:';
+
 function failure(result: Extract<PlanUpgradeOutcome, { ok: false }>): AdminOutcome {
   if (result.code === 'disabled') return fail('disabled', 'BRAND_BILLING_AUTO_ISSUE');
   if (result.code === 'unavailable') return fail('unknown', 'billing cycle tables not migrated');
-  if (result.code === 'invalid' && result.field) return fail('invalid', result.detail ? `${result.field}:${result.detail}` : result.field);
-  if (result.detail) return fail(brandFailure(result.code).code, `${result.code}:${result.detail}`);
+  if (result.code === 'invalid' && result.field) return fail('invalid', `${UPGRADE}${result.detail ? `${result.field}:${result.detail}` : result.field}`);
+  if (result.detail) return fail(brandFailure(result.code).code, `${UPGRADE}${result.code}:${result.detail}`);
   return brandFailure(result.code);
 }
 
@@ -59,9 +65,9 @@ function upgradeOperation(mode: 'manual' | 'subscription'): AdminOperation<Upgra
       if (!(await isDbAdmin(ctx.sql, ctx.viewer))) return brandFailure('forbidden');
       if (mode === 'subscription' && !brandBillingAutoIssueOpen()) return fail('disabled', 'BRAND_BILLING_AUTO_ISSUE');
       if (input.confirm) {
-        if (input.previewDigest === undefined || input.previewPlanId === undefined) return fail('invalid', 'preview_required');
-        if (input.previewPlanId !== input.planId) return fail('invalid', 'preview_mismatch');
-        if (!input.confirmCheck) return fail('invalid', 'upgrade_confirm_check');
+        if (input.previewDigest === undefined || input.previewPlanId === undefined) return fail('invalid', `${UPGRADE}preview_required`);
+        if (input.previewPlanId !== input.planId) return fail('invalid', `${UPGRADE}preview_mismatch`);
+        if (!input.confirmCheck) return fail('invalid', `${UPGRADE}upgrade_confirm_check`);
       }
       const run = mode === 'subscription' ? upgradeSubscriptionPlan : upgradeManualPlan;
       const result = await run({ sql: ctx.sql }, ctx.viewer, {
@@ -97,7 +103,11 @@ function upgradeOperation(mode: 'manual' | 'subscription'): AdminOperation<Upgra
           }),
         });
       }
-      return ok('saved', { detail: result.invoiceId, to: organizationBillingPath(input.organizationId) });
+      // Fix round 1: a manual upgrade's new invoice is a draft the admin still has to issue; the page says so.
+      return ok('saved', {
+        detail: mode === 'manual' ? `upgrade_manual_draft:${result.invoiceId}` : result.invoiceId,
+        to: organizationBillingPath(input.organizationId),
+      });
     },
   };
 }

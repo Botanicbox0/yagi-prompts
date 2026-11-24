@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { Viewer } from '@/lib/auth/identity';
 import { planGraceDaysFromEnv, studioEnv } from '@/lib/brand-studio/env';
-import { loadAllowance, usedKrwIn } from '@/lib/brand-studio/usage';
+import { grantEffectiveStartSql, jobUsageKrwSql, loadAllowance } from '@/lib/brand-studio/usage';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import { brandBillingAutoIssueOpen } from '@/lib/flags';
 import { isSandboxedClientOrganization } from '../features';
@@ -226,7 +226,14 @@ async function runPlanUpgrade(deps: Deps, viewer: Viewer, mode: PlanUpgradeMode,
       if (allowance.source === 'plan' && (allowance.cycle?.start !== paidNow.cycle_start || allowance.cycle?.end !== paidNow.cycle_end)) {
         return deny('conflict', 'cycle_mismatch');
       }
-      const oldUsedKrw = await usedKrwIn(sql, v.organizationId, { start: kstDayStartUtc(paidNow.cycle_start), end: kstDayStartUtc(todayKst) });
+      // Fix round 1: the carry covers the CUT window only — the old plan cap plus the grants whose effective start day is
+      // in [cycle start, today), with the same expression loadAllowance uses, minus the usage in it. A grant starting on or
+      // after today belongs to the new cycle by the one-window rule and is never also carried. The overdue-halved plan cap
+      // cannot occur here (the current cycle is paid, the subscription active): asserted, not handled.
+      if (allowance.planCapHalvedUnpaid) throw new BrandBillingDenied('conflict', 'unexpected_overdue_cap');
+      const kept = await cutWindowTotals(sql, v.organizationId, paidNow.cycle_start, todayKst);
+      const oldCapKrw = allowance.source === 'plan' ? allowance.baseCapKrw + kept.grantsKrw : allowance.capKrw;
+      const oldUsedKrw = kept.usedKrw;
       const discountPercent = await discountInForce(sql, v.organizationId);
       const caps = Object.fromEntries(PAID_BRAND_PLAN_IDS.map((id) => [id, null])) as Record<PaidBrandPlanId, number | null>;
       for (const d of await loadPlanAllowanceDefaults(sql)) caps[d.planId] = d.monthlyCapKrw;
@@ -239,7 +246,7 @@ async function runPlanUpgrade(deps: Deps, viewer: Viewer, mode: PlanUpgradeMode,
         planActive: true,
         sandboxed: false,
         allowanceSource: allowance.source,
-        oldCapKrw: allowance.capKrw,
+        oldCapKrw,
         oldUsedKrw,
         planCapsKrw: caps,
         listPricesKrw: BRAND_PLAN_LIST_KRW,
@@ -269,7 +276,7 @@ async function runPlanUpgrade(deps: Deps, viewer: Viewer, mode: PlanUpgradeMode,
         carryValidUntil: effect.carryValidUntil,
         newPlanCapKrw: effect.newPlanCapKrw,
         newPlanCapUnpaidKrw: mode === 'subscription' ? floor10((effect.newPlanCapKrw * 50) / 100) : null,
-        oldCapKrw: allowance.capKrw,
+        oldCapKrw,
         oldUsedKrw,
         allowanceSource: allowance.source,
         invoice: effect.invoice,
@@ -494,6 +501,39 @@ export async function listPlanUpgradeCarries(sql: SqlRunner, organizationId: str
   }));
 }
 
+/**
+ * Fix round 1 (admin page): a non-ended subscription exists, whatever the flag. With the flag off the page cannot load
+ * the subscription card, and the manual upgrade form must still stay hidden for such an organization.
+ */
+export async function hasLiveSubscription(sql: SqlRunner, organizationId: string): Promise<boolean> {
+  if (!(await loadSubscriptionSchemaReady(sql))) return false;
+  const row = (await sql.query("select 1 from brand_subscriptions where organization_id = $1 and status <> 'ended' limit 1", [organizationId])).rows[0];
+  return Boolean(row);
+}
+
+/**
+ * Fix round 1 (admin page, manual organizations): the plan was upgraded on its current start day and no invoice of that
+ * cycle has been issued yet — the new plan's credits are open while its invoice is still a draft. Returns the cycle start.
+ */
+export async function upgradedCycleAwaitingIssue(sql: SqlRunner, organizationId: string): Promise<{ cycleStart: string } | null> {
+  if (!(await hasColumn(sql, 'brand_invoices', 'cycle_start')) || !(await hasColumn(sql, 'brand_invoices', 'kind'))) return null;
+  const row = (
+    await sql.query<{ started_on: string }>(
+      `select a.started_on::text as started_on
+         from brand_plan_assignments a
+        where a.organization_id = $1
+          and exists (select 1 from brand_invoice_events e
+                       where e.organization_id = a.organization_id and e.action = 'edited'
+                         and e.snapshot->>'reason' = $2 and e.snapshot->>'upgradedOn' = a.started_on::text)
+          and not exists (select 1 from brand_invoices i
+                           where i.organization_id = a.organization_id and i.kind = 'subscription'
+                             and i.status in ('issued', 'paid') and i.cycle_start = a.started_on)`,
+      [organizationId, PLAN_UPGRADE_REASON],
+    )
+  ).rows[0];
+  return row ? { cycleStart: String(row.started_on) } : null;
+}
+
 /** The new cycle's invoice is exactly what the preview said: its cycle, the new plan, the amounts, and (issued) the due day. */
 async function expectNewCycleInvoice(sql: SqlRunner, invoiceId: string, effect: PlanUpgradeEffect, status: 'draft' | 'issued'): Promise<void> {
   const row = (
@@ -513,6 +553,25 @@ async function expectNewCycleInvoice(sql: SqlRunner, invoiceId: string, effect: 
     Number(row.supply_krw) === effect.invoice.supplyKrw &&
     (status === 'draft' || row.due_on === effect.invoice.dueOn);
   if (!matches) throw new BrandBillingDenied('conflict', 'upgrade_invoice_mismatch');
+}
+
+/**
+ * Fix round 1: the cut window `[cycle start, today)` of the old cycle in one statement — the usage in it (failed and
+ * canceled jobs excluded, as everywhere) and the non-revoked grants whose effective start day falls in it
+ * (`grantEffectiveStartSql`, the expression `loadAllowance` attaches grants by).
+ */
+async function cutWindowTotals(sql: SqlRunner, organizationId: string, cycleStart: string, todayKst: string): Promise<{ usedKrw: number; grantsKrw: number }> {
+  const eff = grantEffectiveStartSql(true);
+  const row = (
+    await sql.query<{ used: string | number; grants: string | number }>(
+      `select (select coalesce(sum(${jobUsageKrwSql()}), 0)::bigint from brand_studio_jobs
+                where organization_id = $1 and status not in ('failed','canceled') and created_at >= $2 and created_at < $3) as used,
+              (select coalesce(sum(amount_krw), 0)::bigint from brand_allowance_grants
+                where organization_id = $1 and revoked_at is null and ${eff} >= $4::date and ${eff} < $5::date) as grants`,
+      [organizationId, kstDayStartUtc(cycleStart).toISOString(), kstDayStartUtc(todayKst).toISOString(), cycleStart, todayKst],
+    )
+  ).rows[0];
+  return { usedKrw: Number(row?.used ?? 0), grantsKrw: Math.max(0, Number(row?.grants ?? 0)) };
 }
 
 /** The discount a new draft would apply today (the same rule as the draft path). */

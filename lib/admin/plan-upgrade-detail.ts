@@ -92,7 +92,7 @@ const LABELS: Record<'ko' | 'en', Record<string, string>> = {
     current_cycle_not_invoiced: '이번 주기 청구서가 없거나 아직 발행 전입니다. 이번 주기를 먼저 청구하고 입금을 받으세요',
     current_cycle_waived: '이번 주기는 면제된 주기라 결제된 것으로 보지 않습니다. 결제된 주기에서만 올릴 수 있습니다',
     current_invoice_not_cycle: '오늘을 덮는 청구서가 달력 월 청구서라 주기를 자를 수 없습니다. 주기 청구서로 바뀐 뒤에 올리세요',
-    upgrade_on_cycle_start: '주기 첫날에는 올릴 수 없습니다(이전 주기가 0일이 됩니다). 같은 날 바꾸려면 이번 주기 청구서를 취소하고 새 플랜으로 다시 청구하세요',
+    upgrade_on_cycle_start: '주기 첫날에는 올릴 수 없습니다. 내일부터 올릴 수 있습니다.',
     later_cycle_already_issued: '다음 주기 청구서가 이미 발행되었습니다. 그 청구서를 먼저 취소하세요',
     subscription_upgrade_only: '구독 중인 조직은 구독 카드의 "플랜 올림"으로 올립니다',
     no_subscription: '구독이 없습니다. 플랜 패널의 "플랜 올림"을 쓰세요',
@@ -108,7 +108,6 @@ const LABELS: Record<'ko' | 'en', Record<string, string>> = {
     overlapping_invoices: '오늘을 덮는 청구서가 둘 이상입니다. 청구서를 먼저 정리하세요',
     outside_current_cycle: '오늘이 이번 주기 청구서 기간 밖입니다. 청구서를 확인하세요',
     upgrade_confirm_check: '플랜을 올리면 새 플랜 전액이 청구됩니다. 확인 체크를 선택하세요',
-    upgrade_use_upgrade_operation: '더 높은 플랜은 "플랜 올림"으로 올립니다(오늘 새 주기가 시작됩니다)',
     upgrade_issue_failed: FAILED_KO,
     upgrade_invoice_mismatch: FAILED_KO,
     upgrade_cut_failed: FAILED_KO,
@@ -123,8 +122,7 @@ const LABELS: Record<'ko' | 'en', Record<string, string>> = {
     current_cycle_not_invoiced: 'This cycle has no invoice, or it is not issued yet; bill this cycle and record its payment first',
     current_cycle_waived: 'This cycle was waived, which does not count as paid; upgrades need a paid cycle',
     current_invoice_not_cycle: 'The invoice covering today is a calendar-month invoice and cannot be cut; upgrade once billing is on cycles',
-    upgrade_on_cycle_start:
-      'No upgrade on the first day of a cycle (the old cycle would have no days); for a same-day change void this cycle\'s invoice and bill the new plan',
+    upgrade_on_cycle_start: 'No upgrade on the first day of a cycle; it can be upgraded from tomorrow.',
     later_cycle_already_issued: 'The next cycle is already invoiced; void that invoice first',
     subscription_upgrade_only: 'A subscribed organization is upgraded from the subscription card',
     no_subscription: 'There is no subscription; use the upgrade on the plan panel',
@@ -140,7 +138,6 @@ const LABELS: Record<'ko' | 'en', Record<string, string>> = {
     overlapping_invoices: 'More than one invoice covers today; settle the invoices first',
     outside_current_cycle: "Today is outside this cycle's invoice; check the invoice",
     upgrade_confirm_check: "An upgrade bills the new plan's full price; tick the confirmation",
-    upgrade_use_upgrade_operation: 'A higher plan is an upgrade (a new cycle starts today); use the upgrade',
     upgrade_issue_failed: FAILED_EN,
     upgrade_invoice_mismatch: FAILED_EN,
     upgrade_cut_failed: FAILED_EN,
@@ -151,8 +148,12 @@ const LABELS: Record<'ko' | 'en', Record<string, string>> = {
   },
 };
 
-/** The operator line for an upgrade refusal (`<code>:<reason>` or `<field>:<reason>`), or undefined for other details. */
+/**
+ * The operator line for a refusal of the two upgrade operations (`upgrade:<code>:<reason>`; fix round 1: only details with
+ * that prefix, so shared codes of other operations keep their own lines), or undefined for any other detail.
+ */
 export function formatPlanUpgradeOutcomeDetail(detail: string, locale: 'ko' | 'en'): string | undefined {
+  if (!detail.startsWith('upgrade:')) return undefined;
   const labels = LABELS[locale];
   for (const [token, message] of Object.entries(labels)) {
     if (detail === token || detail.endsWith(`:${token}`) || detail.includes(`:${token}:`)) return `${message} (${detail})`;

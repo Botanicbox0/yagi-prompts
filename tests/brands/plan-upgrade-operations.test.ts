@@ -100,14 +100,14 @@ describe('brandBilling.planUpgrade (manual plan organizations, no flag)', () => 
     expect(await h.run('brandBilling.planUpgrade', { organizationId: orgId, planId: 'b2b_49', confirm: '1', _confirm: '1' })).toMatchObject({
       ok: false,
       code: 'invalid',
-      detail: 'preview_required',
+      detail: 'upgrade:preview_required',
     });
     expect(
       await h.run('brandBilling.planUpgrade', { organizationId: orgId, planId: 'b2b_69', confirm: '1', _confirm: '1', previewDigest: digest, previewPlanId: 'b2b_49' }),
-    ).toMatchObject({ ok: false, code: 'invalid', detail: 'preview_mismatch' });
+    ).toMatchObject({ ok: false, code: 'invalid', detail: 'upgrade:preview_mismatch' });
     expect(
       await h.run('brandBilling.planUpgrade', { organizationId: orgId, planId: 'b2b_49', confirm: '1', previewDigest: digest, previewPlanId: 'b2b_49' }),
-    ).toMatchObject({ ok: false, code: 'invalid', detail: 'upgrade_confirm_check' });
+    ).toMatchObject({ ok: false, code: 'invalid', detail: 'upgrade:upgrade_confirm_check' });
     expect(await loadPlanAssignment(sql, orgId)).toMatchObject({ planId: 'b2b_29' });
     const done = await h.run('brandBilling.planUpgrade', {
       organizationId: orgId,
@@ -127,7 +127,7 @@ describe('brandBilling.planUpgrade (manual plan organizations, no flag)', () => 
       previewDigest: digest,
       previewPlanId: 'b2b_49',
     });
-    expect(again).toMatchObject({ ok: false, detail: 'conflict:already_upgraded_today' });
+    expect(again).toMatchObject({ ok: false, detail: 'upgrade:conflict:already_upgraded_today' });
     expect(formatBillingOutcomeDetail(again.ok ? undefined : again.detail, 'ko')).toContain('오늘 이미 플랜을 올렸습니다');
   });
 
@@ -136,7 +136,7 @@ describe('brandBilling.planUpgrade (manual plan organizations, no flag)', () => 
     const subscribed = await subscribedPaidOrg('Upgrade Op Subscribed Manual Fixture');
     expect(await h.run('brandBilling.planUpgrade', { organizationId: subscribed, planId: 'b2b_49' })).toMatchObject({
       ok: false,
-      detail: 'conflict:subscription_upgrade_only',
+      detail: 'upgrade:conflict:subscription_upgrade_only',
     });
     vi.stubEnv('BRAND_BILLING_AUTO_ISSUE', 'off');
     const orgId = await manualPaidOrg('Upgrade Op Flag Off Fixture');
@@ -197,15 +197,28 @@ describe('brandSubscription.upgrade (subscribed organizations, flag on)', () => 
       'overlapping_invoices',
       'outside_current_cycle',
       'upgrade_confirm_check',
-      'upgrade_use_upgrade_operation',
       'upgrade_issue_failed',
     ]) {
-      const ko = formatBillingOutcomeDetail(`conflict:${token}`, 'ko')!;
-      const en = formatBillingOutcomeDetail(`conflict:${token}`, 'en')!;
-      expect(ko, token).not.toBe(`conflict:${token}`);
-      expect(en, token).not.toBe(`conflict:${token}`);
+      const ko = formatBillingOutcomeDetail(`upgrade:conflict:${token}`, 'ko')!;
+      const en = formatBillingOutcomeDetail(`upgrade:conflict:${token}`, 'en')!;
+      expect(ko, token).not.toBe(`upgrade:conflict:${token}`);
+      expect(en, token).not.toBe(`upgrade:conflict:${token}`);
       expect(ko, token).toMatch(/[가-힣]/);
       expect(en, token).not.toMatch(/[가-힣]/);
     }
+    // Fix round 1: the first day of a cycle says when an upgrade becomes possible, not to void a paid invoice.
+    expect(formatBillingOutcomeDetail('upgrade:conflict:upgrade_on_cycle_start', 'ko')).toContain('주기 첫날에는 올릴 수 없습니다. 내일부터 올릴 수 있습니다.');
+    expect(formatBillingOutcomeDetail('upgrade:conflict:upgrade_on_cycle_start', 'ko')).not.toContain('취소');
+  });
+
+  it('fix round 1: upgrade wording only for the two upgrade operations; shared codes of other operations keep their own lines', () => {
+    // The downgrade operation's own refusals and the plan forms' pointer to the upgrade.
+    expect(formatBillingOutcomeDetail('planId:same_plan', 'ko')).not.toContain('지금과 같은 플랜입니다');
+    expect(formatBillingOutcomeDetail('planId:project_only_not_subscribable', 'ko')).toContain('프로젝트 전용 플랜은 정기구독');
+    expect(formatBillingOutcomeDetail('planId:upgrade_use_upgrade_operation', 'ko')).toContain('플랜 올림');
+    expect(formatBillingOutcomeDetail('conflict:plan_upgrade_required', 'ko')).toContain('플랜 올림');
+    expect(formatBillingOutcomeDetail('conflict:plan_upgrade_required', 'en')).not.toMatch(/[가-힣]/);
+    // The same tokens from an upgrade operation get the upgrade lines.
+    expect(formatBillingOutcomeDetail('upgrade:planId:same_plan', 'ko')).toContain('지금과 같은 플랜입니다');
   });
 });

@@ -93,3 +93,31 @@ export async function startDayMoveBlocked(sql: SqlRunner, organizationId: string
 }
 
 export const CYCLE_ALREADY_INVOICED = 'cycle_already_invoiced' as const;
+
+/** B1c-3 fix round 1: refusal marker when a plan form raises the plan id mid-cycle (use "플랜 올림"). */
+export const PLAN_UPGRADE_REQUIRED = 'plan_upgrade_required' as const;
+
+const PLAN_RANK: Readonly<Record<string, number>> = { project_only: 0, b2b_29: 1, b2b_49: 2, b2b_69: 3 };
+
+/**
+ * B1c-3 fix round 1: an admin plan form may not raise the plan id while a non-void subscription invoice covers today —
+ * that would open the higher plan's credits mid-cycle with no charge. The way to do it is the upgrade operation (new
+ * cycle, full price, carry). A lower or equal plan, and an organization with no invoice covering today, are not
+ * affected. Called only when an assignment already exists (the caller passes its plan id).
+ */
+export async function higherPlanNeedsUpgrade(
+  sql: SqlRunner,
+  organizationId: string,
+  currentPlanId: string,
+  newPlanId: string,
+  todayKst: string,
+): Promise<boolean> {
+  if ((PLAN_RANK[newPlanId] ?? 0) <= (PLAN_RANK[currentPlanId] ?? 0)) return false;
+  return subscriptionInvoiceOverlaps(sql, organizationId, { start: todayKst, end: nextDay(todayKst) });
+}
+
+function nextDay(day: string): string {
+  const t = new Date(`${day}T00:00:00Z`);
+  t.setUTCDate(t.getUTCDate() + 1);
+  return t.toISOString().slice(0, 10);
+}

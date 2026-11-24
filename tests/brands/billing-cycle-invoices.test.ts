@@ -147,8 +147,10 @@ describe('admin drafts by cycle', () => {
     const moveTo = (startedOn: string, planId = 'b2b_29') =>
       setPlanAssignment({ sql: f.sql, now: NOW }, admin(), { organizationId: f.orgId, planId, startedOn, expectedRevision: 1 });
     expect(await moveTo('2026-11-25')).toEqual({ ok: false, code: 'conflict', field: 'cycle_already_invoiced' });
-    // Other edits keep working: same start day, another plan.
-    expect(await moveTo('2026-11-17', 'b2b_49')).toMatchObject({ ok: true, revision: 2 });
+    // B1c-3 fix round 1 (changed on purpose): a HIGHER plan on the same start day while an invoice covers today is the
+    // plan upgrade now ("플랜 올림"), not this form. Other edits keep working: same start day, same (or a lower) plan.
+    expect(await moveTo('2026-11-17', 'b2b_49')).toEqual({ ok: false, code: 'conflict', field: 'plan_upgrade_required' });
+    expect(await moveTo('2026-11-17', 'b2b_29')).toMatchObject({ ok: true, revision: 2 });
     // Even if the start day moved by hand, the overlapping cycle cannot be drafted.
     await f.sql.query("update brand_plan_assignments set started_on = '2026-11-25' where organization_id = $1", [f.orgId]);
     const at26 = at('2026-11-26T01:00:00Z');

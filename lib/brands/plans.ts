@@ -6,7 +6,7 @@ import { isMissingTable } from './entitlements';
 import { brandBillingAutoIssueOpen } from '@/lib/flags';
 import { loadSubscriptionSchemaReady } from './billing/schema-guard';
 import { syncPlanDefaultSnapshot } from './billing/snapshot';
-import { CYCLE_ALREADY_INVOICED, startDayMoveBlocked } from './billing/cycle-invoices';
+import { CYCLE_ALREADY_INVOICED, higherPlanNeedsUpgrade, PLAN_UPGRADE_REQUIRED, startDayMoveBlocked } from './billing/cycle-invoices';
 import { kstDayOf } from './billing/math';
 
 /**
@@ -145,6 +145,8 @@ export async function upsertPlanAssignmentInTx(
     organizationLock?: 'update' | 'no key update';
     /** Item 5: refuse plan id / billing mode / dates changes while a non-ended subscription owns the row. */
     refuseWhenSubscriptionManaged?: boolean;
+    /** B1c-3 fix round 1 (the admin plan form): refuse a higher plan id while a subscription invoice covers today. */
+    refuseMidCycleUpgrade?: boolean;
     now?: Date;
     graceDays?: number;
   },
@@ -182,6 +184,16 @@ export async function upsertPlanAssignmentInTx(
     (await startDayMoveBlocked(sql, params.organizationId, params.startedOn, kstDayOf(params.now ?? new Date())))
   ) {
     return { ok: false, code: 'conflict', field: CYCLE_ALREADY_INVOICED };
+  }
+  // B1c-3 fix round 1: a higher plan mid-cycle is the upgrade operation, not the plan form. Only with an existing assignment
+  // (the new-assignment path runs exactly the statements it ran before).
+  if (current && params.refuseMidCycleUpgrade && params.actor.kind === 'admin') {
+    const stored = (
+      await sql.query<{ plan_id: string }>('select plan_id from brand_plan_assignments where organization_id = $1', [params.organizationId])
+    ).rows[0];
+    if (stored && (await higherPlanNeedsUpgrade(sql, params.organizationId, stored.plan_id, params.planId, kstDayOf(params.now ?? new Date())))) {
+      return { ok: false, code: 'conflict', field: PLAN_UPGRADE_REQUIRED };
+    }
   }
   const next = revision + 1;
   const actorId = params.actor.kind === 'admin' ? params.actor.userId : null;
@@ -323,6 +335,7 @@ export async function setPlanAssignment(
       actor: { kind: 'admin', userId: viewer.userId! },
       recordActorKind: false,
       refuseWhenSubscriptionManaged: true,
+      refuseMidCycleUpgrade: true,
       now: deps.now?.(),
     });
   });

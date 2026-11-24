@@ -19,7 +19,7 @@ import {
 import { brandWorkspaceApprovalOpen } from '@/lib/flags';
 import { hasTable, loadAllowanceSchemaState } from './schema-guard';
 import { syncPlanDefaultSnapshot } from './snapshot';
-import { CYCLE_ALREADY_INVOICED, startDayMoveBlocked } from './cycle-invoices';
+import { CYCLE_ALREADY_INVOICED, higherPlanNeedsUpgrade, PLAN_UPGRADE_REQUIRED, startDayMoveBlocked } from './cycle-invoices';
 import { loadWorkspaceApprovalSchemaReady } from './workspace-approval-schema';
 import type {
   BrandAllowanceGrant,
@@ -291,6 +291,15 @@ export async function setPlanAndAllowance(
       // B1c: moving the start day moves the billing cycle; refused while a subscription invoice covers today or later.
       if (current && (await startDayMoveBlocked(sql, v.organizationId, v.startedOn, kstDayOf(deps.now?.() ?? new Date())))) {
         return { ok: false as const, code: 'conflict' as const, detail: CYCLE_ALREADY_INVOICED };
+      }
+      // B1c-3 fix round 1: a higher plan mid-cycle is "플랜 올림", not this form (only with an existing assignment).
+      if (current) {
+        const stored = (
+          await sql.query<{ plan_id: string }>('select plan_id from brand_plan_assignments where organization_id = $1', [v.organizationId])
+        ).rows[0];
+        if (stored && (await higherPlanNeedsUpgrade(sql, v.organizationId, stored.plan_id, v.planId, kstDayOf(deps.now?.() ?? new Date())))) {
+          return { ok: false as const, code: 'conflict' as const, detail: PLAN_UPGRADE_REQUIRED };
+        }
       }
       const next = revision + 1;
 

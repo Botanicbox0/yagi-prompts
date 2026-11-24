@@ -710,7 +710,11 @@ export const adminConsoleEn = {
       planUpgradeCapSubscription: "New plan credits {cap} · {capUnpaid} if still unpaid after the due date ({due})",
       planUpgradeAmount: "Amount {total} (supply {supply} + VAT {vat}, discount {discount}%) · due {due}",
       planUpgradeIssueNow: "Issued today",
-      planUpgradeDraftManual: "A draft is created for the new cycle (issue it from the invoice list)",
+      planUpgradeDraftManual:
+        "The new plan's credits open at once. The new cycle's invoice is created as a draft and must be issued from the invoice list",
+      planUpgradeManualSaved:
+        "Plan upgraded. The new plan's credits are open now and the new cycle's invoice is still a draft. Issue it from the invoice list",
+      planUpgradeUnissued: "The upgraded cycle's invoice has not been issued yet",
       planUpgradeDowngradeCleared: "The scheduled downgrade to {plan} is cleared",
       planUpgradeDraftsVoided: "{count} draft invoice(s) are voided",
       planUpgradeNoRefund: "The rest of the old plan's cycle is not refunded",
@@ -1761,7 +1765,9 @@ export const adminConsoleKo: typeof adminConsoleEn = {
       planUpgradeCapSubscription: "새 플랜 크레딧 {cap} · 납기({due})가 지나도 미납이면 {capUnpaid}",
       planUpgradeAmount: "청구 금액 {total} (공급가 {supply} + 부가세 {vat}, 할인 {discount}%) · 납기 {due}",
       planUpgradeIssueNow: "오늘 바로 발행됩니다",
-      planUpgradeDraftManual: "새 주기 초안이 만들어집니다(발행은 청구서 목록에서)",
+      planUpgradeDraftManual: "새 플랜 크레딧은 바로 열립니다. 새 주기 청구서는 초안으로 만들어지고, 청구서 목록에서 직접 발행해야 합니다",
+      planUpgradeManualSaved: "플랜을 올렸습니다. 새 플랜 크레딧은 바로 열렸고, 새 주기 청구서는 아직 초안입니다. 청구서 목록에서 발행하세요",
+      planUpgradeUnissued: "올린 주기의 청구서가 아직 발행되지 않았습니다",
       planUpgradeDowngradeCleared: "예약된 플랜 내림 {plan} 취소",
       planUpgradeDraftsVoided: "취소되는 초안 청구서 {count}건",
       planUpgradeNoRefund: "이전 플랜의 남은 기간은 환불하지 않습니다",

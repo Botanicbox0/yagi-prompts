@@ -241,6 +241,18 @@ describe('subscribed organization (automatic billing, flag on)', () => {
     await expectNoOverlap(orgId);
   });
 
+  it('fix round 1 (probe): a grant made the morning of the upgrade is not carried; the new cycle counts it once', async () => {
+    const { orgId } = await subscribedOrg('Upgrade Probe Morning Grant Fixture', '2026-11-17');
+    await used(orgId, 100_000, '2026-11-20T03:00:00Z');
+    await sql.query(
+      "insert into brand_allowance_grants (organization_id, amount_krw, valid_month, reason, created_at) values ($1, 30000, '2026-11', 'probe', '2026-11-25T00:10:00Z')",
+      [orgId],
+    );
+    const done = await upgradeConfirmed(upgradeSubscriptionPlan, '2026-11-25T01:00:00Z', orgId, 'b2b_49');
+    expect(done).toMatchObject({ ok: true, applied: true, preview: { carryKrw: 170_000 } });
+    expect(await load(orgId, '2026-11-25T02:00:00Z')).toMatchObject({ baseCapKrw: 460_000, extraKrw: 200_000, capKrw: 660_000 });
+  });
+
   it('usage earlier on the upgrade day counts in the new cycle only (not also taken off the carry)', async () => {
     const { orgId } = await subscribedOrg('Upgrade Same Day Usage Fixture', '2026-11-17');
     await used(orgId, 100_000, '2026-11-20T03:00:00Z');
@@ -437,12 +449,17 @@ describe('subscribed organization (automatic billing, flag on)', () => {
 
   it('non-payment after an upgrade: past_due, suspended by the normal rules; paying restores the new plan only', async () => {
     const { orgId } = await subscribedOrg('Upgrade Unpaid After Fixture', '2026-11-17');
+    await used(orgId, 100_000, '2026-11-20T03:00:00Z');
     expect(await upgradeConfirmed(upgradeSubscriptionPlan, '2026-11-25T01:00:00Z', orgId, 'b2b_49')).toMatchObject({ ok: true, applied: true });
+    // Fix round 1, the "never paid" sequence: the new plan credits are usable in full until the due date (Dec 9), the plan
+    // part is halved after it (the carry is not), and nothing of the plan is usable once suspended.
+    expect(await load(orgId, '2026-12-09T14:59:59Z')).toMatchObject({ baseCapKrw: 460_000, extraKrw: 170_000 });
     await runBrandSubscriptionTick({ sql, now: at('2026-12-10T01:00:00Z') });
     expect(await loadBrandSubscription(sql, orgId)).toMatchObject({ status: 'past_due', planId: 'b2b_49' });
+    expect(await load(orgId, '2026-12-10T02:00:00Z')).toMatchObject({ baseCapKrw: 230_000, extraKrw: 170_000, planCapHalvedUnpaid: true });
     await runBrandSubscriptionTick({ sql, now: at('2026-12-24T01:00:00Z') });
     expect(await loadBrandSubscription(sql, orgId)).toMatchObject({ status: 'suspended', planId: 'b2b_49' });
-    expect(await load(orgId, '2026-12-24T02:00:00Z')).toMatchObject({ source: 'default' });
+    expect(await load(orgId, '2026-12-24T02:00:00Z')).toMatchObject({ source: 'default', baseCapKrw: 0 });
     const unpaid = (await subscriptionInvoices(orgId)).find((r) => r.cycle_start === '2026-11-25')!;
     expect(await markBrandInvoicePaid({ sql, now: at('2026-12-26T01:00:00Z') }, ADMIN_VIEWER, { invoiceId: unpaid.id, paidMethod: 'transfer' })).toMatchObject({ ok: true });
     expect(await loadBrandSubscription(sql, orgId)).toMatchObject({ status: 'active', planId: 'b2b_49' });
@@ -539,6 +556,40 @@ describe('manual plan organization (no flag)', () => {
     expect(await move('2026-11-25', '2026-11-28T01:00:00Z', assignment!.revision)).toMatchObject({ ok: true });
   });
 
+  it('fix round 1 (probe): a grant for next month made before the upgrade is not carried; it continues in the new cycle by itself', async () => {
+    const { orgId } = await manualPlanOrg('Upgrade Probe Next Month Fixture', '2026-11-17');
+    await used(orgId, 100_000, '2026-11-20T03:00:00Z');
+    // Granted on Nov 25 for December: effective start Dec 1, inside the old cycle [Nov 17, Dec 17) but after the cut.
+    await sql.query(
+      "insert into brand_allowance_grants (organization_id, amount_krw, valid_month, reason, created_at) values ($1, 50000, '2026-12', 'probe', '2026-11-25T00:30:00Z')",
+      [orgId],
+    );
+    expect(await load(orgId, '2026-11-25T00:40:00Z')).toMatchObject({ capKrw: 320_000 }); // attached to the old cycle before the upgrade
+    const done = await upgradeConfirmed(upgradeManualPlan, '2026-11-25T01:00:00Z', orgId, 'b2b_49');
+    expect(done).toMatchObject({ ok: true, applied: true, preview: { carryKrw: 170_000, oldCapKrw: 270_000, oldUsedKrw: 100_000 } });
+    expect(await load(orgId, '2026-11-25T02:00:00Z')).toMatchObject({ baseCapKrw: 460_000, extraKrw: 220_000, capKrw: 680_000 });
+  });
+
+  it('fix round 1 (probe): a trial carried into the month that begins inside the cut is not carried again', async () => {
+    const { orgId } = await manualPlanOrg('Upgrade Probe Trial Fixture', '2026-11-17');
+    await used(orgId, 100_000, '2026-11-20T03:00:00Z');
+    // The original trial (before the plan: in no cycle) and its carried row for December, written by the first run of Dec 1.
+    const original = (
+      await sql.query<{ id: string }>(
+        "insert into brand_allowance_grants (organization_id, amount_krw, valid_month, reason, created_at, kind) values ($1, 4000, '2026-11', 'trial', '2026-11-10T01:00:00Z', 'trial') returning id::text as id",
+        [orgId],
+      )
+    ).rows[0]!.id;
+    await sql.query(
+      "insert into brand_allowance_grants (organization_id, amount_krw, valid_month, reason, created_at, kind, carried_from) values ($1, 4000, '2026-12', 'trial carry', '2026-11-30T15:10:00Z', 'trial', $2)",
+      [orgId, original],
+    );
+    // Upgrade on Dec 1 (the carried trial's first day): it belongs to the new cycle only.
+    const done = await upgradeConfirmed(upgradeManualPlan, '2026-12-01T01:00:00Z', orgId, 'b2b_49');
+    expect(done).toMatchObject({ ok: true, applied: true, preview: { carryKrw: 170_000 } });
+    expect(await load(orgId, '2026-12-01T02:00:00Z')).toMatchObject({ baseCapKrw: 460_000, extraKrw: 174_000, capKrw: 634_000 });
+  });
+
   it('override organization: upgraded for billing, no carry grant, the cap stays the override', async () => {
     const { orgId } = await manualPlanOrg('Upgrade Override Fixture', '2026-11-17');
     await sql.query(
@@ -571,58 +622,94 @@ function prng(seed: number) {
   };
 }
 
-describe('property on the real code (seeded): the carry belongs to the new cycle only and ends with it', () => {
-  it('random anchors, upgrade days, usage and other grants', async () => {
-    const random = prng(20261125);
+describe('property on the real code (seeded): every grant is in the carry or counted by itself, never both', () => {
+  it('random anchors, upgrade days, usage, and grants starting anywhere in the old cycle (also on/after the upgrade day) and next month', async () => {
+    const random = prng(20261126);
     const int = (lo: number, hi: number) => lo + Math.floor(random() * (hi - lo + 1));
     const days = (start: string, n: number) => {
       const t = new Date(`${start}T00:00:00Z`);
       t.setUTCDate(t.getUTCDate() + n);
       return t.toISOString().slice(0, 10);
     };
+    const span = (a: string, b: string) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
     const kstMidnight = (day: string, plusMinutes = 0) => new Date(Date.parse(`${day}T00:00:00Z`) - 9 * 3_600_000 + plusMinutes * 60_000).toISOString();
-    for (let i = 0; i < 10; i += 1) {
-      const anchor = `2026-${String(int(1, 10)).padStart(2, '0')}-${String([1, 15, 28, 29, 30, 31][int(0, 5)]).padStart(2, '0')}`;
-      const valid = !Number.isNaN(Date.parse(`${anchor}T00:00:00Z`)) && new Date(`${anchor}T00:00:00Z`).toISOString().slice(0, 10) === anchor;
-      const start = valid ? anchor : `${anchor.slice(0, 8)}28`;
-      const { orgId } = await manualPlanOrg(`Upgrade Property ${i}`, start);
-      const cycleEnd = (await subscriptionInvoices(orgId))[0]!.cycle_end!;
-      const length = Math.round((Date.parse(`${cycleEnd}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86_400_000);
-      const upgradeDay = days(start, int(1, length - 1));
-      const usedKrw = int(0, 30) * 10_000;
-      if (usedKrw > 0) await used(orgId, usedKrw, kstMidnight(start, 60));
-      // Another grant made in the old cycle (attached to it) is part of what is carried.
-      const gift = random() < 0.5 ? int(1, 5) * 10_000 : 0;
-      if (gift > 0) {
+    const nextMonth = (day: string) => {
+      const y = Number(day.slice(0, 4));
+      const m = Number(day.slice(5, 7));
+      return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`;
+    };
+    /** A grant as written, with its effective start day computed independently of the production SQL. */
+    type Grant = { amount: number; effective: string };
+    const grant = async (orgId: string, amount: number, kind: 'month' | 'range', day: string, createdDay: string): Promise<Grant> => {
+      if (kind === 'range') {
         await sql.query(
-          "insert into brand_allowance_grants (organization_id, amount_krw, valid_month, reason, created_at) values ($1, $2, $3, 'gift', $4)",
-          [orgId, gift, start.slice(0, 7), kstMidnight(start, 120)],
+          "insert into brand_allowance_grants (organization_id, amount_krw, valid_month, reason, created_at, valid_from, valid_until) values ($1, $2, $3, 'range', $4, $5::date, $6::date)",
+          [orgId, amount, createdDay.slice(0, 7), kstMidnight(createdDay, 60), day, days(day, int(0, 40))],
         );
+        return { amount, effective: day };
       }
-      const oldCap = 270_000 + gift;
+      // A month grant counts from the later of its creation day and the 1st of its month.
+      await sql.query(
+        "insert into brand_allowance_grants (organization_id, amount_krw, valid_month, reason, created_at) values ($1, $2, $3, 'month', $4)",
+        [orgId, amount, day.slice(0, 7), kstMidnight(createdDay, 60)],
+      );
+      const first = `${day.slice(0, 7)}-01`;
+      return { amount, effective: createdDay > first ? createdDay : first };
+    };
+    let lateInsideOldCycle = 0;
+    for (let i = 0; i < 12; i += 1) {
+      const month = `2026-${String(int(1, 10)).padStart(2, '0')}`;
+      const anchorDay = [1, 15, 17, 28, 29, 30, 31][int(0, 6)]!;
+      const dim = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).getUTCDate();
+      const start = `${month}-${String(Math.min(anchorDay, dim)).padStart(2, '0')}`;
+      const { orgId } = await manualPlanOrg(`Upgrade Property ${i}`, start);
+      const oldEnd = (await subscriptionInvoices(orgId))[0]!.cycle_end!;
+      const upgradeDay = days(start, int(1, span(start, oldEnd) - 1));
+      // Usage and grants that started before the upgrade day (part of the carry).
+      const usedKrw = int(0, 30) * 10_000;
+      if (usedKrw > 0) await used(orgId, usedKrw, kstMidnight(days(start, int(0, span(start, upgradeDay) - 1)), 90));
+      for (let g = int(0, 2); g > 0; g -= 1) {
+        const day = days(start, int(0, span(start, upgradeDay) - 1));
+        await grant(orgId, int(1, 6) * 10_000, random() < 0.5 ? 'range' : 'month', day, random() < 0.5 ? day : start);
+      }
+      // Read what the old cycle holds before any grant that starts on or after the upgrade day exists.
+      const before = await load(orgId, kstMidnight(upgradeDay, 30));
+      // Grants that start on or after the upgrade day: today, inside the rest of the old cycle, next month, later.
+      const late: Grant[] = [];
+      for (let g = int(1, 4); g > 0; g -= 1) {
+        const pick = int(0, 2);
+        const amount = int(1, 6) * 10_000;
+        if (pick === 0) late.push(await grant(orgId, amount, 'month', upgradeDay, upgradeDay));
+        else if (pick === 1) late.push(await grant(orgId, amount, 'month', `${nextMonth(upgradeDay)}-01`, upgradeDay));
+        else late.push(await grant(orgId, amount, 'range', days(upgradeDay, int(0, 45)), upgradeDay));
+      }
+      lateInsideOldCycle += late.filter((g) => g.effective < oldEnd).length;
+
       const done = await upgradeConfirmed(upgradeManualPlan, kstMidnight(upgradeDay, 600), orgId, random() < 0.5 ? 'b2b_49' : 'b2b_69');
       if (!done.ok || !done.applied) throw new Error(`upgrade refused: ${JSON.stringify(done)}`);
-      const { carryKrw, newCycle, newPlanCapKrw } = done.preview;
-      expect(carryKrw).toBe(Math.max(0, Math.floor((oldCap - usedKrw) / 10) * 10));
-      // Another grant made inside the new cycle belongs to it too (and to no other cycle).
-      let newGift = 0;
-      if (random() < 0.5) {
-        newGift = int(1, 5) * 10_000;
-        const day = days(newCycle.start, int(0, 20));
-        await sql.query(
-          "insert into brand_allowance_grants (organization_id, amount_krw, valid_month, reason, created_at) values ($1, $2, $3, 'gift', $4)",
-          [orgId, newGift, day.slice(0, 7), kstMidnight(day, 180)],
-        );
+      const { carryKrw, newCycle, newPlanCapKrw, oldCapKrw, oldUsedKrw } = done.preview;
+      const label = `${start} ↑${upgradeDay} late=${JSON.stringify(late)}`;
+      // The carry is exactly what loadAllowance showed for the old cycle before the late grants, minus its usage.
+      expect([oldCapKrw, oldUsedKrw], label).toEqual([before.capKrw, before.usedKrw]);
+      expect(carryKrw, label).toBe(Math.max(0, Math.floor((before.capKrw - before.usedKrw) / 10) * 10));
+      // New cycle: new plan cap + carry + the late grants that start in it, each once. Following cycle: its own grants only.
+      const following = { start: newCycle.end, end: days(newCycle.end, span(newCycle.start, newCycle.end) + 3) };
+      const inNew = late.filter((g) => g.effective >= newCycle.start && g.effective < newCycle.end).reduce((s, g) => s + g.amount, 0);
+      const followingCycle = await load(orgId, kstMidnight(following.start, 30));
+      const inFollowing = late
+        .filter((g) => g.effective >= following.start && g.effective < (followingCycle.cycle?.end ?? following.end))
+        .reduce((s, g) => s + g.amount, 0);
+      for (const day of [newCycle.start, days(newCycle.start, int(1, 26)), days(newCycle.end, -1)]) {
+        expect(await load(orgId, kstMidnight(day, 700)), `${label} on ${day}`).toMatchObject({
+          baseCapKrw: newPlanCapKrw,
+          extraKrw: carryKrw + inNew,
+          capKrw: newPlanCapKrw + carryKrw + inNew,
+        });
       }
-      // Every day of the new cycle: new plan cap + carry + its own grants; from the next cycle on: new plan cap only.
-      const probe = [newCycle.start, days(newCycle.start, int(1, 27)), days(newCycle.end, -1)];
-      for (const day of probe) {
-        expect(await load(orgId, kstMidnight(day, 30)), `${anchor} ↑${upgradeDay} on ${day}`).toMatchObject({ capKrw: newPlanCapKrw + carryKrw + newGift });
-      }
-      for (const day of [newCycle.end, days(newCycle.end, int(1, 20))]) {
-        expect(await load(orgId, kstMidnight(day)), `${anchor} ↑${upgradeDay} on ${day}`).toMatchObject({ capKrw: newPlanCapKrw, extraKrw: 0 });
-      }
+      expect(followingCycle, `${label} following`).toMatchObject({ baseCapKrw: newPlanCapKrw, extraKrw: inFollowing });
       await expectNoOverlap(orgId);
     }
+    // The sample must exercise the bug: grants starting after the cut but still inside the old cycle.
+    expect(lateInsideOldCycle).toBeGreaterThan(5);
   });
 });

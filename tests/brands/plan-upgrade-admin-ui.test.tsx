@@ -168,6 +168,15 @@ describe('plan upgrade form', () => {
     expect(html).not.toContain(FORM('subscription'));
   });
 
+  it('fix round 1: with the flag off, an organization with a non-ended subscription gets no manual form', async () => {
+    vi.stubEnv('BRAND_BILLING_AUTO_ISSUE', 'on');
+    const orgId = await subscribedPaidOrg('Upgrade UI Flag Off Fixture');
+    vi.stubEnv('BRAND_BILLING_AUTO_ISSUE', 'off');
+    const html = await renderOrg(orgId);
+    expect(html).not.toContain(FORM('manual'));
+    expect(html).not.toContain(FORM('subscription'));
+  });
+
   it('b2b_69 (nothing higher) and an organization without a plan get no form', async () => {
     const top = await manualPaidOrg('Upgrade UI Top Plan Fixture', 'b2b_69');
     expect(await renderOrg(top)).not.toContain('data-plan-upgrade-form');
@@ -191,7 +200,8 @@ describe('plan upgrade preview and confirm', () => {
     expect(preview).toContain('이월 크레딧 27,000, 새 주기 끝(12월 24일)에 소멸');
     expect(preview).toContain('새 플랜 크레딧 46,000');
     expect(preview).toContain('청구 금액 539,000원 (공급가 490,000원 + 부가세 49,000원, 할인 0%) · 납기 12월 9일');
-    expect(preview).toContain('새 주기 초안이 만들어집니다(발행은 청구서 목록에서)');
+    // Fix round 1: say that the credits open at once and the new cycle's invoice is a draft the admin still issues.
+    expect(preview).toContain('새 플랜 크레딧은 바로 열립니다. 새 주기 청구서는 초안으로 만들어지고, 청구서 목록에서 직접 발행해야 합니다');
     expect(preview).toContain('이전 플랜의 남은 기간은 환불하지 않습니다');
     expect(preview).not.toContain('data-upgrade-line="downgrade-cleared"');
     expect(preview).not.toContain('data-upgrade-line="drafts-voided"');
@@ -269,6 +279,15 @@ describe('carry grant after an upgrade', () => {
       _confirm: '1',
     });
     expect(done).toMatchObject({ ok: true, code: 'saved' });
+    // Fix round 1: the manual result says the credits are open and the new cycle's invoice is a draft to issue; the plan
+    // panel warns until that invoice is issued.
+    if (!done.ok) return;
+    expect(done.detail).toMatch(/^upgrade_manual_draft:[0-9a-f-]{36}$/);
+    const saved = await renderOrg(orgId, { ok: 'saved', detail: done.detail! });
+    expect(saved).toContain('플랜을 올렸습니다. 새 플랜 크레딧은 바로 열렸고, 새 주기 청구서는 아직 초안입니다. 청구서 목록에서 발행하세요');
+    const panel = between(saved, 'id="billing-plan-allowance"', 'id="billing-profile"');
+    expect(panel).toContain('data-plan-upgrade-unissued');
+    expect(panel).toContain('올린 주기의 청구서가 아직 발행되지 않았습니다');
     const [carry] = await listPlanUpgradeCarries(sql, orgId);
     expect(carry).toMatchObject({ validFrom: '2026-11-25', validUntil: '2026-12-24', revoked: false });
 
@@ -282,6 +301,10 @@ describe('carry grant after an upgrade', () => {
     const form = upgradeForm(html, 'manual');
     expect(form).toContain('<option value="b2b_69"');
     expect(form).not.toContain('<option value="b2b_49"');
+    // Once the admin issues the new cycle's invoice the warning goes away.
+    const draftId = done.detail!.slice('upgrade_manual_draft:'.length);
+    expect(await issueBrandInvoice({ sql, now: () => NOW }, ADMIN_VIEWER, { invoiceId: draftId })).toMatchObject({ ok: true });
+    expect(await renderOrg(orgId)).not.toContain('data-plan-upgrade-unissued');
   });
 });
 
