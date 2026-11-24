@@ -56,6 +56,11 @@ export default async function BrandHome({
   // The service guide describes creator campaigns; a brand that only commissions work from the team
   // (self-serve studio closed) does not get it inside the project space.
   const serviceGuide = !(rooms && choice && featureDenied(choice.denied, "self_studio"));
+  // The open service guide of an account that has no brand yet (the same guide, unchanged).
+  const serviceIntro = workspace.projects.length === 0 && !choice
+    ? <ServiceGuide kind="campaign" b={b} studioAllowed={studioOpen} showOther={!access.projectScopedOnly && studioOpen} />
+    : null;
+  const setupFirst = access.fresh && pendingShares === 0;
   return (
     <div data-brand-home data-project-space={rooms ? "" : undefined}>
       {rooms ? (
@@ -110,9 +115,8 @@ export default async function BrandHome({
           </p>
         </section>
       )}
-      {workspace.projects.length === 0 && !choice && (
-        <ServiceGuide kind="campaign" b={b} studioAllowed={studioOpen} showOther={!access.projectScopedOnly && studioOpen} />
-      )}
+      {/* An account with no workspace and nothing waiting creates its workspace first; the guide follows the form. */}
+      {!setupFirst && serviceIntro}
       {pendingShares > 0 && (
         <section className={access.fresh ? "bw-empty" : "bw-note"} data-brand-pending-share={pendingShares}>
           <h2>{b.pendingShareTitle}</h2>
@@ -120,7 +124,8 @@ export default async function BrandHome({
         </section>
       )}
       {access.fresh && pendingShares > 0 ? null : access.fresh ? (
-        <section className="bw-panel">
+        <>
+        <section className="bw-panel" data-brand-setup>
           <h2>{b.needOrganization}</h2><ol className="bw-setup"><li>{b.performance.setupOne}</li><li>{b.performance.setupTwo}</li><li>{b.performance.setupThree}</li></ol>
           <p className="bw-note">{b.organizationHint}</p>
           <ActionForm
@@ -141,6 +146,8 @@ export default async function BrandHome({
             </label>
           </ActionForm>
         </section>
+        {serviceIntro}
+        </>
       ) : (
         <>
           {workspace.projects.length === 0 ? (

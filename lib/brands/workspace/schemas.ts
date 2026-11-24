@@ -23,6 +23,7 @@ export const BrandOrganizationSchema = z.object({ name: text(2, 100), requestId:
 export const BrandInvitationSchema = z.object({ organizationId: id, email: z.email().trim().toLowerCase().max(254), role: z.enum(['editor', 'viewer']), requestId: id });
 export const BrandInvitationAcceptSchema = z.object({ token: z.string().regex(/^[a-zA-Z0-9_-]{43}$/) });
 export const BrandMemberRevokeSchema = z.object({ organizationId: id, userId: id });
+export const BrandInvitationCancelSchema = z.object({ organizationId: id, invitationId: id });
 export const BrandReferenceLinkSchema = z.object({ url: BrandHttpsUrlSchema, note: text(0, 500).default('') });
 export const BrandCriteriaSchema = z.object({
   platforms: z.array(z.enum(['instagram', 'tiktok', 'x', 'youtube'])).max(4).transform(v => [...new Set(v)]).default([]),

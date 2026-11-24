@@ -13,6 +13,7 @@ import {
   reserveBrandAttachment,
   completeBrandAttachment,
   createBrandInvitation,
+  cancelBrandInvitation,
   acceptBrandInvitation,
   revokeBrandMember,
 } from "@/lib/brands/workspace/service";
@@ -214,6 +215,10 @@ export async function POST(request: NextRequest) {
         }
         break;
       }
+      // The owner's cancel on the team page; authorized in the service like invitation.create.
+      case "invitation.cancel":
+        result = await cancelBrandInvitation({ sql }, viewer, input);
+        break;
       case "invitation.accept": {
         const verifiedEmail = await getVerifiedEmail(viewer.userId);
         // docs/BRAND-ROOMS-FEEDBACK.md §12: with invitations on, a project invitation binds to the account

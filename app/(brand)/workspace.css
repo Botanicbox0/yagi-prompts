@@ -5609,6 +5609,10 @@ html[data-brand-workspace]::view-transition-group(bw-tab-indicator) { animation-
     border-top: 0;
     box-shadow: none;
   }
+  /* A bar without tabs (signed out, or no brand yet) keeps the tabs' place, so the brand line stays by the lockup. */
+  :where([data-brand-workspace]) .bw-shell:has([data-brand-layout-mode="topbar"]) [data-brand-nav-empty] {
+    margin-inline: auto;
+  }
   :where([data-brand-workspace]) .bw-shell:has([data-brand-layout-mode="topbar"]) .bw-signout {
     margin: 0;
   }
@@ -5831,6 +5835,10 @@ html[data-brand-workspace]::view-transition-group(bw-tab-indicator) { animation-
   border-radius: 14px;
   background: var(--ys-surface);
   box-shadow: var(--ys-card);
+}
+/* A refused link or a wrong account is said in the note ink, not red (TASTE 3); role="alert" still announces it. */
+:where([data-brand-workspace]) .bw-sota-invite-landing .bw-error {
+  color: var(--ys-ink);
 }
 
 
