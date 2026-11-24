@@ -432,6 +432,9 @@ export const studioEditorEn = {
       frame: 'Export stopped: the frame at {time} (cut "{clip}") could not be read exactly.',
       load: 'Export stopped: "{clip}" could not be loaded.',
       sound: 'Export stopped: the sound could not be put together.',
+      soundMusic: 'Export stopped: the music "{name}" could not be read. Try again. If it stops again, take the music out or change it in the earlier editor.',
+      soundEffect: 'Export stopped: the sound effect "{name}" could not be read. Try again. If it stops again, take the effect out or change it in the earlier editor.',
+      soundCut: 'Export stopped: the sound of "{name}" could not be read. Try again. If it stops again, turn that cut’s sound off or delete the cut.',
       memory: 'Export did not start: the film’s source files add up to {total}, more than the {limit} this browser can handle at once. Export the film in parts.',
       encode: 'Export stopped: the video file could not be written.',
       hidden: 'The export stopped several times because this window was not on screen. Keep this window in front and export again.',
@@ -920,6 +923,12 @@ export const studioEditorKo: typeof studioEditorEn = {
       frame: '내보내기를 멈췄습니다. {time} 지점("{clip}" 컷)의 화면을 읽지 못했습니다.',
       load: '내보내기를 멈췄습니다. "{clip}" 영상을 불러오지 못했습니다.',
       sound: '내보내기를 멈췄습니다. 소리를 합치지 못했습니다.',
+      // 대표 확인 대기 (Gemma 미실행)
+      soundMusic: '음악 "{name}" 파일을 읽지 못해 내보내기를 멈췄습니다. 다시 시도해도 같으면 예전 편집기에서 이 음악을 빼거나 바꿔 주세요.',
+      // 대표 확인 대기 (Gemma 미실행)
+      soundEffect: '효과음 "{name}" 파일을 읽지 못해 내보내기를 멈췄습니다. 다시 시도해도 같으면 예전 편집기에서 이 효과음을 빼거나 바꿔 주세요.',
+      // 대표 확인 대기 (Gemma 미실행)
+      soundCut: '"{name}" 컷의 소리를 읽지 못해 내보내기를 멈췄습니다. 다시 시도해도 같으면 이 컷의 소리를 끄거나 컷을 지워 주세요.',
       memory: '내보낼 수 없습니다. 원본 파일을 합친 크기({total})가 이 브라우저의 한도({limit})를 넘습니다. 영상을 나눠 내보내 주세요.',
       encode: '내보내기를 멈췄습니다. 영상 파일을 만들지 못했습니다.',
       hidden: '이 창이 화면에 보이지 않아 내보내기가 반복해서 중단되었습니다. 창을 화면 앞에 둔 채로 다시 내보내 주세요.',

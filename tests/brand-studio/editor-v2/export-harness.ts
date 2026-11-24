@@ -34,6 +34,8 @@ export interface HarnessOptions {
   reclaimAudioAfter?: number[];
   /** The bytes a `GET` answers per address (the sound read). Default 100 zero bytes. */
   getBody?: (url: string) => Uint8Array;
+  /** The status a `GET` answers per address; anything but 200 comes with no body. Default 200. */
+  getStatus?: (url: string) => number;
 }
 
 export const made = { videoEncoders: 0, audioEncoders: 0, videoFrames: 0, audioData: 0, factsReads: new Map<string, number>(), heads: [] as string[] };
@@ -323,6 +325,8 @@ export async function loadExport(options: HarnessOptions) {
       if (length === 'never') return new Promise(() => undefined);
       return new Response(null, { status: 200, headers: length === null ? {} : { 'content-length': String(length) } });
     }
+    const status = options.getStatus ? options.getStatus(plain) : 200;
+    if (status !== 200) return new Response(null, { status });
     const body = options.getBody ? options.getBody(plain) : new Uint8Array(100);
     return new Response(body.slice().buffer as ArrayBuffer, { status: 200, headers: { 'content-length': String(body.length) } });
   });

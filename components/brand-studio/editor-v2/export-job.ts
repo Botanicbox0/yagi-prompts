@@ -7,7 +7,7 @@ import type { ComposerProject } from '@/lib/brand-studio/compose/timeline';
 import { slowNotice, type ExportPath, type ExportPathOverride } from '@/lib/brand-studio/editor-v2/decode-plan';
 import { totalFrames, type FrameSequence } from '@/lib/brand-studio/editor-v2/frames';
 import type { Reframe } from '@/lib/brand-studio/editor-v2/model';
-import { ExportStop, exportFilm, type ExportProgress, type ExportStopReason, type ExportWarning, type SourcePath } from './export-film';
+import { ExportStop, exportFilm, type ExportProgress, type ExportSoundSource, type ExportStopReason, type ExportWarning, type SourcePath } from './export-film';
 import { watchRefresh } from './screen-refresh';
 
 export type ExportJob =
@@ -43,7 +43,17 @@ export type ExportJob =
       paths: SourcePath[];
       restarts: number;
     }
-  | { status: 'failed'; reason: ExportStopReason; frame: number | null; clip: string | null; bytes: number | null; message: string; fps: number };
+  | {
+      status: 'failed';
+      reason: ExportStopReason;
+      frame: number | null;
+      clip: string | null;
+      bytes: number | null;
+      message: string;
+      fps: number;
+      /** For `sound`: which sound could not be read (`clip` is its name), when the stop knows (audit A5). */
+      sound?: ExportSoundSource | null;
+    };
 
 export interface ExportRequest {
   sequence: FrameSequence;
@@ -190,7 +200,7 @@ export function startExport(request: ExportRequest): void {
       const stop = error instanceof ExportStop ? error : new ExportStop('encode', error instanceof Error ? error.message : String(error));
       // The plain sentence goes on screen; the exact frame, clip and cause stay in the console for us.
       if (stop.reason !== 'cancelled') console.warn('[editor export]', stop.message);
-      set({ status: 'failed', reason: stop.reason, frame: stop.frame, clip: stop.clip, bytes: stop.bytes, message: stop.message, fps });
+      set({ status: 'failed', reason: stop.reason, frame: stop.frame, clip: stop.clip, bytes: stop.bytes, message: stop.message, fps, sound: stop.sound });
       if (stop.reason !== 'cancelled' && openSheets === 0) request.notify('failed');
     },
   );

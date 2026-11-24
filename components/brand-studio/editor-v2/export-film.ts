@@ -141,21 +141,39 @@ export type ExportWarning = { kind: 'sound'; clip: string } | { kind: 'soundPosi
 /** `hidden`: the browser took the encoder back more often than the export may start again (spec H, F3). */
 export type ExportStopReason = 'empty' | 'unsupported' | 'load' | 'frame' | 'encode' | 'sound' | 'memory' | 'hidden' | 'cancelled';
 
-/** Why an export stopped. `frame` (film frame) and `clip` (cut label) say where, when it was a picture. */
+/** Which sound could not be read when an export stops on `sound` (audit A5): a cut's own, the music, an effect. */
+export type ExportSoundSource = 'cut' | 'music' | 'effect';
+
+/**
+ * Why an export stopped. `frame` (film frame) and `clip` (cut label) say where, when it was a picture; for
+ * `sound`, `sound` says which sound could not be read and `clip` its name (the cut's, the music's, the effect's).
+ */
 export class ExportStop extends Error {
   readonly reason: ExportStopReason;
   readonly frame: number | null;
   readonly clip: string | null;
   /** For `memory`: how many bytes the film's sound sources add up to. */
   readonly bytes: number | null;
-  constructor(reason: ExportStopReason, message: string, where: { frame?: number; clip?: string; bytes?: number } = {}) {
+  readonly sound: ExportSoundSource | null;
+  constructor(reason: ExportStopReason, message: string, where: { frame?: number; clip?: string; bytes?: number; sound?: ExportSoundSource } = {}) {
     super(message);
     this.name = 'ExportStop';
     this.reason = reason;
     this.frame = where.frame ?? null;
     this.clip = where.clip ?? null;
     this.bytes = where.bytes ?? null;
+    this.sound = where.sound ?? null;
   }
+}
+
+/**
+ * A sound read that stopped the export, named (audit A5): a stop on `sound` that does not say what it was
+ * reading gets the cut, music or effect it was reading. A cancel, a memory stop or a stop that already
+ * names its sound goes on as it is.
+ */
+export function namedSoundStop(error: unknown, sound: ExportSoundSource, label: string): unknown {
+  if (!(error instanceof ExportStop) || error.reason !== 'sound' || error.sound) return error;
+  return new ExportStop('sound', error.message, { clip: label, sound });
 }
 
 const VIDEO_BITRATE = 8_000_000;
@@ -822,7 +840,9 @@ async function mixSound(
   const leads = new Map<string, number>();
   for (const url of cutUrls) {
     throwIfAborted(signal);
-    const bytes = await read(url);
+    const bytes = await read(url).catch((error: unknown) => {
+      throw namedSoundStop(error, 'cut', labelOf(url));
+    });
     // Inspected before decoding: decoding hands the bytes over.
     const view = new Uint8Array(bytes);
     const track = soundTrackOf(view);
@@ -837,9 +857,11 @@ async function mixSound(
     buffers.set(url, decoded);
     progress((step += 1), steps);
   }
-  // Music and effects are sound files: one that cannot be decoded stops the export.
-  const decodeSoundFile = async (url: string, label: string) => {
-    const bytes = await read(url);
+  // Music and effects are sound files: one that cannot be read or decoded stops the export, named.
+  const decodeSoundFile = async (url: string, label: string, sound: 'music' | 'effect') => {
+    const bytes = await read(url).catch((error: unknown) => {
+      throw namedSoundStop(error, sound, label);
+    });
     try {
       const buffer = await context.decodeAudioData(bytes);
       throwIfAborted(signal);
@@ -847,7 +869,7 @@ async function mixSound(
     } catch (error) {
       throwIfAborted(signal);
       if (error instanceof ExportStop) throw error;
-      throw new ExportStop('sound', `could not decode ${label}`, { clip: label });
+      throw new ExportStop('sound', `could not decode ${label}`, { clip: label, sound });
     }
   };
 
@@ -856,7 +878,7 @@ async function mixSound(
   // Music and effects, by the current exporter's rules: music loops from its in-point for the whole film.
   if (bgm) {
     throwIfAborted(signal);
-    const buffer = await decodeSoundFile(bgm.srcUrl, bgm.label);
+    const buffer = await decodeSoundFile(bgm.srcUrl, bgm.label, 'music');
     const source = context.createBufferSource();
     source.buffer = buffer;
     source.loop = true;
@@ -870,7 +892,7 @@ async function mixSound(
   }
   for (const effect of sfx) {
     throwIfAborted(signal);
-    const buffer = await decodeSoundFile(effect.srcUrl, effect.label);
+    const buffer = await decodeSoundFile(effect.srcUrl, effect.label, 'effect');
     const source = context.createBufferSource();
     source.buffer = buffer;
     const gain = context.createGain();

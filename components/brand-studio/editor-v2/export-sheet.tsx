@@ -316,6 +316,9 @@ export function ExportStatus({ job, copy: e }: { job: ExportJob; copy: ExportCop
     );
   }
   if (job.status === 'failed') {
+    // A sound that could not be read is named, with what to do about it (audit A5).
+    const sound = job.reason === 'sound' && job.sound && job.clip ? job.sound : null;
+    const soundLine = sound === 'music' ? e.failed.soundMusic : sound === 'effect' ? e.failed.soundEffect : sound === 'cut' ? e.failed.soundCut : null;
     const sentence =
       job.reason === 'frame'
         ? fill(e.failed.frame, { time: formatTimecode(job.frame ?? 0, job.fps), clip: job.clip ?? '' })
@@ -323,9 +326,16 @@ export function ExportStatus({ job, copy: e }: { job: ExportJob; copy: ExportCop
           ? fill(e.failed.load, { clip: job.clip ?? '' })
           : job.reason === 'memory'
             ? fill(e.failed.memory, { total: formatBytes(job.bytes ?? 0), limit: formatBytes(SOUND_BYTES_LIMIT) })
-            : e.failed[job.reason];
+            : soundLine
+              ? fill(soundLine, { name: job.clip ?? '' })
+              : e.failed[job.reason];
     return (
-      <p className={job.reason === 'cancelled' ? styles.note : styles.exportError} role={job.reason === 'cancelled' ? 'status' : 'alert'} data-editor-export-failed={job.reason}>
+      <p
+        className={job.reason === 'cancelled' ? styles.note : styles.exportError}
+        role={job.reason === 'cancelled' ? 'status' : 'alert'}
+        data-editor-export-failed={job.reason}
+        data-editor-export-sound={sound ?? undefined}
+      >
         {sentence}
       </p>
     );
