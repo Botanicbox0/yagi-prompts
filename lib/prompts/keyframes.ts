@@ -1,9 +1,32 @@
 import { z } from 'zod';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 
+/**
+ * A template's keyframes (`prompt_items.keyframes`, `platform_formats.keyframes`, 0088 — the column check is only "is
+ * an array"). Two kinds share the column:
+ *
+ * - a BEAT: a moment with a name, shown in the keyframe strip under the example video (as before);
+ * - a MARK (docs/PERSONAL-STUDIO.md §3.4.4, T1a): an entry with `part`, naming a part the template's prompt declares
+ *   (a `Template locks:` key such as 'hair', 'product', 'shots-2-3'), with an end time; `labelKo`/`labelEn` are its
+ *   short description. Marks are shown in the template's "what it decides" row, never as beats.
+ *
+ * Old code strips the new keys, and a row with more than six entries falls back to the default beats there.
+ */
+export const KEYFRAMES_MAX = 12;
+/** The maker route's limit, unchanged: beats only. */
+export const BEATS_MAX = 6;
+/** Ranges shown per part. */
+export const MARKS_PER_PART_MAX = 2;
+/** A part key: the lock keys ('product', 'lighting_mood', 'shots-2-3'). Never prompt words. */
+export const PART_KEY_PATTERN = /^[a-z][a-z0-9_-]{0,31}$/;
+
 export const VideoKeyframeSchema = z.object({
-  index: z.number().int().min(0).max(5),
+  index: z.number().int().min(0).max(KEYFRAMES_MAX - 1),
   timeSeconds: z.number().min(0).max(120),
+  /** A mark's end (seconds). */
+  endSeconds: z.number().min(0).max(120).optional(),
+  /** Present = a mark for this declared part. */
+  part: z.string().regex(PART_KEY_PATTERN).optional(),
   labelKo: z.string().trim().max(40).optional(),
   labelEn: z.string().trim().max(40).optional(),
   thumbUrl: z.string().trim().max(500).optional(),
@@ -11,7 +34,39 @@ export const VideoKeyframeSchema = z.object({
 
 export type VideoKeyframe = z.infer<typeof VideoKeyframeSchema>;
 
-export const VideoKeyframesSchema = z.array(VideoKeyframeSchema).min(1).max(6);
+export const VideoKeyframesSchema = z.array(VideoKeyframeSchema).min(1).max(KEYFRAMES_MAX);
+
+/** The maker route's body (`/api/makers/formats/[id]/keyframes`): exactly the old schema, beats only. */
+export const VideoBeatsSchema = z
+  .array(VideoKeyframeSchema.omit({ endSeconds: true, part: true }).extend({ index: z.number().int().min(0).max(BEATS_MAX - 1) }))
+  .min(1)
+  .max(BEATS_MAX);
+
+/** What the admin saves (`prompt.marks`): marks only, each with a part and an end; may be empty (clears them). */
+export const VideoMarksSchema = z
+  .array(VideoKeyframeSchema.extend({ part: z.string().regex(PART_KEY_PATTERN), endSeconds: z.number().min(0).max(120) }))
+  .max(KEYFRAMES_MAX);
+
+export type VideoMark = VideoKeyframe & { part: string };
+
+export function isMark(keyframe: VideoKeyframe): keyframe is VideoMark {
+  return typeof keyframe.part === 'string' && keyframe.part !== '';
+}
+
+/** Beats (numbered from 0 in time order, as the strip always had them) and marks (time order). */
+export function splitKeyframes(all: readonly VideoKeyframe[]): { beats: VideoKeyframe[]; marks: VideoMark[] } {
+  const sorted = [...all].sort((a, b) => a.timeSeconds - b.timeSeconds);
+  return {
+    beats: sorted.filter((kf) => !isMark(kf)).map((kf, index) => ({ ...kf, index })),
+    marks: sorted.filter(isMark),
+  };
+}
+
+/** "0:03", "1:05": whole seconds, for ranges on the page. */
+export function formatClock(seconds: number): string {
+  const whole = Math.max(0, Math.floor(Number.isFinite(seconds) ? seconds : 0));
+  return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`;
+}
 
 const BEAT_RATIOS: Record<number, readonly number[]> = {
   3: [0.1, 0.5, 0.88],

@@ -8,6 +8,7 @@ import { FIXTURE_SENTINELS } from './fixtures';
 import { HIDDEN_PROMPT_SLUGS, PROMPT_SENTINELS } from './prompt-fixtures';
 import { LOCAL_MAKER, LOCAL_RECIPE_CANARY, LOCAL_RECIPE_SLUG } from './maker-fixtures';
 import { CAST_SENTINELS } from './cast-fixtures';
+import { FIXED_PARTS_PROMPT_FIXTURES, FIXED_PARTS_SLUG } from './fixed-parts-fixtures';
 import { RUNTIME_MODE_ENV } from '@/lib/runtime-mode';
 import { KO_TERMS } from '@/messages/ko';
 import { EN_TERMS } from '@/messages/en';
@@ -1148,6 +1149,28 @@ async function sweepTemplates(): Promise<void> {
   expectAbsent('…no cookie balance', detail.body, 'data-cookie-balance');
   for (const sentinel of PROMPT_SENTINELS) {
     expectAbsent(`…no prompt text of any kind (${sentinel.token})`, detail.body, sentinel.token);
+  }
+  // docs/PERSONAL-STUDIO.md §3.4.4 (T1a): a template that declares no fixed part has no fixed row.
+  expectAbsent('…no "what this template decides" row without a declaration', detail.body, 'data-template-fixed');
+  expectAbsent('…nor on the Korean page', detailKo.body, 'data-template-fixed');
+
+  // T1a: the local film whose prompt declares fixed parts (scripts/fixed-parts-fixtures.ts) shows them under the
+  // example video: names from the lock projection, the marks' descriptions and ranges — never the block's words.
+  for (const locale of ['ko', 'en'] as const) {
+    const fixedPage = await get(`/${locale}/t/${FIXED_PARTS_SLUG}`);
+    expectEqual(`${locale}: the template with fixed parts renders 200`, fixedPage.status, 200);
+    expectPresent(`${locale}: …with the fixed row`, fixedPage.body, 'data-template-fixed');
+    expectPresent(`${locale}: …under the keyframe strip`, fixedPage.body, 'data-video-keyframe-strip');
+    if (fixedPage.body.indexOf('data-video-keyframe-strip') < fixedPage.body.indexOf('data-template-fixed')) ok(`${locale}: …in that order`, 'strip, then fixed row');
+    else fail(`${locale}: fixed row order`, 'expected the fixed row after the keyframe strip');
+    for (const part of ['outfit', 'prop', 'lighting_mood']) expectPresent(`${locale}: …names ${part}`, fixedPage.body, `data-fixed-part="${part}"`);
+    expectPresent(`${locale}: …a marked range is tappable`, fixedPage.body, 'data-fixed-item="outfit"');
+    expectPresent(`${locale}: …with its range`, fixedPage.body, '0:02–0:03');
+    expectPresent(`${locale}: …the heading`, fixedPage.body, locale === 'ko' ? '이 템플릿에서 정해진 것' : 'What this template decides');
+    expectPresent(`${locale}: …the description`, fixedPage.body, locale === 'ko' ? '은색 붐박스' : 'Silver boombox');
+    for (const word of ['Template locks', 'Keep exactly as in the template', 'powder-blue studio world', 'rhinestone denim, studded belts', FIXED_PARTS_PROMPT_FIXTURES[0]!.sentinel]) {
+      expectAbsent(`${locale}: …no word of the template's prompt (${word})`, fixedPage.body, word);
+    }
   }
 
   const closed = await get(`/en/t/${CLOSED_TEMPLATE}`);

@@ -4,6 +4,8 @@ import { checkUpload, publishPromptMedia, stagePromptUpload } from '@/lib/prompt
 import { parsePosterFocus } from '@/lib/prompts/poster-focus';
 import { AssetRefSchema, type AssetRef } from '@/lib/content/schemas';
 import { STAGING_BUCKET } from '@/lib/storage';
+import { KEYFRAMES_MAX, MARKS_PER_PART_MAX, VideoKeyframesSchema, VideoMarksSchema, parseVideoKeyframes, splitKeyframes } from '@/lib/prompts/keyframes';
+import { declaredPartKeysOfPrompt } from '@/lib/template-director/parts-view';
 import {
   approvePrompt,
   insertPrompt,
@@ -600,6 +602,75 @@ const announce: AdminOperation<z.infer<typeof Announce>> = {
 };
 
 // ---------------------------------------------------------------------------
+// fixed parts: descriptions and ranges (docs/PERSONAL-STUDIO.md §3.4.4, T1a)
+// ---------------------------------------------------------------------------
+
+const Marks = z.object({ id: Uuid, marks: VideoMarksSchema });
+
+/**
+ * `prompt.marks` — the first admin writer of `prompt_items.keyframes`. The form posts the template's marks as JSON:
+ * each names a part the template's STORED prompt declares (its `Template locks:` block, through `declaredPartKeys`),
+ * with a range of the example video and a short ko/en description. The marks replace the row's marks; the beats it
+ * already has stay. Refused, nothing is written: a part the prompt does not declare, more than two ranges for one
+ * part, a range that ends before it starts or after the film, more than twelve entries with the beats, an image.
+ * Audited (`platform_audit`) and the template pages re-read (tag `prompts`).
+ */
+const marks: AdminOperation<z.infer<typeof Marks>> = {
+  parse(form) {
+    let raw: unknown;
+    try {
+      raw = JSON.parse(f.text(form, 'marks') || '[]');
+    } catch {
+      return { ok: false, detail: 'marks: not JSON' };
+    }
+    return parsed(Marks, { id: f.str(form, 'id'), marks: raw });
+  },
+  async run(ctx, input) {
+    const row = await loadPromptById(ctx.sql, input.id);
+    if (row === null || row.audience === 'brand') return fail('notFound', NOT_FOUND_DETAIL);
+    if (row.medium !== 'video') return fail('invalid', 'marks: only a film has ranges');
+    const declared = declaredPartKeysOfPrompt(row.promptText);
+    const undeclared = [...new Set(input.marks.map((m) => m.part).filter((part) => !declared.includes(part)))];
+    if (undeclared.length > 0) {
+      return fail('invalid', `marks: not declared by the template's prompt: ${undeclared.join(', ')}${declared.length ? ` (declared: ${declared.join(', ')})` : ' (it declares none)'}`);
+    }
+    for (const part of declared) {
+      if (input.marks.filter((m) => m.part === part).length > MARKS_PER_PART_MAX) return fail('invalid', `marks: at most ${MARKS_PER_PART_MAX} ranges for ${part}`);
+    }
+    const runtime = row.runtimeSeconds ?? null;
+    const bad = input.marks.find((m) => !(m.endSeconds > m.timeSeconds) || (runtime !== null && m.endSeconds > runtime));
+    if (bad) return fail('invalid', `marks: ${bad.part} ${bad.timeSeconds}–${bad.endSeconds}s must end after it starts${runtime !== null ? ` and by ${runtime}s` : ''}`);
+
+    const { rows } = await ctx.sql.query<{ keyframes: unknown }>(
+      "select coalesce(to_jsonb(p.*)->'keyframes', 'null'::jsonb) as keyframes from prompt_items p where id = $1",
+      [row.id],
+    );
+    const { beats } = splitKeyframes(parseVideoKeyframes(rows[0]?.keyframes ?? null) ?? []);
+    const combined = [...beats, ...input.marks.map((m) => ({ ...m, labelKo: m.labelKo || undefined, labelEn: m.labelEn || undefined }))];
+    if (combined.length > KEYFRAMES_MAX) return fail('invalid', `marks: ${beats.length} beats + ${input.marks.length} ranges is more than ${KEYFRAMES_MAX}`);
+    const next = combined.length === 0 ? null : parseVideoKeyframes(combined);
+    if (combined.length > 0 && next === null) return fail('invalid', 'marks: the keyframes would not read back');
+    const checked = next === null ? null : VideoKeyframesSchema.parse(next);
+
+    await ctx.sql.query('update prompt_items set keyframes = $2::jsonb where id = $1', [row.id, checked === null ? null : JSON.stringify(checked)]);
+    if (ctx.viewer.userId) {
+      await ctx.sql.query(
+        'insert into platform_audit (actor_id, entity_id, action, reason, details) values ($1, $2, $3, $4, $5::jsonb)',
+        [
+          ctx.viewer.userId,
+          row.id,
+          'prompt.marks',
+          'admin_template_marks',
+          JSON.stringify({ slug: row.slug, marks: input.marks.length, beats: beats.length, parts: [...new Set(input.marks.map((m) => m.part))].sort() }),
+        ],
+      );
+    }
+    ctx.revalidatePrompts?.();
+    return ok('saved', { detail: row.slug });
+  },
+};
+
+// ---------------------------------------------------------------------------
 // registry fragment
 // ---------------------------------------------------------------------------
 
@@ -613,4 +684,5 @@ export const PROMPT_OPERATIONS = {
   'prompt.feature': feature,
   'prompt.visibility': visibility,
   'prompt.archive': archive,
+  'prompt.marks': marks,
 };

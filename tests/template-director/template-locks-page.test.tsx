@@ -13,7 +13,13 @@ import type { PromptRow } from '@/lib/prompts/repo';
  * crosses to the browser.
  */
 
-const state = vi.hoisted(() => ({ card: null as PromptCard | null, flag: false, studio: [] as Array<Record<string, unknown>> }));
+const state = vi.hoisted(() => ({
+  card: null as PromptCard | null,
+  flag: false,
+  studio: [] as Array<Record<string, unknown>>,
+  media: [] as Array<Record<string, unknown>>,
+  keyframes: null as unknown,
+}));
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/flags', () => ({ RENDER_PIPELINE_MODE: 'off', RENDER_PIPELINE_PUBLIC: false, personalEditSheetOpen: () => state.flag }));
@@ -25,7 +31,13 @@ vi.mock('@/lib/campaigns/public-catalog', () => ({ getCampaignCatalog: async () 
 vi.mock('@/lib/recipes/cached-public', () => ({ cachedPublicRecipe: async () => null }));
 vi.mock('@/components/marketing/chrome', () => ({ MarketingNav: () => null, MarketingFooter: () => null }));
 vi.mock('@/components/prompts/detail', () => ({ RelatedPrompts: () => null }));
-vi.mock('@/components/prompts/detail-media', () => ({ PromptDetailMedia: () => null }));
+vi.mock('@/components/prompts/detail-media', () => ({
+  PromptDetailMedia: (props: Record<string, unknown>) => {
+    state.media.push(props);
+    return null;
+  },
+}));
+vi.mock('@/lib/prompts/keyframes-cached', () => ({ cachedPromptKeyframes: async () => state.keyframes }));
 vi.mock('@/components/prompts/poster', () => ({ TypographicPoster: () => null, posterRatio: () => '9 / 16' }));
 vi.mock('@/lib/db/connect', () => ({ getSqlRunner: async () => null }));
 vi.mock('@/components/twings/studio', () => ({
@@ -55,9 +67,11 @@ function row(promptText: string): PromptRow {
 
 async function render(locale: 'ko' | 'en') {
   state.studio = [];
+  state.media = [];
   const html = renderToStaticMarkup(await TemplatePage({ params: Promise.resolve({ locale, slug: 'serum-counter-locks' }) }));
   expect(state.studio.length).toBeGreaterThan(0);
-  return { html, live: state.studio[0]!.live as Record<string, unknown>, props: state.studio };
+  expect(state.media.length).toBeGreaterThan(0);
+  return { html, live: state.studio[0]!.live as Record<string, unknown>, props: state.studio, media: state.media[0]! };
 }
 
 const PRIVATE = ['Template locks', 'Keep exactly as in the template', 'PRIVATE-PAGE-TAIL', 'pink chin-length bob', 'its shape, colour, label', 'action, framing, timing'];
@@ -69,6 +83,7 @@ function expectNothingPrivate(value: unknown): void {
 
 beforeEach(() => {
   state.flag = false;
+  state.keyframes = null;
   state.card = toPromptCard(row(`${BODY}\n\n${BLOCK}`), { publicUrl: () => null });
 });
 
@@ -94,10 +109,52 @@ describe('the template page with a locked template', () => {
     state.card = toPromptCard(row(BODY), { publicUrl: () => null });
     for (const flag of [false, true]) {
       state.flag = flag;
-      const { live } = await render('ko');
+      const { live, media } = await render('ko');
       expect(Object.hasOwn(live, 'locks')).toBe(false);
       expect(Object.hasOwn(live, 'lockCopy')).toBe(false);
       expect(Object.hasOwn(live, 'editSheet')).toBe(flag);
+      // docs/PERSONAL-STUDIO.md §3.4.4 (T1a): no declaration, no fixed row — the media block gets no new prop.
+      expect(Object.hasOwn(media, 'fixed')).toBe(false);
     }
+  });
+});
+
+describe('the fixed row under the example video (T1a)', () => {
+  const HAIR_MARK = { index: 0, timeSeconds: 3, endSeconds: 6, part: 'hair', labelKo: '핑크 단발', labelEn: 'Pink bob' };
+  const LOGO_MARK = { index: 1, timeSeconds: 1, endSeconds: 2, part: 'logo', labelKo: '선언되지 않은 부분' };
+  const BEAT = { index: 2, timeSeconds: 8, labelKo: '피날레', labelEn: 'Finale' };
+
+  it('hands the media block the declared parts by name, joined with their marks, and nothing of the block', async () => {
+    state.keyframes = [HAIR_MARK, LOGO_MARK, BEAT];
+    const { media, html } = await render('ko');
+    const fixed = media.fixed as { parts: Array<Record<string, unknown>>; all: boolean; copy: Record<string, string> };
+    expect(fixed.all).toBe(false);
+    expect(fixed.parts.map((p) => [p.key, p.label, p.desc, p.from, p.to])).toEqual([
+      ['product', ko.editSheet.locks.product, null, null, null],
+      ['hair', ko.editSheet.slots.hair, '핑크 단발', 3, 6],
+      ['shots-2-3', '2~3번째 컷', null, null, null],
+    ]);
+    expect(fixed.copy).toEqual({ ...ko.templates.fixed, lockedAll: ko.editSheet.lockedAll });
+    // The beats strip gets the beats only; the marks never show up as beats.
+    expect(media.keyframes).toEqual([{ index: 0, timeSeconds: 8, labelKo: '피날레', labelEn: 'Finale' }]);
+    expectNothingPrivate(media);
+    expectNothingPrivate(html);
+    expect(JSON.stringify(media).includes('선언되지 않은 부분')).toBe(false);
+  });
+
+  it('in English, the English words and descriptions only', async () => {
+    state.keyframes = [HAIR_MARK];
+    const { media } = await render('en');
+    const fixed = media.fixed as { parts: Array<Record<string, unknown>> };
+    expect(fixed.parts.map((p) => p.desc)).toEqual([null, 'Pink bob', null]);
+    expect(JSON.stringify(fixed)).not.toMatch(/[가-힣]/);
+    expectNothingPrivate(media);
+  });
+
+  it('without marks the parts are still named, and the default beats stay', async () => {
+    const { media } = await render('ko');
+    const fixed = media.fixed as { parts: Array<Record<string, unknown>> };
+    expect(fixed.parts.map((p) => p.key)).toEqual(['product', 'hair', 'shots-2-3']);
+    expect((media.keyframes as unknown[]).length).toBeGreaterThanOrEqual(3);
   });
 });

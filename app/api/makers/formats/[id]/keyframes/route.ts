@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { getViewer } from '@/lib/auth/viewer';
 import { getSqlRunner } from '@/lib/db/connect';
 import { isSameOrigin } from '@/lib/billing/toss-runtime';
-import { VideoKeyframesSchema } from '@/lib/prompts/keyframes';
+import { VideoBeatsSchema } from '@/lib/prompts/keyframes';
 import { recommendVideoKeyframes } from '@/lib/template-director/keyframes';
 
 export const dynamic = 'force-dynamic';
@@ -19,7 +19,8 @@ const BodySchema = z.discriminatedUnion('action', [
   }),
   z.object({
     action: z.literal('save'),
-    keyframes: VideoKeyframesSchema,
+    // Beats only, at most six: the maker route is unchanged by the marks (docs/PERSONAL-STUDIO.md §3.4.4, T1a).
+    keyframes: VideoBeatsSchema,
   }),
 ]);
 

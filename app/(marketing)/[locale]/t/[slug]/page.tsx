@@ -50,8 +50,9 @@ import { MakeSheet } from '@/components/templates/make-sheet';
 import { templateCredits } from '@/lib/twings/credits';
 import { CreativeAvatar } from '@/components/makers/identity';
 import { PersonalIdentity } from '@/components/audience/personal-identity';
-import { defaultTimelineKeyframes } from '@/lib/prompts/keyframes';
+import { defaultTimelineKeyframes, splitKeyframes } from '@/lib/prompts/keyframes';
 import { cachedPromptKeyframes } from '@/lib/prompts/keyframes-cached';
+import { templatePartsView } from '@/lib/template-director/parts-view';
 
 /**
  * `/[locale]/t/[slug]` — one template, which is also where it is made (docs/TEMPLATES-IA.md §2).
@@ -131,7 +132,16 @@ export default async function TemplatePage({ params }: RouteParams) {
     cachedMakeInputs(card.id, card.cast ?? 'solo'),
     card.medium === 'video' ? cachedPromptKeyframes(card.slug) : Promise.resolve(null),
   ]);
-  const videoKeyframes = card.medium === 'video' ? (storedKeyframes?.length ? storedKeyframes : defaultTimelineKeyframes(card.runtimeSeconds)) : null;
+  // The column holds beats (the keyframe strip) and marks (docs/PERSONAL-STUDIO.md §3.4.4, T1a); a row without beats
+  // keeps the default beats, as a row without keyframes always did.
+  const { beats: storedBeats, marks } = splitKeyframes(storedKeyframes ?? []);
+  const videoKeyframes = card.medium === 'video' ? (storedBeats.length ? storedBeats : defaultTimelineKeyframes(card.runtimeSeconds)) : null;
+  // §3.4.4 (T1a): what the template decides, under the example video. Names come from the public lock projection
+  // (never a word of the block); a mark for a part the prompt does not declare is dropped here. No declaration, no prop.
+  const fixedParts = card.medium === 'video' && card.locks ? templatePartsView({ locks: card.locks, marks, copy: dict.editSheet, locale }) : [];
+  const fixed = card.medium === 'video' && card.locks && (fixedParts.length > 0 || card.locks.all)
+    ? { parts: fixedParts, all: card.locks.all, copy: { ...dict.templates.fixed, lockedAll: dict.editSheet.lockedAll } }
+    : null;
   const petOnly = makeInputs !== null && makeInputs.pet && !makeInputs.selfie;
   const teaserRecipe = recipe ? recipeTeaser(recipe) : null;
   // Story-first (founder, 2026-10-29): the result, then how it was made, then "one selfie and it's
@@ -266,6 +276,7 @@ export default async function TemplatePage({ params }: RouteParams) {
                         ratio={ratio}
                         aspect={mediaAspect}
                         keyframes={videoKeyframes}
+                        {...(fixed ? { fixed } : {})}
                         locale={locale}
                         controls={{
                           play: dict.campaigns.landing.reelPlay,

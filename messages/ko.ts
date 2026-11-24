@@ -3905,6 +3905,16 @@ export const ko: Dictionary = {
       transformImage: '셀카 한 장이면 이 사진의 주인공이 돼요',
       transformVideo: '셀카 한 장이면 이 장면의 주인공이 돼요',
     },
+    /**
+     * docs/PERSONAL-STUDIO.md §3.4.4 (T1a) — the row under the example video: the parts this template fixes. Part names
+     * come from `editSheet.locks` / `editSheet.slots`. PROVISIONAL: a wording pass replaces these before release.
+     */
+    fixed: {
+      heading: '이 템플릿에서 정해진 것',
+      locked: '바꿀 수 없어요',
+      wholeVideo: '영상 전체',
+      hint: '누르면 그 장면만 다시 볼 수 있어요.',
+    },
     notForSale: "준비 중",
     notForSaleBody: "이 템플릿은 아직 생성할 수 없습니다. 예시 결과물을 먼저 살펴보세요.",
     closedBrowseVideoCta: "다른 영상 템플릿 보기",
@@ -5797,6 +5807,24 @@ export const ko: Dictionary = {
     templateLocksLine: '잠금: {parts}',
     templateLocksAll: '잠금: 전부. 저장된 잠금 블록을 읽지 못해 고객이 아무것도 바꿀 수 없습니다. 블록을 고쳐 다시 저장해 주세요.',
     templateLocksTypo: '잠금 없음. 잠금 블록처럼 적은 줄이 있지만 읽히지 않아 고객이 무엇이든 바꿀 수 있습니다. 다음 저장 전에 고쳐 주세요.',
+    /** docs/PERSONAL-STUDIO.md §3.4.4 (T1a): the marks editor on a template with a lock block (`prompt.marks`). */
+    templateMarks: {
+      heading: '고정 항목 설명과 구간',
+      lede: '템플릿 페이지의 "이 템플릿에서 정해진 것"에 보일 설명과 예시 영상 구간입니다. 잠금 블록에 적힌 항목에만 붙일 수 있고, 저장하면 이 템플릿의 설명과 구간을 모두 바꿉니다. 핵심 프레임 시점은 그대로 둡니다.',
+      part: '항목',
+      start: '시작',
+      end: '끝',
+      descKo: '설명 (KO, 40자까지)',
+      descEn: '설명 (EN, 40자까지)',
+      add: '구간 추가',
+      remove: '이 구간 빼기',
+      empty: '아직 붙인 구간이 없습니다. 구간이 없으면 페이지에는 항목 이름과 "영상 전체"만 보입니다.',
+      selected: '선택한 구간',
+      save: '설명과 구간 저장',
+      saving: '저장 중...',
+      saved: '저장했습니다. 템플릿 페이지에 곧 반영됩니다.',
+      failed: '저장하지 못했습니다. 페이지를 새로 고친 뒤 다시 시도해 주세요.',
+    },
     lockRefused: '템플릿 잠금 블록에 문제가 있어 저장하지 않았습니다.',
     lockProblemUnknownLine: '{line}번째 줄: 잠금 줄 형식이 아니거나 잠글 수 없는 항목입니다. 블록 바로 아래에 문장이 이어지면 사이에 빈 줄을 넣어 주세요.',
     lockProblemEmptyBlock: '{line}번째 줄: 머리줄 아래에 잠금 줄이 없습니다.',
