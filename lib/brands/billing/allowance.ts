@@ -431,12 +431,30 @@ function checkGrantInput(
 export async function insertAllowanceGrantInTx(
   sql: SqlRunner,
   input: unknown,
-  options: { createdBy: string | null; now: Date; kind?: 'trial'; carriedFrom?: string | null },
+  options: {
+    createdBy: string | null;
+    now: Date;
+    kind?: 'trial' | 'carry';
+    carriedFrom?: string | null;
+    /** B1c-3, kind 'carry' only (0186): the inclusive date range of a plan-upgrade carry. */
+    validRange?: { from: string; until: string };
+  },
 ): Promise<{ ok: true; id: string | null } | { ok: false; code: 'invalid'; field: string }> {
   const checked = checkGrantInput(input, options.now);
   if (!checked.ok) return checked;
   const v = checked.value;
   const id = randomUUID();
+  // B1c-3: the one-time credit carry of a plan upgrade — a date-range grant (it attaches to the new cycle and ends with
+  // it), stamped with the upgrade's clock. The statements below for the other kinds are unchanged.
+  if (options.kind === 'carry') {
+    if (!options.validRange || options.validRange.from > options.validRange.until) return { ok: false, code: 'invalid', field: 'validRange' };
+    await sql.query(
+      `insert into brand_allowance_grants (id, organization_id, amount_krw, valid_month, reason, created_by, created_at, kind, valid_from, valid_until)
+         values ($1, $2, $3, $4, $5, $6, $7::timestamptz, 'carry', $8::date, $9::date)`,
+      [id, v.organizationId, v.amountKrw, v.validMonth, v.reason, options.createdBy, options.now.toISOString(), options.validRange.from, options.validRange.until],
+    );
+    return { ok: true, id };
+  }
   if (options.kind === undefined) {
     await sql.query(
       `insert into brand_allowance_grants (id, organization_id, amount_krw, valid_month, reason, created_by)

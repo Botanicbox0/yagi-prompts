@@ -28,6 +28,7 @@ import { brandBillingAutoIssueOpen } from '@/lib/flags';
 import { BRAND_PLANS } from '@/lib/brands/plans';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import { firstParam, isDbAdmin, iso } from './brand-ops-guard';
+import { formatPlanUpgradeOutcomeDetail } from './plan-upgrade-detail';
 
 export interface BillingStatusTotals {
   count: number;
@@ -546,6 +547,9 @@ export async function loadBrandDiscountCodesConsole(
  */
 export function formatBillingOutcomeDetail(detail: string | undefined, locale: 'ko' | 'en'): string | undefined {
   if (!detail) return undefined;
+  // B1c-3: plan-upgrade refusals have their own lines (lib/admin/plan-upgrade-detail.ts).
+  const upgrade = formatPlanUpgradeOutcomeDetail(detail, locale);
+  if (upgrade) return upgrade;
   const labels =
     locale === 'ko'
       ? {

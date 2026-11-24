@@ -374,13 +374,14 @@ describe('B1a brand subscriptions integration & route (§8.2–§8.11)', () => {
     );
     expect(decInv).toMatchObject({ planId: 'b2b_29', baseListKrw: 290_000, status: 'issued' });
 
-    // Upgrade rejected after downgraded to b2b_29
+    // Upgrade rejected by the downgrade operation after downgraded to b2b_29. B1c-3 (changed on purpose): a higher plan
+    // is the upgrade operation now (`brandSubscription.upgrade`), so the refusal points there instead of "not yet".
     expect(
       await scheduleDowngrade({ sql: f.sql, now: () => dec01 }, admin(), {
         organizationId: org2Res.id,
         planId: 'b2b_49',
       }),
-    ).toMatchObject({ ok: false, code: 'not_available_yet', detail: 'upgrade_not_available_yet' });
+    ).toMatchObject({ ok: false, code: 'invalid', field: 'planId', detail: 'upgrade_use_upgrade_operation' });
 
     // Cancel on paid org ends only after paid period ends
     await markBrandInvoicePaid({ sql: f.sql, now: () => dec01 }, admin(), {

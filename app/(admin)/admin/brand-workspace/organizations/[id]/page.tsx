@@ -38,6 +38,8 @@ import { loadBrandOrgDetailOps, ORG_JOB_STATUSES, orgJobStatusFilter } from '@/l
 import { loadWorkspaceApprovalPanel } from '@/lib/brands/billing/workspace-approval';
 import { BrandWorkspaceApprovalCard } from '@/components/admin/brand-workspace-approval-card';
 import { formatBillingOutcomeDetail } from '@/lib/admin/brand-billing-console';
+import { parsePlanUpgradeDetail, type PlanUpgradeDetail } from '@/lib/admin/plan-upgrade-detail';
+import { listPlanUpgradeCarries } from '@/lib/brands/billing/plan-upgrade-apply';
 import { formatAdminTime, formatCount, formatKrw, shortId } from '@/lib/admin/format';
 import { interpolate } from '@/lib/i18n/format';
 import {
@@ -84,12 +86,22 @@ function dayLabel(day: string, locale: string, withYear = false): string {
  * another year than today, and on the last day only when it falls in a different year from the start.
  */
 function cycleLabels(start: string, end: string, locale: string, todayKst: string): { start: string; last: string } {
-  const last = addCalendarDays(end, -1);
+  return dayRangeLabels(start, addCalendarDays(end, -1), locale, todayKst);
+}
+
+/** A KST day range `[start, last]` (both inclusive), with the same year rule as `cycleLabels`. */
+function dayRangeLabels(start: string, last: string, locale: string, todayKst: string): { start: string; last: string } {
   const startYear = start.slice(0, 4) !== todayKst.slice(0, 4);
   return {
     start: dayLabel(start, locale, startYear),
     last: dayLabel(last, locale, startYear && last.slice(0, 4) !== start.slice(0, 4)),
   };
+}
+
+/** B1c-3: the paid plans above `planId` (b2b_29 < b2b_49 < b2b_69); none for b2b_69 or a plan that is not paid. */
+function higherPaidPlans(planId: string): (typeof PAID_BRAND_PLAN_IDS)[number][] {
+  const at = (PAID_BRAND_PLAN_IDS as readonly string[]).indexOf(planId);
+  return at < 0 ? [] : PAID_BRAND_PLAN_IDS.slice(at + 1);
 }
 
 export default async function StudioOrganization({
@@ -140,6 +152,7 @@ export default async function StudioOrganization({
     detailOps,
     approvalPanel,
     cycleColumnReady,
+    upgradeCarries,
   ] = await Promise.all([
     loadBrandSupport({ sql }, viewer, id, true).then((r) => r ?? []),
     sql.query<{ id: string; project_id: string; name: string }>(
@@ -160,6 +173,8 @@ export default async function StudioOrganization({
     loadWorkspaceApprovalPanel(sql, id, { now }),
     // B1c: cycle invoices need migration 0186; before it a paid plan keeps the month draft.
     hasColumn(sql, 'brand_invoices', 'cycle_start').catch(() => false),
+    // B1c-3: carry grants from a plan upgrade (a date range that ends with the new cycle).
+    listPlanUpgradeCarries(sql, id).catch(() => []),
   ]);
 
   const previews = previewsRes.rows;
@@ -221,9 +236,13 @@ export default async function StudioOrganization({
   const formattedDetail = formatBillingOutcomeDetail(rawDetail, locale === 'en' ? 'en' : 'ko');
   // B1c: moving the start day under an invoiced cycle is refused with `cycle_already_invoiced`; the shared formatter
   // would show its generic "conflict" line, so this page names the reason and the way out.
-  const outcomeDetail = rawDetail?.includes('cycle_already_invoiced')
-    ? `${od.billing.cycleAlreadyInvoiced} (${rawDetail})`
-    : formattedDetail;
+  // B1c-3: a plan-upgrade preview (step 1). The panel shows it line by line, so the banner leaves out the raw detail.
+  const upgradePreview: PlanUpgradeDetail | null = rawOk === 'prepared' ? parsePlanUpgradeDetail(rawDetail) : null;
+  const outcomeDetail = upgradePreview
+    ? undefined
+    : rawDetail?.includes('cycle_already_invoiced')
+      ? `${od.billing.cycleAlreadyInvoiced} (${rawDetail})`
+      : formattedDetail;
   const defaultAllowanceMode = detailOps?.allowanceRow
     ? detailOps.allowanceRow.isOverride === false
       ? 'plan_default'
@@ -243,6 +262,144 @@ export default async function StudioOrganization({
   const isSandboxedOrg = isSandboxedClientOrganization(org);
   const subStatusTone = (st: string) =>
     st === 'active' ? 'done' : st === 'past_due' ? 'action' : st === 'suspended' ? 'fail' : 'hold';
+  const credits = (krw: number) => formatCredits(creditsOf(krw), locale === 'en' ? 'en' : 'ko');
+  const carryById = new Map(upgradeCarries.map((carry) => [carry.id, carry]));
+
+  /**
+   * B1c-3: "플랜 올림" — the form (higher paid plans only), the step-1 preview of its mode and the step-2 confirm form.
+   * `subscription`: the subscription card (`brandSubscription.upgrade`); `manual`: the plan panel (`brandBilling.planUpgrade`).
+   */
+  const planUpgradeBlock = (mode: 'subscription' | 'manual', currentPlanId: string, anchor: string) => {
+    const op = mode === 'subscription' ? 'brandSubscription.upgrade' : 'brandBilling.planUpgrade';
+    const back = `${backUrl}#${anchor}`;
+    const higher = higherPaidPlans(currentPlanId);
+    const preview = upgradePreview?.mode === mode ? upgradePreview : null;
+    if (higher.length === 0 && !preview) return null;
+    // The old cycle as it was (to `endBefore`) and as it ends now (`end` = today, so its last day is yesterday).
+    const days = preview
+      ? {
+          old: cycleText(preview.oldCycle.start, preview.oldCycle.endBefore),
+          cut: cycleText(preview.oldCycle.start, preview.oldCycle.end),
+          next: cycleText(preview.newCycle.start, preview.newCycle.end),
+        }
+      : null;
+    return (
+      <div className="grid gap-3 border-t border-hairline pt-3 text-xs" data-plan-upgrade>
+        <h3 className="text-xs font-semibold">{od.billing.planUpgradeHeading}</h3>
+        {higher.length > 0 && (
+          <div data-plan-upgrade-form data-plan-upgrade-mode={mode}>
+            <OpForm op={op} back={back} className="flex flex-wrap items-end gap-2">
+              <input type="hidden" name="organizationId" value={id} />
+              <label className="text-xs">
+                <span className="font-semibold block mb-1">{od.billing.planUpgradePlan}</span>
+                <select
+                  name="planId"
+                  defaultValue={preview && higher.some((pid) => pid === preview.newPlanId) ? preview.newPlanId : higher[0]}
+                  className={INPUT}
+                >
+                  {higher.map((pid) => (
+                    <option key={pid} value={pid}>
+                      {`${b.planNames[pid]} · ${formatKrw(BRAND_PLANS[pid].monthlyKrw, locale)}`}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button type="submit" className={BUTTON}>
+                {od.billing.planUpgradePreviewSubmit}
+              </button>
+              <p className="admin-field-hint w-full">{od.billing.planUpgradeHint}</p>
+            </OpForm>
+          </div>
+        )}
+        {preview && days && (
+          <div
+            className="grid gap-1 rounded border border-hairline p-3"
+            data-plan-upgrade-preview
+            data-plan-upgrade-mode={mode}
+          >
+            <p className="font-semibold">
+              {interpolate(od.billing.planUpgradePreviewHeading, {
+                from: b.planNames[preview.oldPlanId as keyof typeof b.planNames] ?? preview.oldPlanId,
+                to: b.planNames[preview.newPlanId as keyof typeof b.planNames] ?? preview.newPlanId,
+              })}
+            </p>
+            <p data-upgrade-line="old-cycle">
+              {interpolate(od.billing.planUpgradeOldCycle, {
+                start: days.old.start,
+                lastBefore: days.old.last,
+                last: days.cut.last,
+              })}
+            </p>
+            <p data-upgrade-line="new-cycle">
+              {interpolate(od.billing.planUpgradeNewCycle, {
+                start: days.next.start,
+                last: days.next.last,
+                next: dayLabel(preview.newCycle.end, locale),
+              })}
+            </p>
+            <p data-upgrade-line="carry">
+              {preview.carryKrw > 0
+                ? interpolate(od.billing.planUpgradeCarry, {
+                    credits: credits(preview.carryKrw),
+                    until: dayLabel(preview.carryValidUntil, locale),
+                  })
+                : od.billing.planUpgradeNoCarry}
+            </p>
+            <p data-upgrade-line="cap">
+              {preview.newPlanCapUnpaidKrw !== null
+                ? interpolate(od.billing.planUpgradeCapSubscription, {
+                    capUnpaid: credits(preview.newPlanCapUnpaidKrw),
+                    cap: credits(preview.newPlanCapKrw),
+                  })
+                : interpolate(od.billing.planUpgradeCap, { cap: credits(preview.newPlanCapKrw) })}
+            </p>
+            <p data-upgrade-line="amount">
+              {interpolate(od.billing.planUpgradeAmount, {
+                total: formatKrw(preview.totalKrw, locale),
+                supply: formatKrw(preview.supplyKrw, locale),
+                vat: formatKrw(preview.vatKrw, locale),
+                discount: String(preview.discountPercent),
+                due: dayLabel(preview.dueOn, locale),
+              })}
+            </p>
+            <p data-upgrade-line="invoice">
+              {mode === 'subscription' ? od.billing.planUpgradeIssueNow : od.billing.planUpgradeDraftManual}
+            </p>
+            {preview.scheduledDowngradeCleared && (
+              <p data-upgrade-line="downgrade-cleared">
+                {interpolate(od.billing.planUpgradeDowngradeCleared, {
+                  plan:
+                    b.planNames[preview.scheduledDowngradeCleared as keyof typeof b.planNames] ??
+                    preview.scheduledDowngradeCleared,
+                })}
+              </p>
+            )}
+            {preview.draftsVoided > 0 && (
+              <p data-upgrade-line="drafts-voided">
+                {interpolate(od.billing.planUpgradeDraftsVoided, { count: String(preview.draftsVoided) })}
+              </p>
+            )}
+            <p className="font-semibold" data-upgrade-line="no-refund">
+              {od.billing.planUpgradeNoRefund}
+            </p>
+            <div data-plan-upgrade-confirm>
+              <OpForm op={op} back={back} className="mt-2 flex flex-wrap items-center gap-3">
+                <input type="hidden" name="organizationId" value={id} />
+                <input type="hidden" name="planId" value={preview.newPlanId} />
+                <input type="hidden" name="previewPlanId" value={preview.newPlanId} />
+                <input type="hidden" name="previewDigest" value={preview.digest} />
+                <input type="hidden" name="confirm" value="1" />
+                <ConfirmCheck label={od.billing.planUpgradeConfirm} />
+                <button type="submit" className={BUTTON_PRIMARY}>
+                  {od.billing.planUpgradeConfirmSubmit}
+                </button>
+              </OpForm>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <AdminShell dict={dict.admin} locale={locale} active="brandWorkspace">
@@ -268,9 +425,11 @@ export default async function StudioOrganization({
       <OutcomeBanner
         dict={{
           ...dict.admin,
-          okPrepared: isReissuePreview
-            ? od.billing.subscriptionReissuePreviewedBanner
-            : od.billing.subscriptionPreviewedBanner,
+          okPrepared: upgradePreview
+            ? od.billing.planUpgradePreviewedBanner
+            : isReissuePreview
+              ? od.billing.subscriptionReissuePreviewedBanner
+              : od.billing.subscriptionPreviewedBanner,
         }}
         ok={rawOk}
         err={one(queryParams, 'err')}
@@ -699,6 +858,10 @@ export default async function StudioOrganization({
                 </button>
               </div>
             </OpForm>
+            {/* B1c-3: a manual paid plan (no live subscription) is upgraded here; a subscribed one on its card. */}
+            {paidPlan &&
+              !(sub && sub.status !== 'ended') &&
+              planUpgradeBlock('manual', paidPlan.planId, 'billing-plan-allowance')}
           </Panel>
 
           <Panel title={od.billing.profileHeading} id="billing-profile">
@@ -868,40 +1031,56 @@ export default async function StudioOrganization({
                   { key: 'reason', label: od.billing.extraReason },
                   { key: 'action', label: od.billing.invoiceCols.actions },
                 ]}
-                rows={detailOps.grants.map((g) => ({
-                  key: g.id,
-                  data: { 'data-grant-row': g.id },
-                  cells: {
-                    month: g.validMonth,
-                    // B1c: revoked grants never count, so they show no cycle.
-                    cycle: paidPlan ? (
-                      <span className="admin-nowrap" data-grant-cycle>
-                        {g.revokedAt
-                          ? '—'
-                          : grantCycleLabel(grantEffectiveStart(g.validMonth, g.createdAt), od.billing.grantBeforePlan)}
-                      </span>
-                    ) : null,
-                    amount: formatKrw(g.amountKrw, locale),
-                    state: (
-                      <StatusPill tone={g.revokedAt ? 'hold' : g.activeNow ? 'done' : 'progress'}>
-                        {g.revokedAt ? od.billing.extraRevoked : g.activeNow ? od.billing.extraActive : od.billing.extraOtherMonth}
-                      </StatusPill>
-                    ),
-                    reason: g.reason || '—',
-                    action: g.revokedAt ? (
-                      <span className="admin-cell-sub">{formatAdminTime(g.revokedAt, locale)}</span>
-                    ) : (
-                      <OpForm op="brandBilling.grant.revoke" back={`${backUrl}#billing`} className="flex flex-wrap items-center gap-2">
-                        <input type="hidden" name="organizationId" value={id} />
-                        <input type="hidden" name="grantId" value={g.id} />
-                        <ConfirmCheck label={od.billing.revokeExtra} />
-                        <button type="submit" className={BUTTON}>
-                          {od.billing.revokeExtra}
-                        </button>
-                      </OpForm>
-                    ),
-                  },
-                }))}
+                rows={detailOps.grants.map((g) => {
+                  // B1c-3: a plan-upgrade carry is a date range; its cycle is the one its first day falls in.
+                  const carry = carryById.get(g.id);
+                  const carryDays = carry ? dayRangeLabels(carry.validFrom, carry.validUntil, locale, todayKst) : null;
+                  return {
+                    key: g.id,
+                    data: { 'data-grant-row': g.id },
+                    cells: {
+                      month:
+                        carry && carryDays ? (
+                          <span className="admin-nowrap" data-grant-carry>
+                            {od.billing.grantCarryKind}
+                            <span className="admin-cell-sub">{interpolate(od.billing.grantCarryRange, carryDays)}</span>
+                          </span>
+                        ) : (
+                          g.validMonth
+                        ),
+                      // B1c: revoked grants never count, so they show no cycle.
+                      cycle: paidPlan ? (
+                        <span className="admin-nowrap" data-grant-cycle>
+                          {g.revokedAt
+                            ? '—'
+                            : grantCycleLabel(
+                                carry ? carry.validFrom : grantEffectiveStart(g.validMonth, g.createdAt),
+                                od.billing.grantBeforePlan,
+                              )}
+                        </span>
+                      ) : null,
+                      amount: formatKrw(g.amountKrw, locale),
+                      state: (
+                        <StatusPill tone={g.revokedAt ? 'hold' : g.activeNow ? 'done' : 'progress'}>
+                          {g.revokedAt ? od.billing.extraRevoked : g.activeNow ? od.billing.extraActive : od.billing.extraOtherMonth}
+                        </StatusPill>
+                      ),
+                      reason: g.reason || '—',
+                      action: g.revokedAt ? (
+                        <span className="admin-cell-sub">{formatAdminTime(g.revokedAt, locale)}</span>
+                      ) : (
+                        <OpForm op="brandBilling.grant.revoke" back={`${backUrl}#billing`} className="flex flex-wrap items-center gap-2">
+                          <input type="hidden" name="organizationId" value={id} />
+                          <input type="hidden" name="grantId" value={g.id} />
+                          <ConfirmCheck label={od.billing.revokeExtra} />
+                          <button type="submit" className={BUTTON}>
+                            {od.billing.revokeExtra}
+                          </button>
+                        </OpForm>
+                      ),
+                    },
+                  };
+                })}
                 empty={od.billing.noGrants}
               />
             ) : (
@@ -1413,6 +1592,7 @@ export default async function StudioOrganization({
                         </OpForm>
                       </div>
                     )}
+                    {sub.status !== 'ended' && planUpgradeBlock('subscription', sub.planId, 'billing-subscription')}
                   </>
                 ) : (
                   <p className="admin-field-hint">{od.billing.subscriptionNone}</p>

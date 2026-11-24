@@ -200,6 +200,9 @@ const SUBSCRIBED_WRITERS: Record<string, string> = {
   'brandSubscription.clearPendingPlan': 'allowed',
   'brandSubscription.reissuePeriod': 'allowed (current month after a void; same day count and due date)',
   'brandSubscription.reconcile': 'allowed (may issue; a failure is reported)',
+  // B1c-3: the mid-cycle upgrade (cuts the paid cycle, moves the plan, a carry grant, a new cycle's invoice).
+  'brandSubscription.upgrade': 'allowed (paid current cycle only; issues the new cycle at once)',
+  'brandBilling.planUpgrade': 'refused:subscription_upgrade_only',
 };
 
 const NON_WRITER_OPS: readonly string[] = [
