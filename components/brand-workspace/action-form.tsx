@@ -7,6 +7,7 @@ import { createFieldFocus, locateField, revealField } from "./form-errors";
 import { ConfirmStep, toneClass, useConfirmStep, type ButtonTone, type ConfirmCopy } from "./confirm-step";
 import { invitationFailure } from "./invite-outcome";
 import { invitationLanding } from "@/lib/brands/workspace/selection";
+import { InviteLink } from "./invite-link";
 
 export type BrandCopy = Dictionary["brandWorkspace"];
 export function ActionForm({
@@ -271,20 +272,8 @@ export function ActionForm({
           {notice}
         </p>
       )}
-      {inviteUrl && (
-        <div className="bw-note">
-          <p>{b.inviteReady}</p>
-          <label>
-            {b.inviteToken}
-            <input
-              readOnly
-              value={inviteUrl}
-              onFocus={(e) => e.currentTarget.select()}
-            />
-          </label>
-          <p>{b.inviteExpiry}</p>
-        </div>
-      )}
+      {/* The 7-day rule is said once, beside the composer on the team page. */}
+      {inviteUrl && <InviteLink url={inviteUrl} b={b} />}
     </form>
   );
 }
