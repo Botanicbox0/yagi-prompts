@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { AssetRefSchema, type AssetRef } from '@/lib/content/schemas';
 import { VISIBILITY_ORDER, type Visibility } from '@/lib/content/visibility';
+import { USE_CASES, type UseCase } from './use-cases';
 
 /**
  * PLAN §13.1 — the prompt content contracts.
@@ -81,24 +82,8 @@ export const ModelList = z
     error: `pick at most ${MODELS_MAX} models`,
   });
 
-/**
- * The use-case vocabulary: eight, fixed, bilingual at the UI layer.
- *
- * Small on purpose. A free-text tag field on a community submission is a moderation queue that
- * grows forever and a filter rail that never converges; eight chips cover what Seedance is used
- * for and can be extended by a migration when the tenth one earns its place.
- */
-export const USE_CASES = [
-  'cinematic',
-  'short-film',
-  'mv',
-  'vlog',
-  'brand-ad',
-  'ugc',
-  'tutorial',
-  'game',
-] as const;
-export type UseCase = (typeof USE_CASES)[number];
+/** The use-case vocabulary lives in `./use-cases` (no zod there, so client code can read it). */
+export { USE_CASES, type UseCase };
 
 export function isUseCase(value: unknown): value is UseCase {
   return typeof value === 'string' && (USE_CASES as readonly string[]).includes(value);
