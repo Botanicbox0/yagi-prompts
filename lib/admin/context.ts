@@ -158,6 +158,11 @@ export type AdminErrorCode =
    *   brandNotShared       — a campaign-only invite for a campaign the client cannot see yet
    */
   | 'brandConflict'
+  /**
+   * R3 item 8: the same refusal from a plan, billing or subscription operation (an invoice already issued, a revision
+   * that moved, a plan change the cycle does not allow). Its own neutral sentence: these are not campaigns.
+   */
+  | 'billingConflict'
   | 'collaborationRateLimited'
   /** The brand host's studio door: this admin's action budget for the window is spent (lib/admin/brand-host-audit.ts). */
   | 'studioRateLimited'

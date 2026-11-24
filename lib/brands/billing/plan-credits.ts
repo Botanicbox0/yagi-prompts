@@ -60,6 +60,27 @@ export function planCapKrwFromCredits(plan: PaidBrandPlanId): number {
   return BRAND_PLAN_CREDITS[plan] * STUDIO_CREDIT_KRW;
 }
 
+/**
+ * R3 item 6: the monthly plan cap that applies (KRW). A stored `brand_plan_allowance_defaults` row wins; with no row, or
+ * a cleared one (null), a paid plan opens its confirmed credits (`planCapKrwFromCredits`) instead of falling back to the
+ * env default. Null only for a plan id with no confirmed credits (`project_only`, an unknown id): the caller's defensive
+ * path (the env default for the allowance, `plan_cap_not_set` for an upgrade). Every reader of the plan default goes
+ * through here (lib/brand-studio/usage.ts, snapshot.ts, allowance.ts, plan-upgrade-apply.ts, the admin summaries).
+ */
+export function resolvePlanCapKrw(planId: string, storedCapKrw: number | null | undefined): number | null {
+  if (storedCapKrw !== null && storedCapKrw !== undefined && Number.isFinite(Number(storedCapKrw))) return Number(storedCapKrw);
+  if (!Object.prototype.hasOwnProperty.call(BRAND_PLAN_CREDITS, planId)) return null;
+  return planCapKrwFromCredits(planId as PaidBrandPlanId);
+}
+
+/** SQL for the same fallback: a `case` over a plan-id expression giving each paid plan's confirmed cap, else null. */
+export function confirmedPlanCapSql(planIdExpr: string): string {
+  const whens = (Object.keys(BRAND_PLAN_CREDITS) as PaidBrandPlanId[])
+    .map((plan) => `when '${plan}' then ${planCapKrwFromCredits(plan)}`)
+    .join(' ');
+  return `(case ${planIdExpr} ${whens} else null end)::bigint`;
+}
+
 /** Card fee on one monthly charge: ceil(price x 1.1 x 0.0374), the price being VAT-exclusive. */
 export function cardFeeKrw(priceKrw: number): number {
   if (!Number.isFinite(priceKrw) || priceKrw <= 0) return 0;

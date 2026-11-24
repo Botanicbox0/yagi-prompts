@@ -15,7 +15,7 @@ import {
   loadBrandBillingProfile,
   loadPlanAllowanceDefault,
 } from '@/lib/brands/billing';
-import { hasTable, hasTables, loadSubscriptionSchemaReady } from '@/lib/brands/billing/schema-guard';
+import { hasTable, hasTables, loadInvoiceBookkeepingReady, loadSubscriptionSchemaReady } from '@/lib/brands/billing/schema-guard';
 import type {
   BrandAllowanceGrant,
   BrandBillingProfile,
@@ -105,8 +105,21 @@ export interface OrgSubscriptionPanelState {
   invoiceMeta: Record<string, ExtendedInvoiceMeta>;
 }
 
+/** R3 items 2 and 4: an invoice's bookkeeping fields (0182), shown and recorded on the manual path with the flag off. */
+export interface InvoiceBookkeeping {
+  dueOn: string | null;
+  collectionMethod: string | null;
+  taxInvoiceIssuedOn: string | null;
+  taxInvoiceRef: string | null;
+}
+
 export interface BrandOrgDetailOps {
   billingAvailable: boolean;
+  /**
+   * R3 items 2 and 4: whether the 0182 bookkeeping columns exist (the tax-invoice control and the due date show only
+   * then), and each invoice's values — whatever `BRAND_BILLING_AUTO_ISSUE` says.
+   */
+  invoiceBookkeeping: { ready: boolean; byInvoice: Record<string, InvoiceBookkeeping> };
   allowance: StudioAllowance | null;
   allowanceRow: StudioAllowanceRow | null;
   planDefaultCapKrw: number | null;
@@ -622,8 +635,48 @@ export async function loadBrandOrgDetailOps(
     }
   }
 
+  // R3 items 2 and 4: the bookkeeping fields for every invoice, flag on or off. With the flag on and the subscription
+  // schema ready they are already in `invoiceMetaMap`; otherwise one probe of the 0182 columns and one select.
+  const invoiceBookkeeping: BrandOrgDetailOps['invoiceBookkeeping'] = { ready: false, byInvoice: {} };
+  if (billingAvailable) {
+    if (autoIssueEnabled && subscriptionSchemaReady) {
+      invoiceBookkeeping.ready = true;
+      for (const [id, m] of invoiceMetaMap.entries()) {
+        invoiceBookkeeping.byInvoice[id] = {
+          dueOn: m.dueOn,
+          collectionMethod: m.collectionMethod,
+          taxInvoiceIssuedOn: m.taxInvoiceIssuedOn,
+          taxInvoiceRef: m.taxInvoiceRef,
+        };
+      }
+    } else if (await loadInvoiceBookkeepingReady(sql).catch(() => false)) {
+      invoiceBookkeeping.ready = true;
+      const { rows } = await sql.query<{
+        id: string;
+        due_on: string | null;
+        collection_method: string | null;
+        tax_invoice_issued_on: string | null;
+        tax_invoice_ref: string | null;
+      }>(
+        `select id::text as id, due_on::text as due_on, collection_method,
+                tax_invoice_issued_on::text as tax_invoice_issued_on, tax_invoice_ref
+           from brand_invoices where organization_id = $1`,
+        [organizationId],
+      );
+      for (const r of rows) {
+        invoiceBookkeeping.byInvoice[String(r.id)] = {
+          dueOn: r.due_on == null ? null : String(r.due_on),
+          collectionMethod: r.collection_method == null ? null : String(r.collection_method),
+          taxInvoiceIssuedOn: r.tax_invoice_issued_on == null ? null : String(r.tax_invoice_issued_on),
+          taxInvoiceRef: r.tax_invoice_ref == null ? null : String(r.tax_invoice_ref),
+        };
+      }
+    }
+  }
+
   return {
     billingAvailable,
+    invoiceBookkeeping,
     allowance,
     allowanceRow,
     planDefaultCapKrw,

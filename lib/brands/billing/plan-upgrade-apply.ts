@@ -10,9 +10,10 @@ import { lockOrganizationForSubscription, previewDigest, reconcileSubscriptionIn
 import { BrandBillingDenied, requireDbAdmin } from './access';
 import { insertAllowanceGrantInTx, loadPlanAllowanceDefaults } from './allowance';
 import { kstDayStartUtc } from './cycle';
+import { PLAN_UPGRADE_REASON } from './cycle-invoices';
 import { appendInvoiceEvent, draftBrandInvoiceInTx, voidBrandInvoiceInTx, type InvoiceActor, type ValidatedDraftInvoiceInput } from './invoices';
 import { kstDayOf, kstMonthOf, PAID_BRAND_PLAN_IDS, type PaidBrandPlanId } from './math';
-import { BRAND_PLAN_LIST_KRW } from './plan-credits';
+import { BRAND_PLAN_LIST_KRW, resolvePlanCapKrw } from './plan-credits';
 import { planUpgradeEffect, planUpgradePairRefusal, type PlanUpgradeEffect, type PlanUpgradeInvoice } from './plan-upgrade';
 import { hasColumn, hasTable, loadSubscriptionSchemaReady } from './schema-guard';
 
@@ -81,8 +82,11 @@ const UpgradeInput = z.object({
   previewDigest: z.string().trim().regex(/^[0-9a-f]{16}$/).optional(),
 });
 
-/** Marker on the cut invoice's audit event; also how a second confirm on the same day is recognised. */
-export const PLAN_UPGRADE_REASON = 'plan_upgrade' as const;
+/**
+ * Marker on the cut invoice's audit event; also how a second confirm on the same day is recognised. Defined in
+ * cycle-invoices.ts since R3 fix round 1 (the plan forms read it there: a cycle that began with an upgrade).
+ */
+export { PLAN_UPGRADE_REASON };
 
 type Deps = { sql: SqlRunner; now?: () => Date; env?: Record<string, string | undefined>; graceDays?: number };
 
@@ -235,8 +239,13 @@ async function runPlanUpgrade(deps: Deps, viewer: Viewer, mode: PlanUpgradeMode,
       const oldCapKrw = allowance.source === 'plan' ? allowance.baseCapKrw + kept.grantsKrw : allowance.capKrw;
       const oldUsedKrw = kept.usedKrw;
       const discountPercent = await discountInForce(sql, v.organizationId);
-      const caps = Object.fromEntries(PAID_BRAND_PLAN_IDS.map((id) => [id, null])) as Record<PaidBrandPlanId, number | null>;
-      for (const d of await loadPlanAllowanceDefaults(sql)) caps[d.planId] = d.monthlyCapKrw;
+      // R3 item 6: a stored default wins; without one each paid plan has its confirmed credits (`resolvePlanCapKrw`), so
+      // `plan_cap_not_set` stays only as the core's defensive path.
+      const stored = new Map((await loadPlanAllowanceDefaults(sql)).map((d) => [d.planId, d.monthlyCapKrw]));
+      const caps = Object.fromEntries(PAID_BRAND_PLAN_IDS.map((id) => [id, resolvePlanCapKrw(id, stored.get(id))])) as Record<
+        PaidBrandPlanId,
+        number | null
+      >;
 
       const effect = planUpgradeEffect({
         todayKst,

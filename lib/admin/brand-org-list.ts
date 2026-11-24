@@ -12,6 +12,7 @@ import {
   planActiveWithGrace,
 } from '@/lib/brands/billing/math';
 import { hasColumn, hasTables } from '@/lib/brands/billing/schema-guard';
+import { confirmedPlanCapSql } from '@/lib/brands/billing/plan-credits';
 import type { BrandBillingMode, BrandPlanId } from '@/lib/brands/plans';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import { escapeLike, firstParam, isDbAdmin, iso } from './brand-ops-guard';
@@ -232,10 +233,11 @@ export async function loadBrandOrgList(
       ? 'a.monthly_cap_krw is not null and a.is_override is distinct from false'
       : 'a.monthly_cap_krw is not null'
     : 'false';
+  // R3 item 6: an active paid plan's cap is its stored default, or with none stored its confirmed credits
+  // (`confirmedPlanCapSql`, the same constants `resolvePlanCapKrw` uses) — never the env default.
   const planDefaultCapExpr =
-    hasPlans && hasPlanDefaults
-      ? `(${planActiveExpr}) and p.plan_id in (${paidPlanList}) and d.monthly_cap_krw is not null`
-      : 'false';
+    hasPlans && hasPlanDefaults ? `(${planActiveExpr}) and p.plan_id in (${paidPlanList})` : 'false';
+  const planCapValueExpr = hasPlanDefaults ? `coalesce(d.monthly_cap_krw::bigint, ${confirmedPlanCapSql('p.plan_id')})` : '0::bigint';
 
   const allowanceSourceExpr = `case
     when ${allowOverrideExpr} then 'override'
@@ -245,7 +247,7 @@ export async function loadBrandOrgList(
 
   const baseCapExpr = `greatest(0::bigint, case
     when ${allowOverrideExpr} then ${hasAllowances ? 'a.monthly_cap_krw::bigint' : '0::bigint'}
-    when ${planDefaultCapExpr} then ${hasPlanDefaults ? 'd.monthly_cap_krw::bigint' : '0::bigint'}
+    when ${planDefaultCapExpr} then ${planCapValueExpr}
     else $1::bigint
   end)`;
 

@@ -389,7 +389,8 @@ describe('B1a review round 4 — B: remaining findings', () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-11-25T01:00:00Z'));
     const op = await h.run('brandSubscription.reconcile', { organizationId: orgId });
-    expect(op).toMatchObject({ ok: false, code: 'brandConflict', detail: 'conflict:reconcile_failed:draft:db:23514' });
+    // R3 item 8 (changed on purpose): a subscription operation's conflict reads as billingConflict, not the campaign line.
+    expect(op).toMatchObject({ ok: false, code: 'billingConflict', detail: 'conflict:reconcile_failed:draft:db:23514' });
     vi.useRealTimers();
     for (let i = 0; i < 2; i += 1) {
       const r = await reconcileSubscriptionAdmin({ sql, now: at('2026-11-25T02:00:00Z') }, ADMIN_VIEWER, { organizationId: orgId });

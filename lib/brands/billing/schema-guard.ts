@@ -181,6 +181,26 @@ const REQUIRED_SUBSCRIPTION_COLUMNS: ReadonlyArray<readonly [string, string]> = 
 ];
 
 /**
+ * R3 item 2: the invoice bookkeeping columns of 0182 the manual path writes and shows — the due date, the collection
+ * method and the Hometax tax invoice (date, reference, audited with an actor kind). Independent of the subscription
+ * tables and of `BRAND_BILLING_AUTO_ISSUE`; each positive probe is cached by `hasColumn`.
+ */
+const INVOICE_BOOKKEEPING_COLUMNS: ReadonlyArray<readonly [string, string]> = [
+  ['brand_invoices', 'due_on'],
+  ['brand_invoices', 'collection_method'],
+  ['brand_invoices', 'tax_invoice_issued_on'],
+  ['brand_invoices', 'tax_invoice_ref'],
+  ['brand_invoice_events', 'actor_kind'],
+];
+
+export async function loadInvoiceBookkeepingReady(sql: SqlRunner): Promise<boolean> {
+  for (const [table, column] of INVOICE_BOOKKEEPING_COLUMNS) {
+    if (!(await hasColumn(sql, table, column))) return false;
+  }
+  return true;
+}
+
+/**
  * Probes whether migration `0182` (brand subscriptions tables and invoice/event columns) is live.
  * Positive `true` is cached per DB root; `false` is never cached so applying migrations live takes effect immediately.
  */

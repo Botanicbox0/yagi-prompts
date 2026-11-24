@@ -5485,6 +5485,7 @@ export const ko: Dictionary = {
     brandStatusFinal: '끝난 캠페인입니다. 상태를 더 바꿀 수 없습니다.',
     inviteHiddenCampaign: '이 캠페인은 아직 고객에게 공개하지 않았습니다. 캠페인만 보는 초대는 공개한 뒤에 보낼 수 있습니다. 브랜드 전체 초대는 브랜드 권한 화면에서 보내세요.',
     errBrandConflict: '캠페인이 그사이 바뀌었거나, 지금 상태에서는 할 수 없는 변경입니다. 새로고침해 현재 상태를 확인해 주세요.',
+    errBillingConflict: '지금 상태에서는 할 수 없는 변경입니다. 아래 상세를 확인하고, 화면을 새로고침해 현재 상태를 본 뒤 다시 시도하세요.',
     errCollaborationRateLimited: '요청이 많습니다. 잠시 후 다시 시도해 주세요.',
     errStudioRateLimited: '짧은 시간에 너무 많이 바꿨어요. 10분 뒤에 다시 해 주세요.',
     errBrandNotActive: '진행 중인 캠페인에서만 할 수 있습니다. 먼저 캠페인을 진행 상태로 바꿔 주세요.',

@@ -423,11 +423,16 @@ describe('B1a brand subscriptions integration & route (§8.2–§8.11)', () => {
         ['brandSubscription.scheduleDowngrade', { organizationId: f.orgId, planId: 'b2b_29' }],
         ['brandSubscription.clearPendingPlan', { organizationId: f.orgId }],
         ['brandSubscription.reconcile', { organizationId: f.orgId }],
-        ['brandBilling.invoice.recordTaxInvoice', { invoiceId: randomUUID(), issuedOn: '2026-11-23', ref: 'TX-1' }],
       ] as const) {
         const res = await h.run(op, payload);
         expect(res, op).toMatchObject({ ok: false, code: 'disabled' });
       }
+      // R3 item 2 (changed on purpose): recording a tax invoice moved from the flag-gated subscription operations to the
+      // manual bookkeeping operations that work with the flag off (like "입금 완료 처리"). It reaches the service: an
+      // unknown invoice is "not found", not "disabled".
+      expect(
+        await h.run('brandBilling.invoice.recordTaxInvoice', { invoiceId: randomUUID(), issuedOn: '2026-11-23', ref: 'TX-1' }),
+      ).toMatchObject({ ok: false, code: 'notFound' });
     } finally {
       await h.close();
     }
