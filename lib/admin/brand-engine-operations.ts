@@ -104,6 +104,10 @@ const plan: AdminOperation<PlanInput> = {
     if (!result.ok && result.field === 'cycle_already_invoiced') {
       return fail('brandConflict', 'conflict:cycle_already_invoiced');
     }
+    // B1c-3 fix round 1: a higher plan mid-cycle goes through "플랜 올림".
+    if (!result.ok && result.field === 'plan_upgrade_required') {
+      return fail('brandConflict', 'conflict:plan_upgrade_required');
+    }
     if (!result.ok) return brandFailure(result.code);
     return ok('saved', { to: organizationPath(input.organizationId) });
   },

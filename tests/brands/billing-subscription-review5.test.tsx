@@ -186,6 +186,9 @@ const SUBSCRIBED_OPS: Record<string, string> = {
   'brandSubscription.clearPendingPlan': 'allowed',
   'brandSubscription.reissuePeriod': 'allowed (current month, after a void)',
   'brandSubscription.reconcile': 'allowed (may issue)',
+  // B1c-3: the mid-cycle upgrade issues the new cycle through the engine; the manual upgrade refuses a subscribed organization.
+  'brandSubscription.upgrade': 'allowed (paid current cycle; issues the new cycle at once)',
+  'brandBilling.planUpgrade': 'refused:subscription_upgrade_only',
   // Organization-level billing operations that write no subscription invoice.
   'brandBilling.planAndAllowance.set': 'plan refused:subscription_managed (allowance-only allowed)',
   'brandBilling.planDefault.set': 'not an invoice write',

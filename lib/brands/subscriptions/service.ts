@@ -1909,7 +1909,8 @@ export async function scheduleDowngrade(
         return { ok: false as const, code: 'invalid' as const, field: 'planId', detail: 'same_plan' };
       }
       if (BRAND_PLANS[targetPlanId].rank > BRAND_PLANS[currentPlan].rank) {
-        return { ok: false as const, code: 'not_available_yet' as const, detail: 'upgrade_not_available_yet' };
+        // B1c-3: a higher plan is the upgrade operation (`brandSubscription.upgrade`, a new cycle from today).
+        return { ok: false as const, code: 'invalid' as const, field: 'planId', detail: 'upgrade_use_upgrade_operation' };
       }
 
       const actor: InvoiceActor = { kind: 'admin', userId: adminId };

@@ -19,7 +19,7 @@ import {
 import { brandWorkspaceApprovalOpen } from '@/lib/flags';
 import { hasTable, loadAllowanceSchemaState } from './schema-guard';
 import { syncPlanDefaultSnapshot } from './snapshot';
-import { CYCLE_ALREADY_INVOICED, startDayMoveBlocked } from './cycle-invoices';
+import { CYCLE_ALREADY_INVOICED, higherPlanNeedsUpgrade, PLAN_UPGRADE_REQUIRED, startDayMoveBlocked } from './cycle-invoices';
 import { loadWorkspaceApprovalSchemaReady } from './workspace-approval-schema';
 import type {
   BrandAllowanceGrant,
@@ -292,6 +292,15 @@ export async function setPlanAndAllowance(
       if (current && (await startDayMoveBlocked(sql, v.organizationId, v.startedOn, kstDayOf(deps.now?.() ?? new Date())))) {
         return { ok: false as const, code: 'conflict' as const, detail: CYCLE_ALREADY_INVOICED };
       }
+      // B1c-3 fix round 1: a higher plan mid-cycle is "플랜 올림", not this form (only with an existing assignment).
+      if (current) {
+        const stored = (
+          await sql.query<{ plan_id: string }>('select plan_id from brand_plan_assignments where organization_id = $1', [v.organizationId])
+        ).rows[0];
+        if (stored && (await higherPlanNeedsUpgrade(sql, v.organizationId, stored.plan_id, v.planId, kstDayOf(deps.now?.() ?? new Date())))) {
+          return { ok: false as const, code: 'conflict' as const, detail: PLAN_UPGRADE_REQUIRED };
+        }
+      }
       const next = revision + 1;
 
       await sql.query(
@@ -431,12 +440,30 @@ function checkGrantInput(
 export async function insertAllowanceGrantInTx(
   sql: SqlRunner,
   input: unknown,
-  options: { createdBy: string | null; now: Date; kind?: 'trial'; carriedFrom?: string | null },
+  options: {
+    createdBy: string | null;
+    now: Date;
+    kind?: 'trial' | 'carry';
+    carriedFrom?: string | null;
+    /** B1c-3, kind 'carry' only (0186): the inclusive date range of a plan-upgrade carry. */
+    validRange?: { from: string; until: string };
+  },
 ): Promise<{ ok: true; id: string | null } | { ok: false; code: 'invalid'; field: string }> {
   const checked = checkGrantInput(input, options.now);
   if (!checked.ok) return checked;
   const v = checked.value;
   const id = randomUUID();
+  // B1c-3: the one-time credit carry of a plan upgrade — a date-range grant (it attaches to the new cycle and ends with
+  // it), stamped with the upgrade's clock. The statements below for the other kinds are unchanged.
+  if (options.kind === 'carry') {
+    if (!options.validRange || options.validRange.from > options.validRange.until) return { ok: false, code: 'invalid', field: 'validRange' };
+    await sql.query(
+      `insert into brand_allowance_grants (id, organization_id, amount_krw, valid_month, reason, created_by, created_at, kind, valid_from, valid_until)
+         values ($1, $2, $3, $4, $5, $6, $7::timestamptz, 'carry', $8::date, $9::date)`,
+      [id, v.organizationId, v.amountKrw, v.validMonth, v.reason, options.createdBy, options.now.toISOString(), options.validRange.from, options.validRange.until],
+    );
+    return { ok: true, id };
+  }
   if (options.kind === undefined) {
     await sql.query(
       `insert into brand_allowance_grants (id, organization_id, amount_krw, valid_month, reason, created_by)

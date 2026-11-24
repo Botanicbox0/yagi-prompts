@@ -11,6 +11,7 @@ import { BRAND_USAGE_OPERATIONS } from './brand-usage-operations';
 import { BRAND_ENGINE_OPERATIONS } from './brand-engine-operations';
 import { BRAND_BILLING_OPERATIONS } from './brand-billing-operations';
 import { BRAND_SUBSCRIPTION_OPERATIONS } from './brand-subscription-operations';
+import { BRAND_PLAN_UPGRADE_OPERATIONS } from './brand-plan-upgrade-operations';
 import { BRAND_WORKSPACE_APPROVAL_OPERATIONS } from './brand-workspace-approval-operations';
 import { BRAND_STUDIO_OPERATIONS } from './brand-studio-operations';
 import { BRAND_STUDIO_REVIEW_OPERATIONS } from './brand-studio-review-operations';
@@ -72,6 +73,8 @@ export const ADMIN_OPERATIONS = {
   ...BRAND_BILLING_OPERATIONS,
   // docs/BRAND-RECURRING-BILLING.md §14 B1a — B2B subscription lifecycle and tax-invoice recording (behind BRAND_BILLING_AUTO_ISSUE).
   ...BRAND_SUBSCRIPTION_OPERATIONS,
+  // docs/BRAND-RECURRING-BILLING.md §5.10 B1c-3 — mid-cycle plan upgrade: subscribed (flag) and manual plan organizations.
+  ...BRAND_PLAN_UPGRADE_OPERATIONS,
   // docs/BRAND-RECURRING-BILLING.md §6.5 B1b — explicit workspace approval and its trial credits (behind BRAND_WORKSPACE_APPROVAL).
   ...BRAND_WORKSPACE_APPROVAL_OPERATIONS,
   // docs/BRAND-STUDIO-V2.md §9 — the studio v2 monthly allowance and preferred lane per organization.

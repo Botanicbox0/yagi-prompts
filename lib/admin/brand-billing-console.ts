@@ -28,6 +28,7 @@ import { brandBillingAutoIssueOpen } from '@/lib/flags';
 import { BRAND_PLANS } from '@/lib/brands/plans';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import { firstParam, isDbAdmin, iso } from './brand-ops-guard';
+import { formatPlanUpgradeOutcomeDetail } from './plan-upgrade-detail';
 
 export interface BillingStatusTotals {
   count: number;
@@ -546,6 +547,9 @@ export async function loadBrandDiscountCodesConsole(
  */
 export function formatBillingOutcomeDetail(detail: string | undefined, locale: 'ko' | 'en'): string | undefined {
   if (!detail) return undefined;
+  // B1c-3: plan-upgrade refusals have their own lines (lib/admin/plan-upgrade-detail.ts).
+  const upgrade = formatPlanUpgradeOutcomeDetail(detail, locale);
+  if (upgrade) return upgrade;
   const labels =
     locale === 'ko'
       ? {
@@ -570,7 +574,9 @@ export function formatBillingOutcomeDetail(detail: string | undefined, locale: '
           sandboxed_org: '샌드박스 조직에는 정기구독을 시작할 수 없습니다',
           project_only_not_subscribable: '프로젝트 전용 플랜은 정기구독을 만들 수 없습니다',
           card_not_available_yet: '카드 자동결제는 다음 단계(B3)에서 열립니다. 현재 계좌이체만 지원됩니다',
-          upgrade_not_available_yet: '플랜 올림은 크레딧 일할 계산과 함께 다음 단계(B1b)에서 열립니다',
+          upgrade_use_upgrade_operation: '더 높은 플랜은 "플랜 올림"으로 올립니다(오늘 새 주기가 시작됩니다)',
+          plan_upgrade_required:
+            '이번 주기 청구서가 있는 동안 플랜 폼으로는 더 높은 플랜으로 바꿀 수 없습니다. "플랜 올림"을 쓰세요(오늘 새 주기와 새 플랜 청구서가 만들어집니다)',
           subscription_exists: '이미 종료되지 않은 정기구독이 있습니다',
           period_already_invoiced: '시작 월 또는 그 이후 달에 취소되지 않은 정기 청구서가 이미 있어 구독을 시작할 수 없습니다. 그 청구서를 먼저 정리하세요',
           manual_plan_active: '유효한 수동 플랜(유예 기간 포함)이 있어 구독을 시작할 수 없습니다. 기존 플랜 설정에서 수동 플랜을 먼저 끝내세요',
@@ -627,7 +633,9 @@ export function formatBillingOutcomeDetail(detail: string | undefined, locale: '
           sandboxed_org: 'Sandboxed organizations cannot have a subscription',
           project_only_not_subscribable: 'project_only plans cannot have a subscription',
           card_not_available_yet: 'Card billing opens in a later slice (B3); only transfer is available now',
-          upgrade_not_available_yet: 'Plan upgrades open in B1b together with credit proration',
+          upgrade_use_upgrade_operation: 'A higher plan is an upgrade (a new cycle starts today); use the upgrade',
+          plan_upgrade_required:
+            "While an invoice covers this cycle the plan form cannot raise the plan; use the plan upgrade (a new cycle and the new plan's invoice start today)",
           subscription_exists: 'An active or non-ended subscription already exists',
           period_already_invoiced: 'A non-void subscription invoice already exists for the start period or a later one; settle it first',
           manual_plan_active: 'A manual plan is still active (grace included); end it in the plan settings before starting a subscription',
@@ -685,7 +693,8 @@ const SUBSCRIPTION_DETAIL_TOKENS = [
   'sandboxed_org',
   'project_only_not_subscribable',
   'card_not_available_yet',
-  'upgrade_not_available_yet',
+  'upgrade_use_upgrade_operation',
+  'plan_upgrade_required',
   'subscription_exists',
   'period_already_invoiced',
   'manual_plan_active',

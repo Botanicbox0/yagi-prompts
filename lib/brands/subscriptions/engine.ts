@@ -310,16 +310,47 @@ export function currentRun(
   const cycles = occupiedCycles(epochInvoices);
   if (cycles.length === 0) return null;
   const ends = new Set(cycles.map((c) => c.end));
-  const runStarts = cycles.filter((c) => !ends.has(c.start));
-  const started = runStarts.filter((c) => c.start <= todayKst);
-  const first = (started.length > 0 ? started : runStarts.length > 0 ? runStarts.slice(0, 1) : cycles).at(-1)!;
-  const chain = [first];
-  for (;;) {
-    const next = cycles.find((c) => c.start === chain.at(-1)!.end);
-    if (!next) break;
-    chain.push(next);
+  // B1c-3 (plan upgrade): a cycle shorter than its anchor's cycle was cut by an upgrade, which started a new cycle (a
+  // new anchor) on the cut day. The run ends there and the cycle starting on the cut day starts the next run. Without a
+  // cut cycle the runs, and therefore everything below, are exactly as before. One pass: every cycle is visited once.
+  const byStart = new Map(cycles.map((c) => [c.start, c] as const));
+  const runs: { first: Cycle; chain: Cycle[] }[] = [];
+  const queue = cycles.filter((c) => !ends.has(c.start));
+  for (let i = 0; i < queue.length; i += 1) {
+    const first = queue[i]!;
+    const chain = [first];
+    for (;;) {
+      const last = chain.at(-1)!;
+      const next = byStart.get(last.end);
+      if (!next) break;
+      if (cutByUpgrade(first.start, chain.length - 1, last)) {
+        queue.push(next);
+        break;
+      }
+      chain.push(next);
+    }
+    runs.push({ first, chain });
   }
-  return { anchor: first.start, lastEnd: chain.at(-1)!.end, cycles: chain };
+  runs.sort((a, b) => a.first.start.localeCompare(b.first.start));
+  const started = runs.filter((r) => r.first.start <= todayKst);
+  const picked = (started.length > 0 ? started : runs.slice(0, 1)).at(-1);
+  if (!picked) {
+    // No run start at all (cannot happen with non-overlapping cycles): the last cycle, as before.
+    const last = cycles.at(-1)!;
+    return { anchor: last.start, lastEnd: last.end, cycles: [last] };
+  }
+  return { anchor: picked.first.start, lastEnd: picked.chain.at(-1)!.end, cycles: picked.chain };
+}
+
+/** B1c-3: cycle `index` of the run anchored on `anchor` ends before that anchor's cycle would (an upgrade cut it). */
+function cutByUpgrade(anchor: string, index: number, cycle: Cycle): boolean {
+  // Fast path (no date math): a cycle ending on the anchor's day one month after its start is never shorter than the
+  // anchor's cycle (every natural end in that window falls on or before that day). Month-end and cut cycles go below.
+  const monthIndex = (day: string) => Number(day.slice(0, 4)) * 12 + Number(day.slice(5, 7));
+  if (cycle.end.slice(8, 10) === anchor.slice(8, 10) && monthIndex(cycle.end) === monthIndex(cycle.start) + 1) return false;
+  if (cycleStartAt(anchor, index) === cycle.start) return cycle.end < cycleStartAt(anchor, index + 1);
+  const natural = cycleContaining(anchor, cycle.start);
+  return natural !== null && cycle.end < natural.end;
 }
 
 interface Ledger {
