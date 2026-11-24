@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { BillingRequestDialog } from '@/components/brand-billing/billing-request-form';
+import { windowText, type AllowanceWindowView } from '@/lib/brand-studio/allowance-window';
 import type { BillingPlanCatalogueItem } from '@/lib/brands/billing-ui';
 import type { ChecklistUsageState, FirstRunChecklistState } from '@/lib/brands/workspace/home-checklist';
 import { homeChecklistDismissCookieName } from '@/lib/brands/workspace/home-checklist-cookie';
@@ -23,6 +24,8 @@ export interface FirstRunChecklistProps {
   hrefs?: { members?: string; studio?: string; billing?: string };
   closedRequestDraft?: string;
   closedRequestOrgFallback?: string;
+  /** R1: the allowance window when the page loaded one; a billing cycle drops "this month" from the ready line. */
+  allowanceWindow?: Pick<AllowanceWindowView, 'kind'> | null;
 }
 
 function writeDismissedCookie(organizationId: string): void {
@@ -39,6 +42,7 @@ export function FirstRunChecklist({
   billingCopy,
   planCatalogue,
   canOpenBilling = true,
+  allowanceWindow,
 }: FirstRunChecklistProps) {
   const [dismissed, setDismissed] = useState(false);
   const [requestOpen, setRequestOpen] = useState(false);
@@ -65,7 +69,7 @@ export function FirstRunChecklist({
 
   const usageBodyText =
     usageState === 'ready'
-      ? copy.usage.readyBody
+      ? windowText(allowanceWindow, copy.usage.readyBody, copy.usage.readyBodyCycle)
       : usageState === 'requested'
         ? copy.usage.requestedBody
         : copy.usage.pendingBody;

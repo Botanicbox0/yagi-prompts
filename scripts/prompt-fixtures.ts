@@ -184,6 +184,9 @@ const YAGI: PromptFixture[] = [
   {
     id: '9a000000-0000-4000-8000-000000000006',
     slug: 'game-cinematic-flyover',
+    // The one short film (≤ 10 s) among the solo videos, so the video list offers three length bands
+    // locally (15 s · 30 s · this) and keeps NULL-length cards that show under "all" only.
+    runtimeSeconds: 8,
     source: 'yagi',
     status: 'published',
     title: 'Game cinematic flyover',

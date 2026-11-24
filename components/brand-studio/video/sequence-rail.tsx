@@ -1458,6 +1458,8 @@ export function SequenceRail({
                     allowance ? creditsLeft(allowance.capKrw, allowance.usedKrw) : null
                   }
                   resetsAt={allowance?.resetsAt ?? null}
+                  allowanceWindow={allowance?.window ?? null}
+                  allowanceRefill={allowance?.refill ?? null}
                   surface="studio_video"
                   solidCta={postProdAllowanceError.code === "allowance_closed"}
                 />

@@ -46,6 +46,9 @@ export const studioShellEn = {
     label: 'Credits',
     refill: 'Refills on {date}',
     summary: '{left} of {total} credits left. Refills on {date}.',
+    // 대표 확인 대기 (2026-11-24): 로컬 Gemma 2패스 초안, 체험 크레딧만 있는 조직용
+    refillTrial: 'Available until {date}',
+    summaryTrial: '{left} of {total} credits left. Available until {date}.',
   },
   toast: {
     imageDone: 'Your image is ready',
@@ -67,6 +70,8 @@ export const studioShellEn = {
     total: 'Whole team',
     totalAmount: '{used} / {cap} credits',
     refill: 'Refills on {date}',
+    // 대표 확인 대기 (2026-11-24): 로컬 Gemma 2패스 초안, 체험 크레딧만 있는 조직용
+    refillTrial: 'Available until {date}',
     member: 'Member',
     credits: 'Credits',
     runs: 'Runs',
@@ -74,6 +79,10 @@ export const studioShellEn = {
     share: '{percent}% of the team',
     formerMember: 'Former member',
     empty: 'Nobody has used credits this month yet.',
+    // 대표 확인 대기 (2026-11-24): 로컬 Gemma 초안, 용어 "이번 이용 기간"
+    titleCycle: 'Credit use this usage period',
+    hintCycle: 'Credits each member has used since {date}. Failed or cancelled work isn’t counted.',
+    emptyCycle: 'No credits used yet in this usage period.',
   },
   showroom: {
     eyebrow: 'Brand Studio · Subscription workspace',
@@ -178,6 +187,9 @@ export const studioShellKo: typeof studioShellEn = {
     label: '크레딧',
     refill: '{date}에 다시 채워져요',
     summary: '크레딧 {total} 중 {left} 남았어요. {date}에 다시 채워져요.',
+    // 대표 확인 대기 (2026-11-24): 로컬 Gemma 2패스 초안, 체험 크레딧만 있는 조직용
+    refillTrial: '{date}까지 사용할 수 있어요',
+    summaryTrial: '크레딧 {total} 중 {left} 남았어요. {date}까지 사용할 수 있어요.',
   },
   toast: {
     imageDone: '이미지가 완성됐어요',
@@ -200,6 +212,8 @@ export const studioShellKo: typeof studioShellEn = {
     total: '팀 전체',
     totalAmount: '{used} / {cap} 크레딧',
     refill: '{date}에 다시 채워져요',
+    // 대표 확인 대기 (2026-11-24): 로컬 Gemma 2패스 초안, 체험 크레딧만 있는 조직용
+    refillTrial: '{date}까지 사용할 수 있어요',
     member: '멤버',
     credits: '크레딧',
     runs: '실행',
@@ -207,6 +221,10 @@ export const studioShellKo: typeof studioShellEn = {
     share: '팀 사용량의 {percent}%',
     formerMember: '이전 멤버',
     empty: '이번 달에는 아직 쓴 크레딧이 없어요.',
+    // 대표 확인 대기 (2026-11-24): 로컬 Gemma 초안, 용어 "이번 이용 기간"
+    titleCycle: '이번 이용 기간 크레딧 사용',
+    hintCycle: '{date}부터 멤버마다 쓴 크레딧이에요. 실패하거나 취소한 작업은 세지 않아요.',
+    emptyCycle: '이번 이용 기간에는 아직 쓴 크레딧이 없어요.',
   },
   showroom: {
     eyebrow: 'TWINGS BRAND STUDIO · 구독 전용 워크스페이스',

@@ -414,7 +414,8 @@
 }
 .quietBtn:hover { background: var(--ys-panel); color: var(--ys-ink); }
 
-/* A workspace a real film cannot use yet (V1): one calm card and the way to the sample film. */
+/* A workspace a real film cannot use yet (V1): calm cards with the way to the earlier editor and, only while
+   BRAND_WORKSPACE_PROTOTYPE_LAYER=on, to the sample film. `.sampleLink` styles both links. */
 .lockedCard {
   display: grid;
   gap: 8px;

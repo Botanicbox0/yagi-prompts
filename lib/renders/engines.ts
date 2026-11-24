@@ -10,7 +10,9 @@ import { assetReference } from '@/lib/identity/service';
 import { quoteArkVideo } from '@/lib/ark/pricing';
 import { DEFAULT_CREATOR_RESOLUTION, type CreatorResolution } from '@/lib/twings/resolution';
 import { isKlingModel, quoteVideo, videoModelForEngine, type VideoModelKey } from '@/lib/video/models';
+import type { SunraClient } from '@/lib/sunra/client';
 import type { RenderProvider } from './repo';
+import { isSunraLaneTaskId, pollSunraRender, startSunraRender } from './engines-sunra';
 
 /**
  * The engine adapters the render pass drives — one call per engine family, every provider
@@ -88,6 +90,15 @@ export interface RenderEngineDeps {
   kling?: KlingClient | null;
   /** Downloads the provider's result URL (ModelArk and Kling films, Seedream `url` answers). */
   fetch?: typeof fetch;
+  /**
+   * The personal Sunra lane (./engines-sunra.ts, docs/PERSONAL-STUDIO.md §5.1). Read only for a job on that
+   * lane (`VideoRenderInput.lane`, a `sunra:` task id); every other job ignores these three.
+   */
+  sunra?: SunraClient | null;
+  /** A charge a FAILED Sunra job may have cost (USD with the top-up fee). Idempotent per task id: set, not add. */
+  onProviderCharge?: (taskId: string | null, usd: number, source: 'provider_usage' | 'estimate') => Promise<void>;
+  /** A Sunra circuit to open (lib/renders/sunra-lane.ts `recordSunraCircuit`). */
+  onSunraCircuit?: (state: 'open_price_drift' | 'open_insufficient_hold' | 'open_provider_outage', reason: string) => Promise<void>;
 }
 
 export interface EngineOutput {
@@ -304,6 +315,8 @@ export interface VideoRenderInput {
   resolution?: CreatorResolution;
   /** A recipe step's references in prompt order, replacing photo/assetId/fixedReferenceUrls. */
   references?: ReadonlyArray<{ type: 'image' | 'video' | 'audio'; url: string }>;
+  /** `'sunra'`: the personal Sunra lane (./engines-sunra.ts). Absent: the engine's own provider, as always. */
+  lane?: 'sunra';
 }
 
 /**
@@ -323,6 +336,7 @@ export interface StartedVideo {
 }
 
 export async function startVideoRender(input: VideoRenderInput, deps: RenderEngineDeps = {}): Promise<StartedVideo> {
+  if (input.lane === 'sunra') return startSunraRender(input, deps);
   if (isKlingEngine(input.engine)) return startKlingRender(input, deps);
   const client = deps.ark === undefined ? arkClientFromEnv() : deps.ark;
   if (client === null) throw new RenderFailure('no_engine_key', 'ARK_API_KEY is not set', false);
@@ -405,6 +419,8 @@ export async function pollVideoRender(args: {
   /** Called once the provider reports success, before the film is downloaded (the wait's "마무리"). Must not throw. */
   onProviderDone?: () => Promise<void>;
 }, deps: RenderEngineDeps = {}): Promise<VideoPoll> {
+  // The task id names the lane, so the pass's poll needs no change for it.
+  if (isSunraLaneTaskId(args.taskId)) return pollSunraRender(args.taskId, args, deps);
   if (isKlingModel(args.model)) return pollKlingRender({ ...args, model: args.model }, deps);
   const client = deps.ark === undefined ? arkClientFromEnv() : deps.ark;
   if (client === null) return { status: 'failed', failure: new RenderFailure('no_engine_key', 'ARK_API_KEY is not set', false) };

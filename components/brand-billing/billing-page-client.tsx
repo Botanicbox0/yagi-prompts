@@ -1,6 +1,7 @@
 'use client';
 
 import { type ReactNode, useMemo, useState } from 'react';
+import { isCycleWindow, refillWording, withoutLastSentence } from '@/lib/brand-studio/allowance-window';
 import { formatCredits } from '@/lib/brand-studio/credits';
 import { BRAND_PLAN_GRACE_DAYS_DEFAULT, kstDayOf } from '@/lib/brands/billing/math';
 import {
@@ -214,6 +215,7 @@ export function BillingPageClient({
 
   const plan = billing.plan;
   const allowance = billing.allowance;
+  const refill = refillWording(allowance.refill);
   const usedPct =
     allowance.capCredits > 0
       ? Math.min(100, Math.round((allowance.usedCredits / allowance.capCredits) * 100))
@@ -410,7 +412,8 @@ export function BillingPageClient({
                 {billing.extraGrants.map((grant) => (
                   <li key={grant.id} className={s.grantItem}>
                     <span>
-                      {copy.usageSection.extraGrantItem
+                      {/* R4: a trial grant reads as the trial, until its last usable day. */}
+                      {(grant.kind === 'trial' ? copy.usageSection.extraGrantItemTrial : copy.usageSection.extraGrantItem)
                         .replace('{credits}', formatCredits(grant.credits, locale))
                         .replace('{expiryDate}', grant.expiresOn)}
                     </span>
@@ -420,10 +423,24 @@ export function BillingPageClient({
             </div>
           ) : null}
 
+          {/* R4: a trial-only organization reads its trial's last day; extra credits without a trial reset on no date. */}
+          {refill.kind === 'hidden' ? null : (
+            <p className={s.panelSub}>
+              {refill.kind === 'trial'
+                ? copy.usageSection.resetTrial.replace('{resetDate}', refill.through)
+                : copy.usageSection.reset.replace('{resetDate}', allowance.resetsOn)}
+            </p>
+          )}
           <p className={s.panelSub}>
-            {copy.usageSection.reset.replace('{resetDate}', allowance.resetsOn)}
+            {/* R1: a billing cycle refills on its own day (the reset date above); the calendar month keeps today's text. */}
+            {refill.kind === 'trial'
+              ? copy.usageSection.explainerTrial.replace('{date}', refill.through)
+              : refill.kind === 'hidden'
+                ? withoutLastSentence(copy.usageSection.explainer)
+                : isCycleWindow(allowance.window)
+                  ? copy.usageSection.explainerCycle.replace('{date}', allowance.resetsOn)
+                  : copy.usageSection.explainer}
           </p>
-          <p className={s.panelSub}>{copy.usageSection.explainer}</p>
 
           {!readOnly ? (
             <div className={s.actionsRow}>

@@ -1,7 +1,9 @@
 import type { Viewer } from '@/lib/auth/identity';
 import { creditsLeft, creditsOf } from '@/lib/brand-studio/credits';
 import type { StudioEnv } from '@/lib/brand-studio/env';
-import { loadAllowance } from '@/lib/brand-studio/usage';
+import { loadAllowanceRefill } from '@/lib/brand-studio/allowance-refill';
+import { allowanceWindowView } from '@/lib/brand-studio/allowance-window';
+import { grantEffectiveStartSql, loadAllowance } from '@/lib/brand-studio/usage';
 import {
   listExtraAllowanceGrants,
   loadActiveBrandDiscount,
@@ -11,12 +13,16 @@ import {
 } from '@/lib/brands/billing';
 import { listBrandInvoices } from '@/lib/brands/billing/invoices';
 import {
+  addCalendarDays,
   BRAND_PLAN_GRACE_DAYS_DEFAULT,
   kstDayOf,
   PAID_BRAND_PLAN_IDS,
   planActiveWithGrace,
 } from '@/lib/brands/billing/math';
-import { hasTable, hasTables } from '@/lib/brands/billing/schema-guard';
+import { hasColumn, hasTable, hasTables } from '@/lib/brands/billing/schema-guard';
+import { loadTrialUsability } from '@/lib/brands/billing/workspace-approval';
+import { loadWorkspaceApprovalSchemaReady } from '@/lib/brands/billing/workspace-approval-schema';
+import { brandWorkspaceApprovalOpen } from '@/lib/flags';
 import { BrandBillingDenied } from '@/lib/brands/billing/access';
 import { isSandboxedClientOrganization } from '@/lib/brands/features';
 import { BRAND_PLANS, loadPlanAssignment } from '@/lib/brands/plans';
@@ -59,16 +65,64 @@ export async function loadCustomerExtraGrants(
   sql: SqlRunner,
   organizationId: string,
   now = new Date(),
+  options: {
+    /** The trial's last day when the caller already read it (`StudioAllowanceView.refill.trialThrough`): no second read. */
+    trialThrough?: string | null;
+  } = {},
 ): Promise<CustomerExtraGrantView[]> {
   if (!(await hasTable(sql, 'brand_allowance_grants'))) return [];
-  const grants = await listExtraAllowanceGrants(sql, organizationId, now);
+  const grants = (await listExtraAllowanceGrants(sql, organizationId, now)).filter((grant) => grant.activeNow && !grant.revokedAt);
+  // R4: a trial grant (its `kind` is read only with BRAND_WORKSPACE_APPROVAL on and 0184 applied) is listed as the trial,
+  // until the last day the trial can be used — the admin panel's rule, read once and only when a trial row counts now.
+  const trialThrough = grants.some((grant) => grant.kind === 'trial')
+    ? (options.trialThrough ?? (await loadTrialUsability(sql, organizationId, { now }))?.usableThrough ?? null)
+    : null;
   return grants
-    .filter((grant) => grant.activeNow && !grant.revokedAt)
-    .map((grant) => ({
-      id: grant.id,
-      credits: creditsOf(grant.amountKrw),
-      validMonth: grant.validMonth,
-      expiresOn: grantExpiryDay(grant.validMonth),
+    .map((grant) =>
+      grant.kind === 'trial' && trialThrough
+        ? { id: grant.id, credits: creditsOf(grant.amountKrw), validMonth: grant.validMonth, expiresOn: trialThrough, kind: 'trial' as const }
+        : {
+            id: grant.id,
+            credits: creditsOf(grant.amountKrw),
+            validMonth: grant.validMonth,
+            expiresOn: grantExpiryDay(grant.validMonth),
+          },
+    )
+    .filter((grant) => grant.credits > 0);
+}
+
+/**
+ * R1: a plan organization's extra credits as its allowance counts them (B1c, `planCycleTotals` in
+ * lib/brand-studio/usage.ts): the unrevoked grants whose effective start day falls inside the current billing cycle,
+ * each lasting until the cycle's last day. Organizations on the calendar month keep `loadCustomerExtraGrants`.
+ *
+ * R4: a trial grant is listed as the trial. Its last day is still the cycle's last day, not the trial rule's end of the
+ * next month: the allowance attaches it to this one cycle and the month-end carry skips plan organizations, so the
+ * cycle's last day is the day the allowance stops counting it. The grant kind is read only with
+ * BRAND_WORKSPACE_APPROVAL on and 0184 applied; off, the statement is as before.
+ */
+export async function loadCustomerCycleExtraGrants(
+  sql: SqlRunner,
+  organizationId: string,
+  cycle: { start: string; end: string },
+): Promise<CustomerExtraGrantView[]> {
+  if (!(await hasTable(sql, 'brand_allowance_grants'))) return [];
+  const effectiveStart = grantEffectiveStartSql(await hasColumn(sql, 'brand_allowance_grants', 'valid_from'));
+  const withKind = brandWorkspaceApprovalOpen() && (await loadWorkspaceApprovalSchemaReady(sql));
+  const { rows } = await sql.query<{ id: string; amount_krw: string | number; valid_month: string; kind?: string }>(
+    `select id::text as id, amount_krw, valid_month${withKind ? ', kind' : ''} from brand_allowance_grants
+      where organization_id = $1 and revoked_at is null and ${effectiveStart} >= $2::date and ${effectiveStart} < $3::date
+      order by created_at desc, id desc`,
+    [organizationId, cycle.start, cycle.end],
+  );
+  const lastDay = addCalendarDays(cycle.end, -1);
+  return rows
+    .map((row) => ({
+      id: String(row.id),
+      credits: creditsOf(Number(row.amount_krw)),
+      validMonth: String(row.valid_month),
+      expiresOn: lastDay,
+      ...(row.kind === 'trial' ? { kind: 'trial' as const } : {}),
     }))
     .filter((grant) => grant.credits > 0);
 }
@@ -159,6 +213,10 @@ export async function loadBrandBillingPageState(
     const today = kstDayOf(now);
     const graceDays = deps.env.planGraceDays ?? BRAND_PLAN_GRACE_DAYS_DEFAULT;
     const planStatus = planActiveWithGrace(assignment, today, graceDays);
+    // R1: a plan organization lists the grants its cycle counts; the calendar month keeps the list loaded above.
+    const shownGrants = allowance.cycle ? await loadCustomerCycleExtraGrants(deps.sql, choice.id, allowance.cycle) : extraGrants;
+    // R4: the same refill fact the owner's page gets (no statement unless the base cap is 0 and the cap above 0).
+    const refill = await loadAllowanceRefill(deps.sql, choice.id, allowance, { now });
 
     return {
       kind: 'ready',
@@ -193,6 +251,8 @@ export async function loadBrandBillingPageState(
           source: allowance.source,
           resetsOn: kstDayOf(new Date(allowance.resetsAt)),
           resetsAt: allowance.resetsAt,
+          window: allowanceWindowView(allowance),
+          ...(refill ? { refill } : {}),
         },
         activeDiscount: activeDiscount
           ? {
@@ -240,7 +300,7 @@ export async function loadBrandBillingPageState(
               updatedAt: profile.updatedAt,
             }
           : null,
-        extraGrants,
+        extraGrants: shownGrants,
       },
     };
   }
@@ -263,11 +323,18 @@ export async function loadBrandBillingPageState(
   }
 
   const now = deps.now ? deps.now() : new Date();
-  const extraGrants = await loadCustomerExtraGrants(
-    deps.sql,
-    choice.id,
-    now,
-  );
+  // R1: a plan organization lists the grants its cycle counts (the window `loadCustomerBrandBilling` loaded).
+  const window = res.billing.allowance.window;
+  const extraGrants =
+    window?.kind === 'cycle'
+      ? await loadCustomerCycleExtraGrants(deps.sql, choice.id, window)
+      : await loadCustomerExtraGrants(
+          deps.sql,
+          choice.id,
+          now,
+          // R4: a trial-only organization's trial day was read with the allowance; the list does not read it again.
+          { trialThrough: res.billing.allowance.refill?.trialThrough ?? null },
+        );
   return {
     kind: 'ready',
     staffReadOnly: false,

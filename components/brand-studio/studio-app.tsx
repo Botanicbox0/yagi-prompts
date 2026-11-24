@@ -815,8 +815,9 @@ export function StudioApp({ organizationId, organizationName, locale, copy, bill
             ))}
           </ul>
         </div>
-      ) : (
-        <p className="bs-muted">{canCreate ? copy.dock.closedBody : copy.board.emptyReadOnly}</p>
+      ) : canCreate ? null : (
+        // Closed for someone who can create: the banner below (ClosedAllowanceBanner) says it, once.
+        <p className="bs-muted">{copy.board.emptyReadOnly}</p>
       )}
     </div>
   );
@@ -1065,7 +1066,7 @@ export function StudioApp({ organizationId, organizationName, locale, copy, bill
                   previewUrl: editorState.base.url,
                   ...regionChoice,
                   jobs: rawJobs,
-                  errorText: (code) => errorLine(copy, code ?? "failed"),
+                  errorText: (code) => errorLine(copy, code ?? "failed", state?.allowance.window, state?.allowance.refill),
                   submit: async (req) => {
                     let effectiveSource = req.source;
                     if (editorState.isBlankCanvas && "assetId" in effectiveSource) {
@@ -1102,7 +1103,7 @@ export function StudioApp({ organizationId, organizationName, locale, copy, bill
                       ...(regionV2 ? { v2: true } : {}),
                     });
                     const result = await studio.createJob(body);
-                    const line = isFailure(result) ? errorLine(copy, result.code) : null;
+                    const line = isFailure(result) ? errorLine(copy, result.code, state?.allowance.window, state?.allowance.refill) : null;
                     if (!internal) onRegionSending({ done: key, line });
                     if (isFailure(result)) {
                       return { ok: false, message: line ?? errorLine(copy, "failed") };

@@ -22,6 +22,7 @@ import {
   type StudioAssetView,
   type StudioErrorCode,
 } from "@/lib/brand-studio/contracts";
+import { refillWording, windowDayInstant } from "@/lib/brand-studio/allowance-window";
 import { creditsLeft } from "@/lib/brand-studio/credits";
 import type { StudioMedium, StudioVideoModel } from "@/lib/brand-studio/models";
 import type { BillingPlanCatalogueItem } from "@/lib/brands/billing-ui";
@@ -699,6 +700,8 @@ export function Dock(props: DockProps) {
           neededCredits={props.credits > 0 ? props.credits : null}
           remainingCredits={creditsLeft(props.allowance.capKrw, props.allowance.usedKrw)}
           resetsAt={props.allowance.resetsAt}
+          allowanceWindow={props.allowance.window}
+          allowanceRefill={props.allowance.refill}
           surface={props.mode === "video" ? "studio_video" : "studio_image"}
           solidCta={false}
         />
@@ -1010,12 +1013,22 @@ function allowanceText(allowance: StudioAllowanceView, copy: StudioCopy, locale:
   return { left, total, value: credits(copy.credits.left, left, locale) };
 }
 
-/** "남은 크레딧 12,340" with the refill day in its tooltip (the page header shows it). */
+/**
+ * "남은 크레딧 12,340" with the refill day in its tooltip (the page header shows it). R4: a trial-only organization's
+ * tooltip gives the trial's last day; extra credits without a trial refill on no date, so there is no tooltip.
+ */
 export function AllowanceLine({ allowance, copy, locale }: { allowance: StudioAllowanceView; copy: StudioCopy; locale: StudioLocale }) {
   const { value } = allowanceText(allowance, copy, locale);
-  const day = formatDay(allowance.resetsAt, locale);
+  const wording = refillWording(allowance.refill);
+  const day =
+    wording.kind === "trial"
+      ? formatDay(windowDayInstant(wording.through).toISOString(), locale)
+      : wording.kind === "hidden"
+        ? ""
+        : formatDay(allowance.resetsAt, locale);
+  const tooltip = wording.kind === "trial" ? copy.dock.resetsTrial : copy.dock.resets;
   return (
-    <p className="bs-allowance bs-num" title={day ? fill(copy.dock.resets, { date: day }) : undefined} data-studio-allowance>
+    <p className="bs-allowance bs-num" title={day ? fill(tooltip, { date: day }) : undefined} data-studio-allowance>
       {value}
     </p>
   );

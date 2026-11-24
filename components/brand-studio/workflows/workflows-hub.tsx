@@ -7,6 +7,7 @@ import {
   type StudioAssetView,
   type StudioOutputView,
 } from '@/lib/brand-studio/contracts';
+import { windowText, type AllowanceWindowView } from '@/lib/brand-studio/allowance-window';
 import { creditsLeft, formatCredits } from '@/lib/brand-studio/credits';
 import type { McpTokenWire } from '@/lib/brand-studio/mcp/clients';
 import {
@@ -228,6 +229,29 @@ function WhyBlock({ title, rows }: { title: string; rows: ReadonlyArray<{ title:
   );
 }
 
+/**
+ * The banner sentence for a refused workflow request. `window` (R1): the organization's allowance window — a billing
+ * cycle says "this usage period" instead of "this month"; without it the words are the calendar month's.
+ */
+export function workflowErrorLine(copy: StudioWorkflowsCopy, code: string | undefined, window?: Pick<AllowanceWindowView, 'kind'> | null): string {
+  switch (code) {
+    case 'forbidden':
+      return copy.errors.forbidden;
+    case 'allowance_closed':
+      return copy.errors.allowanceClosed;
+    case 'allowance_exhausted':
+      return windowText(window, copy.errors.allowanceExhausted, copy.errors.allowanceExhaustedCycle);
+    case 'too_many_running':
+      return copy.errors.tooManyRunning;
+    case 'reference_missing':
+      return copy.errors.referenceMissing;
+    case 'invalid':
+      return copy.errors.invalid;
+    default:
+      return copy.errors.failed;
+  }
+}
+
 export function WorkflowsHub({
   organizationId,
   organizationName,
@@ -360,22 +384,7 @@ export function WorkflowsHub({
   }
 
   function mapErrorCode(code?: string): string {
-    switch (code) {
-      case 'forbidden':
-        return copy.errors.forbidden;
-      case 'allowance_closed':
-        return copy.errors.allowanceClosed;
-      case 'allowance_exhausted':
-        return copy.errors.allowanceExhausted;
-      case 'too_many_running':
-        return copy.errors.tooManyRunning;
-      case 'reference_missing':
-        return copy.errors.referenceMissing;
-      case 'invalid':
-        return copy.errors.invalid;
-      default:
-        return copy.errors.failed;
-    }
+    return workflowErrorLine(copy, code, allowance.window);
   }
 
   async function postWorkflowOp(op: string, input: Record<string, unknown>) {
@@ -924,6 +933,8 @@ export function WorkflowsHub({
             neededCredits={runnerEstimatedCredits > 0 ? runnerEstimatedCredits : null}
             remainingCredits={creditsLeft(allowance.capKrw, allowance.usedKrw)}
             resetsAt={allowance.resetsAt}
+            allowanceWindow={allowance.window}
+            allowanceRefill={allowance.refill}
             surface="studio_workflows"
             solidCta={false}
           />

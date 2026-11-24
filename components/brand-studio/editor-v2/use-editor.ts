@@ -173,8 +173,11 @@ export interface RealFilmOptions {
   /** Owner or editor of the brand, and not the studio team looking in. */
   canEdit: boolean;
   sources: readonly EditorSource[];
-  /** The sample film's address for this organization (`?sample=1`). */
-  sampleBase: string;
+  /**
+   * The sample film's address for this organization (`?sample=1`), or `null` when the sample film is not
+   * offered (`BRAND_WORKSPACE_PROTOTYPE_LAYER` off): the locked workspaces then show no way to it.
+   */
+  sampleBase: string | null;
   /** The current editor's own names for colour grades, so the film's grade is named as it names it. */
   gradeNames?: GradeNames;
   /**
@@ -1153,6 +1156,8 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
     copy,
     /** The organization's own film (V1) rather than the sample film. */
     real: isReal,
+    /** Whose film it is (the export records itself for it); `null` on the sample film. */
+    organizationId: real?.organizationId ?? null,
     /** The stored film as last read or written (real film only): what v2 shows but does not own. */
     storedFilm,
     filmView,
@@ -1176,7 +1181,8 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
     missingSources,
     /** No cut's rate is measured yet: the film's rate is a stand-in and nothing frame-based is stored. */
     tentative,
-    sampleHref: (target: EditorWorkspace) => sampleHrefFor(real?.sampleBase ?? '', target),
+    /** The sample film's address in a workspace, or `null` when the sample film is not offered. */
+    sampleHref: (target: EditorWorkspace): string | null => (real?.sampleBase ? sampleHrefFor(real.sampleBase, target) : null),
     doc,
     sequence,
     fps,

@@ -77,6 +77,8 @@ export const brandHomeEn = {
       requestedAction: 'Send another inquiry',
       readyStatus: 'Ready',
       readyBody: "This month's creation credits are ready to use.",
+      // 대표 확인 대기 (2026-11-24): 로컬 Gemma 초안, 용어 "이번 이용 기간"
+      readyBodyCycle: 'Your production credits are ready to use.',
       billingLink: 'Open plan & billing',
     },
     firstImage: {
@@ -151,6 +153,8 @@ export const brandHomeKo: typeof brandHomeEn = {
       requestedAction: '추가 문의하기',
       readyStatus: '이용 가능',
       readyBody: '이번 달 제작 크레딧이 준비되어 바로 사용하실 수 있습니다.',
+      // 대표 확인 대기 (2026-11-24): 로컬 Gemma 초안, 용어 "이번 이용 기간"
+      readyBodyCycle: '제작 크레딧이 준비되어 바로 사용하실 수 있습니다.',
       billingLink: '플랜 및 청구 확인하기',
     },
     firstImage: {

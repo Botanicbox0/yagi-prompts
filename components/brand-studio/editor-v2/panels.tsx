@@ -226,23 +226,29 @@ function RealBin({ api }: { api: EditorApi }) {
   );
 }
 
-/** A workspace a real film cannot use yet: says so, and shows the way to the sample film. */
+/**
+ * A workspace a real film cannot use yet: says so, and shows the way to the sample film when it is offered
+ * (`BRAND_WORKSPACE_PROTOTYPE_LAYER=on`; otherwise neither the link nor a sentence about it).
+ */
 function LockedPanel({ api, classicHref }: { api: EditorApi; classicHref?: string }) {
   const { copy, workspace } = api;
   const name = copy.workspaces[workspace];
   const inClassic = workspace === 'color' ? copy.real.locked.classicColor : workspace === 'sound' ? copy.real.locked.classicSound : copy.real.locked.classicCaptions;
   // A cut the earlier editor plays at another speed: what is placed on it there may land elsewhere here (audit B5).
   const speedDiffers = filmHasSpeedTheOldEditorChanges(api.sequence);
+  const sampleHref = api.sampleHref(workspace);
   return (
     <>
       <PanelHead title={name} />
       <section className={styles.lockedCard} data-editor-locked={workspace}>
         <strong>{fill(copy.real.locked.heading, { workspace: name })}</strong>
-        <p className={styles.note}>{copy.real.locked.body}</p>
+        <p className={styles.note}>{sampleHref ? copy.real.locked.body : copy.real.locked.bodyNoSample}</p>
         {workspace === 'captions' && <p className={styles.note}>{copy.real.locked.captionsKept}</p>}
-        <a className={styles.sampleLink} href={api.sampleHref(workspace)} data-editor-sample-link={workspace}>
-          {copy.real.locked.open}
-        </a>
+        {sampleHref && (
+          <a className={styles.sampleLink} href={sampleHref} data-editor-sample-link={workspace}>
+            {copy.real.locked.open}
+          </a>
+        )}
       </section>
       {classicHref && workspace !== 'cut' && (
         <section className={styles.lockedCard} data-editor-locked-classic={workspace}>

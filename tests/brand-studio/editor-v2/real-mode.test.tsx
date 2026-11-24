@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { createElement as h } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+import { fill } from '@/components/brand-studio/copy';
 import { EditorV2 } from '@/components/brand-studio/editor-v2/editor-v2';
 import { useEditor, type RealFilmOptions } from '@/components/brand-studio/editor-v2/use-editor';
 import {
@@ -43,6 +44,13 @@ const real = (canEdit = true): RealFilmOptions & { organizationName: string } =>
   sources: [source],
   sampleBase: `/brand/studio/editor?sample=1&organizationId=${ORG}`,
 });
+
+/** The locked workspace's own card (not the card that points to the earlier editor). */
+function lockedCard(html: string): string {
+  const at = html.indexOf('data-editor-locked="');
+  expect(at).toBeGreaterThan(-1);
+  return html.slice(at, html.indexOf('</section>', at));
+}
 
 function render(copy: StudioEditorCopy, workspace: EditorWorkspace, film: ReturnType<typeof real> | null = real()): string {
   return renderToStaticMarkup(
@@ -146,18 +154,51 @@ describe('a real film shows nothing that comes from the sample data', () => {
     }
   });
 
-  it('locks colour, sound and captions with a way to the sample film in that workspace', () => {
+  it('with the sample film offered (BRAND_WORKSPACE_PROTOTYPE_LAYER=on), locks colour, sound and captions with a way to the sample film in that workspace', () => {
     for (const workspace of ['color', 'sound', 'captions'] as const) {
       const html = render(studioEditorKo, workspace);
       expect(html).toContain(`data-editor-locked="${workspace}"`);
       expect(html).toContain(`href="/brand/studio/editor?sample=1&amp;organizationId=${ORG}&amp;ws=${workspace}"`);
+      expect(html).toContain(`data-editor-sample-link="${workspace}"`);
       expect(html).toContain(studioEditorKo.real.locked.open);
+      expect(lockedCard(html)).toContain(studioEditorKo.real.locked.body);
+      expect(html).toContain(`data-editor-locked-classic="${workspace}"`);
       // No scope switch, no actions, no fine-tuning: the locked panel has nothing to press but the link.
       expect(html).not.toContain('data-editor-scope');
       expect(html).not.toContain(`>${studioEditorKo.panel.fineTune}<`);
     }
     expect(render(studioEditorKo, 'captions')).toContain(studioEditorKo.real.locked.captionsKept);
     expect(render(studioEditorKo, 'cut')).not.toContain('data-editor-locked=');
+  });
+
+  it('without the sample film (BRAND_WORKSPACE_PROTOTYPE_LAYER off, the default): no link to it, a body line true without it, and the way to the earlier editor stays', () => {
+    for (const [locale, copy] of [['ko', studioEditorKo], ['en', studioEditorEn]] as const) {
+      for (const workspace of ['color', 'sound', 'captions'] as const) {
+        const html = render(copy, workspace, { ...real(), sampleBase: null });
+        const card = lockedCard(html);
+        expect(html).toContain(`data-editor-locked="${workspace}"`);
+        expect(html, `${locale} ${workspace}`).not.toContain('data-editor-sample-link');
+        expect(html).not.toContain('sample=1');
+        expect(card).toContain(fill(copy.real.locked.heading, { workspace: copy.workspaces[workspace] }));
+        expect(card).toContain(copy.real.locked.bodyNoSample);
+        expect(card).not.toContain(copy.real.locked.body);
+        expect(card).not.toContain(copy.real.locked.open);
+        expect(card, `${locale} ${workspace}`).not.toMatch(locale === 'ko' ? /예시|시안/ : /sample|prototype|preview/i);
+        // The second card is there as before: what the earlier editor has, and the way there.
+        expect(html).toContain(`data-editor-locked-classic="${workspace}"`);
+        expect(html).toMatch(new RegExp(`<a [^>]*href="/brand/studio/compose\\?organizationId=${ORG}"[^>]*data-editor-classic-link="${workspace}"`));
+      }
+    }
+    expect(render(studioEditorKo, 'captions', { ...real(), sampleBase: null })).toContain(studioEditorKo.real.locked.captionsKept);
+  });
+
+  it('the body line without the sample film says only that the workspace cannot be used yet (on any film), in both languages', () => {
+    for (const copy of [studioEditorKo, studioEditorEn]) {
+      expect(copy.real.locked.bodyNoSample.length).toBeGreaterThan(5);
+      expect(copy.real.locked.bodyNoSample).not.toBe(copy.real.locked.body);
+    }
+    expect(studioEditorKo.real.locked.bodyNoSample).not.toMatch(/예시|시안|플래그|prototype|sample/i);
+    expect(studioEditorEn.real.locked.bodyNoSample).not.toMatch(/sample|prototype|preview|flag/i);
   });
 
   it('offers the organization’s clips, not the sample materials, and no titles', () => {
