@@ -16,9 +16,10 @@ import { getDictionary } from '@/lib/i18n/dictionaries';
  * the film's locked workspaces offer no sample film).
  *
  * Where the editor may reach anything, in one place: network access only in the frame-exact export
- * (`export-film.ts`; what it may request is pinned in export-film-network.test.ts), the footage reader
- * and the export record (`export-record.ts`, the current editor's 0-credit `render.reserve`; pinned in
- * export-record.test.tsx), browser storage only in the shortcut store and the film store (always inside
+ * (`export-film.ts`; what it may request is pinned in export-film-network.test.ts), the footage reader,
+ * the export record (`export-record.ts`, the current editor's 0-credit `render.reserve`; pinned in
+ * export-record.test.tsx) and the finished export's save and share (`export-keep.tsx`, the library upload and
+ * the review share window; pinned in export-keep.test.tsx), browser storage only in the shortcut store and the film store (always inside
  * try/catch), and nothing anywhere keeps session storage, a database or a cache.
  */
 const ROOT = process.cwd();

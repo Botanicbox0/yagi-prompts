@@ -8,7 +8,7 @@ import { filmHasSpeedTheOldEditorChanges } from '@/lib/brand-studio/editor-v2/st
 import { actionFor, bindingFromEvent, formatBinding, typingTarget } from '@/lib/brand-studio/editor-v2/shortcuts';
 import type { StudioEditorCopy } from '@/messages/studio-editor';
 import { Assistant } from './assistant';
-import { ExportShareHost, type ExportKeepCopy } from './export-keep';
+import { ExportShareHost, shareWindowOpen, type ExportKeepCopy } from './export-keep';
 import { ExportSheet } from './export-sheet';
 import { EditorIcon } from './icons';
 import { ActionPanel, Materials } from './panels';
@@ -60,6 +60,9 @@ export function EditorV2({ copy, currentEditorHref, initialWorkspace, exportPath
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
       if (typingTarget(target as { tagName?: string; isContentEditable?: boolean; type?: string } | null, event.isComposing, event.keyCode)) return;
+      // The review share window ("검수 · 공유", export-keep.tsx) is modal: while it is open, keys are its own and
+      // never edit the film behind it (it closes itself on Escape).
+      if (shareWindowOpen()) return;
       const editor = latest.current;
       if (editor.shortcutsOpen) {
         if (event.code === 'Escape') editor.setShortcutsOpen(false);

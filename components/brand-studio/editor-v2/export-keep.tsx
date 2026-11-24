@@ -145,3 +145,8 @@ export function ExportShareHost({ organizationId, locale }: { organizationId: st
   useShareReviewEvent(organizationId, setTarget);
   return target ? <ShareReviewDialog target={target} locale={locale} onClose={() => setTarget(null)} /> : null;
 }
+
+/** Whether the review share window is open: it is modal, so the editor's keys wait while it is (editor-v2.tsx). */
+export function shareWindowOpen(): boolean {
+  return typeof document !== 'undefined' && document.querySelector('[data-share-review-dialog]') !== null;
+}
