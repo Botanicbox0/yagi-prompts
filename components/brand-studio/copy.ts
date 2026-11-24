@@ -23,18 +23,38 @@ export function errorLine(copy: Pick<StudioCopy, "errors">, code: string | null 
 }
 
 /**
- * Upload error copy that surfaces the pre-approval 500 MB / 50-file reason when present. Takes only the two
- * parts it reads, so a screen outside the studio (the editing studio's device uploads) can pass just those.
+ * Upload refusals whose library sentence is true for an upload: the reason is said as it is. Every other code an
+ * upload can come back with (`failed` from a dropped connection or an unexpected answer, `invalid` when the
+ * stored bytes could not be read, `conflict`, `too_many_running`, `not_found`, anything unknown) only means the
+ * file did not go up this time, and gets `uploadFailed`: the generic `errors.failed` speaks of making an image,
+ * and `conflict` asks for a reload, which in the editing studio is what removes a file that stayed in the tab.
+ */
+const UPLOAD_REASON_CODES: ReadonlySet<string> = new Set<StudioErrorCode>([
+  "file_too_large",
+  "unsupported_file",
+  "storage_quota_exceeded",
+  "asset_limit",
+  "forbidden",
+  "sign_in_required",
+  "feature_unavailable",
+  "studio_closed",
+]);
+
+/**
+ * The sentence for an upload that did not go through: the pre-approval 500 MB / 50-file reason when present, the
+ * library's line for a real reason, else `uploadFailed`. Takes only the parts it reads, so a screen outside the
+ * studio (the editing studio's device uploads) can pass just those. Used by every studio upload: the library
+ * hub, the image studio (dock, partial edit references, blank canvas), the video studio and the editing studio.
  */
 export function studioUploadErrorLine(
-  copy: Pick<StudioCopy, "errors" | "unapprovedUpload">,
+  copy: Pick<StudioCopy, "errors" | "unapprovedUpload" | "uploadFailed">,
   code: string | null | undefined,
   reason?: UploadLimitReason | null,
 ): string {
   if (code === "storage_quota_exceeded" && isUnapprovedUploadReason(reason)) {
     return reason === "unapproved_file_limit" ? copy.unapprovedUpload.fileLimitExceeded : copy.unapprovedUpload.quotaExceeded;
   }
-  return errorLine(copy, code);
+  return code && UPLOAD_REASON_CODES.has(code) ? errorLine(copy, code) : copy.uploadFailed;
 }
 
 /** "15 크레딧" / "15 credits": a credit count in a sentence of the dictionary (`{n}` is the number). */

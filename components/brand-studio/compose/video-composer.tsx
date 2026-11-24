@@ -11,7 +11,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from 'react';
 import { createStudioApi, isFailure, measureInBrowser } from '@/components/brand-studio/api';
-import { fill as interpolate, studioUploadErrorLine, type StudioCopy } from '@/components/brand-studio/copy';
+import { fill as interpolate } from '@/components/brand-studio/copy';
 import {
   openShareReview,
   ShareReviewDialog,
@@ -67,10 +67,7 @@ import {
   deviceFileKind,
   deviceUploadRuns,
   uploadDeviceFile,
-  type DeviceFileLike,
   type DeviceUploadAdoption,
-  type DeviceUploadResult,
-  type MeasuredDeviceFile,
 } from '@/lib/brand-studio/compose/device-files';
 import { exportCompositionMp4, type ComposeExportResult } from '@/lib/brand-studio/compose/export-client';
 import { exportProjectNleBundleZip } from '@/lib/brand-studio/compose/nle-export';
@@ -86,23 +83,13 @@ import { StudioAllowanceNotice } from '@/components/brand-studio/studio-allowanc
 import type { StudioComposeCopy } from '@/messages/studio-compose';
 import { AssistPanel, AssistPreviewBar } from './assist/assist-panel';
 import { useEditAssist } from './assist/use-edit-assist';
+import { startDeviceUploads, type ComposeUploadCopy, type DevicePick, type DeviceFileState } from './device-uploads';
 import { commitHistory, initHistory, mapHistory, redoHistory, replaceHistory, undoHistory, type History } from './history';
 import s from './video-composer.module.css';
 // The library's own upload indicator and notice (`.bsr-progress`, `.bsr-alert`) for device files (A8).
 import '../rail/rail.css';
 
-/**
- * The library's wording for an upload (A8): the word on a file on its way up and the sentence for each
- * refusal, exactly as the library shows them (`brandStudio.assets.uploading`, `brandStudio.errors`,
- * `brandStudio.unapprovedUpload`). The page passes it; without it the upload still runs and the cut still says
- * when it stays in this tab, but the refusal reason is not shown.
- */
-export interface ComposeUploadCopy extends Pick<StudioCopy, 'errors' | 'unapprovedUpload'> {
-  uploading: string;
-}
-
-/** A device file's upload, by its tab address: on its way up, or refused/failed (it stays in this tab). */
-export type DeviceFileState = 'uploading' | 'tab_only';
+export type { ComposeUploadCopy, DeviceFileState } from './device-uploads';
 
 export interface VideoComposerProps {
   organizationId: string;
@@ -1428,31 +1415,31 @@ export function VideoComposer({
   /* ---------------------------------------------------------------- Local File Uploads */
 
   /**
-   * Uploads a picked file as an organization asset through the library's client (A8). Done: every cut, the
-   * music and the uploads list switch to the asset in place (no undo step, the preview keeps its tab copy).
-   * Refused or failed: the library's sentence for the reason, and the file stays in this tab with a line
-   * saying so. A person who cannot create gets the library's "no permission" answer without a request.
+   * The device-file hooks (A8): a finished upload switches every cut, the music and the uploads list to the
+   * asset in place (no undo step; the preview keeps its tab copy). What goes up, and the lines shown, are decided
+   * in device-uploads.ts.
    */
-  const startDeviceUpload = (blobUrl: string, file: DeviceFileLike, measured: MeasuredDeviceFile) => {
-    setDeviceFiles((prev) => ({ ...prev, [blobUrl]: 'uploading' }));
-    const run: Promise<DeviceUploadResult> = canCreate
-      ? deviceRuns.start(blobUrl, file, measured)
-      : Promise.resolve({ ok: false, code: 'forbidden' });
-    void run.then((result) => {
-      if (result.ok) {
-        const { asset, adoption } = result;
+  const runDeviceUploads = (picks: DevicePick[]) =>
+    startDeviceUploads(picks, {
+      start: (blobUrl, file, measured) => deviceRuns.start(blobUrl, file, measured),
+      canCreate,
+      ...(uploadCopy ? { uploadCopy } : {}),
+      tooLongTemplate: copy.status.deviceTooLong,
+      setState: (blobUrl, state) =>
+        setDeviceFiles((prev) => {
+          if (state) return { ...prev, [blobUrl]: state };
+          const { [blobUrl]: _settled, ...rest } = prev;
+          return rest;
+        }),
+      adopted: (blobUrl, asset, adoption) => {
         adoptionsRef.current.set(blobUrl, adoption);
         tabCopyRef.current.set(adoption.srcUrl, blobUrl);
         setHistory((h) => mapHistory(h, (p) => adoptDeviceUpload(p, blobUrl, adoption)));
         setAssets((prev) => (prev.some((a) => a.id === asset.id) ? prev : [asset, ...prev]));
         setLocalMediaItems((prev) => prev.filter((item) => item.url !== blobUrl));
-        setDeviceFiles(({ [blobUrl]: _done, ...rest }) => rest);
-        return;
-      }
-      setDeviceFiles((prev) => ({ ...prev, [blobUrl]: 'tab_only' }));
-      if (uploadCopy) setStatusMessage(studioUploadErrorLine(uploadCopy, result.code, result.reason));
+      },
+      say: setStatusMessage,
     });
-  };
 
   const handleLocalFilePick = async (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []);
@@ -1462,7 +1449,7 @@ export function VideoComposer({
     let current = project;
     let addedVideo = false;
     // Uploads start after the timeline holds the new cuts, so a fast upload always has a cut to switch.
-    const uploads: Array<[string, DeviceFileLike, MeasuredDeviceFile]> = [];
+    const picks: DevicePick[] = [];
     for (const file of files) {
       const kind = deviceFileKind(file);
       const isVideo = kind === 'video';
@@ -1493,8 +1480,7 @@ export function VideoComposer({
         if (sourceTab === 'color') {
           void handleMatchColorReference({ label: cleanLabel, url: objectUrl, kind: 'image' });
         }
-        const size = await measureInBrowser(file, 'image').catch(() => ({}));
-        uploads.push([objectUrl, file, size]);
+        picks.push({ blobUrl: objectUrl, file, kind: 'image', measured: {} });
         continue;
       }
 
@@ -1537,14 +1523,14 @@ export function VideoComposer({
           },
         };
       }
-      uploads.push([objectUrl, file, measured]);
+      picks.push({ blobUrl: objectUrl, file, kind: isVideo ? 'video' : 'audio', measured });
       setStatusMessage(interpolate(copy.status.localClipAdded, { name: file.name }));
     }
     if (current !== project) {
       commitProject(current);
       if (addedVideo) setSelectedClipIdx(Math.max(0, current.clips.length - 1));
     }
-    for (const [blobUrl, file, measured] of uploads) startDeviceUpload(blobUrl, file, measured);
+    void runDeviceUploads(picks);
   };
 
   const handleGradeRefFilePick = async (event: ChangeEvent<HTMLInputElement>) => {

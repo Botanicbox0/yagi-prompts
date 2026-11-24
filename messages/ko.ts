@@ -2214,6 +2214,7 @@ export const ko: Dictionary = {
       quotaExceeded: `플랜 확정 전에는 총 ${formatLimitMb(UNAPPROVED_UPLOAD_QUOTA_BYTES)} MB, 최대 ${UNAPPROVED_UPLOAD_MAX_FILES}개까지 올릴 수 있어요. 안 쓰는 파일을 지우거나 대화창에서 야기 팀에 문의해 주세요.`,
       fileLimitExceeded: `플랜 확정 전에는 최대 ${UNAPPROVED_UPLOAD_MAX_FILES}개(${formatLimitMb(UNAPPROVED_UPLOAD_QUOTA_BYTES)} MB)까지 올릴 수 있어요. 안 쓰는 파일을 지우거나 대화창에서 야기 팀에 문의해 주세요.`,
     },
+    uploadFailed: '파일을 올리지 못했어요. 다시 시도해 주세요.', // 대표 확인 대기 (Gemma 2패스, 2026-11-24)
     shareDialog: studioShareDialogKo,
   },
   brandWorkspace: {

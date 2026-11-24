@@ -28,20 +28,26 @@ import type { ComposeBgm, ComposeClip, ComposeOverlayClip, ComposeSfxClip, Compo
 export interface DeviceFileFormat {
   label: string;
   kind: StudioAssetKind;
+  /** The library's type for it (`STUDIO_UPLOAD_MIMES`): what an upload is sent under. */
   mime: string;
-  /** Extensions without the dot, lower case; a file with no type is read by these. */
+  /** Other names browsers give the same format (e.g. Firefox's `audio/x-wav`). */
+  aliases: readonly string[];
+  /** Extensions without the dot, lower case; a file with no type (or a generic one) is read by these. */
   exts: readonly string[];
 }
 
 export const DEVICE_FILE_FORMATS: readonly DeviceFileFormat[] = [
-  { label: 'MP4', kind: 'video', mime: 'video/mp4', exts: ['mp4'] },
-  { label: 'MOV', kind: 'video', mime: 'video/quicktime', exts: ['mov'] },
-  { label: 'MP3', kind: 'audio', mime: 'audio/mpeg', exts: ['mp3'] },
-  { label: 'WAV', kind: 'audio', mime: 'audio/wav', exts: ['wav'] },
-  { label: 'JPG', kind: 'image', mime: 'image/jpeg', exts: ['jpg', 'jpeg'] },
-  { label: 'PNG', kind: 'image', mime: 'image/png', exts: ['png'] },
-  { label: 'WEBP', kind: 'image', mime: 'image/webp', exts: ['webp'] },
+  { label: 'MP4', kind: 'video', mime: 'video/mp4', aliases: [], exts: ['mp4'] },
+  { label: 'MOV', kind: 'video', mime: 'video/quicktime', aliases: ['video/x-quicktime'], exts: ['mov'] },
+  { label: 'MP3', kind: 'audio', mime: 'audio/mpeg', aliases: ['audio/mp3', 'audio/x-mp3', 'audio/x-mpeg', 'audio/mpeg3', 'audio/x-mpeg-3'], exts: ['mp3'] },
+  { label: 'WAV', kind: 'audio', mime: 'audio/wav', aliases: ['audio/x-wav', 'audio/wave', 'audio/vnd.wave'], exts: ['wav'] },
+  { label: 'JPG', kind: 'image', mime: 'image/jpeg', aliases: ['image/jpg', 'image/pjpeg'], exts: ['jpg', 'jpeg'] },
+  { label: 'PNG', kind: 'image', mime: 'image/png', aliases: ['image/x-png'], exts: ['png'] },
+  { label: 'WEBP', kind: 'image', mime: 'image/webp', aliases: [], exts: ['webp'] },
 ];
+
+/** Types that say nothing about the format; such a file is read by its extension, like one with no type. */
+const GENERIC_TYPES: readonly string[] = ['', 'application/octet-stream'];
 
 /** The file input's `accept`: every type, then every extension (optionally of one kind). */
 export function deviceFileAccept(kind?: StudioAssetKind): string {
@@ -51,13 +57,30 @@ export function deviceFileAccept(kind?: StudioAssetKind): string {
 
 export const DEVICE_FILE_ACCEPT = deviceFileAccept();
 
-/** What a picked file is: by its type, else by its extension; `null` when the editor does not take it. */
-export function deviceFileKind(file: { type: string; name: string }): StudioAssetKind | null {
-  const byType = DEVICE_FILE_FORMATS.find((f) => f.mime === file.type);
-  if (byType) return byType.kind;
+/**
+ * What a picked file is, by one rule the upload keeps too: its type, or another name of that type, or (when the
+ * browser gave no type or a generic one) its extension. A file of any other type is not taken even with a
+ * fitting extension (a `.mp4` that says `video/webm`). The server reads the bytes when the upload completes and
+ * keeps the type they really are, so a file taken here by alias or extension uploads under `mime`.
+ */
+export function deviceFileType(file: { type: string; name: string }): DeviceFileFormat | null {
+  const type = file.type.trim().toLowerCase();
+  const byType = DEVICE_FILE_FORMATS.find((f) => f.mime === type || f.aliases.includes(type));
+  if (byType) return byType;
+  if (!GENERIC_TYPES.includes(type)) return null;
   const ext = /\.([a-z0-9]+)$/i.exec(file.name)?.[1]?.toLowerCase();
-  const byExt = ext ? DEVICE_FILE_FORMATS.find((f) => f.exts.includes(ext)) : undefined;
-  return byExt?.kind ?? null;
+  return (ext && DEVICE_FILE_FORMATS.find((f) => f.exts.includes(ext))) || null;
+}
+
+export function deviceFileKind(file: { type: string; name: string }): StudioAssetKind | null {
+  return deviceFileType(file)?.kind ?? null;
+}
+
+/** The file as the library takes it: the same bytes and name under the format's own type. */
+export function uploadableDeviceFile(file: DeviceFileLike): DeviceFileLike {
+  const format = deviceFileType(file);
+  if (!format || file.type === format.mime) return file;
+  return new File([file], file.name, { type: format.mime, ...(file instanceof File ? { lastModified: file.lastModified } : {}) });
 }
 
 /* ------------------------------------------------------------------ uploading a device file */
@@ -102,7 +125,8 @@ export interface DeviceUploadApi {
 /**
  * Uploads one picked file as an organization asset through the library's client: it checks type and size
  * before sending anything, the server checks storage and role, and a refusal comes back with the same code
- * (and reason) the library shows a sentence for. `measured` is what the editor already read from the file.
+ * (and reason) the library shows a sentence for. `measured` is what the editor already read from the file. A
+ * file the editor took by an alias or its extension goes up under the format's own type (`uploadableDeviceFile`).
  */
 export async function uploadDeviceFile(
   api: DeviceUploadApi,
@@ -110,7 +134,7 @@ export async function uploadDeviceFile(
   file: DeviceFileLike,
   measured: MeasuredDeviceFile,
 ): Promise<DeviceUploadResult> {
-  const saved = await api.upload(file, { measure: async () => measured });
+  const saved = await api.upload(uploadableDeviceFile(file), { measure: async () => measured });
   if (saved.ok !== true) return saved.reason ? { ok: false, code: saved.code, reason: saved.reason } : { ok: false, code: saved.code };
   const { asset } = saved;
   return {

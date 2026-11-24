@@ -42,6 +42,8 @@ describe('device file note', () => {
 
   it('the page passes the library’s upload wording', () => {
     const page = readFileSync(resolve(process.cwd(), 'app/(brand)/brand/studio/compose/page.tsx'), 'utf8');
-    expect(page).toMatch(/uploadCopy=\{\{\s*uploading: dict\.brandStudio\.assets\.uploading,\s*errors: dict\.brandStudio\.errors,\s*unapprovedUpload: dict\.brandStudio\.unapprovedUpload,/);
+    expect(page).toMatch(
+      /uploadCopy=\{\{\s*uploading: dict\.brandStudio\.assets\.uploading,\s*errors: dict\.brandStudio\.errors,\s*unapprovedUpload: dict\.brandStudio\.unapprovedUpload,\s*uploadFailed: dict\.brandStudio\.uploadFailed,/,
+    );
   });
 });

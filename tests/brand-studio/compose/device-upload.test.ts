@@ -10,7 +10,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createStudioApi } from '@/components/brand-studio/api';
 import { studioUploadErrorLine, type StudioCopy } from '@/components/brand-studio/copy';
-import { commitHistory, initHistory, mapHistory, undoHistory } from '@/components/brand-studio/compose/history';
+import { commitHistory, initHistory, mapHistory, redoHistory, undoHistory } from '@/components/brand-studio/compose/history';
 import { STUDIO_LIMITS, type StudioAssetView } from '@/lib/brand-studio/contracts';
 import {
   adoptDeviceUpload,
@@ -55,7 +55,10 @@ function assetView(id: string, kind: StudioAssetView['kind'] = 'video'): StudioA
   };
 }
 
+/** A file of `size` bytes. Real bytes when a type is missing or an alias (the upload makes a copy under the right type). */
 function file(name: string, type: string, size: number): File {
+  const canonical = ['video/mp4', 'video/quicktime', 'audio/mpeg', 'audio/wav', 'image/jpeg', 'image/png', 'image/webp'].includes(type);
+  if (!canonical) return new File([new Uint8Array(size)], name, { type });
   const f = new File([new Uint8Array(4)], name, { type });
   Object.defineProperty(f, 'size', { value: size });
   return f;
@@ -153,25 +156,36 @@ describe('device files go up through the library path', () => {
   });
 
   it('the limits are the library’s: nothing is sent for a file the library would refuse', async () => {
-    const cases: Array<[string, string, number, string | null]> = [
-      ['big.mp4', 'video/mp4', STUDIO_LIMITS.videoBytesMax + 1, 'file_too_large'],
-      ['ok.mp4', 'video/mp4', STUDIO_LIMITS.videoBytesMax, null],
-      ['big.wav', 'audio/wav', STUDIO_LIMITS.audioBytesMax + 1, 'file_too_large'],
-      ['ok.mp3', 'audio/mpeg', STUDIO_LIMITS.audioBytesMax, null],
-      ['big.webp', 'image/webp', STUDIO_LIMITS.imageBytesMax + 1, 'file_too_large'],
-      ['clip.webm', 'video/webm', 1000, 'unsupported_file'],
-      ['no-type.mov', '', 1000, 'unsupported_file'],
+    // [name, reported type, size, refusal or the type the upload is sent under]
+    const cases: Array<[string, string, number, { code: string } | { mime: string }]> = [
+      ['big.mp4', 'video/mp4', STUDIO_LIMITS.videoBytesMax + 1, { code: 'file_too_large' }],
+      ['ok.mp4', 'video/mp4', STUDIO_LIMITS.videoBytesMax, { mime: 'video/mp4' }],
+      ['big.wav', 'audio/wav', STUDIO_LIMITS.audioBytesMax + 1, { code: 'file_too_large' }],
+      ['ok.mp3', 'audio/mpeg', STUDIO_LIMITS.audioBytesMax, { mime: 'audio/mpeg' }],
+      ['big.webp', 'image/webp', STUDIO_LIMITS.imageBytesMax + 1, { code: 'file_too_large' }],
+      ['clip.webm', 'video/webm', 1000, { code: 'unsupported_file' }],
+      // Review 4: a file the editor takes by its extension goes up under that extension's own type (the
+      // server reads the bytes and keeps what they are), so the hint and the upload agree.
+      ['no-type.mov', '', 1000, { mime: 'video/quicktime' }],
+      ['x-wav.wav', 'audio/x-wav', 1000, { mime: 'audio/wav' }],
+      ['octet.mp4', 'application/octet-stream', 1000, { mime: 'video/mp4' }],
+      ['jpg-alias.jpg', 'image/jpg', 1000, { mime: 'image/jpeg' }],
+      ['big-no-type.mov', '', STUDIO_LIMITS.videoBytesMax + 1, { code: 'file_too_large' }],
+      ['notes.txt', '', 1000, { code: 'unsupported_file' }],
     ];
-    for (const [name, type, size, code] of cases) {
+    for (const [name, type, size, want] of cases) {
       const server = fakeServer();
       const api = createStudioApi({ organizationId: ORG, fetch: server.fetch });
       const result = await uploadDeviceFile(api, ORG, file(name, type, size), {});
-      if (code) {
-        expect(result, name).toEqual({ ok: false, code });
+      if ('code' in want) {
+        expect(result, name).toEqual({ ok: false, code: want.code });
         expect(server.calls, name).toHaveLength(0);
       } else {
         expect(result.ok, name).toBe(true);
         expect(server.calls[0]!.operation, name).toBe('asset.reserve');
+        expect(server.calls[0]!.input, name).toMatchObject({ mime: want.mime, name, sizeBytes: size });
+        const put = server.calls[1]!;
+        expect(put.url, name).toContain(`/api/brand-studio/assets/${ASSET}`);
       }
     }
   });
@@ -276,6 +290,19 @@ describe('a finished upload switches the cut in place', () => {
     // No step is added: one undo still goes back exactly one edit.
     expect(switched.past).toHaveLength(history.past.length);
     expect(undoHistory(undone)).toBe(undone);
+    // Redo returns the edit, switched too.
+    const redone = redoHistory(undone);
+    expect(redone.present).toBe(switched.present);
+    expect(redone.present.clips.some((c) => c.srcUrl === BLOB)).toBe(false);
+    expect(redone.present.clips.filter((c) => c.assetId === ASSET)).toHaveLength(1);
+    expect(redoHistory(redone)).toBe(redone);
+    // The file lands while the edit waits on the redo stack: redo brings it back switched as well.
+    const undoneFirst = undoHistory(history);
+    expect(undoneFirst.future).toHaveLength(1);
+    const landed = mapHistory(undoneFirst, (p) => adoptDeviceUpload(p, BLOB, adoption));
+    const redoneAfter = redoHistory(landed);
+    expect(redoneAfter.present.clips.some((c) => c.srcUrl === BLOB)).toBe(false);
+    expect(redoneAfter.present.clips.map((c) => c.id)).toEqual(history.present.clips.map((c) => c.id));
     // Nothing to switch: the same history.
     expect(mapHistory(switched, (p) => adoptDeviceUpload(p, BLOB, adoption))).toBe(switched);
   });

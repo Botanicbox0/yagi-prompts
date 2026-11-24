@@ -53,7 +53,7 @@ export const studioComposeEn = {
     uploadLocal: '+ Upload file',
     uploadHint: 'MP4, MOV, MP3, WAV, JPG, PNG, or WEBP from your device',
     /** On a cut, the music or a picked file whose upload failed or was refused: it plays from this tab only. */
-    tabOnly: 'Works in this tab only. It will be gone after a reload.',
+    tabOnly: 'Works while you stay on this screen. Leaving it or reloading removes it.',
     studioOutputs: 'Recent studio outputs',
     libraryVideos: 'Uploaded videos',
     libraryAudio: 'Audio in assets',
@@ -321,6 +321,8 @@ export const studioComposeEn = {
     saveFailed: 'Could not save to assets. You can still download the MP4 file.',
     localClipAdded: 'Added {name} to the workspace.',
     unsupportedFile: 'Choose an MP4, MOV, MP3, WAV, JPG, PNG, or WEBP file.',
+    /** A device video longer than the library takes: not uploaded, it stays on this screen. `{minutes}` is the limit. */
+    deviceTooLong: 'The video is longer than {minutes} minutes. Shorten it to upload it to the library.',
     reviewOpened: 'Opened review & share link options.',
     reviewNeedsSave: 'Render or select a saved clip first to open a review & share link.',
     nleExported: 'Downloaded Premiere · DaVinci bundle ({filename}).',
@@ -374,7 +376,7 @@ export const studioComposeKo: typeof studioComposeEn = {
     upscaleTab: '업스케일',
     uploadLocal: '+ 내 파일 올리기',
     uploadHint: '기기에 있는 MP4, MOV, MP3, WAV, JPG, PNG, WEBP 파일',
-    tabOnly: '지금 탭에서는 계속 쓸 수 있어요. 새로고침하면 사라져요.', // 대표 확인 대기 (Gemma 2패스, 2026-11-24)
+    tabOnly: '지금 화면에서는 계속 쓸 수 있어요. 화면을 나가면 사라져요.', // 대표 확인 대기 (Gemma 2패스, 2026-11-24)
     studioOutputs: '최근 생성한 영상',
     libraryVideos: '업로드한 영상',
     libraryAudio: '보관함 오디오',
@@ -642,6 +644,7 @@ export const studioComposeKo: typeof studioComposeEn = {
     saveFailed: '에셋에 저장하지 못했어요. 내보낸 MP4 파일은 바로 내려받을 수 있어요.',
     localClipAdded: '{name} 파일을 작업공간에 담았어요.',
     unsupportedFile: 'MP4, MOV, MP3, WAV, JPG, PNG, WEBP 파일만 불러올 수 있어요.',
+    deviceTooLong: '영상 길이가 {minutes}분을 넘었어요. 길이를 줄이면 보관함에 올릴 수 있어요.', // 대표 확인 대기 (Gemma 2패스, 2026-11-24)
     reviewOpened: '검수 · 공유 창을 열었어요.',
     reviewNeedsSave: '검수 · 공유 링크를 열려면 먼저 클립을 선택하거나 렌더링 본을 에셋에 저장해 주세요.',
     nleExported: 'Premiere · DaVinci 패키지({filename})를 내려받았어요.',

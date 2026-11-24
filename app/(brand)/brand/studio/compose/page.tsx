@@ -169,6 +169,7 @@ export default async function StudioComposePage({
         uploading: dict.brandStudio.assets.uploading,
         errors: dict.brandStudio.errors,
         unapprovedUpload: dict.brandStudio.unapprovedUpload,
+        uploadFailed: dict.brandStudio.uploadFailed,
       }}
     />
   );
