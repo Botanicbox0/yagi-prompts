@@ -5779,6 +5779,16 @@ export const ko: Dictionary = {
     lockProblemMore: '이 밖에 {n}곳이 더 있습니다.',
     lockRules:
       '블록은 Template locks: 한 줄로 시작하고, 그 아래 줄마다 "- Keep exactly as in the template: " 뒤에 항목 하나를 적습니다. 블록이 끝나면 빈 줄을 둡니다. 줄은 {max}개, 그중 컷 줄은 {shots}개까지입니다. 쓸 수 있는 항목: {keys}',
+    stylingRefused: '템플릿 스타일 블록에 문제가 있어 저장하지 않았습니다.',
+    stylingProblemUnknownLine:
+      '{line}번째 줄: 스타일 줄 형식이 아니거나 적을 수 없는 항목입니다. 설명이 없거나 너무 길거나 @ 핸들이 들어 있어도 그렇습니다. 블록 바로 아래에 문장이 이어지면 사이에 빈 줄을 넣어 주세요.',
+    stylingProblemEmptyBlock: '{line}번째 줄: 머리줄 아래에 스타일 줄이 없습니다.',
+    stylingProblemSecondHeader: '{line}번째 줄: 스타일 블록이 하나 더 있습니다. 블록은 하나만 둘 수 있습니다.',
+    stylingProblemDuplicatePart: '{line}번째 줄: 위에서 이미 적은 항목입니다. 항목마다 한 줄만 씁니다.',
+    stylingProblemLockedPart: '{line}번째 줄: 잠금 블록에도 있는 항목입니다. 한 항목은 잠그거나 템플릿이 꾸미거나 둘 중 하나입니다.',
+    stylingProblemTooManyLines: '스타일 줄이 {count}개입니다. {max}개까지 쓸 수 있습니다.',
+    stylingRules:
+      '블록은 Template styling: 한 줄로 시작합니다. 그 아래 줄마다 "- Styled by the template: " 뒤에 항목 하나, 대시, 템플릿이 꾸민 모습({tail}자 이내, @ 핸들 없이)을 적거나, "- Taken from the photo: " 뒤에 항목 하나를 적습니다. 블록이 끝나면 빈 줄을 둡니다. 줄은 항목마다 하나씩 {max}개까지입니다. 쓸 수 있는 항목: {keys}',
     promptInputsRetained: '작성 내용과 첨부 파일은 이 화면에 그대로 남아 있습니다.',
     promptDraftRestored: '작성 중이던 템플릿 임시저장 내용이 복원되었습니다.',
     promptDraftDiscard: '임시저장 비우기',
