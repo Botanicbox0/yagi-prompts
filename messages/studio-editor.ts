@@ -442,6 +442,7 @@ export const studioEditorEn = {
     splitNo: 'Put the playhead inside a cut to split it.',
     lastCut: 'The film needs at least one cut.',
     full: 'A film can hold up to {max} cuts.',
+    curveTooShort: 'This cut is too short for that speed shape. Make the cut longer, or pick a slower shape.',
   },
   /** The organization's own film (V1): only cutting is real; the rest says so plainly. */
   real: {
@@ -925,6 +926,8 @@ export const studioEditorKo: typeof studioEditorEn = {
     lastCut: '영상에는 컷이 하나는 있어야 합니다.',
     // 대표 확인 대기 (Gemma 미실행)
     full: '한 영상에는 컷을 {max}개까지 넣을 수 있습니다.',
+    // 대표 확인 대기 (Gemma 미실행)
+    curveTooShort: '이 컷은 너무 짧아 이 속도 모양을 넣을 수 없습니다. 컷을 늘리거나 더 느린 모양을 골라 주세요.',
   },
   real: {
     filmName: '{name} 영상',

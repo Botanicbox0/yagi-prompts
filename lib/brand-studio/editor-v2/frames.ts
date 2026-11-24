@@ -393,14 +393,34 @@ function sameSpeedPoints(a: readonly SpeedPoint[], b: readonly SpeedPoint[]): bo
   return true;
 }
 
+/**
+ * Why a speed curve was not put on a cut (audit A2): `too_short`, it would make the cut shorter than one
+ * frame; `point_limit`, it has more points than a curve may keep (`MAX_CURVE_TOTAL_POINTS`).
+ */
+export type SpeedCurveRefusal = 'too_short' | 'point_limit';
+
 export function setClipSpeedCurve(seq: FrameSequence, index: number, points: readonly SpeedPoint[]): FrameSequence {
+  return applyClipSpeedCurve(seq, index, points).seq;
+}
+
+/**
+ * Puts a speed curve on a cut, and says why when it cannot: the film comes back unchanged with the reason,
+ * so the editor can say it instead of leaving a button that seems to do nothing. A missing cut, or the curve
+ * the cut already has, changes nothing and is not a refusal.
+ */
+export function applyClipSpeedCurve(
+  seq: FrameSequence,
+  index: number,
+  points: readonly SpeedPoint[],
+): { seq: FrameSequence; refused: SpeedCurveRefusal | null } {
+  const unchanged = (refused: SpeedCurveRefusal | null = null) => ({ seq, refused });
   const clip = seq.clips[index];
-  if (!clip) return seq;
-  if (points.length > MAX_CURVE_TOTAL_POINTS) return seq;
+  if (!clip) return unchanged();
+  if (points.length > MAX_CURVE_TOTAL_POINTS) return unchanged('point_limit');
   const cleanPoints = normalizeCurvePoints(points);
-  if (cleanPoints.length > MAX_CURVE_TOTAL_POINTS) return seq;
+  if (cleanPoints.length > MAX_CURVE_TOTAL_POINTS) return unchanged('point_limit');
   if (clip.speedCurve && sameSpeedPoints(cleanPoints, clip.speedCurve.points)) {
-    return seq;
+    return unchanged();
   }
   const media = mediaFramesOf(clip, seq.fps);
   const startMedia = clip.speedCurve ? curveStartMedia(clip.speedCurve) : clip.inFrame + clip.phase / clip.speedDen;
@@ -412,7 +432,7 @@ export function setClipSpeedCurve(seq: FrameSequence, index: number, points: rea
   const spanMedia = Math.min(rawSpan, Math.max(1e-6, media - startMedia));
   const nextCurve: SpeedCurve = { startMedia, spanMedia: Math.max(1e-6, spanMedia), points: cleanPoints };
   if (curveRawDurationFrames(nextCurve) < 1 - 1e-6) {
-    return seq;
+    return unchanged('too_short');
   }
   const inFrame = clamp(Math.floor(startMedia + 1e-9), 0, Math.max(0, media - 1));
   const retimed: FrameClip = {
@@ -435,7 +455,7 @@ export function setClipSpeedCurve(seq: FrameSequence, index: number, points: rea
   }
   const clips = [...seq.clips];
   clips[index] = retimed;
-  return withClips(seq, clips);
+  return { seq: withClips(seq, clips), refused: null };
 }
 
 export function resetClipSpeed(seq: FrameSequence, index: number): FrameSequence {

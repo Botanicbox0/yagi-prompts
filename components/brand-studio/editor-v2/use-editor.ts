@@ -30,6 +30,7 @@ import {
 } from '@/lib/brand-studio/editor-v2/fixture';
 import {
   addCaption,
+  applyClipSpeedCurve,
   clipMaxFrames,
   frameStateAt,
   insertClips,
@@ -43,6 +44,7 @@ import {
   setClipConstantSpeed as setSequenceClipConstantSpeed,
   setClipSpeed as setSequenceClipSpeed,
   setClipSpeedCurve as setSequenceClipSpeedCurve,
+  type SpeedCurveRefusal,
   type SpeedPoint,
   spansOf,
   splitAtFrame,
@@ -105,6 +107,14 @@ import { loadShortcutPrefs, saveShortcutPrefs } from './shortcut-store';
 /** The line when the film already holds as many cuts as it may (audit A3): the number comes from the limit itself. */
 export function cutLimitLine(copy: StudioEditorCopy): string {
   return fill(copy.toast.full, { max: MAX_COMPOSE_CLIPS });
+}
+
+/**
+ * The line when a speed curve cannot go on a cut (audit A2): too short for that shape, or past the point
+ * limit (the panel's own line for that limit).
+ */
+export function curveRefusalLine(copy: StudioEditorCopy, refused: SpeedCurveRefusal): string {
+  return refused === 'too_short' ? copy.toast.curveTooShort : copy.cut.clip.speedCurveCapHint;
 }
 
 export function speedUndoKey(clipId: string): string {
@@ -715,10 +725,14 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
   );
   const setSpeedCurve = useCallback(
     (index: number, points: readonly SpeedPoint[], coalesce = false) => {
+      if (blockedRef.current) return;
+      // A shape the cut cannot take leaves it as it is and says why, instead of a button that seems dead (audit A2).
+      const { refused } = applyClipSpeedCurve(docRef.current.sequence, index, points);
+      if (refused) return say(curveRefusalLine(copy, refused));
       const clipKey = speedUndoKey(docRef.current.sequence.clips[index]?.id ?? String(index));
       edit((current) => setSequenceClipSpeedCurve(current, index, points), undefined, coalesce ? clipKey : undefined);
     },
-    [edit],
+    [edit, say, copy],
   );
   const resetSpeed = useCallback((index: number) => edit((current) => resetSequenceClipSpeed(current, index)), [edit]);
   const setClipAudio = useCallback(
