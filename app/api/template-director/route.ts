@@ -1,14 +1,19 @@
 import { NextResponse } from 'next/server';
 import { getViewer } from '@/lib/auth/viewer';
 import { getSqlRunner } from '@/lib/db/connect';
+import { personalEditSheetOpen } from '@/lib/flags';
 import { isLocale } from '@/lib/i18n/config';
 import { loadPromptBySlug } from '@/lib/prompts/repo';
 import {
+  DIRECTOR_DEFAULT_REFERENCE_MESSAGE_EN,
+  DIRECTOR_DEFAULT_REFERENCE_MESSAGE_KO,
   createFlashTemplateDirector,
   directorConfigFromEnv,
   runHeuristicDirectorTurn,
   toClientDirectorTurnResponse,
 } from '@/lib/template-director/flash-director';
+import { takeDirectorTurnSlot } from '@/lib/template-director/rate-limit';
+import { cleanPersonalSheetState } from '@/lib/template-director/sheet';
 import {
   DIRECTOR_EDITABLE_SLOTS,
   PERSONAL_AUDIO_MODES,
@@ -32,9 +37,28 @@ function json(body: unknown, status: number): NextResponse {
   return NextResponse.json(body, { status, headers: HEADERS });
 }
 
+function parseJsonOrNull(text: string): unknown {
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return null;
+  }
+}
+
 export async function POST(request: Request): Promise<NextResponse> {
   const viewer = await getViewer();
   if (!viewer.userId) return json({ ok: false, code: 'sign_in_required' }, 401);
+
+  // docs/PERSONAL-STUDIO.md §3.1 — every turn may call the Stage-1 model; admins are not limited.
+  if (!viewer.isAdmin) {
+    const slot = takeDirectorTurnSlot(viewer.userId);
+    if (!slot.ok) {
+      return NextResponse.json(
+        { ok: false, code: 'rate_limited' },
+        { status: 429, headers: { ...HEADERS, 'Retry-After': String(slot.retryAfterSec) } },
+      );
+    }
+  }
 
   const sql = await getSqlRunner();
   if (!sql) return json({ ok: false, code: 'unavailable' }, 503);
@@ -104,9 +128,12 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   const effectiveMessage =
     rawMessage ||
-    (locale === 'en'
-      ? 'Apply my attached reference photo naturally to this scene.'
-      : '첨부한 레퍼런스 사진을 장면에 자연스럽게 반영해 주세요.');
+    (locale === 'en' ? DIRECTOR_DEFAULT_REFERENCE_MESSAGE_EN : DIRECTOR_DEFAULT_REFERENCE_MESSAGE_KO);
+
+  // docs/PERSONAL-STUDIO.md §2.3 — the edit sheet the screen kept. Read only with the flag on, and untrusted:
+  // cleaned and guarded here and again in the director. Off (or no field), the turn is today's chips turn.
+  const sheetField = personalEditSheetOpen() ? form.get('sheet') : null;
+  const sheetState = typeof sheetField === 'string' ? cleanPersonalSheetState(parseJsonOrNull(sheetField)) : null;
 
   const turnInput = {
     templateId: template.id,
@@ -114,6 +141,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     editableSlots: DIRECTOR_EDITABLE_SLOTS,
     userMessage: effectiveMessage,
     references,
+    ...(sheetState ? { sheetState } : {}),
   };
 
   const config = directorConfigFromEnv();

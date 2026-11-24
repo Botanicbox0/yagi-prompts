@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { RecipeSlotRole } from '@/lib/recipes/schema';
+import { SHEET_BLOCK_LIMITS, SheetTextItemSchema } from '@/lib/revision/sheet-core';
 
 export const GEMINI_DIRECTOR_DEFAULT_MODEL = 'gemini-4-hydrogen' as const;
 export const GEMINI_DIRECTOR_DEFAULT_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta' as const;
@@ -284,6 +285,117 @@ export interface DirectorReferenceAttachment {
   mime: 'image/jpeg' | 'image/png' | 'image/webp';
 }
 
+// ---------------------------------------------------------------------------------------------------------------
+// docs/PERSONAL-STUDIO.md §2.3 — the personal edit sheet (P1a, flag `TWINGS_PERSONAL_EDIT_SHEET`). Three blocks like
+// the brand `ReviseSheet` (`lib/revision/sheet-core.ts`); a change line names one editable slot. Text stays in the
+// customer's language (Stage 2 translates). The pure functions are in `./sheet.ts`.
+// ---------------------------------------------------------------------------------------------------------------
+
+export const PERSONAL_SHEET_LIMITS = {
+  ...SHEET_BLOCK_LIMITS,
+  /** Shot numbers a ranged line may name (1-based, inclusive). */
+  shotMax: 12,
+  /** Earlier values a change line remembers for "revert" (newest last). */
+  wasMax: 2,
+  turnsMax: 8,
+  turnTextMax: 1000,
+  pointMax: 60,
+  questionMax: 160,
+  optionMax: 60,
+  optionsMax: 3,
+  /** Stage-1 delta caps. */
+  setMax: 4,
+  removeMax: 6,
+  revertMax: 3,
+  keepAddMax: 3,
+  excludeAddMax: 3,
+} as const;
+
+export const PERSONAL_SHEET_BLOCKS = ['change', 'keep', 'exclude'] as const;
+export type PersonalSheetBlock = (typeof PERSONAL_SHEET_BLOCKS)[number];
+
+const sheetShotNumber = z.number().int().min(1).max(PERSONAL_SHEET_LIMITS.shotMax);
+
+export const PersonalSheetShotsSchema = z
+  .object({ from: sheetShotNumber, to: sheetShotNumber })
+  .refine((shots) => shots.from <= shots.to, { message: 'from must not be after to' });
+
+export const PersonalSheetChangeSchema = z.object({
+  text: SheetTextItemSchema,
+  slot: z.enum(DIRECTOR_EDITABLE_SLOTS),
+  /** The attached reference photo this line takes from. */
+  ref: z.enum(CUSTOM_DIRECTOR_REF_SLOTS).optional(),
+  /** Only these shots; absent = every shot it concerns. */
+  shots: PersonalSheetShotsSchema.optional(),
+  /** Earlier values of this line, newest last; dropped before an order (`sheetForOrder`). */
+  was: z.array(SheetTextItemSchema).max(PERSONAL_SHEET_LIMITS.wasMax).optional(),
+});
+export type PersonalSheetChange = z.infer<typeof PersonalSheetChangeSchema>;
+
+export const PersonalEditSheetSchema = z.object({
+  change: z.array(PersonalSheetChangeSchema).max(PERSONAL_SHEET_LIMITS.changeMax),
+  keep: z.array(SheetTextItemSchema).max(PERSONAL_SHEET_LIMITS.keepMax),
+  exclude: z.array(SheetTextItemSchema).max(PERSONAL_SHEET_LIMITS.excludeMax),
+});
+export type PersonalEditSheet = z.infer<typeof PersonalEditSheetSchema>;
+
+export const PersonalSheetTurnSchema = z.object({
+  role: z.enum(['customer', 'studio']),
+  text: z.string().trim().min(1).max(PERSONAL_SHEET_LIMITS.turnTextMax),
+});
+export type PersonalSheetTurn = z.infer<typeof PersonalSheetTurnSchema>;
+
+export const PersonalSheetQuestionSchema = z.object({
+  /** A few words naming what the question settles. */
+  point: z.string().trim().min(1).max(PERSONAL_SHEET_LIMITS.pointMax),
+  text: z.string().trim().min(1).max(PERSONAL_SHEET_LIMITS.questionMax),
+  options: z.array(z.string().trim().min(1).max(PERSONAL_SHEET_LIMITS.optionMax)).max(PERSONAL_SHEET_LIMITS.optionsMax),
+});
+export type PersonalSheetQuestion = z.infer<typeof PersonalSheetQuestionSchema>;
+
+/** What the screen keeps between turns and sends back as the `sheet` form field. Untrusted on the server. */
+export const PersonalSheetStateSchema = z.object({
+  sheet: PersonalEditSheetSchema,
+  turns: z.array(PersonalSheetTurnSchema).max(PERSONAL_SHEET_LIMITS.turnsMax),
+  question: PersonalSheetQuestionSchema.nullable(),
+  /** The studio has asked its one question in this conversation. */
+  asked: z.boolean(),
+});
+export type PersonalSheetState = z.infer<typeof PersonalSheetStateSchema>;
+
+/** Element slots: a change to one of these replaces the template's own element wherever it appears. */
+export const PERSONAL_SHEET_ELEMENT_SLOTS = ['outfit', 'makeup', 'hair', 'prop'] as const;
+export type PersonalSheetElementSlot = (typeof PERSONAL_SHEET_ELEMENT_SLOTS)[number];
+
+export interface SheetCompileLine {
+  slot: DirectorEditableSlot;
+  text: string;
+  /** The attached reference photo the line takes from; null when none (or the photo is not on the job). */
+  ref: CustomDirectorRefSlot | null;
+}
+
+/** The sheet sorted by where each line goes in the prompt (docs/PERSONAL-STUDIO.md §2.3). Built by `planSheetCompile`. */
+export interface SheetCompilePlan {
+  /** Unranged outfit/makeup/hair/prop: Reference authority and every shot showing the element. */
+  elements: SheetCompileLine[];
+  /** Unranged lighting_mood: Visual style. */
+  style: SheetCompileLine[];
+  /** Unranged shot_action: every shot. */
+  actions: SheetCompileLine[];
+  /** Only the Timeline shots `from`..`to`. */
+  ranged: Array<SheetCompileLine & { from: number; to: number }>;
+  /** Attached reference photos no line names; each keeps its default role. */
+  unboundRefs: CustomDirectorRefSlot[];
+  /** Element slots whose template original goes to `[Exclusions]`. */
+  replaced: PersonalSheetElementSlot[];
+  /** Lock sentences. */
+  keep: string[];
+  /** `[Exclusions]`. */
+  exclude: string[];
+}
+
+export type DirectorCast = 'solo' | 'couple' | 'pet';
+
 export interface DirectorChatTurnInput {
   templateId: string;
   /** Korean summary of the template's shots — safe for Stage 1; contains zero private English prompt text. */
@@ -291,6 +403,11 @@ export interface DirectorChatTurnInput {
   editableSlots: readonly DirectorEditableSlot[];
   userMessage: string;
   references?: readonly DirectorReferenceAttachment[];
+  /**
+   * The edit sheet the screen kept (`TWINGS_PERSONAL_EDIT_SHEET`, the route passes it only with the flag on).
+   * Present = the turn settles a sheet; absent = today's chips turn. Cleaned and guarded again before use.
+   */
+  sheetState?: PersonalSheetState;
 }
 
 export type DirectorRefusalCode = 'none' | 'identity' | 'unsafe' | 'unsupported' | 'too_large';
@@ -304,6 +421,14 @@ export interface DirectorChatTurnResult {
   summaryChips: DirectorSummaryChip[];
   /** Server-only sanitized intent passed to Stage 2; stripped from client responses by `toClientDirectorTurnResponse`. */
   structuredIntent: DirectorEditIntent | null;
+  /** Sheet turns only: the whole sheet after this turn. */
+  sheet?: PersonalEditSheet;
+  /** Sheet turns only: the one question, or null. */
+  question?: PersonalSheetQuestion | null;
+  /** Sheet turns only: a question has been asked in this conversation. */
+  asked?: boolean;
+  /** Sheet turns only: the sheet differs from the one sent. */
+  changed?: boolean;
 }
 
 /** Client-safe projection returned to the browser. Never contains English prompt fragments or `structuredIntent`. */
@@ -314,6 +439,10 @@ export interface ClientDirectorTurnResponse {
   guardrailAdjustmentKo: string | null;
   readyToRender: boolean;
   summaryChips: DirectorSummaryChip[];
+  sheet?: PersonalEditSheet;
+  question?: PersonalSheetQuestion | null;
+  asked?: boolean;
+  changed?: boolean;
 }
 
 export interface DirectorReferenceSlotMeta {
@@ -335,6 +464,13 @@ export interface DirectorRewriteInput {
    * concerns (docs/PERSONAL-STUDIO.md §4 #4) instead of the note being pinned to an invented shot 1.
    */
   userNoteRaw?: string | null;
+  /**
+   * The edit sheet (docs/PERSONAL-STUDIO.md §2.3), only when one is used: then the intent is empty, the note null,
+   * and the payload carries `editSheet`. Absent = the wire body is exactly the chips path's.
+   */
+  sheet?: SheetCompilePlan;
+  /** Who the template features; set on the sheet path only (absent = derived from `referenceSlots`). */
+  cast?: DirectorCast;
 }
 
 /**
@@ -379,6 +515,12 @@ export const personalDirectorSpecSchema = z.object({
     .nullable()
     .optional(),
   slotOverrides: z.array(z.enum(CUSTOM_DIRECTOR_REF_SLOTS)).max(3).optional(),
+  /**
+   * docs/PERSONAL-STUDIO.md §2.3 — the edit sheet (flag `TWINGS_PERSONAL_EDIT_SHEET`). Never fails the spec and has
+   * no default: anything malformed becomes undefined and the rest of the spec stands, an absent key stays absent.
+   * The chips are written alongside it, so a compile with the flag off still honours the order.
+   */
+  sheet: PersonalEditSheetSchema.optional().catch(undefined),
 });
 
 export type PersonalDirectorSpec = z.infer<typeof personalDirectorSpecSchema>;
@@ -454,6 +596,52 @@ export const rawStage1ChatSchema = z.object({
     })
     .nullable()
 });
+
+/**
+ * A list from the model, cut to `max` items; an item that does not fit `item` is dropped, not fatal. The sheet
+ * functions check every surviving item again (slot, reference, shots, text guard) before it touches the sheet.
+ */
+function cappedModelList<T extends z.ZodType>(item: T, max: number) {
+  return z
+    .preprocess((value) => (Array.isArray(value) ? value.slice(0, max) : []), z.array(z.unknown()))
+    .transform((items) =>
+      items.flatMap((raw) => {
+        const parsed = item.safeParse(raw);
+        return parsed.success ? [parsed.data as z.output<T>] : [];
+      }),
+    );
+}
+
+/**
+ * docs/PERSONAL-STUDIO.md §2.3 — the Stage-1 reading of one turn on the edit sheet: a DELTA, never a whole sheet.
+ * Indices name lines of the sheet the model was shown. The server applies it with `settleSheetTurn`.
+ */
+export const rawStage1SheetSchema = z.object({
+  approved: z.boolean(),
+  refusal: z.enum(['none', 'identity', 'unsafe', 'unsupported', 'too_large']),
+  replyKo: z.string().trim().min(2).max(600),
+  guardrailAdjustmentKo: z.string().trim().max(400).nullable().optional().transform((value) => value ?? null),
+  set: cappedModelList(
+    z.object({
+      text: z.string(),
+      slot: z.string(),
+      ref: z.string().nullish(),
+      shots: z.object({ from: z.number(), to: z.number() }).nullish(),
+      replaces: z.number().nullish(),
+    }),
+    PERSONAL_SHEET_LIMITS.setMax,
+  ),
+  remove: cappedModelList(z.object({ block: z.enum(PERSONAL_SHEET_BLOCKS), index: z.number() }), PERSONAL_SHEET_LIMITS.removeMax),
+  revert: cappedModelList(z.number(), PERSONAL_SHEET_LIMITS.revertMax),
+  keep: cappedModelList(z.string(), PERSONAL_SHEET_LIMITS.keepAddMax),
+  exclude: cappedModelList(z.string(), PERSONAL_SHEET_LIMITS.excludeAddMax),
+  question: z
+    .object({ point: z.string(), text: z.string(), options: z.array(z.string()).optional() })
+    .nullish()
+    .catch(null)
+    .transform((value) => value ?? null),
+});
+export type RawStage1SheetReading = z.output<typeof rawStage1SheetSchema>;
 
 export const rawStage2RewriteSchema = z.object({
   rewrittenPrompt: z.string().trim().min(40).max(16_000),
