@@ -9,7 +9,8 @@ import {
   undoCancelSubscription,
 } from '@/lib/brands/subscriptions';
 import { brandBillingAutoIssueOpen } from '@/lib/flags';
-import { isDbAdmin, UUID_RE } from './brand-ops-guard';
+import { formatReissueDetail, formatSubscriptionStartDetail } from './billing-preview-detail';
+import { isDbAdmin, UUID_RE, withBillingConflicts } from './brand-ops-guard';
 import { brandFailure } from './brand-workspace-operations';
 import { fail, ok, type AdminContext, type AdminOutcome } from './context';
 import * as f from './form';
@@ -109,7 +110,15 @@ const subscriptionStart: AdminOperation<{
     if (!result.ok) return subscriptionFailure(result);
     if (!result.applied) {
       return ok('prepared', {
-        detail: `${result.preview.planId}|${result.preview.startedOn}|early=${result.preview.activateBeforePayment ? '1' : '0'} · due=${result.preview.dueOn} · ${result.preview.totalKrw} · digest=${result.preview.digest}${result.preview.shortPaymentWindow ? ' · short_window=1' : ''}`,
+        detail: formatSubscriptionStartDetail({
+          planId: result.preview.planId,
+          startedOn: result.preview.startedOn,
+          activateBeforePayment: result.preview.activateBeforePayment,
+          dueOn: result.preview.dueOn,
+          totalKrw: result.preview.totalKrw,
+          digest: result.preview.digest,
+          shortWindow: result.preview.shortPaymentWindow,
+        }),
       });
     }
     return ok('created', {
@@ -205,7 +214,15 @@ const subscriptionReissuePeriod: AdminOperation<{
     if (!result.ok) return subscriptionFailure(result);
     if (!result.applied) {
       return ok('prepared', {
-        detail: `reissue=${result.preview.period}|${result.preview.planId}|${result.preview.prorateFromDay ?? 'full'}|due=${result.preview.dueOn}|${result.preview.totalKrw}|digest=${result.preview.digest}${result.preview.shortPaymentWindow ? '|short_window=1' : ''}`,
+        detail: formatReissueDetail({
+          period: result.preview.period,
+          planId: result.preview.planId,
+          prorateFromDay: result.preview.prorateFromDay,
+          dueOn: result.preview.dueOn,
+          totalKrw: result.preview.totalKrw,
+          digest: result.preview.digest,
+          shortWindow: result.preview.shortPaymentWindow,
+        }),
       });
     }
     return ok('saved', {
@@ -248,7 +265,8 @@ const invoiceRecordTaxInvoice: AdminOperation<{
   },
   async run(ctx: AdminContext, input) {
     if (!(await isDbAdmin(ctx.sql, ctx.viewer))) return brandFailure('forbidden');
-    if (!brandBillingAutoIssueOpen()) return fail('disabled', 'BRAND_BILLING_AUTO_ISSUE');
+    // R3 item 2: recording the Hometax date and reference is manual bookkeeping on an issued or paid invoice, so it is
+    // open with BRAND_BILLING_AUTO_ISSUE off too (the manual path). Schema, sandbox and state checks are the service's.
     const result = await recordBrandInvoiceTaxInvoice({ sql: ctx.sql }, ctx.viewer, {
       invoiceId: input.invoiceId,
       issuedOn: input.issuedOn,
@@ -261,7 +279,8 @@ const invoiceRecordTaxInvoice: AdminOperation<{
   },
 };
 
-export const BRAND_SUBSCRIPTION_OPERATIONS = {
+/** R3 item 8: every conflict of these operations reads as `billingConflict` (lib/admin/brand-ops-guard.ts). */
+export const BRAND_SUBSCRIPTION_OPERATIONS = withBillingConflicts({
   'brandSubscription.start': subscriptionStart,
   'brandSubscription.cancel': subscriptionCancel,
   'brandSubscription.undoCancel': subscriptionUndoCancel,
@@ -270,4 +289,4 @@ export const BRAND_SUBSCRIPTION_OPERATIONS = {
   'brandSubscription.reissuePeriod': subscriptionReissuePeriod,
   'brandSubscription.reconcile': subscriptionReconcile,
   'brandBilling.invoice.recordTaxInvoice': invoiceRecordTaxInvoice,
-} as const;
+} as const);

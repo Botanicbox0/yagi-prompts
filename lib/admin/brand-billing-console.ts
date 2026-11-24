@@ -16,6 +16,7 @@ import {
 import { hasColumn, hasTable, hasTables, loadSubscriptionSchemaReady } from '@/lib/brands/billing/schema-guard';
 import { cycleContaining, cycleStartAt } from '@/lib/brands/billing/cycle';
 import { monthRange } from '@/lib/brands/billing/cycle-invoices';
+import { planCapKrwFromCredits, resolvePlanCapKrw } from '@/lib/brands/billing/plan-credits';
 import type {
   BrandBillingProfile,
   BrandDiscountCode,
@@ -70,7 +71,10 @@ export interface UninvoicedCycle {
 
 export interface PlanDefaultRowView {
   planId: PaidBrandPlanId;
+  /** The stored default; null when unset. */
   monthlyCapKrw: number | null;
+  /** R3 item 6: what applies — the stored default, else the plan's confirmed credits x 10 (`resolvePlanCapKrw`). */
+  effectiveCapKrw: number;
   note: string;
   updatedAt: string | null;
   affectedOrgCount: number;
@@ -200,6 +204,7 @@ export async function loadBrandBillingOverview(
       planDefaults: PAID_BRAND_PLAN_IDS.map((planId) => ({
         planId,
         monthlyCapKrw: null,
+        effectiveCapKrw: planCapKrwFromCredits(planId),
         note: '',
         updatedAt: null,
         affectedOrgCount: 0,
@@ -416,6 +421,7 @@ export async function loadBrandBillingOverview(
     return {
       planId,
       monthlyCapKrw: existing?.monthlyCapKrw ?? null,
+      effectiveCapKrw: resolvePlanCapKrw(planId, existing?.monthlyCapKrw) ?? planCapKrwFromCredits(planId),
       note: existing?.note ?? '',
       updatedAt: existing?.updatedAt ?? null,
       affectedOrgCount: existing?.affectedOrgCount ?? 0,
@@ -541,6 +547,14 @@ export async function loadBrandDiscountCodesConsole(
   };
 }
 
+/** "12월 17일" / "Dec 17" for a KST `YYYY-MM-DD`, formatted as a UTC calendar day so nothing shifts a day. */
+function calendarDayLabel(day: string, locale: 'ko' | 'en'): string {
+  const [y, m, d] = day.split('-').map(Number) as [number, number, number];
+  return new Intl.DateTimeFormat(locale === 'en' ? 'en-US' : 'ko-KR', { timeZone: 'UTC', month: 'short', day: 'numeric' }).format(
+    Date.UTC(y, m - 1, d),
+  );
+}
+
 /**
  * Formats an operation `detail` code/field into plain Korean or English operator text
  * while keeping the original identifier visible.
@@ -550,6 +564,22 @@ export function formatBillingOutcomeDetail(detail: string | undefined, locale: '
   // B1c-3: plan-upgrade refusals have their own lines (lib/admin/plan-upgrade-detail.ts).
   const upgrade = formatPlanUpgradeOutcomeDetail(detail, locale);
   if (upgrade) return upgrade;
+  // R3 item 7: a lower plan through the plan forms waits for the next cycle; the line names its start day.
+  const downgrade = /(?:^|:)plan_downgrade_next_cycle:(\d{4}-\d{2}-\d{2})$/.exec(detail);
+  if (downgrade) {
+    const day = calendarDayLabel(downgrade[1]!, locale);
+    return locale === 'ko'
+      ? `주기 중간에는 낮은 플랜으로 바꿀 수 없습니다. 다음 주기 시작일(${day})에 바꾸세요. (${detail})`
+      : `A lower plan cannot start in the middle of a cycle. Change it on the next cycle's start day (${day}). (${detail})`;
+  }
+  // R3 item 3: the manual paid day runs from the invoice's issue day through today; the line names that range.
+  const paidRange = /(?:^|:)(paid_at_before_issue|paid_at_in_future):(\d{4}-\d{2}-\d{2})~(\d{4}-\d{2}-\d{2})$/.exec(detail);
+  if (paidRange) {
+    const [, , issue, today] = paidRange;
+    return locale === 'ko'
+      ? `입금일은 청구서 발행일(${issue})부터 오늘(${today})까지의 날짜만 넣을 수 있습니다(한국 시간). (${detail})`
+      : `The paid date must be from the invoice's issue day (${issue}) through today (${today}), KST. (${detail})`;
+  }
   const labels =
     locale === 'ko'
       ? {

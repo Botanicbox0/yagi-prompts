@@ -1,6 +1,7 @@
 import { planGraceDaysFromEnv } from '@/lib/brand-studio/env';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import { kstDayOf, PAID_BRAND_PLAN_IDS, planActiveWithGrace } from './math';
+import { resolvePlanCapKrw } from './plan-credits';
 import { loadAllowanceSchemaState } from './schema-guard';
 
 /**
@@ -62,11 +63,14 @@ export async function syncPlanDefaultSnapshot(
           graceDays,
         ).active
       : false;
-  const hasDefault = isActive && planRow?.default_cap !== null && planRow?.default_cap !== undefined;
+  // R3 item 6: the cap that applies — the stored default, or with none stored the confirmed credits of the paid plan —
+  // so a rollback reads what `loadAllowance` gives.
+  const planCap = isActive && planRow ? resolvePlanCapKrw(planRow.plan_id, planRow.default_cap) : null;
+  const hasDefault = planCap !== null;
 
   if (!existing && !hasDefault) return;
 
-  const snapshotCap = hasDefault ? Number(planRow!.default_cap) : 0;
+  const snapshotCap = hasDefault ? planCap : 0;
   await sql.query(
     `insert into brand_studio_allowances (organization_id, monthly_cap_krw, is_override, preferred_lane, note, updated_by, updated_at)
        values ($1, $2, false, null, '', $3, now())

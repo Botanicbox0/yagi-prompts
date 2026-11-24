@@ -227,7 +227,15 @@ describe('B1: the first-payment date is bounded', () => {
     const orgId = await makeOrg('Paid Bound Engine Fixture');
     const s = await start(orgId, '2026-11-25');
     vi.stubEnv('BRAND_BILLING_AUTO_ISSUE', 'off');
-    expect(await pay(s.firstInvoiceId, '2026-11-26T03:00:00Z', '2026-11-20')).toMatchObject({ ok: true });
+    // R3 item 3 (changed on purpose): with the flag off this date is now refused at entry too (before the issue day).
+    expect(await pay(s.firstInvoiceId, '2026-11-26T03:00:00Z', '2026-11-20')).toMatchObject({
+      ok: false,
+      detail: 'paid_at_before_issue:2026-11-25~2026-11-26',
+    });
+    // The job's own bound still holds for a payment recorded with such a date before R3 (no entry bound then).
+    await sql.query("update brand_invoices set status = 'paid', paid_at = '2026-11-20T00:00:00+09:00', paid_method = 'transfer' where id = $1", [
+      s.firstInvoiceId,
+    ]);
     vi.stubEnv('BRAND_BILLING_AUTO_ISSUE', 'on');
     await tick('2026-11-27T01:00:00Z');
     expect(await row(s.firstInvoiceId)).toMatchObject({ status: 'paid', cycle_start: null });

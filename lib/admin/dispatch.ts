@@ -41,6 +41,34 @@ export async function dispatchAdmin(
 }
 
 /**
+ * The longest `detail` the outcome URL carries, in characters (R3 item 1). It used to be 200, set with the first admin
+ * CMS to keep the redirect short; the step-1 previews of the billing operations travel in this field to their confirm
+ * form (the plan upgrade's is ~300 characters), and a cut preview cannot be parsed, so the confirm never appeared.
+ * Every preview a registered operation returns fits (tests/admin/outcome-detail-roundtrip.test.ts builds the worst
+ * case of each); a database error sentence longer than this is still cut.
+ */
+export const OUTCOME_DETAIL_MAX_CHARS = 1000;
+
+/**
+ * ...and the most its URL-encoded form may take. The detail rides in a 303 `Location` header and then in the request
+ * line of the GET that follows, which shares the server's header budget (16 KB on Node, cookies included) with
+ * everything else. A detail of non-ASCII text can encode to 9 bytes a character, so the encoded length is bounded too.
+ */
+export const OUTCOME_DETAIL_MAX_ENCODED = 3000;
+
+/** The detail cut to both bounds, on code points (a surrogate pair is never split). */
+export function boundOutcomeDetail(detail: string): string {
+  let points = Array.from(detail);
+  if (points.length > OUTCOME_DETAIL_MAX_CHARS) points = points.slice(0, OUTCOME_DETAIL_MAX_CHARS);
+  let out = points.join('');
+  while (encodeURIComponent(out).length > OUTCOME_DETAIL_MAX_ENCODED && points.length > 0) {
+    points = points.slice(0, Math.max(0, points.length - Math.max(1, Math.ceil(points.length / 20))));
+    out = points.join('');
+  }
+  return out;
+}
+
+/**
  * Outcome → the URL the form returns to.
  *
  * Query params rather than `useActionState` because the editor is deliberately JS-free (§4: the
@@ -72,7 +100,7 @@ export function outcomeUrl(back: string, outcome: AdminOutcome): string {
   params.delete('detail');
 
   params.set(outcome.ok ? 'ok' : 'err', outcome.code);
-  if (outcome.detail) params.set('detail', outcome.detail.slice(0, 200));
+  if (outcome.detail) params.set('detail', boundOutcomeDetail(outcome.detail));
 
   const query = params.toString();
   return `${target.pathname}${query.length > 0 ? `?${query}` : ''}${target.hash}`;

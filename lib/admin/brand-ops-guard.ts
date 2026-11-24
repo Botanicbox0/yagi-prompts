@@ -1,7 +1,31 @@
 import type { Viewer } from '@/lib/auth/identity';
 import type { SqlRunner } from '@/lib/db/sql-runner';
+import type { AdminContext, AdminOutcome } from './context';
 
 export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * R3 item 8: a plan, billing or subscription operation's conflict reads as `billingConflict` (a neutral sentence), not
+ * as the campaign sentence of `brandConflict`, which the shared `brandFailure` maps every `conflict` to. The detail is
+ * unchanged.
+ */
+export function asBillingConflict(outcome: AdminOutcome): AdminOutcome {
+  return !outcome.ok && outcome.code === 'brandConflict' ? { ...outcome, code: 'billingConflict' } : outcome;
+}
+
+type AnyOperation = { parse(form: FormData): unknown; run(ctx: AdminContext, input: never): Promise<AdminOutcome> };
+
+/** Every operation of a billing registry with `asBillingConflict` applied to its result. */
+export function withBillingConflicts<T extends Record<string, AnyOperation>>(operations: T): T {
+  const wrapped: Record<string, AnyOperation> = {};
+  for (const [name, op] of Object.entries(operations)) {
+    wrapped[name] = {
+      parse: (form) => op.parse(form),
+      run: async (ctx, input) => asBillingConflict(await op.run(ctx, input)),
+    };
+  }
+  return wrapped as T;
+}
 
 /**
  * Re-reads `profiles.is_admin` from the database before returning any admin read model.

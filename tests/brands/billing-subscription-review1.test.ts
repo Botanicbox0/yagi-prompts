@@ -189,8 +189,17 @@ describe('B1a review round 1 — integration gaps', () => {
     const forbidden =
       /brand_subscriptions|brand_subscription_events|subscription_epoch|last_reconciled_at|tax_invoice_issued_on|tax_invoice_ref|created_via|issued_via|covers_months|\bdue_on\b|actor_kind|collection_method|pending_plan_effective_period|\bkind\s*=/;
     // B1c fix round: the no-overlap check on subscription drafts names `kind = 'subscription'` on purpose (flag off too).
+    // R3 items 2 and 4 (changed on purpose): the admin organization page reads the 0182 bookkeeping columns of its invoices
+    // with the flag off — the due date and the tax invoice the manual path shows and records — in exactly this one
+    // statement, which names no subscription table, epoch or other subscription column.
+    const BOOKKEEPING_READ =
+      'select id::text as id, due_on::text as due_on, collection_method, tax_invoice_issued_on::text as tax_invoice_issued_on, tax_invoice_ref from brand_invoices where organization_id = $1';
+    expect(r.log.filter((q) => q.text === BOOKKEEPING_READ)).toHaveLength(1);
     const leaks = r.log.filter(
-      (q) => !OVERLAP_CHECK.test(q.text) && (forbidden.test(q.text) || q.params.some((p) => typeof p === 'string' && /^brand_subscription/.test(p))),
+      (q) =>
+        !OVERLAP_CHECK.test(q.text) &&
+        q.text !== BOOKKEEPING_READ &&
+        (forbidden.test(q.text) || q.params.some((p) => typeof p === 'string' && /^brand_subscription/.test(p))),
     );
     expect(leaks.map((q) => q.text)).toEqual([]);
     // The subscription row was never touched by flag-off code.

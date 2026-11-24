@@ -6,7 +6,14 @@ import { isMissingTable } from './entitlements';
 import { brandBillingAutoIssueOpen } from '@/lib/flags';
 import { loadSubscriptionSchemaReady } from './billing/schema-guard';
 import { syncPlanDefaultSnapshot } from './billing/snapshot';
-import { CYCLE_ALREADY_INVOICED, higherPlanNeedsUpgrade, PLAN_UPGRADE_REQUIRED, startDayMoveBlocked } from './billing/cycle-invoices';
+import {
+  CYCLE_ALREADY_INVOICED,
+  higherPlanNeedsUpgrade,
+  lowerPlanWaitsForNextCycle,
+  PLAN_DOWNGRADE_NEXT_CYCLE,
+  PLAN_UPGRADE_REQUIRED,
+  startDayMoveBlocked,
+} from './billing/cycle-invoices';
 import { kstDayOf } from './billing/math';
 
 /**
@@ -145,7 +152,10 @@ export async function upsertPlanAssignmentInTx(
     organizationLock?: 'update' | 'no key update';
     /** Item 5: refuse plan id / billing mode / dates changes while a non-ended subscription owns the row. */
     refuseWhenSubscriptionManaged?: boolean;
-    /** B1c-3 fix round 1 (the admin plan form): refuse a higher plan id while a subscription invoice covers today. */
+    /**
+     * B1c-3 fix round 1 (the admin plan form): refuse a higher plan id while a subscription invoice covers today; R3 item 7:
+     * and a lower paid plan while an issued or paid one does (from the next cycle). The subscription paths never set it.
+     */
     refuseMidCycleUpgrade?: boolean;
     now?: Date;
     graceDays?: number;
@@ -194,6 +204,11 @@ export async function upsertPlanAssignmentInTx(
     if (stored && (await higherPlanNeedsUpgrade(sql, params.organizationId, stored.plan_id, params.planId, kstDayOf(params.now ?? new Date())))) {
       return { ok: false, code: 'conflict', field: PLAN_UPGRADE_REQUIRED };
     }
+    // R3 item 7: a lower paid plan waits for the next cycle while an issued or paid invoice covers today.
+    const nextCycleStart = stored
+      ? await lowerPlanWaitsForNextCycle(sql, params.organizationId, stored.plan_id, params.planId, kstDayOf(params.now ?? new Date()))
+      : null;
+    if (nextCycleStart) return { ok: false, code: 'conflict', field: PLAN_DOWNGRADE_NEXT_CYCLE, detail: nextCycleStart };
   }
   const next = revision + 1;
   const actorId = params.actor.kind === 'admin' ? params.actor.userId : null;

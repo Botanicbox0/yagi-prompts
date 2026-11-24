@@ -19,8 +19,15 @@ import {
   proposeProration,
 } from './math';
 import { cycleContaining, cycleStartAt, type BillingCycle } from './cycle';
-import { firstPaymentCycleRefusal, monthRange, subscriptionInvoiceOverlaps } from './cycle-invoices';
-import { hasColumn, hasTable, hasTables, loadSubscriptionSchemaReady } from './schema-guard';
+import {
+  firstPaymentCycleRefusal,
+  monthRange,
+  PAID_AT_BEFORE_ISSUE,
+  PAID_AT_IN_FUTURE,
+  subscriptionInvoiceOverlaps,
+} from './cycle-invoices';
+import { hasColumn, hasTable, hasTables, loadInvoiceBookkeepingReady, loadSubscriptionSchemaReady } from './schema-guard';
+import { dueOnForInvoice } from '../subscriptions/engine';
 import type {
   BrandBillingFailureCode,
   BrandBillingOutcome,
@@ -339,6 +346,8 @@ type InvoiceRow = {
   /** 0186 (B1c); absent before it, null on calendar-month rows. */
   cycle_start?: unknown;
   cycle_end?: unknown;
+  /** 0182; absent before it. */
+  due_on?: unknown;
 };
 
 /** A `date` column as `YYYY-MM-DD` (PGlite and pg return a Date at UTC midnight or a string). */
@@ -1340,6 +1349,14 @@ export async function issueBrandInvoiceInTx(
   }
 
   const memo = v.memo !== undefined ? v.memo : String(row.memo ?? '');
+  // R3 item 4: an admin issuing a plan organization's CYCLE invoice fixes its due date then — the issue day + 14 (bank
+  // transfer), from the engine's one due-date function — when the column exists (0182; `select *` shows it). A
+  // calendar-month row (an organization without a plan) keeps exactly the statement it always ran. With the flag off
+  // nothing reads the date (overdue stays "more than 14 days after the issue instant", the cap is never halved).
+  const manualDueOn =
+    !subscriptionMeta && Object.prototype.hasOwnProperty.call(row, 'due_on') && row.cycle_start != null
+      ? dueOnForInvoice({ issueDay: kstDayOf(nowDate), method: 'transfer' })
+      : null;
   const updated = (
     subscriptionMeta
       ? await sql.query<InvoiceRow>(
@@ -1367,8 +1384,22 @@ export async function issueBrandInvoiceInTx(
             subscriptionMeta.subscriptionEpoch ?? null,
           ],
         )
-      : await sql.query<InvoiceRow>(
-          `update brand_invoices
+      : manualDueOn !== null
+        ? await sql.query<InvoiceRow>(
+            `update brand_invoices
+                set status = 'issued',
+                    issued_at = $2::timestamptz,
+                    issued_by = $3,
+                    memo = $4,
+                    updated_by = $3,
+                    updated_at = $2::timestamptz,
+                    due_on = $5::date
+              where id = $1 and status = 'draft'
+              returning *`,
+            [row.id, nowIso, actorId, memo, manualDueOn],
+          )
+        : await sql.query<InvoiceRow>(
+            `update brand_invoices
               set status = 'issued',
                   issued_at = $2::timestamptz,
                   issued_by = $3,
@@ -1377,8 +1408,8 @@ export async function issueBrandInvoiceInTx(
                   updated_at = $2::timestamptz
             where id = $1 and status = 'draft'
             returning *`,
-          [row.id, nowIso, actorId, memo],
-        )
+            [row.id, nowIso, actorId, memo],
+          )
   ).rows[0];
   if (!updated) return { ok: false, code: 'conflict' };
 
@@ -1503,19 +1534,40 @@ export async function markBrandInvoicePaid(
       const row = (await sql.query<InvoiceRow>('select * from brand_invoices where id = $1 for update', [v.invoiceId])).rows[0];
       if (!row) return { ok: false as const, code: 'not_found' as const };
       if (row.status !== 'issued') return { ok: false as const, code: 'conflict' as const };
-      // Review round 5, B4: a subscribed organization's payment cannot be dated after today (KST).
-      if (
-        v.paidAt !== undefined &&
-        kstDayOf(new Date(paidAtIso)) > kstDayOf(nowDate) &&
-        brandBillingAutoIssueOpen(deps.env) &&
-        (await loadSubscriptionSchemaReady(sql)) &&
-        (
-          await sql.query("select 1 from brand_subscriptions where organization_id = $1 and status <> 'ended' limit 1", [
-            row.organization_id,
-          ])
-        ).rows[0]
-      ) {
-        return { ok: false as const, code: 'invalid' as const, detail: 'paid_at_in_future' };
+      // The paid day (KST) of an explicit `paidAt`. Without one the payment is recorded now: nothing to check.
+      if (v.paidAt !== undefined) {
+        const paidDay = kstDayOf(new Date(paidAtIso));
+        const todayKst = kstDayOf(nowDate);
+        const issuedAt = stamp(row.issued_at);
+        const issueDay = issuedAt ? kstDayOf(new Date(issuedAt)) : null;
+        const afterToday = paidDay > todayKst;
+        const beforeIssue = issueDay !== null && paidDay < issueDay;
+        if (afterToday || beforeIssue) {
+          const subscribed =
+            brandBillingAutoIssueOpen(deps.env) &&
+            (await loadSubscriptionSchemaReady(sql)) &&
+            Boolean(
+              (
+                await sql.query("select 1 from brand_subscriptions where organization_id = $1 and status <> 'ended' limit 1", [
+                  row.organization_id,
+                ])
+              ).rows[0],
+            );
+          if (subscribed) {
+            // Review round 5, B4: a subscribed organization's payment cannot be dated after today (KST). A day before the
+            // issue day is the subscribed path's to judge (a first payment may precede a reissue; the rule below).
+            if (afterToday) return { ok: false as const, code: 'invalid' as const, detail: 'paid_at_in_future' };
+          } else {
+            // R3 item 3: the manual path — the paid day runs from the invoice's issue day through today (KST). Refused,
+            // nothing written; the detail carries the allowed range for the admin line.
+            const range = `${issueDay ?? todayKst}~${todayKst}`;
+            return {
+              ok: false as const,
+              code: 'invalid' as const,
+              detail: `${afterToday ? PAID_AT_IN_FUTURE : PAID_AT_BEFORE_ISSUE}:${range}`,
+            };
+          }
+        }
       }
       // B1c-2 fix round 1, B1: a subscription's first invoice (an epoch invoice with no cycle yet) starts cycle 0 on its
       // paid day — not before the subscription started, and not overlapping another subscription invoice. Refused,
@@ -1761,7 +1813,9 @@ const RecordTaxInvoiceInput = z.object({
 
 /**
  * Record manual Hometax tax invoice issuance (`issuedOn`, `ref`) on an `issued` or `paid` transfer invoice.
- * Gated behind `BRAND_BILLING_AUTO_ISSUE=on` and migration `0182`. Editable; records an audit event.
+ * Needs the 0182 bookkeeping columns (`unavailable` before them, never a throw). R3 item 2: open with
+ * `BRAND_BILLING_AUTO_ISSUE` off too — it is manual bookkeeping, the step after "입금 확인" on the manual path.
+ * Sandboxed organizations are refused. Editable; every call records an audit event.
  */
 export async function recordBrandInvoiceTaxInvoice(
   deps: { sql: SqlRunner; now?: () => Date; env?: Record<string, string | undefined> },
@@ -1779,10 +1833,7 @@ export async function recordBrandInvoiceTaxInvoice(
   try {
     return await deps.sql.transaction(async (sql) => {
       const adminId = await requireDbAdmin(sql, viewer);
-      if (!brandBillingAutoIssueOpen(deps.env)) {
-        return { ok: false as const, code: 'disabled' as const };
-      }
-      if (!(await loadSubscriptionSchemaReady(sql))) {
+      if (!(await loadInvoiceBookkeepingReady(sql))) {
         return { ok: false as const, code: 'unavailable' as const };
       }
       const row = (

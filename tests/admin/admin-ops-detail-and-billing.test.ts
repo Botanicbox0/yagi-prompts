@@ -292,7 +292,8 @@ describe('brand org detail, billing console, operations, migrations & page gates
       note: 'Founder approved cap',
     });
     expect(previewRes).toMatchObject({ ok: true, code: 'prepared' });
-    expect(previewRes.detail).toContain('Harbor Labs:0->180000');
+    // R3 item 6 (changed on purpose): an unset b2b_29 default is the confirmed 270,000 KRW, no longer the env default 0.
+    expect(previewRes.detail).toContain('Harbor Labs:270000->180000');
 
     const applyRes = await h.run('brandBilling.planDefault.set', {
       planId: 'b2b_29',

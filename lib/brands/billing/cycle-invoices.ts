@@ -45,6 +45,9 @@ export async function subscriptionInvoiceOverlaps(
 
 export const PAID_AT_BEFORE_START = 'paid_at_before_start' as const;
 export const PAID_AT_OVERLAPS_CYCLE = 'paid_at_overlaps_cycle' as const;
+/** R3 item 3, the manual path: a paid day before the invoice's issue day / after today (`<code>:<issue day>~<today>`). */
+export const PAID_AT_BEFORE_ISSUE = 'paid_at_before_issue' as const;
+export const PAID_AT_IN_FUTURE = 'paid_at_in_future' as const;
 
 /**
  * B1c-2 fix round 1, B1: a subscription's first invoice (no cycle yet) starts cycle 0 on its paid day. That day may not be
@@ -114,6 +117,41 @@ export async function higherPlanNeedsUpgrade(
 ): Promise<boolean> {
   if ((PLAN_RANK[newPlanId] ?? 0) <= (PLAN_RANK[currentPlanId] ?? 0)) return false;
   return subscriptionInvoiceOverlaps(sql, organizationId, { start: todayKst, end: nextDay(todayKst) });
+}
+
+/** R3 item 7: refusal marker when a plan form lowers the plan mid-cycle; the detail is the next cycle's start day. */
+export const PLAN_DOWNGRADE_NEXT_CYCLE = 'plan_downgrade_next_cycle' as const;
+
+/**
+ * R3 item 7 (founder rule, confirmed 2026-11-24: a downgrade takes effect from the next cycle's start day). While an
+ * ISSUED or PAID non-void subscription invoice covers today, an admin plan form may not move a paid plan to a LOWER paid
+ * plan — the customer has been billed for the higher one. Returns the day the covering invoice ends (= the next cycle's
+ * start; a calendar-month row: the next month's 1st), or null when the change is allowed. A draft alone does not block
+ * (on the boundary day the admin changes the plan before issuing the new cycle's invoice). Same or higher plans,
+ * `project_only`, and an organization with no such invoice run no query.
+ */
+export async function lowerPlanWaitsForNextCycle(
+  sql: SqlRunner,
+  organizationId: string,
+  currentPlanId: string,
+  newPlanId: string,
+  todayKst: string,
+): Promise<string | null> {
+  const current = PLAN_RANK[currentPlanId] ?? 0;
+  const next = PLAN_RANK[newPlanId] ?? 0;
+  if (next === 0 || current === 0 || next >= current) return null;
+  const c = await coverageSql(sql);
+  const row = (
+    await sql.query<{ next_start: string }>(
+      `select (${c.endExpr})::text as next_start from brand_invoices
+        where organization_id = $1 and status in ('issued', 'paid')${c.kindFilter}
+          and ${c.startExpr} <= $2::date and ${c.endExpr} > $2::date
+        order by ${c.endExpr} desc
+        limit 1`,
+      [organizationId, todayKst],
+    )
+  ).rows[0];
+  return row ? String(row.next_start).slice(0, 10) : null;
 }
 
 function nextDay(day: string): string {

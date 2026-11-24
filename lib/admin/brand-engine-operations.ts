@@ -13,6 +13,8 @@ import {
 import type { AdminOperation } from './operations';
 import { fail, ok, type AdminContext } from './context';
 import { brandFailure } from './brand-workspace-operations';
+import { asBillingConflict } from './brand-ops-guard';
+import { PLAN_DOWNGRADE_NEXT_CYCLE } from '@/lib/brands/billing/cycle-invoices';
 import * as f from './form';
 
 /**
@@ -96,19 +98,24 @@ const plan: AdminOperation<PlanInput> = {
   },
   async run(ctx: AdminContext, input) {
     const result = await setPlanAssignment({ sql: ctx.sql }, ctx.viewer, input);
+    // R3 item 8: a plan conflict reads as `billingConflict` (neutral), not as the campaign sentence.
     // Review round 2, item 5: a subscription owns this plan (only possible with BRAND_BILLING_AUTO_ISSUE=on).
     if (!result.ok && result.field === SUBSCRIPTION_MANAGED_PLAN) {
-      return fail('brandConflict', `conflict:${SUBSCRIPTION_MANAGED_PLAN}`);
+      return fail('billingConflict', `conflict:${SUBSCRIPTION_MANAGED_PLAN}`);
     }
     // B1c: moving the start day under an invoiced cycle (void that invoice first).
     if (!result.ok && result.field === 'cycle_already_invoiced') {
-      return fail('brandConflict', 'conflict:cycle_already_invoiced');
+      return fail('billingConflict', 'conflict:cycle_already_invoiced');
     }
     // B1c-3 fix round 1: a higher plan mid-cycle goes through "플랜 올림".
     if (!result.ok && result.field === 'plan_upgrade_required') {
-      return fail('brandConflict', 'conflict:plan_upgrade_required');
+      return fail('billingConflict', 'conflict:plan_upgrade_required');
     }
-    if (!result.ok) return brandFailure(result.code);
+    // R3 item 7: a lower plan mid-cycle waits for the next cycle (the detail names its start day).
+    if (!result.ok && result.field === PLAN_DOWNGRADE_NEXT_CYCLE) {
+      return fail('billingConflict', `conflict:${PLAN_DOWNGRADE_NEXT_CYCLE}:${result.detail ?? ''}`);
+    }
+    if (!result.ok) return asBillingConflict(brandFailure(result.code));
     return ok('saved', { to: organizationPath(input.organizationId) });
   },
 };
