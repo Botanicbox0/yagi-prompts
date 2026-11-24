@@ -1110,6 +1110,8 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
     copy,
     /** The organization's own film (V1) rather than the sample film. */
     real: isReal,
+    /** Whose film it is (the export records itself for it); `null` on the sample film. */
+    organizationId: real?.organizationId ?? null,
     /** The stored film as last read or written (real film only): what v2 shows but does not own. */
     storedFilm,
     filmView,

@@ -14,9 +14,10 @@ import { getDictionary } from '@/lib/i18n/dictionaries';
  * keeps in this browser. `?sample=1` opens the sample film and loads nothing.
  *
  * Where the editor may reach anything, in one place: network access only in the frame-exact export
- * (`export-film.ts`; what it may request is pinned in export-film-network.test.ts), browser storage
- * only in the shortcut store and the film store (always inside try/catch), and nothing anywhere keeps
- * session storage, a database or a cache.
+ * (`export-film.ts`; what it may request is pinned in export-film-network.test.ts), the footage reader
+ * and the export record (`export-record.ts`, the current editor's 0-credit `render.reserve`; pinned in
+ * export-record.test.tsx), browser storage only in the shortcut store and the film store (always inside
+ * try/catch), and nothing anywhere keeps session storage, a database or a cache.
  */
 const ROOT = process.cwd();
 const ORG = '00000000-0000-4000-8000-0000000000aa';
@@ -274,20 +275,31 @@ describe('where the editor keeps anything', () => {
   const files = readdirSync(dir).filter((name) => /\.(tsx?|ts)$/.test(name));
   const STORES = ['shortcut-store.ts', 'film-store.ts'];
   /**
-   * The files that may make a request, each only for the film's own media: the export reads it to decode
-   * its sound; footage-facts reads a clip's timing boxes with Range requests (spec E addendum, C1; pinned
-   * in footage-facts.test.ts).
+   * The files that may make a request, and the one way each may make it. The export and the footage reader
+   * read the film's own media: the export to decode its sound; footage-facts a clip's timing boxes with
+   * Range requests (spec E addendum, C1; pinned in footage-facts.test.ts). The export record asks the
+   * compose route for the current editor's 0-credit export record, through the current editor's own
+   * request helper and nothing else (pinned in export-record.test.tsx).
    */
-  const NETWORK_FILES = ['export-film.ts', 'footage-facts.ts'];
-  const NETWORK = ['fetch(', 'XMLHttpRequest', 'sendBeacon', 'WebSocket', 'EventSource'];
+  const NETWORK_FILES: Record<string, string[]> = {
+    'export-film.ts': ['fetch('],
+    'footage-facts.ts': ['fetch('],
+    'export-record.ts': ['postComposeOperation', 'compose-request'],
+  };
+  const NETWORK = ['fetch(', 'XMLHttpRequest', 'sendBeacon', 'WebSocket', 'EventSource', 'postComposeOperation', 'compose-request', '/api/'];
 
-  it('only the export and the footage reader make a request', () => {
-    for (const name of NETWORK_FILES) expect(files).toContain(name);
+  it('only the export, the footage reader and the export record make a request, each its own way', () => {
+    for (const name of Object.keys(NETWORK_FILES)) expect(files).toContain(name);
     for (const name of files) {
-      if (NETWORK_FILES.includes(name)) continue;
+      const allowed = NETWORK_FILES[name] ?? [];
       const source = readFileSync(join(dir, name), 'utf8');
-      for (const banned of NETWORK) expect(source.includes(banned), `${name} contains ${banned}`).toBe(false);
+      for (const banned of NETWORK) {
+        if (allowed.includes(banned)) continue;
+        expect(source.includes(banned), `${name} contains ${banned}`).toBe(false);
+      }
     }
+    const record = readFileSync(join(dir, 'export-record.ts'), 'utf8');
+    expect(record.match(/postComposeOperation\(/g), 'export-record.ts makes one request').toHaveLength(1);
   });
 
   it('no component keeps session storage, a database or a cache', () => {

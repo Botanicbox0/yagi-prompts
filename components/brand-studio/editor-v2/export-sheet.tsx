@@ -25,7 +25,8 @@ import styles from './editor-v2.module.css';
  * (`api.filmForExport()`: captions, colour grade, music, sound effects, still overlays made in the
  * current editor), read when the sheet opens to name what cannot go in, and read again the moment the
  * export starts. The sample film's workspaces (findings, looks, titles, sample music, caption styles)
- * have no part in it there. People who may only look at the film cannot export it.
+ * have no part in it there. People who may only look at the film cannot export it. An export of the
+ * organization's own film leaves the current editor's 0-credit record as it starts (export-record.ts).
  *
  * `exportPath` is the developer's override for the proof (`?exportPath=seek|decoder`, read by the page), and
  * `autoDownload` `false` (`?exportDownload=off`) keeps the finished file from downloading by itself; the
@@ -96,6 +97,8 @@ export function ExportSheet({ api, exportPath = null, autoDownload = true }: { a
       notify: (outcome) => api.say(outcome === 'done' ? e.toastDone : e.toastFailed),
       path: exportPath,
       download: autoDownload,
+      // The organization's own film leaves the current editor's export record; the sample film has none.
+      recordFor: real ? api.organizationId : null,
     });
   };
 

@@ -8,6 +8,7 @@ import { slowNotice, type ExportPath, type ExportPathOverride } from '@/lib/bran
 import { totalFrames, type FrameSequence } from '@/lib/brand-studio/editor-v2/frames';
 import type { Reframe } from '@/lib/brand-studio/editor-v2/model';
 import { ExportStop, exportFilm, type ExportProgress, type ExportStopReason, type ExportWarning, type SourcePath } from './export-film';
+import { recordExport } from './export-record';
 import { watchRefresh } from './screen-refresh';
 
 export type ExportJob =
@@ -60,6 +61,11 @@ export interface ExportRequest {
   path?: ExportPathOverride;
   /** `false` (`?exportDownload=off`, checks only): the finished file is not downloaded by itself. */
   download?: boolean;
+  /**
+   * The organization whose own film this is: the export leaves the current editor's 0-credit record for it
+   * (export-record.ts), once, as it starts. `null` or absent on the sample film, which records nothing.
+   */
+  recordFor?: string | null;
 }
 
 const IDLE: ExportJob = { status: 'idle' };
@@ -126,6 +132,9 @@ export function startExport(request: ExportRequest): void {
   let restarts = 0;
   let restartedPhase: 'video' | 'audio' | null = null;
   set({ status: 'running', progress: progressNow, frames, fps, slow, restarts, restartedPhase });
+  // One record per export the person starts. A restart after the browser took the encoder back happens inside
+  // `exportFilm` and is the same export; the record is never waited for and never stops the export.
+  if (request.recordFor) recordExport(request.recordFor, frames, fps);
   const update = (force: boolean) => {
     const next = slowNotice(reduced, path);
     if (!force && next === slow) return;
