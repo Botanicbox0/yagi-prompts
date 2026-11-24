@@ -3,10 +3,11 @@ const mocks = vi.hoisted(() => ({ viewer: vi.fn(), sql: vi.fn(), save: vi.fn(), 
 vi.mock('@/lib/auth/viewer', () => ({ getViewer: mocks.viewer }));
 vi.mock('@/lib/db/connect', () => ({ getSqlRunner: mocks.sql }));
 vi.mock('@/lib/billing/toss-runtime', () => ({ isSameOrigin: (request: Request) => request.headers.get('origin') === new URL(request.url).origin }));
-vi.mock('@/lib/renders/store', () => ({ getRenderStore: async () => ({ name: 'local', put: async () => {}, read: mocks.read, url: async () => null }) }));
+vi.mock('@/lib/renders/store', async original => ({ ...(await original<object>()), getRenderStore: async () => ({ name: 'local', put: async () => {}, read: mocks.read, url: async () => null }) }));
 vi.mock('@/lib/identity/selfie-service', async original => ({
   ...(await original<object>()), saveSelfie: mocks.save, selfieLibrary: mocks.library, updateSelfie: mocks.update, deleteSelfie: mocks.remove, ownSelfie: mocks.own,
 }));
+import { RenderObjectNotFound } from '@/lib/renders/store';
 import { DELETE, GET, PATCH, POST } from '@/app/api/identity/selfie/route';
 import { GET as image } from '@/app/api/identity/selfie/[id]/image/route';
 
@@ -149,5 +150,21 @@ describe('selfie library HTTP boundaries', () => {
     expect(served.headers.get('content-type')).toBe('image/png');
     expect(served.headers.get('cache-control')).toBe(PRIVATE);
     expect(mocks.own).toHaveBeenCalledWith({}, 'u1', ID);
+  });
+
+  it('a live row whose file is gone is a 404; any other storage failure is a 500, never a fake 404', async () => {
+    mocks.own.mockResolvedValue({ id: ID, input_key: `${ID}/selfie.png` });
+    mocks.read.mockRejectedValue(new RenderObjectNotFound(`${ID}/selfie.png`));
+    const missing = await imageOf(ID);
+    expect(missing.status).toBe(404);
+    expect(missing.headers.get('cache-control')).toBe(PRIVATE);
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mocks.read.mockRejectedValue(new Error('render download failed: status 403'));
+    const broken = await imageOf(ID);
+    expect(broken.status).toBe(500);
+    expect(broken.headers.get('cache-control')).toBe(PRIVATE);
+    expect(broken.headers.get('x-robots-tag')).toBe('noindex, nofollow');
+    expect(logged).toHaveBeenCalledTimes(1);
+    logged.mockRestore();
   });
 });

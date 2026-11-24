@@ -93,6 +93,7 @@ N=1에서는 사진 한 장만 보인다: 카운터·기본 뱃지·[기본으�
 - 바이트는 비공개 `renders` 버킷 `{selfieId}/selfie.png`. 서버에서 방향 보정·메타데이터 제거·최대 1600px(얼굴 크롭·왜곡 없음). 읽기는 소유자 세션 + `private, no-store`.
 - **주문·렌더 계보**: `billing_payments.identity_selfie_id`, `render_jobs.identity_selfie_id`. 결제 시점에 바이트를 주문 input으로 **복사**하므로 이후 교체·삭제가 결제한 작품을 바꾸지 않는다. `platform_redemptions.portrait_id`(FK 없음)는 셀카 id를 그대로 담는다.
 - **새 주문은 소유자의 활성 사진이면 어느 것이든** 쓴다(기본이 아니어도). `savedSelfiePhoto`가 그때 `last_used_at`을 갱신한다(호출자의 트랜잭션 안이면 함께 롤백). 교체·삭제된 id·남의 id는 `selfie_required`.
+- **파일이 없는 활성 사진**(2026-11-12 R2 이전 때 2건 유실): `readSavedSelfie`가 `RenderObjectNotFound`만 잡아 `selfie_file_missing`으로 답한다. 결제 주문·운영자 렌더·스토어 크레딧 렌더는 주문을 만들기 전에 409로 거절하고, 이미지 경로는 404(그 밖의 저장소 오류는 500). 스튜디오는 사진이 안 열리면(이미지 오류 또는 이 코드) "저장한 사진을 불러오지 못했어요. 사진을 다시 골라 주세요."와 함께 그 사진을 바꾸는 업로더를 보이고, 그 사진으로는 주문하지 않는다. `savedSelfiePhoto`를 쓰는 다른 경로는 이 경우 null을 받는다.
 - **다시 결제하기**(`retryTossOrder`, PR #78)도 새 주문이다: 실패한 주문의 바이트 사본을 쓰지만 `identity_selfie_id` 계보를 새 주문에 그대로 넘기고, 그 사진이 그사이 교체·삭제됐으면 `selfie_required`로 거절한다(`useSavedSelfie`, `last_used_at` 갱신). 화면은 기존 "새 주문을 만들지 못했어요. 템플릿에서 다시 시작해 주세요."를 보이고, 템플릿에서 "이 얼굴로 만들까요?"가 다시 묻는다.
 
 ### API `/api/identity/selfie` (모든 응답 `private, no-store`)

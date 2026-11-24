@@ -4229,6 +4229,8 @@ export const en = {
         rate_limited: 'You have used up today’s renders.',
         identity_required: 'Verify your face first.',
         selfie_required: 'Save your photo first.',
+        // Provisional: founder confirms the wording. The saved photo's row is live but its file is gone.
+        selfie_file_missing: "We couldn't open your saved photo. Please choose a photo again.",
         slot_missing: 'A photo is missing. Choose it again.',
         bad_slot_photo: 'This photo cannot be used. Choose a JPG, PNG or WebP of at least 256px.',
         partner_consent_required: 'Confirm the other person agreed.',

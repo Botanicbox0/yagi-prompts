@@ -2,7 +2,7 @@ import { after, NextResponse } from 'next/server';
 import { getViewer } from '@/lib/auth/viewer';
 import { getSqlRunner } from '@/lib/db/connect';
 import { isLocale } from '@/lib/i18n/config';
-import { savedSelfiePhoto } from '@/lib/identity/selfie-service';
+import { readSavedSelfie } from '@/lib/identity/selfie-service';
 import { identityVerifyHref } from '@/lib/identity/links';
 import { detectStorePlatformFromRequest, isNativeStoreApp } from '@/lib/mobile/store-bridge';
 import { castFormPhotos } from '@/lib/renders/cast-form';
@@ -86,13 +86,15 @@ export async function POST(request: Request): Promise<NextResponse> {
   const requestId = String(form.get('requestId') ?? '');
   const store = await getRenderStore();
   const selfieId = String(form.get('selfieId') ?? '');
-  const saved =
+  const read =
     !(photo instanceof File) && selfieId
-      ? await savedSelfiePhoto(sql, store, viewer.userId, selfieId)
+      ? await readSavedSelfie(sql, store, viewer.userId, selfieId)
       : null;
-  if (selfieId && !saved && !(photo instanceof File)) {
-    return json({ ok: false, code: 'selfie_required' }, 400);
+  // A saved photo whose file is gone is 409, like the paid order — before any credit is spent.
+  if (read && !read.ok) {
+    return json({ ok: false, code: read.code }, read.code === 'selfie_file_missing' ? 409 : 400);
   }
+  const saved = read?.ok ? read.photo : null;
 
   const cast = await castFormPhotos(form);
   const primary =
