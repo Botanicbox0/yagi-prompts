@@ -606,7 +606,7 @@ function CutPanel({ api }: { api: EditorApi }) {
           )}
           <Section title={c.clip.sound}>
             <Range
-              label={c.clip.sound}
+              label={c.clip.volume}
               value={Math.round((clip.muted ? 0 : clip.volume) * 100)}
               min={0}
               max={100}

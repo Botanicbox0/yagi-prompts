@@ -110,6 +110,8 @@ export const studioEditorEn = {
       fit: 'Show all of it',
       position: 'Left to right',
       sound: 'Sound of this cut',
+      /** The slider under "Sound of this cut": the earlier editor's name for the same control (audit A6). */
+      volume: 'Clip volume',
       mute: 'Mute',
       remove: 'Delete cut',
     },
@@ -591,6 +593,8 @@ export const studioEditorKo: typeof studioEditorEn = {
       fit: '전체 보이기',
       position: '좌우 위치',
       sound: '이 컷의 소리',
+      // 대표 확인 대기 (Gemma 미실행)
+      volume: '원본 소리 크기',
       mute: '소리 끄기',
       remove: '컷 지우기',
     },
