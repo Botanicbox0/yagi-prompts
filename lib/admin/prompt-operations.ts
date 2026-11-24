@@ -41,6 +41,7 @@ import {
   parsePromptMedia,
   parseStagedUpload,
   slugify,
+  toTemplateCast,
   type PromptMedia,
 } from '@/lib/prompts/schemas';
 import { ADMIN_PROMPTS_PATH, adminPromptPath } from '@/lib/prompts/links';
@@ -740,13 +741,15 @@ const declareStyling: AdminOperation<z.infer<typeof DeclareStyling>> = {
   parse: (form) => parsed(DeclareStyling, { id: f.str(form, 'id'), block: f.text(form, 'block') }),
   async run(ctx, input) {
     const outcome = await ctx.sql.transaction(async (tx): Promise<AdminOutcome | { slug: string; parts: { styled: string[]; photo: string[] } | null; texts: number; recipeChanged: boolean }> => {
-      const { rows } = await tx.query<{ slug: string; audience: string; prompt_text: string; cast: string | null; recipe: unknown }>(
-        "select slug, audience::text as audience, prompt_text, to_jsonb(p.*)->>'cast' as cast, to_jsonb(p.*)->'recipe' as recipe from prompt_items p where id = $1 for update",
+      // The cast is the `cast_kind` column (0078; `cast` is a reserved word), read the way the catalogue reads it
+      // (lib/prompts/repo.ts): absent before 0078 = solo.
+      const { rows } = await tx.query<{ slug: string; audience: string; prompt_text: string; cast_kind: string | null; recipe: unknown }>(
+        "select slug, audience::text as audience, prompt_text, coalesce(to_jsonb(p.*)->>'cast_kind', 'solo') as cast_kind, to_jsonb(p.*)->'recipe' as recipe from prompt_items p where id = $1 for update",
         [input.id],
       );
       const row = rows[0];
       if (!row || row.audience === 'brand') return fail('notFound', NOT_FOUND_DETAIL);
-      const cast = row.cast === 'pet' || row.cast === 'couple' ? row.cast : 'solo';
+      const cast = toTemplateCast(row.cast_kind);
       const plan = planStylingDeclaration(
         { promptText: row.prompt_text, recipe: row.recipe, recipeReady: await recipeSchemaReady(tx), cast },
         input.block,
