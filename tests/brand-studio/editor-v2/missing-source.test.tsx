@@ -10,21 +10,21 @@ import { RangeRefused, readFailureOf } from '@/lib/brand-studio/editor-v2/ranged
 import { studioEditorEn, studioEditorKo, type StudioEditorCopy } from '@/messages/studio-editor';
 
 /**
- * Audit A4 (2026-11-24): a cut whose footage file is gone (the media answers 404) was told "the frame rate
- * has not been read yet, open the film again" in the panel and in the export sheet, for ever: opening it
- * again reads the same 404. The read already knows the difference. A file that answers 404 or 410 is
- * missing: the cut is marked on the timeline, the panel and the sheet say the file cannot be found and what
- * to do, and the export is blocked with its own reason. A failure that may pass (a refused request, a server
- * error, no network) keeps today's "not read yet" (it is asked again next time).
+ * Audit A4 (2026-11-24): a cut whose footage file is gone was told "the frame rate has not been read yet, open
+ * the film again" in the panel and in the export sheet, for ever. A file is missing only when it answered
+ * not-found (404/410) AND the organization's complete record does not hold the asset (./missing-record.test.ts):
+ * the footage route also answers 404 when a storage read fails. A missing cut is marked on the timeline, the panel
+ * and the sheet say the file cannot be found and what to do, and the export is blocked with its own reason.
+ * Anything else keeps the behaviour from before (stored frame data used, playback tried, "not read yet").
  */
 
-describe('what a failed read means', () => {
-  it('404 and 410: the file is not there', () => {
-    expect(readFailureOf(new RangeRefused(404))).toBe('gone');
-    expect(readFailureOf(new RangeRefused(410))).toBe('gone');
+describe('what a failed read answered', () => {
+  it('404 and 410: the server said not found (which alone does not prove the file is gone)', () => {
+    expect(readFailureOf(new RangeRefused(404))).toBe('not-found');
+    expect(readFailureOf(new RangeRefused(410))).toBe('not-found');
   });
 
-  it('anything that may pass is not "gone": refused, server errors, no network, anything else', () => {
+  it('every other failure is one that may pass: refused, server errors, no network, anything else', () => {
     for (const status of [401, 403, 429, 500, 502, 503, 206]) expect(readFailureOf(new RangeRefused(status)), String(status)).toBe('broken');
     expect(readFailureOf(new TypeError('Failed to fetch'))).toBe('broken');
     expect(readFailureOf(new Error('boom'))).toBe('broken');
@@ -32,48 +32,52 @@ describe('what a failed read means', () => {
   });
 });
 
-describe('reading the file’s facts tells a gone file apart', () => {
+describe('reading the file’s facts tells a not-found answer apart', () => {
   beforeEach(() => vi.resetModules());
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.doUnmock('@/components/brand-studio/editor-v2/footage-facts');
   });
 
-  it('404: answered as gone and remembered as gone until a read finds it again', async () => {
+  it('404: answered as not found, never kept for the visit: the next read asks again and its answer counts', async () => {
     let status = 404;
     const fetch = vi.fn(async () => new Response(null, { status }));
     vi.stubGlobal('fetch', fetch);
     vi.stubGlobal('performance', { now: () => 0 });
-    const { readFootage, footageGone } = await import('@/components/brand-studio/editor-v2/footage-facts');
-    expect((await readFootage('/media/gone.mp4')).answer).toEqual({ ok: false, reason: 'gone' });
-    expect(footageGone('/media/gone.mp4')).toBe(true);
-    // Asked again next time (an asset may come back); a server error is not "gone".
+    const { readFootage, footageNotFound } = await import('@/components/brand-studio/editor-v2/footage-facts');
+    expect((await readFootage('/media/gone.mp4')).answer).toEqual({ ok: false, reason: 'not-found' });
+    expect(footageNotFound('/media/gone.mp4')).toBe(true);
     status = 503;
     expect((await readFootage('/media/gone.mp4')).answer).toEqual({ ok: false, reason: 'broken' });
-    expect(footageGone('/media/gone.mp4')).toBe(false);
+    expect(footageNotFound('/media/gone.mp4')).toBe(false);
     expect(fetch).toHaveBeenCalledTimes(2);
   });
 
-  it('a refused request (403) or no network stays "may pass", not gone', async () => {
+  it('a refused request (403) or no network is not a not-found answer', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 403 })));
     vi.stubGlobal('performance', { now: () => 0 });
-    const { readFootage, footageGone } = await import('@/components/brand-studio/editor-v2/footage-facts');
+    const { readFootage, footageNotFound } = await import('@/components/brand-studio/editor-v2/footage-facts');
     expect((await readFootage('/media/refused.mp4')).answer).toEqual({ ok: false, reason: 'broken' });
-    expect(footageGone('/media/refused.mp4')).toBe(false);
+    expect(footageNotFound('/media/refused.mp4')).toBe(false);
     vi.stubGlobal('fetch', vi.fn(async () => Promise.reject(new TypeError('Failed to fetch'))));
     expect((await readFootage('/media/offline.mp4')).answer).toEqual({ ok: false, reason: 'broken' });
-    expect(footageGone('/media/offline.mp4')).toBe(false);
+    expect(footageNotFound('/media/offline.mp4')).toBe(false);
   });
 
-  it('a gone file is not measured by playback: no video element is made for a 404', async () => {
+  it('a never-measured clip whose file answered 404 is still measured by playback, as before (the asset may be there)', async () => {
     const created: string[] = [];
-    vi.stubGlobal('document', { visibilityState: 'visible', createElement: (tag: string) => (created.push(tag), {}) });
+    vi.stubGlobal('document', {
+      visibilityState: 'visible',
+      createElement: (tag: string) => (created.push(tag), {}),
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    });
     vi.doMock('@/components/brand-studio/editor-v2/footage-facts', () => ({
-      readFootage: async () => ({ answer: { ok: false, reason: 'gone' }, requests: 1, received: 0, mode: null, ms: 1 }),
+      readFootage: async () => ({ answer: { ok: false, reason: 'not-found' }, requests: 1, received: 0, mode: null, ms: 1 }),
     }));
     const { measureSource } = await import('@/components/brand-studio/editor-v2/measure-fps');
-    expect(await measureSource('/media/gone.mp4', 10)).toBeNull();
-    expect(created).toEqual([]);
+    expect(await measureSource('/media/hiccup.mp4', 10)).toBeNull();
+    expect(created).toContain('video');
   });
 });
 

@@ -16,7 +16,16 @@ import type { GradeNames } from '@/lib/brand-studio/editor-v2/film-contents';
 import { createFilmSession, type FilmConflict, type FilmSession } from '@/lib/brand-studio/editor-v2/film-session';
 import { mapLimit, measuredFromTiming, snapFilmFps, sourceFramesOf } from '@/lib/brand-studio/editor-v2/fps';
 import { emptyFilm, realAssistAllowed, realDoc, sampleHrefFor, workspaceLocked } from '@/lib/brand-studio/editor-v2/real';
-import { deepLinkSource, parseClipParam, sourceSeconds, storedClipForSource, type EditorSource } from '@/lib/brand-studio/editor-v2/sources';
+import {
+  deepLinkSource,
+  footageConfirmedMissing,
+  missingAfterRead,
+  parseClipParam,
+  sourceSeconds,
+  storedClipForSource,
+  type AssetRecord,
+  type EditorSource,
+} from '@/lib/brand-studio/editor-v2/sources';
 import { fromStored, inheritClip, mergeFilmText, sourcesToMeasure, storedFilmView, type MeasuredSource, type StoredFilmView } from '@/lib/brand-studio/editor-v2/stored';
 import {
   FIXTURE_MATERIALS,
@@ -100,7 +109,7 @@ import {
 } from '@/lib/brand-studio/editor-v2/shortcuts';
 import type { StudioEditorCopy } from '@/messages/studio-editor';
 import { readFilmText, watchFilmText, writeFilmText } from './film-store';
-import { footageGone, readFootage } from './footage-facts';
+import { footageNotFound, readFootage } from './footage-facts';
 import { measureSource } from './measure-fps';
 import { loadShortcutPrefs, saveShortcutPrefs } from './shortcut-store';
 
@@ -170,6 +179,12 @@ export interface RealFilmOptions {
   sampleBase: string;
   /** The current editor's own names for colour grades, so the film's grade is named as it names it. */
   gradeNames?: GradeNames;
+  /**
+   * The organization's live, ready assets as the page read them, and whether that is all of them: the only
+   * thing that can confirm a cut's file is missing (sources.ts `footageConfirmedMissing`). Without it no cut
+   * is ever called missing.
+   */
+  assets?: AssetRecord;
 }
 
 export interface EditorOptions {
@@ -243,10 +258,11 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
   /** Footage whose frames are not evenly spaced (variable frame rate): shown, not supported (review round 1, item 10). */
   const [variableRates, setVariableRates] = useState<Record<string, true>>({});
   /**
-   * Footage whose file answered that it is not there (404 / 410) the last time it was read (audit A4): its
-   * cuts say the file cannot be found, and the export is blocked for that reason, not for an unread rate.
+   * Footage confirmed missing (audit A4, review): its file answered 404/410 the last time it was read AND the
+   * organization's complete record does not hold the asset. Its cuts say the file cannot be found and the export
+   * is blocked for that reason. A 404 the record does not confirm changes nothing here.
    */
-  const [missingSources, setMissingSources] = useState<Record<string, true>>({});
+  const [missingSources, setMissingSources] = useState<Readonly<Record<string, true>>>({});
   /**
    * No cut's rate is measured: the film runs at a stand-in rate and nothing frame-based is stored until a
    * later visit measures one (review round 1, item 3).
@@ -442,20 +458,13 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
     setVariableRates((current) => ({ ...without(current, read.filter((src) => !variable.includes(src))), ...Object.fromEntries(variable.map((src) => [src, true as const])) }));
   }, []);
 
-  /** Which of the footage just read answered that its file is not there; the rest are no longer marked. */
+  /** The footage just read, marked missing or cleared by its latest answer and the organization's record. */
   const noteMissing = useCallback((srcs: readonly string[]) => {
-    setMissingSources((current) => {
-      const next = { ...current };
-      let changed = false;
-      for (const src of srcs) {
-        const gone = footageGone(src);
-        if (gone === !!next[src]) continue;
-        changed = true;
-        if (gone) next[src] = true;
-        else delete next[src];
-      }
-      return changed ? next : current;
-    });
+    const film = realRef.current;
+    if (!film) return;
+    setMissingSources((current) =>
+      missingAfterRead(current, srcs, (src) => footageConfirmedMissing(src, footageNotFound(src), film.organizationId, film.assets)),
+    );
   }, []);
 
   /**

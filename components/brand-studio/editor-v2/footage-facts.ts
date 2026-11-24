@@ -29,15 +29,16 @@ export interface FootageRead {
 }
 
 const cache = new Map<string, Promise<FootageRead>>();
-/** Files whose last read answered that they are not there (404 / 410, audit A4). */
-const gone = new Set<string>();
+/** Files whose last read answered 404 or 410 (audit A4). */
+const notFound = new Set<string>();
 
 /**
- * Whether the clip's file answered, the last time it was read, that it is not there (404 / 410): its cut
- * gets "the file cannot be found" instead of "the frame rate has not been read yet" (audit A4).
+ * Whether the clip's file answered 404 or 410 the last time it was read. Alone that does not mean the file is
+ * gone (a storage read that failed answers 404 too): the editor calls a cut missing only when the
+ * organization's record confirms it (lib/brand-studio/editor-v2/sources.ts `footageConfirmedMissing`).
  */
-export function footageGone(srcUrl: string): boolean {
-  return gone.has(srcUrl);
+export function footageNotFound(srcUrl: string): boolean {
+  return notFound.has(srcUrl);
 }
 
 /**
@@ -60,12 +61,12 @@ export function readFootage(srcUrl: string): Promise<FootageRead> {
       source.close();
       const { requests, received, mode } = source.stats();
       // Only a failure that may pass is asked again (`broken`: a refused request, a network error, a file
-      // cut off; `gone`: an asset that may come back); the file's own answers (not an MP4, an edit list the
-      // export cannot follow, too large …) are remembered for the visit and not fetched again (review
-      // round 2 of part E).
-      if (!answer.ok && (answer.reason === 'broken' || answer.reason === 'gone')) cache.delete(srcUrl);
-      if (!answer.ok && answer.reason === 'gone') gone.add(srcUrl);
-      else gone.delete(srcUrl);
+      // cut off; `not-found`: a 404 or 410, which a failed storage read gives too); the file's own answers (not
+      // an MP4, an edit list the export cannot follow, too large …) are remembered for the visit and not fetched
+      // again (review round 2 of part E).
+      if (!answer.ok && (answer.reason === 'broken' || answer.reason === 'not-found')) cache.delete(srcUrl);
+      if (!answer.ok && answer.reason === 'not-found') notFound.add(srcUrl);
+      else notFound.delete(srcUrl);
       return { answer, requests, received, mode, ms: Math.round(performance.now() - started) };
     });
   cache.set(srcUrl, run);

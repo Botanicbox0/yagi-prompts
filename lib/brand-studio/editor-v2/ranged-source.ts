@@ -59,12 +59,14 @@ export class RangeRefused extends Error {
 }
 
 /**
- * What a failed read of a file means (audit A4): `gone` when the server says the file is not there (404 or
- * 410: a deleted asset, a result that no longer exists), `broken` for everything that may pass on another
- * try (a refused request, a server error, no network, a file cut off). Pure.
+ * What a failed read of a file answered (audit A4): `not-found` when the server answered 404 or 410, `broken`
+ * for every other failure (a refused request, a server error, no network, a file cut off). A not-found answer
+ * alone does not prove the file is gone: the footage route also answers 404 when its storage read fails or an
+ * access check refuses. Only the organization's own record can confirm it (sources.ts
+ * `footageConfirmedMissing`). Pure.
  */
-export function readFailureOf(error: unknown): 'gone' | 'broken' {
-  return error instanceof RangeRefused && (error.status === 404 || error.status === 410) ? 'gone' : 'broken';
+export function readFailureOf(error: unknown): 'not-found' | 'broken' {
+  return error instanceof RangeRefused && (error.status === 404 || error.status === 410) ? 'not-found' : 'broken';
 }
 
 export function rangedSource(request: RangeRequest, chunk = RANGE_CHUNK, wholeLimit = MAX_WHOLE_BYTES): RangedSource {
