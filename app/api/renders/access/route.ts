@@ -18,6 +18,7 @@ import type { EditScope } from '@/lib/premium-editing/contract';
 import { getPremiumEditBudget, type PremiumEditBudget } from '@/lib/premium-editing/budget';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { loadPublicRecipe, recordRecipeOpen, type PublicRecipe } from '@/lib/recipes/public';
+import { publicRecipeText } from '@/lib/template-director/public-text';
 import { loadTemplateRecipe } from '@/lib/recipes/repo';
 import { recipeNeedsIdentity } from '@/lib/recipes/schema';
 import { personalSunraFacesOpen } from '@/lib/flags';
@@ -86,11 +87,15 @@ export async function GET(request: Request): Promise<NextResponse> {
       const template = candidate?.audience === 'brand' ? null : candidate;
       if (template !== null) {
         const mr = getDictionary(locale).makerRecipe;
-        recipe = await loadPublicRecipe(sql, template.id, {
-          selfie: mr.selfieLabel,
-          reference: mr.referenceLabel,
-          step: mr.stepResultLabel,
-        }).catch(() => null);
+        // docs/PERSONAL-STUDIO.md §3.3–§3.4.9: the member reads and copies the steps without the compiler's lock and
+        // styling blocks.
+        recipe = publicRecipeText(
+          await loadPublicRecipe(sql, template.id, {
+            selfie: mr.selfieLabel,
+            reference: mr.referenceLabel,
+            step: mr.stepResultLabel,
+          }).catch(() => null),
+        );
         // §20.3: the creative's studio counts members who opened the recipe — (template, member) once a minute.
         const userId = viewer.userId;
         if (recipe) after(() => recordRecipeOpen(sql, template.id, userId));
