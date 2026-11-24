@@ -11,7 +11,7 @@ import { CardPlaybackControl, shouldMountClip } from '@/components/prompts/card-
 import { CARD_RATIOS, cardRatio, ORIGIN_RUN_MAX, cardAspect, cardAuthor, cardFrame, makerProfileRest, railOrder } from '@/components/prompts/card-frame';
 import { pillClassName } from '@/components/prompts/pill';
 import { PromptRail } from '@/components/prompts/rails';
-import { UseCaseFilter } from '@/components/prompts/filter-chips';
+import { applyListFilter, collapsedGroups, ListFilter } from '@/components/prompts/filter-chips';
 import { MediumTabs, TemplatesListing } from '@/components/templates/listing';
 import { promptLabels, useCaseLabel } from '@/components/prompts/labels';
 
@@ -276,8 +276,11 @@ describe('recommended order (founder 2026-11-02)', () => {
 });
 
 describe('catalog first screen (§15.3-5)', () => {
-  const listing = (cards: PromptCard[]) =>
-    renderToStaticMarkup(<TemplatesListing locale="ko" dict={dicts.ko} medium="video" cards={cards} />);
+  const listing = (cards: PromptCard[], medium: 'video' | 'image' = 'video', locale: 'ko' | 'en' = 'ko') =>
+    renderToStaticMarkup(<TemplatesListing locale={locale} dict={dicts[locale]} medium={medium} cards={cards} now={NOW} />);
+  const image = (overrides: Partial<PromptCard> = {}) => card({ medium: 'image', runtimeSeconds: null, ...overrides });
+  const OLD = '2026-01-01T00:00:00.000Z';
+  const labels = { heading: 'Filter', all: 'All', count: '{count} templates', reset: 'Reset' };
 
   it('keeps the GEO definition in the HTML, but below the grid', () => {
     const html = listing([card(), card({ slug: 'second', useCase: ['mv'] })]);
@@ -287,34 +290,129 @@ describe('catalog first screen (§15.3-5)', () => {
     expect(definition).toBeGreaterThan(html.lastIndexOf('data-prompt-card='));
   });
 
-  it('hides the chip row when every template shares one use case, and keeps the count line', () => {
-    const one = listing([card(), card({ slug: 'second' })]);
+  it('image list: hides the chip row when every template shares one use case, and keeps the count line', () => {
+    const one = listing([image(), image({ slug: 'second' })], 'image');
     expect(one).not.toContain('role="group"');
     expect(one).toContain('2개 템플릿');
-    const two = listing([card(), card({ slug: 'second', useCase: ['mv'] })]);
+    const two = listing([image(), image({ slug: 'second', useCase: ['mv'] })], 'image');
     expect(two).toContain('role="group"');
+    expect(two).toContain('data-filter-facet="useCase"');
+    expect(two).toContain('data-filter-option="useCase:mv"');
+    expect(two).toContain(`>${useCaseLabel(dicts.ko, 'mv')}<`);
+    expect(two).not.toContain('data-filter-facet="length"');
     expect(two).toContain('2개 템플릿');
   });
 
-  it('draws the medium segment and the use-case chips as the same pill', () => {
+  /** Founder 2026-11-24, second time: genre chips on the video list mean nothing to a buyer. */
+  it('video list: never offers genre chips, however mixed the genres are', () => {
+    const html = listing([
+      card({ runtimeSeconds: 15 }),
+      card({ slug: 'second', useCase: ['mv'], runtimeSeconds: 15 }),
+      card({ slug: 'third', useCase: ['brand-ad', 'ugc'], runtimeSeconds: 15 }),
+    ]);
+    expect(html).not.toContain('data-filter-facet="useCase"');
+    expect(html).not.toContain('data-filter-option="useCase:');
+    for (const value of ['mv', 'brand-ad', 'ugc', 'cinematic'] as const) expect(html).not.toContain(`>${useCaseLabel(dicts.ko, value)}<`);
+  });
+
+  it('video list: an 8 s and a 15 s template make two length chips, in plain words', () => {
+    const html = listing([card({ runtimeSeconds: 8 }), card({ slug: 'second', runtimeSeconds: 15 })]);
+    expect(html).toContain('data-list-filter=""');
+    expect(html).toContain('data-filter-facet="length"');
+    expect(html).toContain('data-filter-option="length:short"');
+    expect(html).toContain('data-filter-option="length:mid"');
+    expect(html).not.toContain('data-filter-option="length:long"');
+    expect(html).toContain('>10초 이하<');
+    expect(html).toContain('>11~15초<');
+    expect(html).toContain('2개 템플릿');
+    const en = listing([card({ runtimeSeconds: 8 }), card({ slug: 'second', runtimeSeconds: 30 })], 'video', 'en');
+    expect(en).toContain('>Up to 10s<');
+    expect(en).toContain('>16s and longer<');
+  });
+
+  it('video list: every template at 10 s renders the count only', () => {
+    const html = listing([card({ runtimeSeconds: 10 }), card({ slug: 'second', runtimeSeconds: 10 })]);
+    expect(html).toContain('data-list-filter="count-only"');
+    expect(html).not.toContain('role="group"');
+    expect(html).not.toContain('data-filter-option');
+    expect(html).toContain('2개 템플릿');
+  });
+
+  it('video list: a NEW chip only while some — not all — templates are new, set off from the lengths by a line', () => {
+    const html = listing([card({ runtimeSeconds: 8 }), card({ slug: 'old', publishedAt: OLD, runtimeSeconds: 15 })]);
+    expect(html).toContain('data-filter-option="new:1"');
+    expect(html).toContain('>새로 나온 것<');
+    expect(html).toContain('data-filter-divider');
+    expect(html.indexOf('data-filter-facet="new"')).toBeLessThan(html.indexOf('data-filter-facet="length"'));
+    const allNew = listing([card({ runtimeSeconds: 8 }), card({ slug: 'second', runtimeSeconds: 15 })]);
+    expect(allNew).not.toContain('data-filter-option="new:1"');
+    expect(allNew).not.toContain('data-filter-divider');
+  });
+
+  it('video list: the empty-filter line is the one the filter owns', () => {
+    const html = listing([card({ runtimeSeconds: 8 }), card({ slug: 'second', runtimeSeconds: 15 })]);
+    expect(html).toContain(dicts.ko.prompts.filterNone);
+    expect(dicts.ko.prompts.filterNone).toBe('이 조건에 맞는 템플릿이 아직 없어요.');
+    expect(dicts.en.prompts.filterNone).toBe('Nothing matches yet.');
+  });
+
+  it('draws the medium segment and the filter chips as the same pill', () => {
     expect(pillClassName(true)).toContain('rounded-full');
     expect(pillClassName(true)).not.toBe(pillClassName(false));
     const tabs = renderToStaticMarkup(<MediumTabs locale="ko" dict={dicts.ko} active="video" />);
     expect(tabs).toContain(`class="${pillClassName(true)}"`);
     expect(tabs).toContain(`class="${pillClassName(false)}"`);
     const chips = renderToStaticMarkup(
-      <UseCaseFilter options={[['cinematic', 'Cinematic'], ['mv', 'MV']]} total={2} labels={{ heading: 'Use', all: 'All', count: '{count} templates', reset: 'Reset' }} />,
+      <ListFilter rail="video" total={2} labels={labels} facets={[{ group: 'length', label: 'Length', options: [{ value: 'short', label: 'Short' }, { value: 'mid', label: 'Mid' }] }]} />,
     );
     expect(chips).toContain(pillClassName(true));
     expect(chips).toContain(pillClassName(false));
+    // Keyboard and screen readers: real buttons that say whether they are pressed.
+    expect(chips).toContain('aria-pressed="true"');
+    expect(chips).toContain('aria-pressed="false"');
+    expect(chips).toMatch(/<button[^>]*type="button"[^>]*data-filter-option="length:short"/);
   });
 
-  it('a single option renders the count but no chips', () => {
-    const html = renderToStaticMarkup(
-      <UseCaseFilter options={[['cinematic', 'Cinematic']]} total={9} labels={{ heading: 'Use', all: 'All', count: '{count} templates', reset: 'Reset' }} />,
-    );
+  it('no facet renders the count but no chips', () => {
+    const html = renderToStaticMarkup(<ListFilter rail="video" total={9} labels={labels} facets={[]} />);
     expect(html).not.toContain('<button');
     expect(html).toContain('9 templates');
+  });
+
+  it('folds a group into one labelled menu pill when the row would pass six chips', () => {
+    const many = { group: 'useCase' as const, label: 'Use case', options: ['a', 'b', 'c', 'd', 'e', 'f'].map((value) => ({ value, label: value.toUpperCase() })) };
+    const html = renderToStaticMarkup(<ListFilter rail="image" total={9} labels={labels} facets={[many]} />);
+    expect(html).toContain('<select');
+    expect(html).toContain('aria-label="Use case"');
+    expect(html).toContain('data-filter-option="useCase:f"');
+    expect(html).not.toMatch(/<button[^>]*data-filter-option=/);
+    expect(collapsedGroups([many])).toEqual(new Set(['useCase']));
+    // Today's video row (all + new + three lengths) stays as chips.
+    expect(collapsedGroups([
+      { group: 'new', label: '', options: [{ value: '1', label: '' }] },
+      { group: 'length', label: '', options: ['short', 'mid', 'long'].map((value) => ({ value, label: value })) },
+    ])).toEqual(new Set());
+  });
+
+  it('filters only the catalogue rail — the cast shelves under it keep every card', () => {
+    const item = (length: string) => ({ dataset: { length, new: 'false', useCase: 'cinematic', cast: 'solo' } as Record<string, string>, hidden: false });
+    const rail = (items: ReturnType<typeof item>[]) => {
+      const empty = { hidden: true };
+      return { items, empty, querySelectorAll: (selector: string) => (selector === '[data-prompt-item]' ? items : []), querySelector: (selector: string) => (selector === '[data-rail-filtered-empty]' ? empty : null) };
+    };
+    const rails: Record<string, ReturnType<typeof rail>> = { video: rail([item('short'), item('mid'), item('')]), 'cast-pet-video': rail([item('mid')]) };
+    const root = { querySelector: (selector: string) => rails[/^\[data-rail="(.+)"\]$/.exec(selector)?.[1] ?? ''] ?? null };
+
+    expect(applyListFilter(root, 'video', { length: 'short' })).toBe(1);
+    expect(rails.video!.items.map((entry) => entry.hidden)).toEqual([false, true, true]);
+    expect(rails.video!.empty.hidden).toBe(true);
+    expect(rails['cast-pet-video']!.items[0]!.hidden).toBe(false);
+
+    expect(applyListFilter(root, 'video', { length: 'long' })).toBe(0);
+    expect(rails.video!.empty.hidden).toBe(false);
+
+    expect(applyListFilter(root, 'video', {})).toBe(3);
+    expect(rails.video!.items.every((entry) => !entry.hidden)).toBe(true);
   });
 });
 

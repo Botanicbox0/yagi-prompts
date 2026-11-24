@@ -15,8 +15,8 @@ import {
 /** `held` = stored and waiting behind the person's face check (0020); released to `queued` by the identity callback. */
 export type RenderStatus = 'held' | 'queued' | 'running' | 'succeeded' | 'failed';
 export type NotifyStatus = 'pending' | 'sent' | 'skipped' | 'failed';
-/** Who rendered (or is rendering) the job — the CHECK on render_jobs.provider (0017, widened in 0061). */
-export type RenderProvider = 'openai' | 'modelark' | 'kling' | 'google';
+/** Who rendered (or is rendering) the job — the CHECK on render_jobs.provider (0017, widened in 0061 and 0188). */
+export type RenderProvider = 'openai' | 'modelark' | 'kling' | 'google' | 'sunra';
 
 export interface RenderJob {
   id: string;

@@ -56,6 +56,15 @@ describe('brand host boundary', () => {
     expect((await middleware(req('brand.twings.app','/api/brand-workspace/studio','POST','https://twings.app'))).status).toBe(404);
     expect((await middleware(req('brand.twings.app','/api/brand-workspace/studio'))).status).toBe(404);
   });
+  it('lets the closed studio read whether an access request was already sent: GET only, brand host only', async () => {
+    for (const method of ['GET', 'HEAD']) expect(brandRouteAllowed('/api/brand-workspace/access-request', method)).toBe(true);
+    for (const method of ['POST', 'PUT', 'PATCH', 'DELETE']) expect(brandRouteAllowed('/api/brand-workspace/access-request', method)).toBe(false);
+    expect(brandRouteAllowed('/api/brand-workspace/access-request/extra', 'GET')).toBe(false);
+    expect(adminRouteAllowed('/api/brand-workspace/access-request', 'GET')).toBe(false);
+    expect((await middleware(req('brand.twings.app','/api/brand-workspace/access-request'))).headers.get('x-middleware-next')).toBe('1');
+    expect((await middleware(req('brand.twings.app','/api/brand-workspace/access-request','POST','https://brand.twings.app'))).status).toBe(404);
+    expect((await middleware(req('admin.twings.app','/api/brand-workspace/access-request'))).status).toBe(404);
+  });
   it('allows only the guarded studio upload transport on the admin host', async () => {
     expect((await middleware(req('admin.twings.app','/api/admin/brand-workspace','POST','https://admin.twings.app'))).headers.get('x-middleware-next')).toBe('1');
     expect((await middleware(req('admin.twings.app','/api/admin/brand-workspace','GET'))).status).toBe(404);

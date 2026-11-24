@@ -42,7 +42,8 @@ import { talkStudioRevise } from './revision/talk';
 import { readStudioMark } from './revision/mark';
 import { assetView, assetsOf, campaignsOf, jobSoftDeleteReady, jobsByIds, jobsOfStudioState, viewsOf } from './repo';
 import type { StudioDeps } from './types';
-import { allowanceView, loadAllowance } from './usage';
+import { allowanceViewWithRefill, loadAllowanceViewWithRefill } from './allowance-refill';
+import { loadAllowance } from './usage';
 
 export function isStudioOperation(value: unknown): value is StudioOperation {
   return typeof value === 'string' && (STUDIO_OPERATIONS as readonly string[]).includes(value);
@@ -158,7 +159,7 @@ export async function loadStudioState(deps: StudioDeps, viewer: Viewer, organiza
       return {
         ok: true as const,
         canCreate: seat.canCreate,
-        allowance: allowanceView(allowance),
+        allowance: await allowanceViewWithRefill(sql, organizationId, allowance, { now }),
         storage: toStudioStorageQuotaView(storageSummary),
         assets: assets.map((a) => assetView(a, deps.media)),
         jobs: views,
@@ -184,7 +185,7 @@ export async function pollStudioJobs(deps: StudioDeps, viewer: Viewer, organizat
       return {
         ok: true as const,
         jobs: await viewsOf(sql, jobs, deps.media),
-        allowance: allowanceView(await loadAllowance(sql, organizationId, deps.env, deps.now?.() ?? new Date())),
+        allowance: await loadAllowanceViewWithRefill(sql, organizationId, deps.env, deps.now?.() ?? new Date()),
       };
     }),
   );

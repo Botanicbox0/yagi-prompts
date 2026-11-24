@@ -4,10 +4,11 @@ import type { Dictionary } from '@/lib/i18n/dictionaries';
 import type { PromptCard } from '@/lib/prompts/catalog';
 import { TEMPLATE_MEDIA, USE_CASES, type TemplateMedium } from '@/lib/prompts/schemas';
 import { templatesHref } from '@/lib/prompts/links';
+import { listFacets, type FacetGroup } from '@/lib/prompts/facets';
 import { TextSwap } from '@/components/ui/text-swap';
 import { PromptRail } from '@/components/prompts/rails';
-import { UseCaseFilter } from '@/components/prompts/filter-chips';
-import { promptLabels, presentUseCases, useCaseLabel } from '@/components/prompts/labels';
+import { ListFilter, type FilterFacetView } from '@/components/prompts/filter-chips';
+import { promptLabels, useCaseLabel } from '@/components/prompts/labels';
 import { pillClassName } from '@/components/prompts/pill';
 
 /**
@@ -16,10 +17,14 @@ import { pillClassName } from '@/components/prompts/pill';
  *
  * Nothing on this surface varies by viewer (no gated text anywhere any more), so the whole thing is
  * cached HTML shared by everyone — the same cache posture the prompts gallery had, for a simpler
- * reason. The use-case filter is client-side over the DOM, exactly as before.
+ * reason. The filter is client-side over the DOM.
  *
- * First screen (docs/PLATFORM-2.0.md §15.3-5): title → medium pills → use-case pills (only when
+ * First screen (docs/PLATFORM-2.0.md §15.3-5): title → medium pills → filter pills (only when
  * there is a choice) and the count → the cards. The service definition follows the grid.
+ *
+ * 2026-11-24 (founder, second time): the video list filters by what a buyer knows about the film —
+ * NEW and its length — never by the image side's genre chips. The image list keeps its use cases
+ * (lib/prompts/facets.ts).
  *
  * §7.5 (founder 2026-10-30): ONE grid. TWINGS originals and AI creatives' templates are ranked
  * together and mixed by `railOrder`; a creative's card says `by @handle` and nothing else marks
@@ -49,6 +54,7 @@ export function TemplatesListing({
   medium,
   cards,
   after,
+  now,
 }: {
   locale: Locale;
   dict: Dictionary;
@@ -56,13 +62,25 @@ export function TemplatesListing({
   cards: PromptCard[];
   /** docs/CAST-CATEGORIES.md §5 — the pet and couple shelves for this medium, between the grid and the definition. */
   after?: ReactNode;
+  /** Injectable clock for NEW (the badge, the order and the filter read the same one). */
+  now?: Date | number;
 }) {
   const t = dict.templates[medium];
   const labels = promptLabels(dict);
   const useCaseLabels = Object.fromEntries(USE_CASES.map((value) => [value, useCaseLabel(dict, value)]));
-  const present = presentUseCases([...new Set(cards.flatMap((card) => card.useCase))].sort());
-  const filterOptions = present.map((value) => [value, useCaseLabels[value]!] as [string, string]);
   const other: TemplateMedium = medium === 'video' ? 'image' : 'video';
+  const p = dict.prompts;
+  const groupLabel: Record<FacetGroup, string> = { new: p.filterNew, length: p.filterLength, useCase: p.filterHeading };
+  const optionLabel = (group: FacetGroup, value: string): string => {
+    if (group === 'new') return p.filterNew;
+    if (group === 'length') return value === 'short' ? p.filterLengthShort : value === 'mid' ? p.filterLengthMid : p.filterLengthLong;
+    return useCaseLabels[value] ?? value;
+  };
+  const facets: FilterFacetView[] = listFacets(cards, medium, now).map((facet) => ({
+    group: facet.group,
+    label: groupLabel[facet.group],
+    options: facet.options.map((option) => ({ value: option.value, label: optionLabel(facet.group, option.value) })),
+  }));
 
   return (
     <div data-template-catalog={medium} className="audience-shell pt-24 pb-20 lg:pt-28">
@@ -70,8 +88,8 @@ export function TemplatesListing({
 
       <div className="mt-5 space-y-4">
         <MediumTabs locale={locale} dict={dict} active={medium} />
-        {filterOptions.length > 0 && (
-          <UseCaseFilter options={filterOptions} total={cards.length} labels={{ heading: dict.prompts.filterHeading, all: dict.prompts.filterAll, count: dict.prompts.filterCount, reset: dict.prompts.filterReset }} />
+        {cards.length > 0 && (
+          <ListFilter rail={medium} facets={facets} total={cards.length} labels={{ heading: p.filterRowLabel, all: p.filterAll, count: p.filterCount, reset: p.filterReset }} />
         )}
       </div>
 
@@ -93,9 +111,10 @@ export function TemplatesListing({
           labels={labels}
           useCaseLabels={useCaseLabels}
           emptyLabel={t.emptyTitle}
-          filteredEmptyLabel={dict.prompts.filterEmpty}
+          filteredEmptyLabel={p.filterNone}
           hideHeading
           topClassName="mt-4"
+          {...(now === undefined ? {} : { now })}
         />
       )}
 

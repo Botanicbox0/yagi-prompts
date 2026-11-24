@@ -54,6 +54,8 @@ export interface CustomerExtraGrantView {
   credits: number;
   validMonth: string;
   expiresOn: string;
+  /** R4: present only on a trial grant (the original or its carry); `expiresOn` is then the trial's last usable day. */
+  kind?: 'trial';
 }
 
 export interface CustomerBrandBillingPayload extends CustomerBrandBillingView {

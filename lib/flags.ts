@@ -189,7 +189,8 @@ export function brandStudioEditAssistOpen(env: Record<string, string | undefined
  * The rebuilt editing studio (docs/BRAND-EDITING-STUDIO-V2.md): four workspaces (cut, colour, sound,
  * captions) around one preview and one timeline. Since V1 the flag opens `/brand/studio/editor` on the
  * organization's own film (the film the current editor keeps, on frames, with a frame-exact export);
- * `?sample=1` still opens the sample film. Default OFF: open only when the server environment says
+ * `?sample=1` still opens the sample film (for a listed organization only while
+ * `BRAND_WORKSPACE_PROTOTYPE_LAYER=on`, see below). Default OFF: open only when the server environment says
  * exactly `BRAND_STUDIO_EDITOR_V2=on`. Off means the route answers 404 and every other screen is as it
  * was. The studio route guard runs first, so a sandboxed organization gets 404 whatever this flag says.
  *
@@ -197,7 +198,9 @@ export function brandStudioEditAssistOpen(env: Record<string, string | undefined
  * organization ids (spaces around ids and empty entries ignored, ids compared exactly). For a listed
  * organization, and only while this flag is on, `/brand/studio/compose` sends the person to the new
  * editor after the studio guard (`brandStudioEditorV2DefaultFor`); `?classic=1` keeps the current editor.
- * The ids live only in the deployment's environment, never in the repository. Unset or empty: nobody.
+ * An entry `all` (any case) or `*`, anywhere in the list, counts every organization as listed; the studio
+ * guard still runs first. The ids live only in the deployment's environment, never in the repository.
+ * Unset or empty: nobody.
  */
 export function brandStudioEditorV2Open(env: Record<string, string | undefined> = process.env): boolean {
   return env.BRAND_STUDIO_EDITOR_V2 === 'on';
@@ -282,6 +285,19 @@ export function coupleTemplatesOpen(env: Record<string, string | undefined> = pr
 }
 
 /**
+ * docs/PERSONAL-STUDIO.md §5.1, §9 — the personal Sunra lane: a person's face (the buyer's verified selfie
+ * and a consenting partner's photo) may go to Sunra as a short-lived signed URL. Default OFF: open only when
+ * the server environment says exactly `TWINGS_PERSONAL_SUNRA_FACES=on`. This is the one switch for
+ * `sunraSignedFaceAllowed`; off means no job is routed to Sunra and the adapter refuses to submit
+ * (lib/renders/engines-sunra.ts). A Sunra job already submitted is still polled to its end.
+ * Turning it on waits for the founder and the conditions in §5.1 (DPA, training opt-out or a true policy line,
+ * revised terms in force, the 19+ check working).
+ */
+export function personalSunraFacesOpen(env: Record<string, string | undefined> = process.env): boolean {
+  return env.TWINGS_PERSONAL_SUNRA_FACES === 'on';
+}
+
+/**
  * docs/CAST-CATEGORIES.md §3 — pet templates. Default OFF: open only when the server environment says
  * exactly `TWINGS_PET_TEMPLATES=on`. Off means the same as couples off: the catalogue drops pet
  * templates, `/{locale}/pet` and their template pages answer 404, and the make and render APIs refuse.
@@ -335,8 +351,11 @@ export function brandRoomInvitesOpen(env: NodeJS.ProcessEnv = process.env): bool
 
 /**
  * Prototype layer on `/brand/projects/[id]` (`HumanHandoff`, `BriefConcierge`, `AestheticEngine`,
- * `ReviewStage`) and preview links to demo/sample routes. Default OFF: open only when the server
- * environment says exactly `BRAND_WORKSPACE_PROTOTYPE_LAYER=on`.
+ * `ReviewStage`) and preview links to demo/sample routes: the current editor's link to the editing studio
+ * v2's sample film, and in the editing studio v2 an organization's own film's way to the sample film (its
+ * locked workspaces' link and `?sample=1`; an organization not in `BRAND_STUDIO_EDITOR_V2_ORGS` only ever
+ * gets the sample film there). Default OFF: open only when the server environment says exactly
+ * `BRAND_WORKSPACE_PROTOTYPE_LAYER=on`.
  */
 export function brandWorkspacePrototypeLayerOpen(env: Record<string, string | undefined> = process.env): boolean {
   return env.BRAND_WORKSPACE_PROTOTYPE_LAYER === 'on';

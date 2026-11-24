@@ -3,7 +3,8 @@
  * (docs/BRAND-EDITING-STUDIO-V2.md §3-5, §11 V1).
  *
  * The rule: sample values never look real. While a real film is open only cutting is real and saved.
- * Colour, sound and captions are locked (their tab opens a calm panel with a way to the sample film),
+ * Colour, sound and captions are locked (their tab opens a calm panel that says so and points to the
+ * earlier editor, and to the sample film only while `BRAND_WORKSPACE_PROTOTYPE_LAYER=on`),
  * titles and framing are not offered (nothing stores or exports them yet), and "말로 편집" follows only
  * the cut sentences. Nothing here reads the sample data. Pure.
  */

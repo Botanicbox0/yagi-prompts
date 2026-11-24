@@ -55,6 +55,23 @@ describe('route cache modes (§3.4 / §4)', () => {
   });
 
   /**
+   * 2026-11-24: the video list filters by length and NEW, the image list by use case — all of it in
+   * the browser over cards already in the HTML. Reading `searchParams` would opt these pages out of
+   * the shared static document, so the filter state lives in the client (`lib/navigation/public-state.ts`).
+   */
+  it('video and image pages do not read searchParams', () => {
+    // Comments may name the rule ("no `searchParams`"); only code counts.
+    const code = (source: string) => source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|\s)\/\/.*$/gm, '$1');
+    for (const medium of ['video', 'image']) {
+      const source = code(read('app', '(marketing)', '[locale]', medium, 'page.tsx'));
+      expect(source, medium).toContain('export default');
+      expect(source, medium).not.toContain('searchParams');
+      expect(source, medium).not.toContain('useSearchParams');
+    }
+    expect(code(read('components', 'templates', 'listing.tsx'))).not.toContain('searchParams');
+  });
+
+  /**
    * M6 added a SECOND tagged projection (§13.2 tag `prompts`), so the static surfaces no longer
    * all read the same one: the landing reads both, pricing and the gallery count prompts. What has
    * not changed — and what this asserts — is that every static page reads a TAGGED, TTL-floored
@@ -202,6 +219,8 @@ describe('route cache modes (§3.4 / §4)', () => {
       // lib/content/landing-media.ts — the replace screen and the local-mode image route.
       ['app', '(admin)', 'admin', 'landing-media', 'page.tsx'],
       ['app', 'api', 'landing-media', '[...slot]', 'route.ts'],
+      // The closed studio's "access request already sent" answer: per member, never cached.
+      ['app', 'api', 'brand-workspace', 'access-request', 'route.ts'],
     ]) {
       expect(read(...file), file.join('/')).toMatch(/export const dynamic\s*=\s*(['"])force-dynamic\1/);
     }

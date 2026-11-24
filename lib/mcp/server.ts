@@ -71,8 +71,8 @@ export const MCP_TOOLS = [
     template_id: str, role: { type: 'string', enum: ['reference', 'example'] }, ...mediaSource,
   }, ['template_id']),
   tool('delete_file', 'Delete a file', 'Removes one uploaded file (ast_ id) from a draft.', { template_id: str, file: str }, ['template_id', 'file']),
-  tool('test_render', 'Test render', `Runs the draft once with your own saved selfie through the real pipeline (at most ${MAKER_TEST_RENDERS} per template, at TWINGS's cost).`, { template_id: str }, ['template_id']),
-  tool('publish_template', 'Publish', 'Publishes a draft as a live TWINGS template, credited to you — no studio review. Needs a passing recipe, an uploaded example file (upload_file role "example") and one succeeded test_render. The price is set automatically (cost floor + your royalty). You confirm you hold the rights to everything in it.', { template_id: str, rights_confirmed: { type: 'boolean', const: true } }, ['template_id', 'rights_confirmed']),
+  tool('test_render', 'Test render', `Makes the draft's IMAGE steps once with your own saved selfie through the real pipeline (at most ${MAKER_TEST_RENDERS} per template, at TWINGS's cost). A test never makes video: video steps are skipped and made only when a buyer pays. A template with no image step to test is refused (video_test_unavailable) and no test is used.`, { template_id: str }, ['template_id']),
+  tool('publish_template', 'Publish', 'Publishes a draft as a live TWINGS template, credited to you — no studio review. Needs a passing recipe, an uploaded example file (upload_file role "example") and one succeeded test_render. A template with no image step to test needs an uploaded example VIDEO instead of a test_render. The price is set automatically (cost floor + your royalty). You confirm you hold the rights to everything in it.', { template_id: str, rights_confirmed: { type: 'boolean', const: true } }, ['template_id', 'rights_confirmed']),
   tool('submit_template', 'Submit for review', 'Sends a complete draft to the TWINGS studio for review instead of publishing it yourself. You confirm you hold the rights to everything in it.', { template_id: str, rights_confirmed: { type: 'boolean', const: true } }, ['template_id', 'rights_confirmed']),
   tool('update_profile', 'Update my profile', 'Changes any of your public profile fields; fields you leave out keep their value. Set public_profile true to publish the page.', {
     display_name: str, handle: str, headline: str, bio: str, country: { type: 'string', description: 'ISO 3166-1 alpha-2, e.g. KR, US, FR.' }, city: str,
@@ -102,7 +102,7 @@ function guide() {
       : { id, kind: 'image', aspects: IMAGE_ASPECTS })),
     imageEngines: makerEnginesFor('image'),
     videoEngines: makerEnginesFor('video'),
-    publishing: 'publish_template makes the draft a live template with no studio review once: the recipe passes, an example FILE is uploaded (role "example"), and one test_render has succeeded. Price = cost floor + royalty_krw, set automatically.',
+    publishing: 'publish_template makes the draft a live template with no studio review once: the recipe passes, an example FILE is uploaded (role "example"), and one test_render has succeeded. test_render makes the image steps only; a template with no image step to test needs an example VIDEO file instead. Price = cost floor + royalty_krw, set automatically.',
     disclosure: 'show_prompts / show_files decide what signed-in members see on the template page. Anonymous visitors only see an outline (steps, engines, inputs) and are asked to sign in. Off by default.',
     presentation: '"make-first": example → make → how it was made. "story-first": your story and steps first.',
     notes: 'notes.intro (shown to everyone above the outline), steps[].note (a tip under that step, members only) and notes.outro (e.g. "post yours and tag me") are display-only; no engine reads them.',
@@ -193,7 +193,8 @@ async function callTool(deps: McpDeps, name: string, args: Record<string, unknow
     case 'test_render': {
       const result = await makerAction({ sql: deps.sql, store }, viewer, { action: 'test', id: args.template_id }, access);
       if (result.renderId) deps.afterRender?.(result.renderId);
-      return { ...result, note: 'The render runs in the background; get_template shows its status.' };
+      const skippedNote = result.skipped?.length ? ` Video steps ${result.skipped.join(', ')} were not made: a test makes images only, and video is made when a buyer pays.` : '';
+      return { ...result, note: `The render runs in the background; get_template shows its status.${skippedNote}` };
     }
     case 'publish_template': {
       if (args.rights_confirmed !== true) throw new ToolFailure('rights_required');
