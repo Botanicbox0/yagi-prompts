@@ -102,6 +102,11 @@ import { readFootage } from './footage-facts';
 import { measureSource } from './measure-fps';
 import { loadShortcutPrefs, saveShortcutPrefs } from './shortcut-store';
 
+/** The line when the film already holds as many cuts as it may (audit A3): the number comes from the limit itself. */
+export function cutLimitLine(copy: StudioEditorCopy): string {
+  return fill(copy.toast.full, { max: MAX_COMPOSE_CLIPS });
+}
+
 export function speedUndoKey(clipId: string): string {
   return `clip-speed:${clipId}`;
 }
@@ -584,7 +589,7 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
   // ── Cut ──
   const splitAtPlayhead = useCallback(() => {
     if (blockedRef.current) return;
-    if (sequence.clips.length >= MAX_COMPOSE_CLIPS) return say(copy.toast.full);
+    if (sequence.clips.length >= MAX_COMPOSE_CLIPS) return say(cutLimitLine(copy));
     const parent = frameStateAt(sequence, playhead).active;
     if (!parent || parent.offset === 0) return say(copy.toast.splitNo);
     const id = newId('cut');
@@ -625,7 +630,7 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
 
   const addMaterial = useCallback(
     (material: FixtureMaterial) => {
-      if (sequence.clips.length >= MAX_COMPOSE_CLIPS) return say(copy.toast.full);
+      if (sequence.clips.length >= MAX_COMPOSE_CLIPS) return say(cutLimitLine(copy));
       const clip = clipOfMaterial(material, newId('cut'), labelOf(material.id), sequence.fps);
       edit((current) => insertClips(current, current.clips.length, [clip]));
     },
@@ -639,13 +644,13 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
   const addSource = useCallback(
     async (source: EditorSource) => {
       if (blockedRef.current) return;
-      if (docRef.current.sequence.clips.length >= MAX_COMPOSE_CLIPS) return say(copy.toast.full);
+      if (docRef.current.sequence.clips.length >= MAX_COMPOSE_CLIPS) return say(cutLimitLine(copy));
       setBusySource(source.key);
       const measured = await measureSource(source.srcUrl, sourceSeconds(source));
       setBusySource((current) => (current === source.key ? null : current));
       const now = docRef.current.sequence;
       if (blockedRef.current) return;
-      if (now.clips.length >= MAX_COMPOSE_CLIPS) return say(copy.toast.full);
+      if (now.clips.length >= MAX_COMPOSE_CLIPS) return say(cutLimitLine(copy));
       const fresh = now.clips.length === 0 && now.captions.length === 0;
       const fps = fresh ? snapFilmFps(measured?.fps ?? null) : now.fps;
       const seconds = sourceSeconds(source) ?? (measured ? measured.frames / measured.fps : null);
@@ -753,7 +758,7 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
   const insertCopies = useCallback(
     (source: Clipboard, atIndex: number) => {
       if (blockedRef.current) return;
-      if (sequence.clips.length + source.clips.length > MAX_COMPOSE_CLIPS) return say(copy.toast.full);
+      if (sequence.clips.length + source.clips.length > MAX_COMPOSE_CLIPS) return say(cutLimitLine(copy));
       const copies = source.clips.map((clip) => ({
         ...clip,
         id: newId('cut'),

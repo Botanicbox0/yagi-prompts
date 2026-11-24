@@ -439,7 +439,7 @@ export const studioEditorEn = {
   toast: {
     splitNo: 'Put the playhead inside a cut to split it.',
     lastCut: 'The film needs at least one cut.',
-    full: 'The film cannot take more cuts.',
+    full: 'A film can hold up to {max} cuts.',
   },
   /** The organization's own film (V1): only cutting is real; the rest says so plainly. */
   real: {
@@ -919,7 +919,8 @@ export const studioEditorKo: typeof studioEditorEn = {
   toast: {
     splitNo: '재생 위치를 컷 안쪽에 두면 나눌 수 있습니다.',
     lastCut: '영상에는 컷이 하나는 있어야 합니다.',
-    full: '컷을 더 넣을 수 없습니다.',
+    // 대표 확인 대기 (Gemma 미실행)
+    full: '한 영상에는 컷을 {max}개까지 넣을 수 있습니다.',
   },
   real: {
     filmName: '{name} 영상',
