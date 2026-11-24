@@ -12,6 +12,7 @@ import { centsForKrw, isRoyalty, price1080KrwFor, quoteRecipeBase } from './pric
 import { parseDisclosure, parsePresentation } from './repo';
 import { legacyPromptText, primaryStep, recipeCast, type Recipe } from './schema';
 import { defaultTimelineKeyframes, parseVideoKeyframes } from '@/lib/prompts/keyframes';
+import { imageTestRecipe } from './test-render';
 
 /**
  * docs/PLATFORM-2.0.md §20.6 — an AI creative publishes their own template, no studio review in
@@ -22,8 +23,10 @@ import { defaultTimelineKeyframes, parseVideoKeyframes } from '@/lib/prompts/key
  *   · the recipe passes every rule the render pass enforces (`parseRecipe` + files belong here);
  *   · the creative confirmed they hold the rights to everything in it;
  *   · an uploaded example file exists — it becomes the card's media, so a page never goes up blank;
- *   · at least one of the creative's own TEST RENDERS succeeded: the recipe has run end to end on
- *     a real face through the real pipeline (provider moderation included) before anyone pays.
+ *   · at least one of the creative's own TEST RENDERS succeeded: the recipe's image steps have run
+ *     on a real face through the real pipeline (provider moderation included) before anyone pays.
+ *     A test makes no video (founder decision 2026-11-24, lib/recipes/test-render.ts), so a recipe
+ *     with nothing to test — a film only — publishes on its uploaded example FILM instead.
  *
  * The price is the base price (lib/twings/template-price.ts) plus the creative's raise — the price
  * they typed in the studio, never below the base — through the same `quoteRecipeBase` the studio uses. The template goes live published,
@@ -63,9 +66,13 @@ export async function selfPublishFormat(
     "select storage_key,mime,kind from platform_format_assets where format_id=$1 and role='example' order by created_at desc limit 1", [row.id]);
   const example = files[0];
   demand(example, 'example_file_required');
-  const tested = await tx.query(`select 1 from render_job_recipes r join render_jobs j on j.id=r.render_id
-    where r.format_id=$1 and r.purpose='maker_test' and j.user_id=$2 and j.status='succeeded' limit 1`, [row.id, userId]);
-  demand(tested.rows.length, 'test_required');
+  if (imageTestRecipe(recipe).ok) {
+    const tested = await tx.query(`select 1 from render_job_recipes r join render_jobs j on j.id=r.render_id
+      where r.format_id=$1 and r.purpose='maker_test' and j.user_id=$2 and j.status='succeeded' limit 1`, [row.id, userId]);
+    demand(tested.rows.length, 'test_required');
+  } else {
+    demand(example.kind === 'video', 'example_film_required');
+  }
 
   // The example file becomes the card's media through the same staging → public copy the studio uses.
   const templateId = randomUUID();
