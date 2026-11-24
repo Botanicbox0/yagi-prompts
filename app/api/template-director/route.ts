@@ -135,13 +135,14 @@ export async function POST(request: Request): Promise<NextResponse> {
   const sheetField = personalEditSheetOpen() ? form.get('sheet') : null;
   const sheetState = typeof sheetField === 'string' ? cleanPersonalSheetState(parseJsonOrNull(sheetField)) : null;
 
+  // A sheet turn answers in the screen's language; a chips turn gets no locale and stays as it was.
   const turnInput = {
     templateId: template.id,
     templateSummaryKo: templateSummaryKo || template.slug,
     editableSlots: DIRECTOR_EDITABLE_SLOTS,
     userMessage: effectiveMessage,
     references,
-    ...(sheetState ? { sheetState } : {}),
+    ...(sheetState ? { sheetState, locale } : {}),
   };
 
   const config = directorConfigFromEnv();
