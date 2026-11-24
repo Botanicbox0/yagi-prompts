@@ -1,6 +1,8 @@
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import type { Visibility } from '@/lib/content/visibility';
 import { toTemplateCast, type PromptSource, type PromptStatus, type TemplateCast, type TemplateMedium } from './schemas';
+import { templateLookOpen } from '@/lib/flags';
+import { isTemplateLook, toTemplateAudience, type TemplateAudience, type TemplateLook } from '@/lib/template-look/look';
 
 /**
  * PLAN §13 — every `prompt_items` query, in one driver-agnostic module.
@@ -57,6 +59,11 @@ export interface PromptRow {
   announcedAt: string | null;
   createdAt: string | null;
   publishedAt: string | null;
+  /**
+   * docs/PERSONAL-STUDIO.md §3.4.10 — set only when the template is written for one style and `TWINGS_TEMPLATE_LOOK=on`;
+   * absent = for anyone (and always absent with the switch off).
+   */
+  look?: TemplateLook;
 }
 
 interface RawRow {
@@ -91,6 +98,8 @@ interface RawRow {
   announced_at?: Date | string | null;
   created_at: Date | string | null;
   published_at: Date | string | null;
+  /** Present only while `TWINGS_TEMPLATE_LOOK=on` (see `columns()`). */
+  look?: string | null;
 }
 
 /**
@@ -114,6 +123,18 @@ const COLUMNS = `id, audience, slug, source, author_id, author_handle, status, m
                  ${PRICE_1080_COLUMNS},
                  ${CAST_COLUMN},
                  reject_reason, created_at, published_at, announced_at`;
+
+/**
+ * docs/PERSONAL-STUDIO.md §3.4.10 — who the template is written for (0190), read through the row's JSON like the cast,
+ * so a database without 0190 serves every template as `any`. Selected ONLY while `TWINGS_TEMPLATE_LOOK=on`: with the
+ * switch off no query names the column, and every row reads exactly as before.
+ */
+const LOOK_COLUMN = `coalesce(to_jsonb(prompt_items.*)->>'look', 'any') as look`;
+
+/** The select list, decided per query so the switch is read at call time (the tests flip it per case). */
+function columns(): string {
+  return templateLookOpen() ? `${COLUMNS},\n                 ${LOOK_COLUMN}` : COLUMNS;
+}
 
 /** §13.2 — the one ordering, so the gallery, the admin list and the sitemap never disagree. */
 const RAIL_ORDER = 'featured desc, published_at desc nulls last, created_at desc, slug asc';
@@ -156,6 +177,7 @@ function toRow(raw: RawRow): PromptRow {
     announcedAt: toIso(raw.announced_at ?? null),
     createdAt: toIso(raw.created_at),
     publishedAt: toIso(raw.published_at),
+    ...(isTemplateLook(raw.look) ? { look: raw.look } : {}),
   };
 }
 
@@ -166,7 +188,7 @@ function toRow(raw: RawRow): PromptRow {
 /** Every PUBLISHED item, both rails, in rail order. The gallery's single query. */
 export async function loadPublishedPrompts(sql: SqlRunner): Promise<PromptRow[]> {
   const { rows } = await sql.query<RawRow>(
-    `select ${COLUMNS} from prompt_items where status = 'published' and audience = 'public' order by ${RAIL_ORDER}`,
+    `select ${columns()} from prompt_items where status = 'published' and audience = 'public' order by ${RAIL_ORDER}`,
   );
   return rows.map(toRow);
 }
@@ -180,7 +202,7 @@ export async function loadPublishedPrompts(sql: SqlRunner): Promise<PromptRow[]>
  */
 export async function loadPromptBySlug(sql: SqlRunner, slug: string): Promise<PromptRow | null> {
   const { rows } = await sql.query<RawRow>(
-    `select ${COLUMNS} from prompt_items where slug = $1`,
+    `select ${columns()} from prompt_items where slug = $1`,
     [slug],
   );
   return rows[0] ? toRow(rows[0]) : null;
@@ -198,7 +220,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  */
 export async function loadPromptById(sql: SqlRunner, id: string): Promise<PromptRow | null> {
   if (!UUID.test(id)) return null;
-  const { rows } = await sql.query<RawRow>(`select ${COLUMNS} from prompt_items where id = $1`, [id]);
+  const { rows } = await sql.query<RawRow>(`select ${columns()} from prompt_items where id = $1`, [id]);
   return rows[0] ? toRow(rows[0]) : null;
 }
 
@@ -214,7 +236,7 @@ export async function loadRelatedPrompts(
   limit = 4,
 ): Promise<PromptRow[]> {
   const { rows } = await sql.query<RawRow & { shared: boolean }>(
-    `select ${COLUMNS}, (use_case && $2::text[]) as shared
+    `select ${columns()}, (use_case && $2::text[]) as shared
        from prompt_items
       where status = 'published' and audience = 'public' and id <> $1
       order by (use_case && $2::text[]) desc,
@@ -230,7 +252,7 @@ export async function loadRelatedPrompts(
 /** `/account` — "your submissions" (§13.1: slug, status, reject_reason when rejected). */
 export async function loadSubmissionsByAuthor(sql: SqlRunner, userId: string): Promise<PromptRow[]> {
   const { rows } = await sql.query<RawRow>(
-    `select ${COLUMNS} from prompt_items where author_id = $1 order by created_at desc`,
+    `select ${columns()} from prompt_items where author_id = $1 order by created_at desc`,
     [userId],
   );
   return rows.map(toRow);
@@ -243,7 +265,7 @@ export async function loadPromptsByStatus(
 ): Promise<PromptRow[]> {
   const order = status === 'pending' ? 'created_at asc' : RAIL_ORDER;
   const { rows } = await sql.query<RawRow>(
-    `select ${COLUMNS} from prompt_items where status = $1 and audience = 'public' order by ${order}`,
+    `select ${columns()} from prompt_items where status = $1 and audience = 'public' order by ${order}`,
     [status],
   );
   return rows.map(toRow);
@@ -251,7 +273,7 @@ export async function loadPromptsByStatus(
 
 export async function loadAllPrompts(sql: SqlRunner): Promise<PromptRow[]> {
   const { rows } = await sql.query<RawRow>(
-    `select ${COLUMNS} from prompt_items where audience = 'public'
+    `select ${columns()} from prompt_items where audience = 'public'
       order by (status = 'pending') desc, ${RAIL_ORDER}`,
   );
   return rows.map(toRow);
@@ -397,6 +419,43 @@ export async function setPromptCast(sql: SqlRunner, id: string, cast: TemplateCa
     throw new Error('prompt_items.cast_kind is missing — apply 0078_core_template_cast first');
   }
   await sql.query('update prompt_items set cast_kind = $2 where id = $1', [id, cast]);
+}
+
+/** Whether 0190 is applied to `prompt_items` — the admin form shows the style select only then. */
+export async function promptLookSchemaReady(sql: SqlRunner): Promise<boolean> {
+  const { rows } = await sql.query<{ ready: boolean }>(
+    `select exists (select 1 from information_schema.columns
+                     where table_name = 'prompt_items' and column_name = 'look') as ready`,
+  );
+  return rows[0]?.ready === true;
+}
+
+/**
+ * docs/PERSONAL-STUDIO.md §3.4.10 — the admin form's current value: 'any' for every row before it is labelled, and null
+ * when 0190 is not applied (the form then offers no select). Read through the row's JSON whatever the switch says: the
+ * admin labels templates BEFORE the switch is turned on.
+ */
+export async function loadPromptLook(sql: SqlRunner, id: string): Promise<TemplateAudience | null> {
+  const { rows } = await sql.query<{ present: boolean; look: string | null }>(
+    // The column is NOT NULL, so a JSON null here means the key is absent (0190 not applied).
+    `select (to_jsonb(p.*)->'look') is not null as present, to_jsonb(p.*)->>'look' as look from prompt_items p where id = $1`,
+    [id],
+  );
+  const row = rows[0];
+  if (!row || !row.present) return null;
+  return toTemplateAudience(row.look);
+}
+
+/**
+ * The style a template is written for. Like the cast: a database without 0190 holds only `any` templates, so writing
+ * `any` there is a no-op; any other value refuses with the migration's name instead of silently dropping the label.
+ */
+export async function setPromptLook(sql: SqlRunner, id: string, look: TemplateAudience): Promise<void> {
+  if (!(await promptLookSchemaReady(sql))) {
+    if (look === 'any') return;
+    throw new Error('prompt_items.look is missing — apply 0190_core_template_look first');
+  }
+  await sql.query('update prompt_items set look = $2 where id = $1', [id, look]);
 }
 
 /** Stamp the published media refs back onto the row after the copier has run (§13.1 lifecycle). */

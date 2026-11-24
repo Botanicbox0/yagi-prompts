@@ -13,7 +13,7 @@ const film = vi.hoisted(() => ({
   source: 'yagi', authorHandle: null, models: [], modelLabels: [], useCase: [], poster: null, video: null, lock: null, featured: false, publishedAt: null,
 }));
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/flags', () => ({ RENDER_PIPELINE_PUBLIC: false, RENDER_PIPELINE_MODE: 'off', personalEditSheetOpen: () => false }));
+vi.mock('@/lib/flags', () => ({ RENDER_PIPELINE_PUBLIC: false, RENDER_PIPELINE_MODE: 'off', personalEditSheetOpen: () => false, templateLookOpen: () => false }));
 vi.mock('@/lib/creator-subscriptions/cached-availability', () => ({ cachedSubscriptionAvailability: vi.fn(async () => state.availability) }));
 vi.mock('@/lib/prompts/public-catalog', () => ({ getPromptCatalog: async () => ({ video: [film], image: [] }) }));
 vi.mock('@/lib/campaigns/public-catalog', () => ({ getCampaignCatalog: async () => ({ campaigns: [] }) }));

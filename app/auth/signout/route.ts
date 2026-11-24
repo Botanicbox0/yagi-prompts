@@ -4,6 +4,8 @@ import { DEFAULT_LOCALE, LOCALE_COOKIE, isLocale, localizedPath } from '@/lib/i1
 import { chooseProviderHref } from '@/lib/auth/providers';
 import { resolveRequestUrl } from '@/lib/routing/surfaces';
 import { CONCIERGE_UID_COOKIE } from '@/lib/support/concierge-scope';
+import { templateLookOpen } from '@/lib/flags';
+import { LOOK_COOKIE } from '@/lib/template-look/look';
 
 /** `POST /auth/signout` — ends the session and returns to the public landing in the same locale. */
 export async function POST(request: NextRequest): Promise<NextResponse> {
@@ -22,5 +24,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const destination = url.hostname === 'admin.twings.app' ? chooseProviderHref('/admin', locale) : url.hostname === 'brand.twings.app' ? chooseProviderHref('/brand', locale) : localizedPath(locale, '/');
   const response = NextResponse.redirect(new URL(destination, url.origin), { status: 303 });
   response.cookies.delete(CONCIERGE_UID_COOKIE);
+  // docs/PERSONAL-STUDIO.md §3.4.10 — a signed-out browser keeps no template style (switch on only).
+  if (templateLookOpen()) response.cookies.delete(LOOK_COOKIE);
   return response;
 }

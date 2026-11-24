@@ -3,7 +3,10 @@ import type { PromptCard } from '@/lib/prompts/catalog';
 import { PromptCardView } from './prompt-card';
 import { RevealGrid } from '@/components/motion/reveal-grid';
 import { cardRatio, railOrder } from './card-frame';
-import { cardFacets } from '@/lib/prompts/facets';
+import { cardFacets, lookAttribute } from '@/lib/prompts/facets';
+import { templateLookOpen } from '@/lib/flags';
+import { getDictionary } from '@/lib/i18n/dictionaries';
+import { DEFAULT_LOCALE, isLocale } from '@/lib/i18n/config';
 import type { PromptLabels } from './labels';
 
 /**
@@ -47,6 +50,10 @@ export function PromptRail({
   /** The catalog already has a visible page title and introduction. Keep its rail label accessible. */
   hideHeading?: boolean;
 }) {
+  // docs/PERSONAL-STUDIO.md §3.4.10 — with the switch on, every card says who it is written for (`data-look`) and the
+  // rail carries the "다른 스타일도 보기" button the style island shows when the viewer's style alone empties it. With
+  // the switch off neither exists, so the markup is exactly as before.
+  const look = templateLookOpen() ? { reveal: getDictionary(isLocale(locale) ? locale : DEFAULT_LOCALE).templateLook.reveal } : null;
   return (
     <section data-rail={id} className={topClassName}>
       <div className={hideHeading ? 'sr-only' : 'flex flex-wrap items-baseline justify-between gap-x-8 gap-y-2 border-b border-hairline pb-4'}>
@@ -81,6 +88,7 @@ export function PromptRail({
                   data-cast={facets.cast}
                   // docs/PERSONAL-STUDIO.md §3.4.9 (S2): only a card that declares its styling carries it.
                   {...(facets.style ? { 'data-style': facets.style } : {})}
+                  {...(look ? { 'data-look': lookAttribute(facets) } : {})}
                   style={{ '--r': cardRatio(card) } as CSSProperties}
                 >
                   <PromptCardView
@@ -98,6 +106,11 @@ export function PromptRail({
           <p data-rail-filtered-empty hidden className="mt-2 text-sm text-muted">
             {filteredEmptyLabel}
           </p>
+          {look && (
+            <button type="button" data-look-reveal hidden className="mt-2 inline-flex min-h-11 items-center text-sm font-medium text-[#CC1573] underline underline-offset-4">
+              {look.reveal}
+            </button>
+          )}
         </>
       )}
     </section>

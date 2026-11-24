@@ -10,6 +10,9 @@ import {
   approvePrompt,
   insertPrompt,
   loadPromptById,
+  loadPromptLook,
+  promptLookSchemaReady,
+  setPromptLook,
   rejectPrompt,
   setPromptArchived,
   setPromptFeatured,
@@ -48,6 +51,7 @@ import { checkLockBlock, lockBlockRefusalDetail } from '@/lib/template-director/
 import { checkStylingBlock, stylingBlockRefusalDetail } from '@/lib/template-director/styling';
 import { planStylingDeclaration, templateCardStyling } from '@/lib/template-director/compile-prompts';
 import { recipeSchemaReady } from '@/lib/recipes/repo';
+import { TEMPLATE_AUDIENCES, type TemplateAudience } from '@/lib/template-look/look';
 import { fail, ok, type AdminContext, type AdminOutcome } from './context';
 import * as f from './form';
 import type { AdminOperation, ParseResult } from './operations';
@@ -122,6 +126,11 @@ const TemplateFields = z
     /** docs/TEMPLATES-IA.md §7 — null = the medium's default; a named engine must be one of its medium's. */
     engine: z.string().nullable(),
     aspectDefault: z.string().nullable(),
+    /**
+     * docs/PERSONAL-STUDIO.md §3.4.10 — who the template is written for ("대상: 누구나 / 여성 스타일 / 남성 스타일").
+     * Absent (a form without the select: 0190 not applied, or an older open tab) = unchanged / for anyone.
+     */
+    look: z.enum(TEMPLATE_AUDIENCES).optional(),
   })
   .superRefine((value, ctx) => {
     if (value.engine !== null && !(enginesForMedium(value.medium) as readonly string[]).includes(value.engine)) {
@@ -156,7 +165,29 @@ function templateFields(form: FormData): ParseResult<z.infer<typeof TemplateFiel
     runtimeSeconds: medium === 'image' ? null : (runtime ?? null),
     engine: f.str(form, 'engine') || null,
     aspectDefault: f.str(form, 'aspectDefault') || null,
+    look: f.str(form, 'look') || undefined,
   });
+}
+
+/**
+ * docs/PERSONAL-STUDIO.md §3.4.10 — refuse a one-style label before anything is written when 0190 is missing (the form
+ * only offers the select once it is applied, so this is an old tab or a hand-made post). `any` needs nothing.
+ */
+async function lookRefusal(ctx: AdminContext, look: TemplateAudience | undefined): Promise<string | null> {
+  if (look === undefined || look === 'any') return null;
+  return (await promptLookSchemaReady(ctx.sql)) ? null : 'look: the template style needs 0190_core_template_look applied first';
+}
+
+/** Write the label when it changed, with one `platform_audit` row (who, which template, from → to). */
+async function saveLook(ctx: AdminContext, row: { id: string; slug: string }, before: TemplateAudience, look: TemplateAudience | undefined): Promise<void> {
+  if (look === undefined || look === before) return;
+  await setPromptLook(ctx.sql, row.id, look);
+  if (ctx.viewer.userId) {
+    await ctx.sql.query(
+      'insert into platform_audit (actor_id, entity_id, action, reason, details) values ($1, $2, $3, $4, $5::jsonb)',
+      [ctx.viewer.userId, row.id, 'prompt.look', 'admin_template_look', JSON.stringify({ slug: row.slug, from: before, to: look })],
+    );
+  }
 }
 
 /**
@@ -267,6 +298,9 @@ const createPrompt: AdminOperation<{ input: z.infer<typeof AuthoringSchema>; for
     if (!template.ok) return fail('invalid', template.detail);
     const locks = lockBlockRefusal('promptText', input.promptText);
     if (locks !== null) return fail('invalid', locks);
+    const { look, ...fields } = template.value;
+    const lookRefused = await lookRefusal(ctx, look);
+    if (lookRefused !== null) return fail('invalid', lookRefused);
     const id = randomUUID();
     const staged = await applyUploads(ctx, id, form, {});
     if (!staged.ok) return fail('upload', staged.detail);
@@ -303,9 +337,11 @@ const createPrompt: AdminOperation<{ input: z.infer<typeof AuthoringSchema>; for
       media,
       useCase: input.useCase,
       featured: input.featured,
-      ...template.value,
+      ...fields,
       publishedAt: 'now',
     });
+    // A new row is born `any` (the column default); only another style is written, and audited.
+    await saveLook(ctx, { id, slug }, 'any', look);
 
     ctx.revalidatePrompts?.();
     return ok('published', { detail: slug, to: BACK });
@@ -502,6 +538,10 @@ const editPrompt: AdminOperation<{ input: z.infer<typeof EditSchema>; form: Form
     if (!template.ok) return fail('invalid', template.detail);
     const locks = lockBlockRefusal('promptText', input.promptText);
     if (locks !== null) return fail('invalid', locks);
+    const { look, ...fields } = template.value;
+    const lookRefused = await lookRefusal(ctx, look);
+    if (lookRefused !== null) return fail('invalid', lookRefused);
+    const lookBefore = look === undefined ? 'any' : (await loadPromptLook(ctx.sql, input.id)) ?? 'any';
 
     const staged = await applyUploads(ctx, input.id, form, parsePromptMedia(row.media));
     if (!staged.ok) return fail('upload', staged.detail);
@@ -523,9 +563,10 @@ const editPrompt: AdminOperation<{ input: z.infer<typeof EditSchema>; form: Form
       // The community rule is applied to the payload here and enforced by the CHECK underneath.
       textVisibility: effectiveTextVisibility(row.source, input.textVisibility),
       featured: input.featured,
-      ...template.value,
+      ...fields,
     });
     if (!saved) return fail('notFound', NOT_FOUND_DETAIL);
+    await saveLook(ctx, { id: input.id, slug: input.slug }, lookBefore, look);
 
     ctx.revalidatePrompts?.();
     // No `to` (P2-8): update, feature and visibility are in-place edits, so the form's own `_back`

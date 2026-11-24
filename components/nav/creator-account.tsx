@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { IDENTITY_SELFIE_PATH } from '@/lib/identity/links';
 import { ANONYMOUS_SESSION, observeCreatorSession, type CreatorSession } from '@/lib/auth/observe-creator-session';
+import { publishLookSession } from '@/lib/template-look/store';
 
 export interface CreatorAccountLabels {
   signIn: string; profile: string; selfie: string; renders: string; campaigns: string; signOut: string; menu: string; fallbackName: string;
@@ -48,7 +49,11 @@ export function useCreatorSession(enabled: boolean) {
     return observeCreatorSession({
       window, document, now: Date.now,
       fetch: signal => fetch('/api/account/session', { signal, credentials: 'same-origin', cache: 'no-store' }),
-    }, setSession);
+    }, (next) => {
+      setSession(next);
+      // docs/PERSONAL-STUDIO.md §3.4.10: the template style islands read this answer instead of asking again.
+      publishLookSession(next);
+    });
   }, [enabled]);
   return session;
 }

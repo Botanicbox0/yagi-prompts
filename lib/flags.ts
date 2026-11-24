@@ -318,6 +318,17 @@ export function personalEditSheetOpen(env: Record<string, string | undefined> = 
 }
 
 /**
+ * docs/PERSONAL-STUDIO.md §3.4.10 — the template style preference (founder decision 2026-11-25). Default OFF: open only
+ * when the server environment says exactly `TWINGS_TEMPLATE_LOOK=on`. Off means today exactly: no question, no settings
+ * row, no `data-look` on any card, no label, no filtering, and nothing reads `prompt_items.look` or
+ * `profiles.template_look` (the catalogue does not even select the column). Storing the choice needs a privacy-policy
+ * line the founder approves first; the lists are static, so the switch must be set for the build and the server alike.
+ */
+export function templateLookOpen(env: Record<string, string | undefined> = process.env): boolean {
+  return env.TWINGS_TEMPLATE_LOOK === 'on';
+}
+
+/**
  * docs/BRAND-ROOMS.md — project rooms (messages, storyboards and deliverable review with the YAGI
  * team). Default OFF: open only when the server environment says exactly `BRAND_ROOMS=on`. Off means
  * no room page, no messages item in the rail and every `/api/brand-rooms/*` answers 404.
