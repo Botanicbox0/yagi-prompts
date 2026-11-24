@@ -15,6 +15,8 @@ import {
 import { filmContents } from '@/lib/brand-studio/editor-v2/film-contents';
 import { clipFrameAt, formatTimecode, type FrameCaption } from '@/lib/brand-studio/editor-v2/frames';
 import { sourceSeconds } from '@/lib/brand-studio/editor-v2/sources';
+import { everyCutMissing } from '@/lib/brand-studio/editor-v2/sources';
+import { filmHasSpeedTheOldEditorChanges } from '@/lib/brand-studio/editor-v2/stored';
 import { formatBinding, type ShortcutAction } from '@/lib/brand-studio/editor-v2/shortcuts';
 import {
   CAPTION_OUTPUTS,
@@ -232,6 +234,8 @@ function LockedPanel({ api, classicHref }: { api: EditorApi; classicHref?: strin
   const { copy, workspace } = api;
   const name = copy.workspaces[workspace];
   const inClassic = workspace === 'color' ? copy.real.locked.classicColor : workspace === 'sound' ? copy.real.locked.classicSound : copy.real.locked.classicCaptions;
+  // A cut the earlier editor plays at another speed: what is placed on it there may land elsewhere here (audit B5).
+  const speedDiffers = filmHasSpeedTheOldEditorChanges(api.sequence);
   const sampleHref = api.sampleHref(workspace);
   return (
     <>
@@ -249,6 +253,11 @@ function LockedPanel({ api, classicHref }: { api: EditorApi; classicHref?: strin
       {classicHref && workspace !== 'cut' && (
         <section className={styles.lockedCard} data-editor-locked-classic={workspace}>
           <p className={styles.note}>{inClassic}</p>
+          {speedDiffers && (
+            <p className={styles.note} data-editor-classic-speed>
+              {copy.real.locked.classicSpeed}
+            </p>
+          )}
           <a className={styles.sampleLink} href={classicHref} data-editor-classic-link={workspace}>
             {copy.notice.current}
           </a>
@@ -560,6 +569,9 @@ function CutPanel({ api }: { api: EditorApi }) {
       const dims = COMPOSE_DIMENSIONS[sequence.aspect];
       const outFrame = clipFrameAt(clip, clip.frames - 1, fps).mediaFrame + 1;
       const canSlide = !!material && material.ratio > dims.width / dims.height + 0.01 && reframe.fit === 'fill';
+      // A file confirmed missing (a 404 the organization's record confirms) says so, before (and instead of) "the rate
+      // has not been read yet" (audit A4). A 404 alone keeps the old line.
+      const missing = api.real && !!api.missingSources[clip.srcUrl];
       const rateUnknown = api.real && !!api.unknownRates[clip.srcUrl];
       return (
         <>
@@ -573,12 +585,14 @@ function CutPanel({ api }: { api: EditorApi }) {
             <p className={styles.note}>
               {fill(c.clip.frames, { count: span.frames, fps })} {c.clip.lengthHint}
             </p>
-            {rateUnknown ? (
+            {missing ? (
+              <p className={styles.note} data-editor-source-missing>{copy.real.sourceMissing}</p>
+            ) : rateUnknown ? (
               <p className={styles.note} data-editor-rate-unknown>{fill(copy.real.rateUnknown, { fps })}</p>
             ) : api.real && clip.sourceFps !== fps ? (
               <p className={styles.note} data-editor-source-rate>{fill(copy.real.sourceRate, { rate: clip.sourceFps, fps })}</p>
             ) : null}
-            {api.real && api.variableRates[clip.srcUrl] && (
+            {!missing && api.real && api.variableRates[clip.srcUrl] && (
               <p className={styles.note} data-editor-rate-variable>{copy.real.rateVariable}</p>
             )}
           </Section>
@@ -612,7 +626,7 @@ function CutPanel({ api }: { api: EditorApi }) {
           )}
           <Section title={c.clip.sound}>
             <Range
-              label={c.clip.sound}
+              label={c.clip.volume}
               value={Math.round((clip.muted ? 0 : clip.volume) * 100)}
               min={0}
               max={100}
@@ -643,12 +657,16 @@ function CutPanel({ api }: { api: EditorApi }) {
     );
   }
   const cannotCut = api.readOnly || sequence.clips.length === 0;
+  const filmGone = api.real ? everyCutMissing(sequence.clips, api.missingSources) : null;
   return (
     <>
       <PanelHead title={copy.panel.film} meta={fill(copy.panel.filmSummary, { count: sequence.clips.length, duration: formatTimecode(api.total, fps) })} />
-      {api.real && api.tentative && (
+      {api.real && api.tentative && (filmGone ? (
+        // Every cut's file is confirmed missing: no rate will be read next time, so the film says why instead.
+        <p className={styles.note} data-editor-film-missing>{fill(copy.export.sourceMissing, { clip: filmGone.label })}</p>
+      ) : (
         <p className={styles.note} data-editor-rate-tentative>{fill(copy.real.rateTentative, { fps })}</p>
-      )}
+      ))}
       {api.real && <StoredContents api={api} />}
       <Section title={c.film.shape}>
         <div className={styles.shapeGrid} role="group" aria-label={c.film.shape}>

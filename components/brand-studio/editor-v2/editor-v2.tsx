@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { fill } from '@/components/brand-studio/copy';
 import type { ExportPathOverride } from '@/lib/brand-studio/editor-v2/decode-plan';
 import { EDITOR_WORKSPACES, type EditorWorkspace } from '@/lib/brand-studio/editor-v2/model';
+import { filmHasSpeedTheOldEditorChanges } from '@/lib/brand-studio/editor-v2/stored';
 import { actionFor, bindingFromEvent, formatBinding, typingTarget } from '@/lib/brand-studio/editor-v2/shortcuts';
 import type { StudioEditorCopy } from '@/messages/studio-editor';
 import { Assistant } from './assistant';
@@ -81,9 +82,7 @@ export function EditorV2({ copy, currentEditorHref, initialWorkspace, exportPath
     >
       <header className={styles.top}>
         <div className={styles.topLeft}>
-          <a className={styles.iconBtn} href={currentEditorHref} aria-label={copy.notice.current} title={copy.notice.current} data-editor-current>
-            <EditorIcon name="back" />
-          </a>
+          <OldEditorLink copy={copy} href={currentEditorHref} speedDiffers={api.real && filmHasSpeedTheOldEditorChanges(api.sequence)} />
           {real ? (
             <>
               <h1>{fill(copy.real.filmName, { name: real.organizationName })}</h1>
@@ -174,6 +173,42 @@ export function EditorV2({ copy, currentEditorHref, initialWorkspace, exportPath
       {api.shortcutsOpen && <ShortcutsPanel api={api} />}
       {api.toast && <p className={styles.toast} role="status" data-editor-toast>{api.toast}</p>}
     </div>
+  );
+}
+
+/**
+ * The header's way back to the earlier editor, as its tooltip: on the organization's film with a cut the
+ * earlier editor plays at another speed, the same warning the locked workspaces' link carries (audit B5).
+ */
+export function oldEditorLinkTitle(copy: StudioEditorCopy, speedDiffers: boolean): string {
+  return speedDiffers ? `${copy.notice.current} · ${copy.real.locked.classicSpeed}` : copy.notice.current;
+}
+
+/**
+ * The header's icon back to the earlier editor. With a cut the earlier editor plays at another speed it carries
+ * the warning twice: as its tooltip for the mouse, and as hidden text the link points to (`aria-describedby`) for
+ * keyboard and screen-reader users, who never see a tooltip (review item 4). Nothing visible is added.
+ */
+export function OldEditorLink({ copy, href, speedDiffers }: { copy: StudioEditorCopy; href: string; speedDiffers: boolean }) {
+  const noteId = useId();
+  return (
+    <>
+      <a
+        className={styles.iconBtn}
+        href={href}
+        aria-label={copy.notice.current}
+        aria-describedby={speedDiffers ? noteId : undefined}
+        title={oldEditorLinkTitle(copy, speedDiffers)}
+        data-editor-current
+      >
+        <EditorIcon name="back" />
+      </a>
+      {speedDiffers && (
+        <span id={noteId} className={styles.srOnly}>
+          {copy.real.locked.classicSpeed}
+        </span>
+      )}
+    </>
   );
 }
 

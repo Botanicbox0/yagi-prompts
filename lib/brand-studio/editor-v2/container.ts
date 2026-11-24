@@ -75,10 +75,12 @@ export interface FileTiming {
  * Why a file could not be read: not an MP4 / MOV; no `moov`; boxes cut off or inconsistent; an edit list
  * the export cannot follow (more than one piece of media, or a changed speed); too many fragments; too many
  * requests; a fragmented file too large to walk; more bytes than allowed from a server that sends the
- * whole file. Only `broken` may pass on another try (a refused request or a network error lands there
- * too); the others are the file's own and are remembered for the visit (footage-facts.ts).
+ * whole file; or the server answered 404 or 410 (`not-found`, audit A4: alone it does not prove the file is
+ * gone, see ranged-source.ts `readFailureOf`). `broken` and `not-found` may pass on another try (a refused
+ * request or a network error lands in `broken` too); the others are the file's own and are remembered for the
+ * visit (footage-facts.ts).
  */
-export type TimingFailure = 'not-mp4' | 'no-moov' | 'broken' | 'edits' | 'too-many-boxes' | 'too-many-requests' | 'fragmented-too-large' | 'too-large';
+export type TimingFailure = 'not-mp4' | 'no-moov' | 'broken' | 'not-found' | 'edits' | 'too-many-boxes' | 'too-many-requests' | 'fragmented-too-large' | 'too-large';
 
 export type TimingAnswer = { ok: true; timing: FileTiming } | { ok: false; reason: TimingFailure };
 

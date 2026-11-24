@@ -3,7 +3,7 @@ import { EditorV2 } from '@/components/brand-studio/editor-v2/editor-v2';
 import { studioRouteContext } from '@/components/brand-studio/route-context';
 import { exportAutoDownload, exportPathOverride } from '@/lib/brand-studio/editor-v2/decode-plan';
 import { EDITOR_WORKSPACES, type EditorWorkspace } from '@/lib/brand-studio/editor-v2/model';
-import { editorSources } from '@/lib/brand-studio/editor-v2/sources';
+import { EDITOR_ASSET_LIMIT, assetRecordOf, editorSources } from '@/lib/brand-studio/editor-v2/sources';
 import { createStudioMediaStore } from '@/lib/brand-studio/media-store';
 import { assetView, assetsOf, jobsOf, viewsOf } from '@/lib/brand-studio/repo';
 import { scopedHref } from '@/lib/brands/workspace/selection';
@@ -87,6 +87,9 @@ export default async function StudioEditorV2Page({
         organizationName: choice.name,
         canEdit,
         sources: editorSources(choice.id, assets, videoOutputs),
+        // Every live, ready asset this read holds (all kinds), and whether it holds all of them: what confirms a
+        // cut's file is missing (audit A4). Studio results are not in it, so their cuts are never called missing.
+        assets: assetRecordOf(rawAssets.map((asset) => String(asset.id)), EDITOR_ASSET_LIMIT),
         sampleBase: sampleFilm ? scopedHref('/brand/studio/editor?sample=1', choice) : null,
         gradeNames: { presets: dict.studioCompose.colorGrade.presets, reference: dict.studioCompose.colorGrade.activeRef },
       }}

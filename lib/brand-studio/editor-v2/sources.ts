@@ -71,6 +71,79 @@ export function editorSources(
   return [...fromOutputs, ...fromAssets].sort((a, b) => (a.createdAt === b.createdAt ? 0 : a.createdAt < b.createdAt ? 1 : -1));
 }
 
+/**
+ * How many of the organization's assets the editor page reads (`assetsOf(deps.sql, choice.id, 200)`, newest
+ * first, the same call as the current editor's page): the library's video assets and the record below come from
+ * that one read. tests/brand-studio/editor-v2/flag-gate.test.ts holds the page to that call and
+ * tests/brand-studio/editor-v2/missing-record.test.ts holds this number to it, so the two cannot drift apart.
+ */
+export const EDITOR_ASSET_LIMIT = 200;
+
+/**
+ * The organization's live, ready assets as the page read them (every kind), and whether that read holds all of
+ * them: `assetsOf` reads `status = 'ready' and deleted_at is null` (exactly what the footage route needs to serve
+ * an asset) up to the limit, so fewer rows than the limit is the whole list; the limit itself may mean more.
+ */
+export interface AssetRecord {
+  ids: readonly string[];
+  complete: boolean;
+}
+
+export function assetRecordOf(ids: readonly string[], limit = EDITOR_ASSET_LIMIT): AssetRecord {
+  return { ids: ids.map((id) => id.toLowerCase()), complete: ids.length < limit };
+}
+
+/** The asset a cut's address reads, when it is this organization's asset stream (`composeStreamUrl`); else `null`. */
+export function streamAssetId(srcUrl: string, organizationId: string): string | null {
+  if (!srcUrl.startsWith('/api/brand-studio/compose?')) return null;
+  const query = new URLSearchParams(srcUrl.slice(srcUrl.indexOf('?') + 1));
+  const id = query.get('id') ?? '';
+  if (query.get('source') !== 'asset' || query.get('organizationId') !== organizationId || !UUID.test(id)) return null;
+  return id.toLowerCase();
+}
+
+/**
+ * Whether a cut's file is missing for good (review of audit A4). One 404 or 410 is not proof: the footage route
+ * answers 404 for a deleted asset, but also when its storage read fails or an access check refuses. So the
+ * answer is "missing" only when the file answered not-found AND the organization's complete record does not hold
+ * the asset. A studio result, an address the record cannot speak for, or a record at its limit is never
+ * "missing": that read failed now, and the editor treats it as it did before.
+ */
+export function footageConfirmedMissing(srcUrl: string, answeredNotFound: boolean, organizationId: string, record: AssetRecord | null | undefined): boolean {
+  if (!answeredNotFound || !record || !record.complete) return false;
+  const id = streamAssetId(srcUrl, organizationId);
+  return id !== null && !record.ids.includes(id);
+}
+
+/**
+ * The missing marks after reading some footage: each one read is marked or cleared by `isMissing`, the others
+ * stay as they were. The same object when nothing changed.
+ */
+export function missingAfterRead(
+  current: Readonly<Record<string, true>>,
+  read: readonly string[],
+  isMissing: (srcUrl: string) => boolean,
+): Readonly<Record<string, true>> {
+  const next: Record<string, true> = { ...current };
+  let changed = false;
+  for (const src of new Set(read)) {
+    const missing = isMissing(src);
+    if (missing === !!next[src]) continue;
+    changed = true;
+    if (missing) next[src] = true;
+    else delete next[src];
+  }
+  return changed ? next : current;
+}
+
+/**
+ * The first cut when every cut of the film is confirmed missing, else `null`. A film never measured whose
+ * cuts are all missing will not read a rate next time either, so it does not promise that (review item 6).
+ */
+export function everyCutMissing<T extends { srcUrl: string }>(clips: readonly T[], missing: Readonly<Record<string, true>>): T | null {
+  return clips.length > 0 && clips.every((clip) => missing[clip.srcUrl]) ? clips[0]! : null;
+}
+
 /** The footage's length in seconds: exact when known. */
 export function sourceSeconds(source: Pick<EditorSource, 'seconds' | 'durationMs'>): number | null {
   if (typeof source.durationMs === 'number' && source.durationMs > 0) return source.durationMs / 1000;

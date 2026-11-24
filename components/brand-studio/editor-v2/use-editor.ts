@@ -16,7 +16,16 @@ import type { GradeNames } from '@/lib/brand-studio/editor-v2/film-contents';
 import { createFilmSession, type FilmConflict, type FilmSession } from '@/lib/brand-studio/editor-v2/film-session';
 import { mapLimit, measuredFromTiming, snapFilmFps, sourceFramesOf } from '@/lib/brand-studio/editor-v2/fps';
 import { emptyFilm, realAssistAllowed, realDoc, sampleHrefFor, workspaceLocked } from '@/lib/brand-studio/editor-v2/real';
-import { deepLinkSource, parseClipParam, sourceSeconds, storedClipForSource, type EditorSource } from '@/lib/brand-studio/editor-v2/sources';
+import {
+  deepLinkSource,
+  footageConfirmedMissing,
+  missingAfterRead,
+  parseClipParam,
+  sourceSeconds,
+  storedClipForSource,
+  type AssetRecord,
+  type EditorSource,
+} from '@/lib/brand-studio/editor-v2/sources';
 import { fromStored, inheritClip, mergeFilmText, sourcesToMeasure, storedFilmView, type MeasuredSource, type StoredFilmView } from '@/lib/brand-studio/editor-v2/stored';
 import {
   FIXTURE_MATERIALS,
@@ -42,7 +51,7 @@ import {
   resetClipSpeed as resetSequenceClipSpeed,
   setClipConstantSpeed as setSequenceClipConstantSpeed,
   setClipSpeed as setSequenceClipSpeed,
-  setClipSpeedCurve as setSequenceClipSpeedCurve,
+  type SpeedCurveRefusal,
   type SpeedPoint,
   spansOf,
   splitAtFrame,
@@ -53,6 +62,7 @@ import {
   type FrameClip,
   type FrameSequence,
 } from '@/lib/brand-studio/editor-v2/frames';
+import { applyChange, mergeWindow, runCurveEdit } from '@/lib/brand-studio/editor-v2/edit-steps';
 import { cloneSpeedCurve } from '@/lib/brand-studio/editor-v2/speed-curve';
 import {
   DEFAULT_REFRAME,
@@ -62,7 +72,6 @@ import {
   balanceLooks,
   captionFindings,
   colorFindings,
-  commit,
   filmTarget,
   interpretUtterance,
   redo as redoHistory,
@@ -98,9 +107,22 @@ import {
 } from '@/lib/brand-studio/editor-v2/shortcuts';
 import type { StudioEditorCopy } from '@/messages/studio-editor';
 import { readFilmText, watchFilmText, writeFilmText } from './film-store';
-import { readFootage } from './footage-facts';
+import { footageNotFound, readFootage } from './footage-facts';
 import { measureSource } from './measure-fps';
 import { loadShortcutPrefs, saveShortcutPrefs } from './shortcut-store';
+
+/** The line when the film already holds as many cuts as it may (audit A3): the number comes from the limit itself. */
+export function cutLimitLine(copy: StudioEditorCopy): string {
+  return fill(copy.toast.full, { max: MAX_COMPOSE_CLIPS });
+}
+
+/**
+ * The line when a speed curve cannot go on a cut (audit A2): too short for that shape, or past the point
+ * limit (the panel's own line for that limit).
+ */
+export function curveRefusalLine(copy: StudioEditorCopy, refused: SpeedCurveRefusal): string {
+  return refused === 'too_short' ? copy.toast.curveTooShort : copy.cut.clip.speedCurveCapHint;
+}
 
 export function speedUndoKey(clipId: string): string {
   return `clip-speed:${clipId}`;
@@ -158,6 +180,12 @@ export interface RealFilmOptions {
   sampleBase: string | null;
   /** The current editor's own names for colour grades, so the film's grade is named as it names it. */
   gradeNames?: GradeNames;
+  /**
+   * The organization's live, ready assets as the page read them, and whether that is all of them: the only
+   * thing that can confirm a cut's file is missing (sources.ts `footageConfirmedMissing`). Without it no cut
+   * is ever called missing.
+   */
+  assets?: AssetRecord;
 }
 
 export interface EditorOptions {
@@ -230,6 +258,12 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
   const [unknownRates, setUnknownRates] = useState<Record<string, true>>({});
   /** Footage whose frames are not evenly spaced (variable frame rate): shown, not supported (review round 1, item 10). */
   const [variableRates, setVariableRates] = useState<Record<string, true>>({});
+  /**
+   * Footage confirmed missing (audit A4, review): its file answered 404/410 the last time it was read AND the
+   * organization's complete record does not hold the asset. Its cuts say the file cannot be found and the export
+   * is blocked for that reason. A 404 the record does not confirm changes nothing here.
+   */
+  const [missingSources, setMissingSources] = useState<Readonly<Record<string, true>>>({});
   /**
    * No cut's rate is measured: the film runs at a stand-in rate and nothing frame-based is stored until a
    * later visit measures one (review round 1, item 3).
@@ -359,14 +393,9 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
   const change = useCallback((mutate: (current: EditorDoc) => EditorDoc | null, coalesce?: string) => {
     // A real film that is still loading, or that this person may only look at, takes no edits.
     if (blockedRef.current) return;
-    const now = Date.now();
-    const merge = !!coalesce && lastChange.current?.key === coalesce && now - lastChange.current.at < 900;
-    lastChange.current = coalesce ? { key: coalesce, at: now } : null;
-    setStored((current) => {
-      const next = mutate(current.doc);
-      if (!next || next === current.doc) return current;
-      return { doc: next, history: merge ? current.history : commit(current.history, current.doc) };
-    });
+    const { merge, mark } = mergeWindow(lastChange.current, coalesce, Date.now());
+    lastChange.current = mark;
+    setStored((current) => applyChange(current, mutate(current.doc), merge));
   }, []);
 
   /** A change to the cuts. `inherit` pairs each new cut with the cut whose look and framing it keeps. */
@@ -425,6 +454,15 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
     setVariableRates((current) => ({ ...without(current, read.filter((src) => !variable.includes(src))), ...Object.fromEntries(variable.map((src) => [src, true as const])) }));
   }, []);
 
+  /** The footage just read, marked missing or cleared by its latest answer and the organization's record. */
+  const noteMissing = useCallback((srcs: readonly string[]) => {
+    const film = realRef.current;
+    if (!film) return;
+    setMissingSources((current) =>
+      missingAfterRead(current, srcs, (src) => footageConfirmedMissing(src, footageNotFound(src), film.organizationId, film.assets)),
+    );
+  }, []);
+
   /**
    * Opens a stored film for the session: measures the footage that has no frame data yet, puts it on
    * frames, and replaces the film (and clears undo) only if the session still wants it: an edit made
@@ -451,6 +489,7 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
       for (const clip of film.sequence.clips) if (!unknown.includes(clip.srcUrl)) known[clip.srcUrl] = clip.sourceFps;
       const variable = Object.entries(measured).filter(([, seen]) => seen?.variable).map(([src]) => src);
       noteRates(known, unknown, variable);
+      noteMissing([...toMeasure, ...toCheck]);
       // The captions stay with the stored film; the document holds the cuts only.
       const cuts = { ...film.sequence, captions: [] };
       if (!session.opened(ticket, cuts)) return;
@@ -460,7 +499,7 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
       setStored({ doc: realDoc(cuts), history: { past: [], future: [] } });
       setStatus('ready');
     },
-    [secondsOfSrc, noteRates],
+    [secondsOfSrc, noteRates, noteMissing],
   );
   const openFilmRef = useRef(openFilm);
   openFilmRef.current = openFilm;
@@ -587,7 +626,7 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
   // ── Cut ──
   const splitAtPlayhead = useCallback(() => {
     if (blockedRef.current) return;
-    if (sequence.clips.length >= MAX_COMPOSE_CLIPS) return say(copy.toast.full);
+    if (sequence.clips.length >= MAX_COMPOSE_CLIPS) return say(cutLimitLine(copy));
     const parent = frameStateAt(sequence, playhead).active;
     if (!parent || parent.offset === 0) return say(copy.toast.splitNo);
     const id = newId('cut');
@@ -628,7 +667,7 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
 
   const addMaterial = useCallback(
     (material: FixtureMaterial) => {
-      if (sequence.clips.length >= MAX_COMPOSE_CLIPS) return say(copy.toast.full);
+      if (sequence.clips.length >= MAX_COMPOSE_CLIPS) return say(cutLimitLine(copy));
       const clip = clipOfMaterial(material, newId('cut'), labelOf(material.id), sequence.fps);
       edit((current) => insertClips(current, current.clips.length, [clip]));
     },
@@ -642,13 +681,13 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
   const addSource = useCallback(
     async (source: EditorSource) => {
       if (blockedRef.current) return;
-      if (docRef.current.sequence.clips.length >= MAX_COMPOSE_CLIPS) return say(copy.toast.full);
+      if (docRef.current.sequence.clips.length >= MAX_COMPOSE_CLIPS) return say(cutLimitLine(copy));
       setBusySource(source.key);
       const measured = await measureSource(source.srcUrl, sourceSeconds(source));
       setBusySource((current) => (current === source.key ? null : current));
       const now = docRef.current.sequence;
       if (blockedRef.current) return;
-      if (now.clips.length >= MAX_COMPOSE_CLIPS) return say(copy.toast.full);
+      if (now.clips.length >= MAX_COMPOSE_CLIPS) return say(cutLimitLine(copy));
       const fresh = now.clips.length === 0 && now.captions.length === 0;
       const fps = fresh ? snapFilmFps(measured?.fps ?? null) : now.fps;
       const seconds = sourceSeconds(source) ?? (measured ? measured.frames / measured.fps : null);
@@ -656,6 +695,7 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
       const sourceFrames = measured?.frames ?? sourceFramesOf(seconds ?? 5, sourceFps);
       if (measured) noteRates({ [source.srcUrl]: measured.fps }, [], measured.variable ? [source.srcUrl] : []);
       else noteRates({}, [source.srcUrl]);
+      noteMissing([source.srcUrl]);
       // The first cut of an empty film sets its rate: a stand-in when that cut's rate could not be read.
       if (fresh) setTentative(!measured);
       const id = newId('cut');
@@ -680,7 +720,7 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
         return insertClips(base, base.clips.length, [{ ...clip, frames: clipMaxFrames(clip, base.fps) }]);
       });
     },
-    [edit, say, copy, noteRates],
+    [edit, say, copy, noteRates, noteMissing],
   );
 
   // A `clip=` link (asset hub, video studio): read once, the clip goes on the end, the link is tidied away.
@@ -713,10 +753,13 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
   );
   const setSpeedCurve = useCallback(
     (index: number, points: readonly SpeedPoint[], coalesce = false) => {
+      if (blockedRef.current) return;
+      // A shape the cut cannot take leaves it as it is and says why (audit A2); the refused move still keeps a
+      // drag's undo window open, and the retime is worked out once (review item 8, lib/brand-studio/editor-v2/edit-steps.ts).
       const clipKey = speedUndoKey(docRef.current.sequence.clips[index]?.id ?? String(index));
-      edit((current) => setSequenceClipSpeedCurve(current, index, points), undefined, coalesce ? clipKey : undefined);
+      runCurveEdit({ doc: docRef.current, change, say: (refused) => say(curveRefusalLine(copy, refused)) }, index, points, coalesce ? clipKey : undefined);
     },
-    [edit],
+    [change, say, copy],
   );
   const resetSpeed = useCallback((index: number) => edit((current) => resetSequenceClipSpeed(current, index)), [edit]);
   const setClipAudio = useCallback(
@@ -756,7 +799,7 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
   const insertCopies = useCallback(
     (source: Clipboard, atIndex: number) => {
       if (blockedRef.current) return;
-      if (sequence.clips.length + source.clips.length > MAX_COMPOSE_CLIPS) return say(copy.toast.full);
+      if (sequence.clips.length + source.clips.length > MAX_COMPOSE_CLIPS) return say(cutLimitLine(copy));
       const copies = source.clips.map((clip) => ({
         ...clip,
         id: newId('cut'),
@@ -1134,6 +1177,8 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
     rates,
     unknownRates,
     variableRates,
+    /** Footage confirmed missing (a 404/410 the organization's record confirms): its cuts say so, and the export is blocked for it (audit A4). */
+    missingSources,
     /** No cut's rate is measured yet: the film's rate is a stand-in and nothing frame-based is stored. */
     tentative,
     /** The sample film's address in a workspace, or `null` when the sample film is not offered. */

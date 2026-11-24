@@ -2,7 +2,7 @@
 
 import { corsMediaUrl } from '@/lib/brand-studio/cors-media-url';
 import { ByteLimit, ReadLimit, gatherBoxes, readTiming, type TimingAnswer } from '@/lib/brand-studio/editor-v2/container';
-import { rangedSource } from '@/lib/brand-studio/editor-v2/ranged-source';
+import { rangedSource, readFailureOf } from '@/lib/brand-studio/editor-v2/ranged-source';
 import { gatherIndexBoxes, readSampleIndex, type IndexAnswer } from '@/lib/brand-studio/editor-v2/sample-index';
 
 export { FRAGMENTED_INDEX_REQUESTS } from '@/lib/brand-studio/editor-v2/sample-index';
@@ -29,6 +29,17 @@ export interface FootageRead {
 }
 
 const cache = new Map<string, Promise<FootageRead>>();
+/** Files whose last read answered 404 or 410 (audit A4). */
+const notFound = new Set<string>();
+
+/**
+ * Whether the clip's file answered 404 or 410 the last time it was read. Alone that does not mean the file is
+ * gone (a storage read that failed answers 404 too): the editor calls a cut missing only when the
+ * organization's record confirms it (lib/brand-studio/editor-v2/sources.ts `footageConfirmedMissing`).
+ */
+export function footageNotFound(srcUrl: string): boolean {
+  return notFound.has(srcUrl);
+}
 
 /**
  * Asks the clip's own file for bytes `start` to `end` (inclusive). The one request this file makes. `signal`
@@ -45,14 +56,17 @@ export function readFootage(srcUrl: string): Promise<FootageRead> {
   const source = rangedSource(footageBytes(srcUrl));
   const run = gatherBoxes(source)
     .then((found): TimingAnswer => ('failure' in found ? { ok: false, reason: found.failure } : readTiming(found)))
-    .catch((): TimingAnswer => ({ ok: false, reason: 'broken' }))
+    .catch((error: unknown): TimingAnswer => ({ ok: false, reason: readFailureOf(error) }))
     .then((answer) => {
       source.close();
       const { requests, received, mode } = source.stats();
       // Only a failure that may pass is asked again (`broken`: a refused request, a network error, a file
-      // cut off); the file's own answers (not an MP4, an edit list the export cannot follow, too large …)
-      // are remembered for the visit and not fetched again (review round 2 of part E).
-      if (!answer.ok && answer.reason === 'broken') cache.delete(srcUrl);
+      // cut off; `not-found`: a 404 or 410, which a failed storage read gives too); the file's own answers (not
+      // an MP4, an edit list the export cannot follow, too large …) are remembered for the visit and not fetched
+      // again (review round 2 of part E).
+      if (!answer.ok && (answer.reason === 'broken' || answer.reason === 'not-found')) cache.delete(srcUrl);
+      if (!answer.ok && answer.reason === 'not-found') notFound.add(srcUrl);
+      else notFound.delete(srcUrl);
       return { answer, requests, received, mode, ms: Math.round(performance.now() - started) };
     });
   cache.set(srcUrl, run);

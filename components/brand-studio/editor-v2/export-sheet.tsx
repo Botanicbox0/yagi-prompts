@@ -68,19 +68,9 @@ export function ExportSheet({ api, exportPath = null, autoDownload = true }: { a
   const empty = frames === 0;
   const missing = notIncluded({ sequence, doc: sampleDoc, extras: real ? (view?.film ?? null) : null });
   const running = job.status === 'running';
-  // A cut whose footage rate is not measured cannot be exported frame-exactly: refused before it starts.
-  const unmeasured = real ? sequence.clips.find((clip) => api.unknownRates[clip.srcUrl]) : undefined;
   const uneven = real ? unevenClipOnSeek(sequence, variableRates, paths) : undefined;
-  const blocked = empty || !supported || api.readOnly || !!unmeasured;
-  const blockedAs = api.readOnly ? 'read-only' : empty ? 'empty' : !supported ? 'unsupported' : 'rate';
-  const blockedSentence =
-    blockedAs === 'read-only'
-      ? copy.real.readOnly
-      : blockedAs === 'empty'
-        ? e.empty
-        : blockedAs === 'unsupported'
-          ? e.unsupported
-          : fill(e.rateUnknown, { clip: unmeasured?.label ?? '' });
+  const block = exportBlockOf({ real, readOnly: api.readOnly, empty, supported, sequence, unknownRates: api.unknownRates, missingSources: api.missingSources });
+  const blocked = block !== null;
 
   const start = () => {
     if (blocked || running) return;
@@ -173,9 +163,9 @@ export function ExportSheet({ api, exportPath = null, autoDownload = true }: { a
         </button>
       ) : (
         <>
-          {blocked && (
-            <p className={styles.note} data-editor-export-blocked={blockedAs}>
-              {blockedSentence}
+          {block && (
+            <p className={styles.note} data-editor-export-blocked={block.as}>
+              {exportBlockSentence(copy, block)}
             </p>
           )}
           {!blocked && uneven && (
@@ -194,6 +184,47 @@ export function ExportSheet({ api, exportPath = null, autoDownload = true }: { a
 }
 
 type ExportCopy = EditorApi['copy']['export'];
+
+/**
+ * Why the export cannot start, in this order: only looking, nothing to export, a browser that cannot, a cut
+ * whose file is confirmed missing (`missing`, audit A4: a 404 the organization's record confirms), a cut whose footage rate is not measured yet (`rate`: it
+ * cannot be exported frame-exactly). The last two are the organization's film only, and name the first such cut.
+ */
+export type ExportBlock = { as: 'read-only' | 'empty' | 'unsupported'; clip: null } | { as: 'missing' | 'rate'; clip: FrameClip };
+
+export function exportBlockOf(input: {
+  real: boolean;
+  readOnly: boolean;
+  empty: boolean;
+  supported: boolean;
+  sequence: FrameSequence;
+  unknownRates: Readonly<Record<string, true>>;
+  missingSources: Readonly<Record<string, true>>;
+}): ExportBlock | null {
+  if (input.readOnly) return { as: 'read-only', clip: null };
+  if (input.empty) return { as: 'empty', clip: null };
+  if (!input.supported) return { as: 'unsupported', clip: null };
+  if (!input.real) return null;
+  const missing = input.sequence.clips.find((clip) => input.missingSources[clip.srcUrl]);
+  if (missing) return { as: 'missing', clip: missing };
+  const unmeasured = input.sequence.clips.find((clip) => input.unknownRates[clip.srcUrl]);
+  return unmeasured ? { as: 'rate', clip: unmeasured } : null;
+}
+
+export function exportBlockSentence(copy: EditorApi['copy'], block: ExportBlock): string {
+  switch (block.as) {
+    case 'read-only':
+      return copy.real.readOnly;
+    case 'empty':
+      return copy.export.empty;
+    case 'unsupported':
+      return copy.export.unsupported;
+    case 'missing':
+      return fill(copy.export.sourceMissing, { clip: block.clip.label });
+    case 'rate':
+      return fill(copy.export.rateUnknown, { clip: block.clip.label });
+  }
+}
 
 /**
  * The cut the "frames are not evenly spaced, a few may differ" line names: footage that is uneven AND will
@@ -289,6 +320,9 @@ export function ExportStatus({ job, copy: e }: { job: ExportJob; copy: ExportCop
     );
   }
   if (job.status === 'failed') {
+    // A sound that could not be read is named, with what to do about it (audit A5).
+    const sound = job.reason === 'sound' && job.sound && job.clip ? job.sound : null;
+    const soundLine = sound === 'music' ? e.failed.soundMusic : sound === 'effect' ? e.failed.soundEffect : sound === 'cut' ? e.failed.soundCut : null;
     const sentence =
       job.reason === 'frame'
         ? fill(e.failed.frame, { time: formatTimecode(job.frame ?? 0, job.fps), clip: job.clip ?? '' })
@@ -296,9 +330,16 @@ export function ExportStatus({ job, copy: e }: { job: ExportJob; copy: ExportCop
           ? fill(e.failed.load, { clip: job.clip ?? '' })
           : job.reason === 'memory'
             ? fill(e.failed.memory, { total: formatBytes(job.bytes ?? 0), limit: formatBytes(SOUND_BYTES_LIMIT) })
-            : e.failed[job.reason];
+            : soundLine
+              ? fill(soundLine, { name: job.clip ?? '' })
+              : e.failed[job.reason];
     return (
-      <p className={job.reason === 'cancelled' ? styles.note : styles.exportError} role={job.reason === 'cancelled' ? 'status' : 'alert'} data-editor-export-failed={job.reason}>
+      <p
+        className={job.reason === 'cancelled' ? styles.note : styles.exportError}
+        role={job.reason === 'cancelled' ? 'status' : 'alert'}
+        data-editor-export-failed={job.reason}
+        data-editor-export-sound={sound ?? undefined}
+      >
         {sentence}
       </p>
     );
