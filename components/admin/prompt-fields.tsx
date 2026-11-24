@@ -7,6 +7,14 @@ import { baseKrw, makeEarning, providerKrw } from '@/lib/twings/template-price';
 import { videoModelForEngine } from '@/lib/video/models';
 import { PROMPT_TEXT_MAX, PROMPT_TEXT_MIN, TEMPLATE_CASTS, TEMPLATE_MEDIA } from '@/lib/prompts/schemas';
 import { promptHref } from '@/lib/prompts/links';
+import {
+  TEMPLATE_LOCK_EXAMPLE,
+  checkLockBlock,
+  lockRefusalLines,
+  lockRulesText,
+  type PublicTemplateLocks,
+} from '@/lib/template-director/locks';
+import { LockRefusalNotice } from '@/components/admin/prompt-create-feedback';
 import { visibilityLabel, visibilityOptions } from '@/components/admin/labels';
 import type { Dictionary } from '@/lib/i18n/dictionaries';
 import type { PromptRow } from '@/lib/prompts/repo';
@@ -192,6 +200,59 @@ function CostFloorNote({ row, dict }: { row: PromptRow | null; dict: Dict }) {
   );
 }
 
+// --- Template locks (docs/PERSONAL-STUDIO.md §3.3, C3) ------------------------------------------------------------
+
+/** The locked parts in the customer screen's words (C2): named parts, closed slots (the product covers the prop), shots. */
+function lockedPartLabels(locks: PublicTemplateLocks, dict: Dict): string[] {
+  const e = dict.editSheet;
+  const product = locks.named.includes('product');
+  return [
+    ...locks.named.map((kind) => e.locks[kind]),
+    ...locks.slots.filter((slot) => !(slot === 'prop' && product)).map((slot) => e.slots[slot]),
+    ...locks.shots.map((r) => (r.from === r.to ? interpolate(e.shotOne, { n: r.from }) : interpolate(e.shotRange, { from: r.from, to: r.to }))),
+  ];
+}
+
+/**
+ * Under the prompt field: what the SAVED block locks (edit form only; nothing when there is no block), and a collapsed
+ * example an author can copy. Admin-only, so it names the parts; the block's own words stay in the field above.
+ */
+function TemplateLocksNote({ promptText, dict }: { promptText: string | null; dict: Dict }) {
+  const a = dict.admin;
+  const check = promptText === null ? null : checkLockBlock(promptText);
+  return (
+    <>
+      {check?.state === 'ok' && (
+        <p data-template-locks="ok" className="font-mono text-[0.72rem] opacity-70">
+          {interpolate(a.templateLocksLine, { parts: lockedPartLabels(check.locks, dict).join(' · ') })}
+        </p>
+      )}
+      {(check?.state === 'malformed' || check?.state === 'header_typo') && (
+        <p data-template-locks={check.state} className="font-mono text-[0.72rem] text-accent">
+          {check.state === 'malformed' ? a.templateLocksAll : a.templateLocksTypo}
+        </p>
+      )}
+      <details data-template-locks-help className="border border-hairline p-3">
+        <summary className="cursor-pointer font-label text-eyebrow">{a.templateLocksHelp}</summary>
+        <p className="mt-2 font-mono text-[0.72rem] opacity-70">{lockRulesText(a.lockRules)}</p>
+        <pre className="mt-2 overflow-auto border border-hairline p-3 font-mono text-[0.72rem] whitespace-pre-wrap select-all">
+          {TEMPLATE_LOCK_EXAMPLE}
+        </pre>
+      </details>
+    </>
+  );
+}
+
+/**
+ * A save the lock check refused (`?err=invalid&detail=promptText: template locks: …`), in sentences: which line, what
+ * is wrong, and how a block is written. Nothing for any other detail. The new-template screen shows the same notice.
+ */
+export function LockBlockRefusalNote({ detail, dict }: { detail: string | undefined; dict: Dict }) {
+  const lines = detail ? lockRefusalLines(detail, dict.admin) : null;
+  if (lines === null) return null;
+  return <LockRefusalNotice lines={lines} className="mt-3 rounded-[10px] border border-accent px-3.5 py-2.5 text-[13px] text-accent" />;
+}
+
 export function PromptFields({ row, dict }: { row: PromptRow | null; dict: Dict }) {
   const a = dict.admin;
   const existing = row === null ? {} : parsePromptMedia(row.media);
@@ -266,6 +327,7 @@ export function PromptFields({ row, dict }: { row: PromptRow | null; dict: Dict 
           className={INPUT}
         />
       </Field>
+      <TemplateLocksNote promptText={row?.promptText ?? null} dict={dict} />
 
       <details open={row !== null} className="border border-hairline p-3">
         <summary className="cursor-pointer font-label text-eyebrow">{a.promptOptionalDetails}</summary>

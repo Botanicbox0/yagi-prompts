@@ -5778,6 +5778,25 @@ export const en = {
     promptSlugAutoHint: 'Leave empty — it follows the EN title, lowercase with hyphens.',
     promptAddressAutomatic: 'The page address is generated from the English title. A number is added when the address is already taken.',
     promptOptionalDetails: 'Add source and making-of notes (optional)',
+    /** docs/PERSONAL-STUDIO.md §3.3 (C3): the collapsed example lock block under the prompt field. */
+    templateLocksHelp: 'Lock block example (campaign templates)',
+    /** What the saved block locks, on the template's page. {parts}: the locked parts joined by " · ". */
+    templateLocksLine: 'Locks: {parts}',
+    templateLocksAll: 'Locks: everything. The saved lock block cannot be read, so customers can change nothing. Fix the block and save again.',
+    templateLocksTypo: 'No locks. Some lines look like a lock block but are not read, so customers can change anything. Fix them before the next save.',
+    /** A save refused because of the lock block, then one sentence per problem. */
+    lockRefused: 'Not saved: the template lock block has a problem.',
+    lockProblemUnknownLine: 'Line {line}: not a lock line, or a part that cannot be locked. If text follows the block directly, put a blank line between them.',
+    lockProblemEmptyBlock: 'Line {line}: there is no lock line under the header.',
+    lockProblemSecondHeader: 'Line {line}: a second lock block. A prompt can have only one.',
+    lockProblemHeaderTypo: 'Line {line}: the header is not exact, so nothing is locked. Write it as Template locks:',
+    lockProblemWithoutHeader: 'Line {line}: there is no Template locks: header above this lock line, so it is not read.',
+    lockProblemTooManyLines: 'The block has {count} lock lines. Up to {max} are allowed.',
+    lockProblemTooManyShotRanges: 'The block has {count} shot lines. Up to {max} are allowed.',
+    lockProblemMore: '{n} more.',
+    /** {max}: lock lines per block, {shots}: shot lines per block, {keys}: the parts a line may name. */
+    lockRules:
+      'A block starts with the line Template locks: and each line under it is "- Keep exactly as in the template: " followed by one part. End the block with a blank line. Up to {max} lines, {shots} of them shot lines. Parts: {keys}',
     promptInputsRetained: 'Your entries and attached files are still here on this page.',
     promptDraftRestored: 'Your saved draft for this template has been restored.',
     promptDraftDiscard: 'Clear saved draft',

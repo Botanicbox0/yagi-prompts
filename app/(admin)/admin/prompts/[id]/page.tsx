@@ -22,6 +22,7 @@ import {
 } from '@/components/admin/chrome';
 import { AdminPageHeader, StatusPill, type AdminTone } from '@/components/admin/patterns';
 import {
+  LockBlockRefusalNote,
   PromptFields,
   StagedMedia,
   TemplateSpecSummaryCard,
@@ -230,6 +231,8 @@ export default async function AdminPromptItemPage({
     <AdminShell dict={a} locale={locale} active="prompts">
       <Header row={row} dict={dict} locale={locale} />
       {banner}
+      {/* docs/PERSONAL-STUDIO.md §3.3 (C3): a save refused for its lock block, in sentences. */}
+      {one(query, 'err') === 'invalid' && <LockBlockRefusalNote detail={one(query, 'detail')} dict={dict} />}
 
       <TemplateSpecSummaryCard row={row} dict={dict} />
 

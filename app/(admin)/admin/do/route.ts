@@ -9,6 +9,7 @@ import { fail, type AdminOutcome } from '@/lib/admin/context';
 import { dispatchAdmin, outcomeUrl } from '@/lib/admin/dispatch';
 import { BACK_FIELD, OP_FIELD, str } from '@/lib/admin/form';
 import { resolveRequestUrl } from '@/lib/routing/surfaces';
+import { readLockBlockRefusal } from '@/lib/template-director/locks';
 
 /**
  * `POST /admin/do` — the one admin mutation door, as a ROUTE rather than a server action.
@@ -76,9 +77,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   // Keep refused new-template forms mounted; still use the guarded operation above.
   if (name === 'prompt.create' && request.headers.get('accept') === 'application/vnd.twings.admin-form+json') {
     const field = outcome.ok ? undefined : outcome.detail?.split(':')[0];
+    // docs/PERSONAL-STUDIO.md §3.3 (C3): the lock-block refusal is the one detail this answer carries. It is the
+    // operation's own fixed-prefix sentence (lines and kinds), recognised by `readLockBlockRefusal`; nothing else is echoed.
+    const lock = !outcome.ok && outcome.code === 'invalid' && readLockBlockRefusal(outcome.detail ?? '')?.field === 'promptText';
     return NextResponse.json(outcome.ok
       ? { ok: true, to: outcomeUrl(back, outcome) }
-      : { ok: false, code: outcome.code, field: ['useCase', 'poster'].includes(field ?? '') ? field : undefined },
+      : lock
+        ? { ok: false, code: outcome.code, field: 'promptText', detail: outcome.detail }
+        : { ok: false, code: outcome.code, field: ['useCase', 'poster'].includes(field ?? '') ? field : undefined },
     { status: outcome.ok ? 200 : 400, headers: NO_STORE });
   }
   if (name === 'prompt.createSet' && request.headers.get('accept') === 'application/vnd.twings.admin-form+json') {
