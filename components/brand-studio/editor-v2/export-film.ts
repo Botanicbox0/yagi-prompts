@@ -826,6 +826,9 @@ async function mixSound(
   const read = reader.read;
   const warnings: ExportWarning[] = [];
   const labelOf = (url: string) => sequence.clips.find((clip) => clip.srcUrl === url)?.label ?? url;
+  // The clip a sound read stops on is named by a cut whose sound is heard: a muted piece of the same clip is not
+  // what made it read (review item 2). The line then speaks of every cut of that clip.
+  const heardLabelOf = (url: string) => sequence.clips.find((clip) => clip.srcUrl === url && !clip.muted && clip.volume > 0)?.label ?? labelOf(url);
   // A cut whose file's own boxes say it has no sound track is silent: it is not read whole (spec F, F2).
   const cutUrls = [...new Set(plan.segments.filter((s) => s.gain > 0 && !noSoundTrack.has(s.srcUrl)).map((s) => s.srcUrl))];
   const bgm = extras?.bgm && extras.bgm.volume > 0 && extras.bgm.srcUrl ? extras.bgm : null;
@@ -841,7 +844,7 @@ async function mixSound(
   for (const url of cutUrls) {
     throwIfAborted(signal);
     const bytes = await read(url).catch((error: unknown) => {
-      throw namedSoundStop(error, 'cut', labelOf(url));
+      throw namedSoundStop(error, 'cut', heardLabelOf(url));
     });
     // Inspected before decoding: decoding hands the bytes over.
     const view = new Uint8Array(bytes);

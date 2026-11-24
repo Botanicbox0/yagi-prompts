@@ -43,6 +43,15 @@ describe('the stop says which sound could not be read', () => {
     expect(outcome.error).toMatchObject({ reason: 'sound', sound: 'effect', clip: 'whoosh' });
   });
 
+  it('two cuts of one clip, the first muted: the stop names the clip by a cut whose sound is heard (review item 2)', async () => {
+    vi.useFakeTimers();
+    const { exportFilm } = await loadExport({ clips: { [URL_A]: { facts: { fps: 24, frames: 24 }, index: 'refused' } }, getStatus: (url) => (url === URL_A ? 503 : 200) });
+    const muted = { ...harnessClip('first piece', URL_A, 12), muted: true };
+    const heard = harnessClip('second piece', URL_A, 12);
+    const outcome = await settle(exportFilm({ sequence: film([muted, heard]) }));
+    expect(outcome.error).toMatchObject({ reason: 'sound', sound: 'cut', clip: 'second piece' });
+  });
+
   it('a cut’s own file cannot be read for its sound: stopped as sound, naming the cut', async () => {
     vi.useFakeTimers();
     const { exportFilm } = await loadExport({ clips: { [URL_A]: { facts: { fps: 24, frames: 24 }, index: 'refused' } }, getStatus: (url) => (url === URL_A ? 503 : 200) });
