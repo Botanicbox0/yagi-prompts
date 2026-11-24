@@ -10,6 +10,7 @@
 import { z } from 'zod';
 import type { StudioStorageQuotaView } from '@/lib/brands/storage-quota-format';
 import type { UploadLimitReason } from '@/lib/brands/upload-limits-format';
+import type { AllowanceWindowView } from './allowance-window';
 import { STUDIO_IMAGE_BACKGROUNDS, STUDIO_IMAGE_QUALITIES, type StudioImageQuality } from './models';
 import { LYRIC_STRUCTURES } from './sound/lyrics';
 import type { LyricsModel } from './sound/lyrics-model';
@@ -880,6 +881,12 @@ export interface StudioAllowanceView {
   usedKrw: number;
   /** ISO time the month rolls over (Asia/Seoul). */
   resetsAt: string;
+  /**
+   * R1: the window the allowance runs on — a plan organization's billing cycle or the KST calendar month (KST days,
+   * `end` = the refill day). It decides which words the screens use (./allowance-window.ts). Absent on a view built
+   * elsewhere: the screens then keep the calendar-month words.
+   */
+  window?: AllowanceWindowView;
 }
 
 /** `GET /api/brand-studio?organizationId=…` */

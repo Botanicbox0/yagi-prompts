@@ -23,6 +23,7 @@ import {
   type StudioAssetView,
   type StudioState,
 } from "@/lib/brand-studio/contracts";
+import { windowText, type AllowanceWindowView } from "@/lib/brand-studio/allowance-window";
 import { creditsLeft, formatCredits } from "@/lib/brand-studio/credits";
 import { blueprintFit, remakeSeconds } from "@/lib/brand-studio/reference-video";
 import type { StudioVideoCopy } from "@/messages/studio-video";
@@ -233,7 +234,7 @@ export function ReversePanel({ organizationId, locale, copy, video: t, initialOp
     setNotice(null);
     const result = await api.call("job.create", { ...built.input, requestId: press.current.id });
     setBusy(false);
-    if (isFailure(result)) return setNotice(errorLine(copy, result.code));
+    if (isFailure(result)) return setNotice(errorLine(copy, result.code, state?.allowance.window));
     press.current = null;
     announce(STUDIO_JOB_STARTED, { jobId: result.job.id });
     setOpen(false);
@@ -259,6 +260,7 @@ export function ReversePanel({ organizationId, locale, copy, video: t, initialOp
           uploading={uploading}
           canCreate={canCreate}
           runOpen={open4Run}
+          allowanceWindow={state?.allowance.window ?? null}
           credits={credits}
           left={left}
           busy={busy}
@@ -273,6 +275,18 @@ export function ReversePanel({ organizationId, locale, copy, video: t, initialOp
       )}
     </div>
   );
+}
+
+/**
+ * Why the run button is off, or null when it is on: viewers cannot make anything; a team without credits sees the
+ * closed line — "this month" on the calendar month, without it on a billing cycle (R1).
+ */
+export function reverseRunLine(
+  run: Pick<StudioVideoCopy["reverse"]["run"], "readOnly" | "closed" | "closedCycle">,
+  input: { canCreate: boolean; runOpen: boolean; window?: Pick<AllowanceWindowView, "kind"> | null },
+): string | null {
+  if (!input.canCreate) return run.readOnly;
+  return input.runOpen ? null : windowText(input.window, run.closed, run.closedCycle);
 }
 
 interface DrawerProps {
@@ -292,6 +306,8 @@ interface DrawerProps {
   uploading: "video" | ChangeSlot | null;
   canCreate: boolean;
   runOpen: boolean;
+  /** R1: the allowance window; a billing cycle drops "this month" from the closed line. */
+  allowanceWindow: AllowanceWindowView | null;
   credits: number;
   left: number;
   busy: boolean;
@@ -330,7 +346,7 @@ function ReverseDrawer(props: DrawerProps) {
   const numbers = imageNumbers(draft.images);
   const total = sheet?.seconds && sheet.seconds > 0 ? sheet.seconds : (clip?.seconds ?? table[table.length - 1]?.end ?? 0);
   const setTable = (next: FilmShot[]) => setDraft((current) => ({ ...current, shots: next }));
-  const runLine = !props.canCreate ? r.run.readOnly : !props.runOpen ? r.run.closed : null;
+  const runLine = reverseRunLine(r.run, { canCreate: props.canCreate, runOpen: props.runOpen, window: props.allowanceWindow });
 
   return (
     <dialog

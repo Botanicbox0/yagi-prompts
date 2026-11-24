@@ -306,8 +306,8 @@ export const COMPOSE_SLOWEST_SPEED = 0.1;
  * The longest film the export record (`render.reserve`) writes as it is: every cut of the longest library
  * footage at the slowest speed, 144,000 s. Export is free and the row is only a record, so a longer film (only
  * device files over 10 minutes can make one) is recorded at this length, never refused. The same rule applies
- * to every screen that sends the record (today this editor and the video studio; the new editor's export once
- * it sends one too). The 300 s it replaces came from the per-second export price, gone since
+ * to every screen that sends the record (this editor, the video studio and the new editor's export,
+ * components/brand-studio/editor-v2/export-record.ts). The 300 s it replaces came from the per-second export price, gone since
  * docs/BRAND-EDITING-STUDIO.md §8-3.
  */
 export const COMPOSE_FILM_MAX_SEC = (MAX_COMPOSE_CLIPS * COMPOSE_SOURCE_MAX_SEC) / COMPOSE_SLOWEST_SPEED;

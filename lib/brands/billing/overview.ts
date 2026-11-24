@@ -1,5 +1,6 @@
 import type { Viewer } from '@/lib/auth/identity';
 import type { SqlRunner } from '@/lib/db/sql-runner';
+import { allowanceWindowView } from '@/lib/brand-studio/allowance-window';
 import { creditsLeft, creditsOf } from '@/lib/brand-studio/credits';
 import type { StudioEnv } from '@/lib/brand-studio/env';
 import { loadAllowance } from '@/lib/brand-studio/usage';
@@ -113,6 +114,7 @@ export async function loadCustomerBrandBilling(
             source: allowance.source,
             resetsOn: kstDayOf(new Date(allowance.resetsAt)),
             resetsAt: allowance.resetsAt,
+            window: allowanceWindowView(allowance),
           },
           activeDiscount: activeDiscount
             ? {

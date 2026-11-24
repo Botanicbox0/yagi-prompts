@@ -127,8 +127,8 @@ const RenderReserveInputSchema = z.object({
   organizationId: z.uuid(),
   requestId: z.string().regex(/^[A-Za-z0-9_-]{8,80}$/),
   // No length is refused (A7): a film longer than any timeline built from library footage is recorded at that
-  // bound. The rule lives here so every screen that sends this record gets it (today the editing studio and the
-  // video studio; the new editor's export too once it sends one).
+  // bound. The rule lives here so every screen that sends this record gets it (the editing studio, the video
+  // studio and the new editor's export).
   durationSec: z
     .number()
     .min(0.3)

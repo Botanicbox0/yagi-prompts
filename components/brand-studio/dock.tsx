@@ -699,6 +699,7 @@ export function Dock(props: DockProps) {
           neededCredits={props.credits > 0 ? props.credits : null}
           remainingCredits={creditsLeft(props.allowance.capKrw, props.allowance.usedKrw)}
           resetsAt={props.allowance.resetsAt}
+          allowanceWindow={props.allowance.window}
           surface={props.mode === "video" ? "studio_video" : "studio_image"}
           solidCta={false}
         />

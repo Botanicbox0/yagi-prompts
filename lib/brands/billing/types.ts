@@ -1,4 +1,5 @@
 import type { BrandBillingMode, BrandPlanId } from '../plans';
+import type { AllowanceWindowView } from '@/lib/brand-studio/allowance-window';
 import type { StudioLane } from '@/lib/brand-studio/models';
 import type { AllowanceSource } from '@/lib/brand-studio/usage';
 import type { PaidBrandPlanId } from './math';
@@ -196,6 +197,8 @@ export interface CustomerBrandBillingView {
     resetsOn: string;
     resetsAt: string;
     preferredLane?: StudioLane | null;
+    /** R1: the window the allowance runs on (billing cycle or calendar month); decides the usage section's words. */
+    window?: AllowanceWindowView;
   };
   activeDiscount: {
     id: string;

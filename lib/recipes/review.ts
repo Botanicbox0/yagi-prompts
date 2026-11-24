@@ -10,13 +10,15 @@ import { listMakerFiles, type MakerAsset } from './assets';
 import { quoteRecipeBase, type RecipeQuote } from './pricing';
 import { parseDisclosure, parsePresentation, recipeSchemaReady, type Disclosure, type Presentation } from './repo';
 import { parseRecipe, recipeCast, recipeMedium, type Recipe, type RecipeMedium } from './schema';
+import { imageTestRecipe } from './test-render';
 
 /**
  * The studio's review of a maker recipe (docs/PLATFORM-2.0.md §7.4, §18 R1): three review renders
  * side by side, each with a different face the studio holds — the admin's own saved photos first,
  * then the public portrait-guide people (`public/images/portrait-guide/*`, studio-owned images) —
  * so "the face stays" is judged on more than the maker's own face. Admin only (`platform.review`),
- * audited, never counted against the maker's three test renders.
+ * audited, never counted against the maker's three test renders. Like a test render, it is not an
+ * order, so it runs the IMAGE steps only (lib/recipes/test-render.ts, founder decision 2026-11-24).
  */
 
 export const REVIEW_RENDERS = 3;
@@ -62,9 +64,12 @@ export async function startReviewRenders(deps: { sql: SqlRunner; store: RenderSt
     // docs/CAST-CATEGORIES.md §3: review renders send studio faces only; a pet or couple recipe would fail
     // every one of them ("user slot pet is missing"), so it is refused before any render is made.
     demand(recipeCast(checked.recipe) === 'solo', 'cast_test_unavailable');
+    // No free video: the image steps only, and a film-only recipe gets no review render at all.
+    const test = imageTestRecipe(checked.recipe);
+    demand(test.ok, 'video_test_unavailable');
     const renderIds: string[] = [];
     for (const face of faces) {
-      const created = await createRecipeSandboxRender({ sql: tx, store: deps.store }, { userId: viewer.userId!, locale: viewer.locale ?? null, formatId: input.id, purpose: 'studio_review', recipe: checked.recipe, photo: face, selfieId: face.selfieId });
+      const created = await createRecipeSandboxRender({ sql: tx, store: deps.store }, { userId: viewer.userId!, locale: viewer.locale ?? null, formatId: input.id, purpose: 'studio_review', recipe: test.recipe, photo: face, selfieId: face.selfieId });
       demand(created.ok, 'bad_photo');
       renderIds.push(created.id);
     }

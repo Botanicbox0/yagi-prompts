@@ -18,6 +18,7 @@ import { createStudioApi, isFailure, measureInBrowser } from '@/components/brand
 import { newRequestId } from '@/components/brand-studio/copy';
 import { STUDIO_JOB_SETTLED, STUDIO_JOB_STARTED, announce } from '@/components/brand-studio/seams';
 import { settledJobs } from '@/components/brand-studio/use-studio';
+import { windowText, type AllowanceWindowView } from '@/lib/brand-studio/allowance-window';
 import { composeStorageKey } from '@/lib/brand-studio/compose/timeline';
 import type { StudioAllowanceView, StudioErrorCode, StudioJobView } from '@/lib/brand-studio/contracts';
 import { creditsLeft, formatCredits } from '@/lib/brand-studio/credits';
@@ -69,12 +70,13 @@ function dateLabel(iso: string, locale: 'ko' | 'en'): string {
   return new Intl.DateTimeFormat(locale === 'en' ? 'en-US' : 'ko-KR', { month: 'short', day: 'numeric' }).format(date);
 }
 
-function errorLine(copy: StudioSoundCopy, code: StudioErrorCode | 'artist'): string {
+/** The sound studio's sentence for a refusal. `window` (R1): a billing cycle drops "this month" from the credit line. */
+export function soundErrorLine(copy: StudioSoundCopy, code: StudioErrorCode | 'artist', window?: Pick<AllowanceWindowView, 'kind'> | null): string {
   switch (code) {
     case 'artist':
       return copy.errors.artist;
     case 'allowance_exhausted':
-      return copy.errors.allowance;
+      return windowText(window, copy.errors.allowance, copy.errors.allowanceCycle);
     case 'allowance_closed':
     case 'feature_unavailable':
     case 'not_found':
@@ -247,12 +249,12 @@ export function SoundStudio(props: SoundStudioProps) {
       chooseTab('music');
       return true;
     }
-    if (result?.blocked === 'name') setComposerError(errorLine(copy, 'artist'));
+    if (result?.blocked === 'name') setComposerError(soundErrorLine(copy, 'artist'));
     else if (result?.blocked === 'lyrics') setComposerError(copy.composer.lyricsBlocked);
     else if (result?.blocked === 'paused') setComposerError(copy.errors.paused);
     else if (result?.code === 'allowance_closed' || result?.code === 'allowance_exhausted') {
       setAllowanceErrorCode(result.code);
-    } else setComposerError(errorLine(copy, result?.code ?? 'failed'));
+    } else setComposerError(soundErrorLine(copy, result?.code ?? 'failed', allowance.window));
     // A refused request reserved nothing: the next press is a new one.
     if (result?.code) draftRequest.current = null;
     return false;
@@ -603,6 +605,7 @@ export function SoundStudio(props: SoundStudioProps) {
           neededCredits={lastNeededCredits}
           remainingCredits={left}
           resetsAt={allowance.resetsAt}
+          allowanceWindow={allowance.window}
           surface="studio_sound"
           solidCta={false}
         />
