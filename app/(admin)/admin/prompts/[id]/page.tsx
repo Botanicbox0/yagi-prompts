@@ -24,6 +24,7 @@ import { AdminPageHeader, StatusPill, type AdminTone } from '@/components/admin/
 import {
   LockBlockRefusalNote,
   PromptFields,
+  stylingPartLabels,
   StagedMedia,
   TemplateSpecSummaryCard,
   UseCaseChecks,
@@ -34,6 +35,9 @@ import { adminMediaPath, promptAdminRef } from '@/lib/media/admin-authorize';
 import { KEYFRAMES_MAX, loadPromptKeyframesBySlug, splitKeyframes } from '@/lib/prompts/keyframes';
 import { parsePromptMedia } from '@/lib/prompts/schemas';
 import { declaredPartKeysOfPrompt, partLabel } from '@/lib/template-director/parts-view';
+import { templateCardStyling } from '@/lib/template-director/compile-prompts';
+import { recipeSchemaReady } from '@/lib/recipes/repo';
+import { TemplateStylingPanel } from '@/components/admin/template-styling-panel';
 
 /**
  * `/admin/prompts/{id}` — one prompt, everything you can do to it (2026-08-15).
@@ -232,20 +236,40 @@ export default async function AdminPromptItemPage({
     );
   }
 
+  // docs/PERSONAL-STUDIO.md §3.4.9 (S2): the prompts an order compiles (a recipe's result steps, else the main text)
+  // and the styling they declare alike — what the catalogue card shows.
+  const stylingSource = sql === null
+    ? { recipe: null, recipeReady: false }
+    : {
+        recipe: (await sql.query<{ recipe: unknown }>("select to_jsonb(p.*)->'recipe' as recipe from prompt_items p where id = $1", [row.id])).rows[0]?.recipe ?? null,
+        recipeReady: await recipeSchemaReady(sql),
+      };
+  const cardStyling = templateCardStyling({ promptText: row.promptText, ...stylingSource, cast: row.cast });
+
   // docs/PERSONAL-STUDIO.md §3.4.4 (T1a): a film whose saved prompt declares parts gets the marks editor (a short
   // description and an example-video range per part, `prompt.marks`) under the editor, with the same lock line.
-  const declared = row.medium === 'video' ? declaredPartKeysOfPrompt(row.promptText) : [];
+  const declared = row.medium === 'video' ? declaredPartKeysOfPrompt(row.promptText, cardStyling) : [];
   const markParts = declared.flatMap((key) => {
     const label = partLabel(key, dict.editSheet);
     return label === null ? [] : [{ key, label }];
   });
+  // The lock line names the locked parts only; the styled and photo parts have their own line (§3.4.9).
+  const lockedKeys = declaredPartKeysOfPrompt(row.promptText, null);
+  const lockedMarkParts = markParts.filter((part) => lockedKeys.includes(part.key));
   const stored = markParts.length > 0 && sql !== null ? splitKeyframes((await loadPromptKeyframesBySlug(sql, row.slug)) ?? []) : null;
   const marksEditor =
     stored === null ? null : (
       <section data-template-marks-panel className="mt-4 flex flex-col gap-3">
-        <p data-template-marks-locks className="font-mono text-[0.72rem] opacity-70">
-          {interpolate(a.templateLocksLine, { parts: markParts.map((part) => part.label).join(' · ') })}
-        </p>
+        {lockedMarkParts.length > 0 && (
+          <p data-template-marks-locks className="font-mono text-[0.72rem] opacity-70">
+            {interpolate(a.templateLocksLine, { parts: lockedMarkParts.map((part) => part.label).join(' · ') })}
+          </p>
+        )}
+        {cardStyling && (
+          <p data-template-marks-styling className="font-mono text-[0.72rem] opacity-70">
+            {interpolate(a.templateStylingLine, { parts: stylingPartLabels(cardStyling, dict).join(' · ') })}
+          </p>
+        )}
         <TemplateMarksEditor
           op="prompt.marks"
           promptId={row.id}
@@ -346,6 +370,8 @@ export default async function AdminPromptItemPage({
         </OpForm>
         {marksEditor}
       </Panel>
+
+      {row.audience !== 'brand' && <TemplateStylingPanel op="prompt.declareStyling" row={row} source={stylingSource} dict={dict} back={back} />}
     </AdminShell>
   );
 }

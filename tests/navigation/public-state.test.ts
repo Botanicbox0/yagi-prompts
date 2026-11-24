@@ -37,6 +37,15 @@ describe('list filter URL state', () => {
     expect(filterHref('https://twings.app/ko/video', { useCase: 'mv' }, video)).toBe('/ko/video');
   });
 
+  it('docs/PERSONAL-STUDIO.md §3.4.9 (S2): ?style=mine|styled, only while the list offers it', () => {
+    const styled = { ...video, style: ['mine', 'styled'] } as const;
+    expect(readFilterState('?style=mine&length=short', styled)).toEqual({ length: 'short', style: 'mine' });
+    expect(readFilterState('?style=styled', video)).toEqual({});
+    expect(readFilterState('?style=other', styled)).toEqual({});
+    expect(filterHref('https://twings.app/ko/video?source=pwa', { length: 'mid', style: 'styled' }, styled)).toBe('/ko/video?source=pwa&length=mid&style=styled');
+    expect(filterHref('https://twings.app/ko/video?style=mine', {}, styled)).toBe('/ko/video');
+  });
+
   it('keeps the image list on ?useCase=', () => {
     expect(readFilterState('?useCase=mv', image)).toEqual({ useCase: 'mv' });
     expect(filterHref('https://twings.app/en/image?length=short#top', { useCase: 'cinematic' }, image)).toBe('/en/image?useCase=cinematic#top');

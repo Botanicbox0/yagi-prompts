@@ -14,6 +14,7 @@ import {
   lockRulesText,
   type PublicTemplateLocks,
 } from '@/lib/template-director/locks';
+import { checkStylingBlock, type PublicTemplateStyling } from '@/lib/template-director/styling';
 import { LockRefusalNotice } from '@/components/admin/prompt-create-feedback';
 import { visibilityLabel, visibilityOptions } from '@/components/admin/labels';
 import type { Dictionary } from '@/lib/i18n/dictionaries';
@@ -214,17 +215,42 @@ function lockedPartLabels(locks: PublicTemplateLocks, dict: Dict): string[] {
 }
 
 /**
- * Under the prompt field: what the SAVED block locks (edit form only; nothing when there is no block), and a collapsed
- * example an author can copy. Admin-only, so it names the parts; the block's own words stay in the field above.
+ * docs/PERSONAL-STUDIO.md §3.4.9 (S2) — the styling parts in the admin's words: "헤어 템플릿", "의상 사진". The template
+ * styles a part (the buyer may keep their own hair or makeup) or takes it from the photo.
+ */
+export function stylingPartLabels(styling: PublicTemplateStyling, dict: Dict): string[] {
+  const a = dict.admin;
+  const e = dict.editSheet;
+  return [
+    ...styling.styled.map((part) => interpolate(a.templateStylingStyled, { part: e.slots[part] })),
+    ...styling.photo.map((part) => interpolate(a.templateStylingPhoto, { part: e.slots[part] })),
+  ];
+}
+
+/**
+ * Under the prompt field: what the SAVED block locks (edit form only; nothing when there is no block), what its
+ * styling block declares (§3.4.9: next to the lock line, with a warning when it does not read), and a collapsed example
+ * an author can copy. Admin-only, so it names the parts; the block's own words stay in the field above.
  */
 function TemplateLocksNote({ promptText, dict }: { promptText: string | null; dict: Dict }) {
   const a = dict.admin;
   const check = promptText === null ? null : checkLockBlock(promptText);
+  const styling = promptText === null ? null : checkStylingBlock(promptText);
   return (
     <>
       {check?.state === 'ok' && (
         <p data-template-locks="ok" className="font-mono text-[0.72rem] opacity-70">
           {interpolate(a.templateLocksLine, { parts: lockedPartLabels(check.locks, dict).join(' · ') })}
+        </p>
+      )}
+      {styling?.state === 'ok' && (
+        <p data-template-styling="ok" className="font-mono text-[0.72rem] opacity-70">
+          {interpolate(a.templateStylingLine, { parts: stylingPartLabels(styling.styling, dict).join(' · ') })}
+        </p>
+      )}
+      {styling?.state === 'malformed' && (
+        <p data-template-styling="malformed" className="font-mono text-[0.72rem] text-accent">
+          {a.templateStylingMalformed}
         </p>
       )}
       {(check?.state === 'malformed' || check?.state === 'header_typo') && (

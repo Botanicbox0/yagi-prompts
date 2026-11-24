@@ -61,9 +61,10 @@ async function readPromptCatalog(): Promise<PromptCatalog> {
 /** 2026-11-02 (`v13-remove-goldfish-daydream`): drop duplicate `aquarium-goldfish-daydream` from the catalog cache. */
 /** 2026-11-11 (`v14-cast`): `PromptCard.cast`; couple and pet templates leave the projection while their flag is off (both part of the key). */
 /** 2026-11-15 (`v15-rule-prices`): five creative templates moved to their rule price in the database (founder: no raise on company templates), `lens-portal-tutu` runtime 17 → 15 s. */
+/** 2026-11-24 (`v16-template-styling`): `PromptCard.styling` (docs/PERSONAL-STUDIO.md §3.4.9, S2), read from the prompts the compile reads. */
 export const getPromptCatalog = unstable_cache(
   readPromptCatalog,
-  ['prompt-catalog', 'v15-rule-prices', resolveRuntimeMode(), publicMediaCacheKey(), coupleTemplatesOpen() ? 'couple-on' : 'couple-off', petTemplatesOpen() ? 'pet-on' : 'pet-off'],
+  ['prompt-catalog', 'v16-template-styling', resolveRuntimeMode(), publicMediaCacheKey(), coupleTemplatesOpen() ? 'couple-on' : 'couple-off', petTemplatesOpen() ? 'pet-on' : 'pet-off'],
   {
     tags: [PROMPTS_TAG],
     revalidate: CATALOG_TTL_SECONDS,

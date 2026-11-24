@@ -8,7 +8,7 @@ import { FIXTURE_SENTINELS } from './fixtures';
 import { HIDDEN_PROMPT_SLUGS, PROMPT_SENTINELS } from './prompt-fixtures';
 import { LOCAL_MAKER, LOCAL_RECIPE_CANARY, LOCAL_RECIPE_SLUG } from './maker-fixtures';
 import { CAST_SENTINELS } from './cast-fixtures';
-import { FIXED_PARTS_PROMPT_FIXTURES, FIXED_PARTS_SLUG } from './fixed-parts-fixtures';
+import { FIXED_PARTS_PROMPT_FIXTURES, FIXED_PARTS_SLUG, STYLED_PARTS_PROMPT_FIXTURES, STYLED_PARTS_SLUG } from './fixed-parts-fixtures';
 import { RUNTIME_MODE_ENV } from '@/lib/runtime-mode';
 import { KO_TERMS } from '@/messages/ko';
 import { EN_TERMS } from '@/messages/en';
@@ -1068,6 +1068,17 @@ async function sweepTemplates(): Promise<void> {
     else fail('…and another band', 'neither data-filter-option="length:mid" nor "length:long"');
     expectPresent('cards carry their length band', page.body, 'data-length=');
     expectAbsent('…and no genre chips', page.body, 'data-filter-option="useCase:');
+    // docs/PERSONAL-STUDIO.md §3.4.9 (S2): the style group splits only on cards that declare their styling — on the
+    // local data, the one fixture that does (scripts/fixed-parts-fixtures.ts); production shows none until templates
+    // are declared. A card that declares nothing carries no style.
+    expectPresent('…grouped by style (the styled local fixture)', page.body, 'data-filter-facet="style"');
+    expectPresent('…with "styled by the template"', page.body, 'data-filter-option="style:styled"');
+    expectPresent('…on the card that declares it', page.body, 'data-style="styled"');
+    {
+      const styled = page.body.split('data-style="').length - 1;
+      if (styled === 1) ok('…and on no card that declares none', 'one card carries data-style');
+      else fail('…style on undeclared cards', `expected exactly 1 data-style, got ${styled}`);
+    }
     // §15.3-5: the GEO definition is still in the HTML, under the grid rather than above it.
     {
       const definition = page.body.indexOf('data-service-definition');
@@ -1153,6 +1164,9 @@ async function sweepTemplates(): Promise<void> {
   // docs/PERSONAL-STUDIO.md §3.4.4 (T1a): a template that declares no fixed part has no fixed row.
   expectAbsent('…no "what this template decides" row without a declaration', detail.body, 'data-template-fixed');
   expectAbsent('…nor on the Korean page', detailKo.body, 'data-template-fixed');
+  expectAbsent('…no part states without a declaration', detail.body, 'data-fixed-state');
+  // 2026-11-24 (founder): genre chips say nothing about a video — a video template page carries none.
+  expectAbsent('…no genre chips on a video template', detail.body, 'data-template-use-case');
 
   // T1a: the local film whose prompt declares fixed parts (scripts/fixed-parts-fixtures.ts) shows them under the
   // example video: names from the lock projection, the marks' descriptions and ranges — never the block's words.
@@ -1173,8 +1187,28 @@ async function sweepTemplates(): Promise<void> {
     }
   }
 
+  // §3.4.9 (S2): the local film that styles the hair and makeup (and locks a prop) lists all three with their states —
+  // names and the admin's descriptions only, never a word of either block.
+  for (const locale of ['ko', 'en'] as const) {
+    const styledPage = await get(`/${locale}/t/${STYLED_PARTS_SLUG}`);
+    expectEqual(`${locale}: the template with styled parts renders 200`, styledPage.status, 200);
+    expectPresent(`${locale}: …with the fixed row`, styledPage.body, 'data-template-fixed');
+    for (const part of ['hair', 'makeup', 'prop']) expectPresent(`${locale}: …names ${part}`, styledPage.body, `data-fixed-part="${part}"`);
+    const styledCount = styledPage.body.split('data-fixed-state="styled"').length - 1;
+    if (styledCount === 2) ok(`${locale}: …two parts in the template's style`, 'hair, makeup');
+    else fail(`${locale}: styled parts`, `expected 2 data-fixed-state="styled", got ${styledCount}`);
+    expectPresent(`${locale}: …and the locked prop`, styledPage.body, 'data-fixed-state="locked"');
+    expectPresent(`${locale}: …the state in words`, styledPage.body, locale === 'ko' ? '템플릿 스타일' : 'Template style');
+    expectPresent(`${locale}: …the description`, styledPage.body, locale === 'ko' ? '낮게 묶은 머리' : 'Low bun');
+    for (const word of ['Template styling', 'Styled by the template', 'Template locks', 'a sleek low bun', 'glossy lip', 'microphone on a stand', STYLED_PARTS_PROMPT_FIXTURES[0]!.sentinel]) {
+      expectAbsent(`${locale}: …no word of the template's prompt (${word})`, styledPage.body, word);
+    }
+    expectAbsent(`${locale}: …and no genre chips on the video`, styledPage.body, 'data-template-use-case');
+  }
+
   const closed = await get(`/en/t/${CLOSED_TEMPLATE}`);
   expectEqual('a not-yet-for-sale template renders 200', closed.status, 200);
+  expectAbsent('…a video template page carries no genre chips', closed.body, 'data-template-use-case');
   expectPresent('…and says so', closed.body, 'data-template-closed');
   expectAbsent('…without a studio', closed.body, 'data-twings-studio');
   // (Related cards below it may well carry price chips — the assertion is on ITS facts, not the page.)

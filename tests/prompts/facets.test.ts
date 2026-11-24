@@ -175,3 +175,61 @@ describe('matching', () => {
     expect(matchesFilter(unknown, { new: '1' })).toBe(true);
   });
 });
+
+/**
+ * docs/PERSONAL-STUDIO.md §3.4.9 (S2) — "keeps my look" vs "styled by the template", for video cards that declare their
+ * styling. A card that declares nothing about the hair or makeup matches neither (shown under "all" only), and the
+ * group shows only when it splits the list — so production is unchanged until templates are declared.
+ */
+describe('the style group', () => {
+  const mine = card({ slug: 'mine', styling: { styled: [], photo: ['hair', 'makeup'] } });
+  const photoHairOnly = card({ slug: 'photo-hair', styling: { styled: ['outfit'], photo: ['hair'] } });
+  const styled = card({ slug: 'styled', styling: { styled: ['hair'], photo: ['makeup'] } });
+  const lockedHair = card({ slug: 'locked-hair', styling: { styled: [], photo: ['makeup'] }, locks: { named: [], slots: ['hair'], shots: [], refs: [], all: false } });
+  const outfitOnly = card({ slug: 'outfit-only', styling: { styled: ['outfit'], photo: [] } });
+  const undeclared = card({ slug: 'undeclared' });
+
+  it('classifies each video card', () => {
+    expect(cardFacets(mine, NOW).style).toBe('mine');
+    expect(cardFacets(photoHairOnly, NOW).style).toBe('mine');
+    expect(cardFacets(styled, NOW).style).toBe('styled');
+    expect(cardFacets(lockedHair, NOW).style).toBe('styled');
+    expect(cardFacets(outfitOnly, NOW).style).toBeNull();
+    expect(cardFacets(undeclared, NOW).style).toBeNull();
+    // Locks alone are not a styling declaration.
+    expect(cardFacets(card({ locks: { named: [], slots: ['hair'], shots: [], refs: [], all: false } }), NOW).style).toBeNull();
+    expect(cardFacets({ ...styled, medium: 'image' }, NOW).style).toBeNull();
+  });
+
+  it('round-trips through the attribute the rail writes (absent on a card that declares nothing)', () => {
+    expect(facetsFromDataset({ style: 'styled' }).style).toBe('styled');
+    expect(facetsFromDataset({ style: 'mine' }).style).toBe('mine');
+    expect(facetsFromDataset({}).style).toBeNull();
+    expect(facetsFromDataset({ style: 'other' }).style).toBeNull();
+  });
+
+  it('is offered only when it splits the list', () => {
+    const groups = (cards: PromptCard[]) => listFacets(cards, 'video', NOW).map((facet) => facet.group);
+    expect(groups([undeclared, card({ slug: 'b' })])).not.toContain('style');
+    expect(groups([styled, undeclared])).toContain('style');
+    expect(listFacets([styled, mine, undeclared], 'video', NOW).find((f) => f.group === 'style')!.options).toEqual([
+      { value: 'mine', count: 1 },
+      { value: 'styled', count: 1 },
+    ]);
+    // Every card styled alike: choosing it would hide nothing.
+    expect(groups([styled, { ...styled, slug: 'styled-2' }])).not.toContain('style');
+    expect(groups([styled, mine])).toContain('style');
+    // Never on the image list.
+    expect(listFacets([{ ...styled, medium: 'image' }, { ...mine, medium: 'image' }], 'image', NOW).map((f) => f.group)).not.toContain('style');
+  });
+
+  it('matches one choice; an undeclared card only under "all"', () => {
+    const facets = (c: PromptCard) => cardFacets(c, NOW);
+    expect(matchesFilter(facets(mine), { style: 'mine' })).toBe(true);
+    expect(matchesFilter(facets(styled), { style: 'mine' })).toBe(false);
+    expect(matchesFilter(facets(styled), { style: 'styled' })).toBe(true);
+    expect(matchesFilter(facets(undeclared), { style: 'styled' })).toBe(false);
+    expect(matchesFilter(facets(undeclared), { style: 'mine' })).toBe(false);
+    expect(matchesFilter(facets(undeclared), {})).toBe(true);
+  });
+});

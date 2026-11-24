@@ -9,6 +9,8 @@ import { makerAvatarSrc, makerCoverSrc } from '@/lib/makers/links';
 import type { MakerLink } from '@/lib/makers/fields';
 import { recipeSchemaReady } from '@/lib/recipes/repo';
 import { parseTemplateLocks, publicLocks, type PublicTemplateLocks } from '@/lib/template-director/locks';
+import type { PublicTemplateStyling } from '@/lib/template-director/styling';
+import { templateCardStyling } from '@/lib/template-director/compile-prompts';
 
 /**
  * PLAN §13.2 — the public card projection: "cards carry NO prompt text".
@@ -97,6 +99,13 @@ export interface PromptCard {
    * projection: never the block or a line's words.
    */
   locks?: PublicTemplateLocks;
+  /**
+   * docs/PERSONAL-STUDIO.md §3.4.9 (S2) — which parts the template styles (the buyer may keep their own hair or makeup
+   * instead) and which it takes from the photo, read from the `Template styling:` block of every prompt the compile
+   * reads (lib/template-director/compile-prompts.ts `templateCardStyling`). Present ONLY when they all declare the same
+   * styling, so every other card is exactly as before. Names only: never the block or a line's words.
+   */
+  styling?: PublicTemplateStyling;
 }
 
 export interface PromptTotals {
@@ -223,14 +232,23 @@ export function toPromptCard(
   options: PromptCatalogOptions = {},
   makerHandles: ReadonlyMap<string, string> = new Map(),
   openRecipes: ReadonlySet<string> = new Set(),
+  recipes: ReadonlyMap<string, unknown> = new Map(),
 ): PromptCard {
   const { poster, video, gallery } = shapePromptMedia(row.id, row.media, {
     publicUrl: options.publicUrl ?? publicContentUrl,
   });
   const origin = promptOrigin(row);
   const makerHandle = row.authorId === null ? null : makerHandles.get(row.authorId) ?? null;
-  // The prompt text is read for one thing only, the lock block, and only its public projection lands on the card.
+  // The prompt text is read for two things only, the lock and styling blocks, and only their public projections land
+  // on the card. A recipe template's styling is read from the recipe's result steps (the prompts its compile reads),
+  // which `loadPromptCatalog` hands in as `recipes`; every other row's from its own text.
   const locks = publicLocks(parseTemplateLocks(row.promptText));
+  const styling = templateCardStyling({
+    promptText: row.promptText,
+    recipe: recipes.get(row.id) ?? null,
+    recipeReady: recipes.has(row.id),
+    cast: row.cast,
+  });
   return {
     id: row.id,
     slug: row.slug,
@@ -260,7 +278,26 @@ export function toPromptCard(
     publishedAt: row.publishedAt,
     recipeOpen: openRecipes.has(row.id),
     ...(locks ? { locks } : {}),
+    ...(styling ? { styling } : {}),
   };
+}
+
+/**
+ * docs/PERSONAL-STUDIO.md §3.4.9 (S2) — the raw recipes of the published templates whose card styling must be read
+ * from their recipe steps: a recipe is set and either it or the main text mentions a styling block (without one in
+ * either, the card claims nothing either way). Empty before 0059, exactly when the render pass never takes the recipe
+ * path. A recipe that no longer parses is still handed over: `templateCardStyling` then reads the main text, as the
+ * render pass does.
+ */
+async function loadStylingRecipes(sql: SqlRunner): Promise<Map<string, unknown>> {
+  if (!(await recipeSchemaReady(sql))) return new Map();
+  const { rows } = await sql.query<{ id: string; recipe: unknown }>(
+    `select p.id, to_jsonb(p.*)->'recipe' as recipe from prompt_items p
+      where p.status = 'published' and p.audience = 'public' and to_jsonb(p.*)->'recipe' is not null
+        and jsonb_typeof(to_jsonb(p.*)->'recipe') = 'object'
+        and ((to_jsonb(p.*)->'recipe')::text ilike '%template styling:%' or p.prompt_text ilike '%template styling:%')`,
+  );
+  return new Map(rows.map((row) => [row.id, row.recipe]));
 }
 
 /**
@@ -286,10 +323,11 @@ export async function loadPromptCatalog(
   const rows = await loadPublishedPrompts(sql);
   const makerRows = await loadPublicMakerRows(sql);
   const openRecipes = await loadOpenRecipeIds(sql);
+  const stylingRecipes = await loadStylingRecipes(sql);
   const makerHandles = new Map(makerRows.map((maker) => [maker.userId, maker.handle]));
   const cards = rows
     .filter((row) => (row.cast !== 'couple' || options.coupleOpen === true) && (row.cast !== 'pet' || options.petOpen === true))
-    .map((row) => toPromptCard(row, options, makerHandles, openRecipes));
+    .map((row) => toPromptCard(row, options, makerHandles, openRecipes, stylingRecipes));
 
   // The two rails are by ORIGIN: a maker's template is a `source='yagi'` row too (0046).
   const yagi = cards.filter((card) => card.origin === 'studio');

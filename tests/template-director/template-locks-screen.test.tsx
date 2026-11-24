@@ -265,14 +265,19 @@ function panel(props: Partial<Parameters<typeof TemplateDirectorPanel>[0]> = {})
 }
 
 describe('TemplateDirectorPanel with template locks (flag off: no editSheet)', () => {
-  it('replaces the guessed "fixed" chips with the skeleton line and the real locked parts', () => {
+  // docs/PERSONAL-STUDIO.md §3.4.9 (S2): a declared template shows no guess by address at all, and its parts are listed
+  // once, on the make card's parts card (components/twings/template-parts-card.tsx), not again in the panel.
+  it('replaces every guess by address with the skeleton line; the locked parts are left to the make card', () => {
     const html = panel({ locks: CAMPAIGN, lockCopy: ko.editSheet });
-    const row = html.slice(html.indexOf('data-template-locked-elements'), html.indexOf('data-director-predictive-presets'));
-    for (const guessed of BASELINE.lockedElementsKo) expect(row).not.toContain(guessed);
+    const start = html.indexOf('data-template-locked-elements');
+    const row = html.slice(start, html.indexOf('</section>', start));
+    for (const guessed of BASELINE.lockedElementsKo) expect(html).not.toContain(guessed);
     expect(html).not.toContain('템플릿 고정 (변경 불가)');
+    expect(html).not.toContain(BASELINE.titleKo);
+    expect(html).toContain('data-template-baseline-card="declared"');
     expect(row).toContain(ko.editSheet.lockedHeading);
     expect(row).toContain(ko.editSheet.skeleton);
-    expect([...row.matchAll(/data-template-lock-part="([^"]+)"/g)].map((m) => m[1])).toEqual(['product', 'logo', 'hair', 'shots-2-3']);
+    expect(html).not.toContain('data-template-lock-part=');
   });
 
   it('hides every closed photo picker and leaves the open ones', () => {
@@ -293,23 +298,17 @@ describe('TemplateDirectorPanel with template locks (flag off: no editSheet)', (
     expect(panel({ locks: CAMPAIGN, lockCopy: ko.editSheet })).toContain('data-director-audio-toggle');
   });
 
-  it('does not offer a preset or a slot card whose part or photo is closed', () => {
+  it('offers no preset or slot card chosen by address, and no quick pill whose part or photo is closed', () => {
     const html = panel({ locks: CAMPAIGN, lockCopy: ko.editSheet });
-    const closedSlots = new Set(['hair', 'prop']);
-    const closedRefs = new Set(['outfit', 'prop', 'scene']);
-    for (const preset of BASELINE.predictivePresets) {
-      const closed = closedSlots.has(preset.slot) || (preset.opensReferenceSlot ? closedRefs.has(preset.opensReferenceSlot) : false);
-      expect(html.includes(`data-predictive-preset="${preset.id}"`), preset.id).toBe(!closed);
-    }
+    expect(html).not.toContain('data-director-predictive-presets');
+    for (const preset of BASELINE.predictivePresets) expect(html.includes(`data-predictive-preset="${preset.id}"`), preset.id).toBe(false);
     // The quick pills: a closed part, or a pill that works from a closed photo (outfit and prop pills ask for one).
     for (const slot of ['hair', 'prop', 'outfit']) expect(html).not.toContain(`data-director-preset="${slot}"`);
     for (const slot of ['makeup', 'shot_action']) expect(html).toContain(`data-director-preset="${slot}"`);
     const propOnly = panel({ locks: PROP_ONLY, lockCopy: ko.editSheet });
     expect(propOnly).toContain('data-director-preset="outfit"');
     expect(propOnly).not.toContain('data-director-preset="prop"');
-    for (const slot of BASELINE.baselineSlots) {
-      expect(html.includes(`data-baseline-slot="${slot.slot}"`), slot.slot).toBe(!closedSlots.has(slot.slot));
-    }
+    for (const slot of BASELINE.baselineSlots) expect(html.includes(`data-baseline-slot="${slot.slot}"`), slot.slot).toBe(false);
   });
 
   it('a malformed block: one "everything is fixed" line, nothing to pick or change', () => {
@@ -346,11 +345,12 @@ describe('TemplateDirectorPanel with template locks (flag off: no editSheet)', (
     expect(placeholder(panel())).toBe('예: 2번째 컷에서 컵 대신 내 향수를 들고 정면을 보며 살짝 웃게 해줘');
   });
 
-  it('English names the parts in English', () => {
+  it('English says the skeleton in English', () => {
     const html = panel({ locale: 'en', locks: CAMPAIGN, lockCopy: en.editSheet });
-    const row = html.slice(html.indexOf('data-template-locked-elements'), html.indexOf('data-director-predictive-presets'));
+    const start = html.indexOf('data-template-locked-elements');
+    const row = html.slice(start, html.indexOf('</section>', start));
+    expect(row).toContain(en.editSheet.lockedHeading);
     expect(row).toContain(en.editSheet.skeleton);
-    expect(row).toContain('Shots 2–3');
     expect(row).not.toMatch(/[가-힣]/);
   });
 });
@@ -364,10 +364,11 @@ describe('TemplateDirectorPanel with template locks (flag on: editSheet)', () =>
     expect(panel({ initialExpanded: false, editSheet: ko.editSheet })).not.toContain('data-edit-sheet');
   });
 
-  it('uses the sheet words when no separate lock words are given', () => {
+  it('uses the sheet words when no separate lock words are given; the sheet card keeps its fixed block', () => {
     const html = panel({ editSheet: ko.editSheet, locks: PROP_ONLY });
-    expect(html).toContain('data-template-lock-part="prop"');
+    expect(html).toContain('data-template-baseline-card="declared"');
     expect(html).toContain('data-edit-sheet-locked="prop"');
+    expect(html).not.toContain('data-template-lock-part=');
   });
 
   it('is unchanged without locks', () => {

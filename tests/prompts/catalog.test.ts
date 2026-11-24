@@ -179,3 +179,52 @@ describe('prompt catalog projection (§13.2)', () => {
     expect(landingPromptCards(EMPTY_PROMPT_CATALOG)).toEqual([]);
   });
 });
+
+/**
+ * docs/PERSONAL-STUDIO.md §3.4.9 (S2) — `PromptCard.styling`: present only on a template that declares its styling,
+ * names only, read from the prompts an order compiles (a recipe's result steps, else the main text).
+ */
+describe('the styling projection on the card', () => {
+  let harness: PromptHarness;
+  const STYLING = 'Template styling:\n- Styled by the template: the hairstyle — a sleek low bun.\n- Taken from the photo: the makeup.';
+  const frames = (block: string) => ({
+    version: 2,
+    slots: { selfie: { kind: 'image', source: 'user', required: true } },
+    steps: [
+      { id: 'f1', kind: 'image', engine: 'gpt-image-2', inputs: ['selfie'], prompt: `Frame one of {{selfie}}.${block}`, params: { aspect: '4:5' } },
+      { id: 'f2', kind: 'image', engine: 'gpt-image-2', inputs: ['selfie'], prompt: `Frame two of {{selfie}}.${block}`, params: { aspect: '4:5' } },
+    ],
+    output: { frames: ['f1', 'f2'] },
+  });
+
+  beforeAll(async () => {
+    harness = await promptHarness();
+  });
+  afterAll(async () => harness.close());
+
+  async function cardOf(slug: string) {
+    const catalog = await loadPromptCatalog(harness.sql, { publicUrl: () => null });
+    return [...catalog.video, ...catalog.image].find((card) => card.slug === slug)!;
+  }
+
+  it('a text template with a block: the key appears, names only; without one it is absent', async () => {
+    const plain = await cardOf('neon-alley-dolly');
+    expect(Object.hasOwn(plain, 'styling')).toBe(false);
+    await harness.sql.query("update prompt_items set prompt_text = prompt_text || $2 where slug = $1", ['neon-alley-dolly', `\n\n${STYLING}`]);
+    const styled = await cardOf('neon-alley-dolly');
+    expect(Object.keys(styled)).toContain('styling');
+    expect(styled.styling).toEqual({ styled: ['hair'], photo: ['makeup'] });
+    expect(Object.keys(styled.styling!).sort()).toEqual(['photo', 'styled']);
+    expect(JSON.stringify(styled)).not.toMatch(/sleek low bun|Template styling|Styled by the template/);
+  });
+
+  it('a recipe template: its result steps decide, not the main text', async () => {
+    const slug = 'static-portrait-window-light';
+    // The main text declares it, the steps do not: an order never reads the main text, so the card claims nothing.
+    await harness.sql.query("update prompt_items set prompt_text = prompt_text || $2, recipe = $3::jsonb where slug = $1", [slug, `\n\n${STYLING}`, JSON.stringify(frames(''))]);
+    expect(Object.hasOwn(await cardOf(slug), 'styling')).toBe(false);
+    // Every result step declares it: the card shows it.
+    await harness.sql.query('update prompt_items set recipe = $2::jsonb where slug = $1', [slug, JSON.stringify(frames(`\n\n${STYLING}`))]);
+    expect((await cardOf(slug)).styling).toEqual({ styled: ['hair'], photo: ['makeup'] });
+  });
+});

@@ -50,6 +50,7 @@ vi.mock('@/components/twings/studio', () => ({
 import TemplatePage from '@/app/(marketing)/[locale]/t/[slug]/page';
 import { toPromptCard } from '@/lib/prompts/catalog';
 import { parseTemplateLocks, publicLocks, renderLockBlock } from '@/lib/template-director/locks';
+import { renderStylingBlock } from '@/lib/template-director/styling';
 
 const HAIR_TAIL = 'a bright pink chin-length bob PRIVATE-PAGE-TAIL';
 const BLOCK = renderLockBlock([{ kind: 'product' }, { kind: 'slot', slot: 'hair', note: HAIR_TAIL }, { kind: 'shots', from: 2, to: 3 }]);
@@ -156,5 +157,99 @@ describe('the fixed row under the example video (T1a)', () => {
     const fixed = media.fixed as { parts: Array<Record<string, unknown>> };
     expect(fixed.parts.map((p) => p.key)).toEqual(['product', 'hair', 'shots-2-3']);
     expect((media.keyframes as unknown[]).length).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe('a template that styles the hair and makeup (S2, docs/PERSONAL-STUDIO.md §3.4.9)', () => {
+  const STYLE_TAIL = 'a sleek low bun PRIVATE-STYLE-TAIL';
+  const STYLING = renderStylingBlock([
+    { part: 'hair', from: 'template', note: STYLE_TAIL },
+    { part: 'makeup', from: 'template', note: 'soft rosy cheeks PRIVATE-MAKEUP-TAIL' },
+    { part: 'outfit', from: 'photo' },
+  ]);
+  const PROP_LOCK = renderLockBlock([{ kind: 'slot', slot: 'prop', note: 'a silver microphone PRIVATE-PROP-TAIL' }]);
+  const STYLE_PRIVATE = ['Template styling', 'Styled by the template', 'Taken from the photo', 'PRIVATE-STYLE-TAIL', 'PRIVATE-MAKEUP-TAIL', 'PRIVATE-PROP-TAIL', 'sleek low bun', 'rosy cheeks', 'silver microphone'];
+  const expectNoStyleWords = (value: unknown) => {
+    const serialised = typeof value === 'string' ? value : JSON.stringify(value);
+    for (const needle of STYLE_PRIVATE) expect(serialised.includes(needle), needle).toBe(false);
+  };
+
+  it('the card carries names only; the studio gets the styling and the parts with the choice, flag on or off', async () => {
+    state.card = toPromptCard(row(`${BODY}\n\n${PROP_LOCK}\n\n${STYLING}`), { publicUrl: () => null });
+    expect(state.card.styling).toEqual({ styled: ['hair', 'makeup'], photo: ['outfit'] });
+    expect(Object.keys(state.card.styling!).sort()).toEqual(['photo', 'styled']);
+    for (const flag of [false, true]) {
+      state.flag = flag;
+      state.keyframes = [{ index: 0, timeSeconds: 1, endSeconds: 2, part: 'hair', labelKo: '낮게 묶은 머리', labelEn: 'Low bun' }];
+      const { html, live, props, media } = await render('ko');
+      expect(live.styling).toEqual({ styled: ['hair', 'makeup'], photo: ['outfit'] });
+      expect(live.lockCopy).toEqual(ko.editSheet);
+      const parts = live.parts as { rows: Array<Record<string, unknown>>; all: boolean; copy: Record<string, string> };
+      expect(parts.all).toBe(false);
+      expect(parts.rows.map((r) => [r.key, r.state, r.choice, r.desc])).toEqual([
+        ['prop', 'locked', false, null],
+        ['hair', 'styled', true, '낮게 묶은 머리'],
+        ['makeup', 'styled', true, null],
+        ['outfit', 'photo', false, null],
+      ]);
+      expect(parts.copy).toMatchObject({ template: ko.editSheet.styleTemplate, mine: ko.editSheet.styleMine, templateNote: ko.editSheet.styleTemplateNote, styled: ko.templates.fixed.styled, photo: ko.templates.fixed.photo });
+      const fixed = media.fixed as { parts: Array<Record<string, unknown>> };
+      expect(fixed.parts.map((p) => [p.key, p.state])).toEqual([['prop', 'locked'], ['hair', 'styled'], ['makeup', 'styled'], ['outfit', 'photo']]);
+      expectNoStyleWords(props);
+      expectNoStyleWords(media);
+      expectNoStyleWords(html);
+    }
+  });
+
+  it('styling without locks: no lock key, the styling, the parts', async () => {
+    state.card = toPromptCard(row(`${BODY}\n\n${STYLING}`), { publicUrl: () => null });
+    const { live } = await render('en');
+    expect(Object.hasOwn(live, 'locks')).toBe(false);
+    expect(live.styling).toEqual({ styled: ['hair', 'makeup'], photo: ['outfit'] });
+    expect((live.parts as { copy: Record<string, string> }).copy).toMatchObject({ template: 'Template style', mine: 'From my photo', photo: 'From your photo' });
+    expectNoStyleWords(live);
+  });
+
+  it('a malformed styling block claims nothing: no styling, no parts', async () => {
+    state.card = toPromptCard(row(`${BODY}\n\nTemplate styling:\n- Styled by the template: the eyebrows — arched.`), { publicUrl: () => null });
+    expect(Object.hasOwn(state.card, 'styling')).toBe(false);
+    const { live, media } = await render('ko');
+    for (const key of ['styling', 'parts', 'lockCopy', 'locks']) expect(Object.hasOwn(live, key), key).toBe(false);
+    expect(Object.hasOwn(media, 'fixed')).toBe(false);
+  });
+
+  it('a template without a declaration hands over no styling or parts key', async () => {
+    state.card = toPromptCard(row(BODY), { publicUrl: () => null });
+    for (const flag of [false, true]) {
+      state.flag = flag;
+      const { live } = await render('ko');
+      expect(Object.hasOwn(live, 'styling')).toBe(false);
+      expect(Object.hasOwn(live, 'parts')).toBe(false);
+    }
+  });
+});
+
+describe('the template page leftovers (2026-11-24)', () => {
+  it('a video template prints no genre chips; an unknown length is no length, never "0초"', async () => {
+    state.card = { ...toPromptCard(row(BODY), { publicUrl: () => null }), useCase: ['mv', 'brand-ad'], runtimeSeconds: null };
+    const { html, props } = await render('ko');
+    expect(html).not.toContain('data-template-use-case');
+    const styles = props[0]!.styles as Array<{ runtime: string }>;
+    expect(styles[0]!.runtime).toBe('');
+    expect(html).not.toContain('0초');
+  });
+
+  it('an image template keeps its genre chips', async () => {
+    state.card = { ...toPromptCard(row(BODY), { publicUrl: () => null }), medium: 'image', useCase: ['mv', 'brand-ad'], runtimeSeconds: null };
+    state.studio = [];
+    const html = renderToStaticMarkup(await TemplatePage({ params: Promise.resolve({ locale: 'ko', slug: 'serum-counter-locks' }) }));
+    expect(html).toContain('data-template-use-case="mv"');
+    expect(html).toContain('data-template-use-case="brand-ad"');
+  });
+
+  it('a video with a length still says it', async () => {
+    state.card = toPromptCard(row(BODY), { publicUrl: () => null });
+    const { props } = await render('ko');
+    expect((props[0]!.styles as Array<{ runtime: string }>)[0]!.runtime).toBe('10');
   });
 });

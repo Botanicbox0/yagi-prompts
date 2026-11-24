@@ -52,7 +52,7 @@ import { CreativeAvatar } from '@/components/makers/identity';
 import { PersonalIdentity } from '@/components/audience/personal-identity';
 import { defaultTimelineKeyframes, splitKeyframes } from '@/lib/prompts/keyframes';
 import { cachedPromptKeyframes } from '@/lib/prompts/keyframes-cached';
-import { templatePartsView } from '@/lib/template-director/parts-view';
+import { partRows, templatePartsView } from '@/lib/template-director/parts-view';
 
 /**
  * `/[locale]/t/[slug]` — one template, which is also where it is made (docs/TEMPLATES-IA.md §2).
@@ -136,11 +136,43 @@ export default async function TemplatePage({ params }: RouteParams) {
   // keeps the default beats, as a row without keyframes always did.
   const { beats: storedBeats, marks } = splitKeyframes(storedKeyframes ?? []);
   const videoKeyframes = card.medium === 'video' ? (storedBeats.length ? storedBeats : defaultTimelineKeyframes(card.runtimeSeconds)) : null;
-  // §3.4.4 (T1a): what the template decides, under the example video. Names come from the public lock projection
-  // (never a word of the block); a mark for a part the prompt does not declare is dropped here. No declaration, no prop.
-  const fixedParts = card.medium === 'video' && card.locks ? templatePartsView({ locks: card.locks, marks, copy: dict.editSheet, locale }) : [];
-  const fixed = card.medium === 'video' && card.locks && (fixedParts.length > 0 || card.locks.all)
-    ? { parts: fixedParts, all: card.locks.all, copy: { ...dict.templates.fixed, lockedAll: dict.editSheet.lockedAll } }
+  // §3.4.4 (T1a) · §3.4.9 (S2): what the template decides — its locked parts, the hair, makeup or wardrobe it styles
+  // and the parts it takes from the photo. Names come from the public lock and styling projections (never a word of a
+  // block); a mark for a part the template does not declare is dropped here. No declaration, no prop.
+  const declaredLocks = card.locks ?? null;
+  const declaredStyling = card.styling ?? null;
+  const declares = declaredLocks !== null || declaredStyling !== null;
+  const partsView = declares
+    ? templatePartsView({ locks: declaredLocks, styling: declaredStyling, marks: card.medium === 'video' ? marks : [], copy: dict.editSheet, locale })
+    : [];
+  const fixedAll = declaredLocks?.all === true;
+  const fixed = card.medium === 'video' && declares && (partsView.length > 0 || fixedAll)
+    ? { parts: partsView, all: fixedAll, copy: { ...dict.templates.fixed, lockedAll: dict.editSheet.lockedAll } }
+    : null;
+  // The same parts on the make card, one row per part, with the hair and makeup choice where the template styles them.
+  const e = dict.editSheet;
+  const makeParts = declares && (partsView.length > 0 || fixedAll)
+    ? {
+        rows: partRows(partsView),
+        all: fixedAll,
+        copy: {
+          heading: dict.templates.fixed.heading,
+          lockedAll: e.lockedAll,
+          locked: dict.templates.fixed.locked,
+          styled: dict.templates.fixed.styled,
+          photo: dict.templates.fixed.photo,
+          choiceLabel: e.styleChoiceLabel,
+          template: e.styleTemplate,
+          mine: e.styleMine,
+          templateNote: card.medium === 'image' ? e.styleTemplateNoteImage : e.styleTemplateNote,
+          mineHair: e.styleMineHair,
+          mineMakeup: e.styleMineMakeup,
+          overridden: e.styleOverridden,
+          outfitPhoto: e.styleOutfitPhoto,
+          outfitPhotoCta: e.styleOutfitPhotoCta,
+          outfitAttached: e.styleOutfitAttached,
+        },
+      }
     : null;
   const petOnly = makeInputs !== null && makeInputs.pet && !makeInputs.selfie;
   const teaserRecipe = recipe ? recipeTeaser(recipe) : null;
@@ -199,7 +231,8 @@ export default async function TemplatePage({ params }: RouteParams) {
         id: card.slug,
         title,
         price: formatTemplatePrice(card, locale),
-        runtime: String(card.runtimeSeconds ?? 0),
+        // 2026-11-24: an unknown length is no length, never "0초".
+        runtime: card.runtimeSeconds ? String(card.runtimeSeconds) : '',
         blurb: card.useCase.map((value) => useCaseLabels[value] ?? value).join(' · '),
         posterSrc: card.poster?.src ?? null,
         videoSrc: card.video?.src ?? null,
@@ -331,8 +364,9 @@ export default async function TemplatePage({ params }: RouteParams) {
                   <span data-template-verified title={t.verifiedHint} className="inline-flex items-center rounded-full bg-[#F4F4F5] px-2.5 py-1 font-medium text-[#52525B]">
                     {t.verified}
                   </span>
-                  {card.useCase.filter((v) => v !== 'cinematic').map((value) => (
-                    <span key={value} className="inline-flex items-center rounded-full bg-[#F4F4F5] px-2.5 py-1 text-[#52525B]">
+                  {/* 2026-11-24 (founder): genre words say nothing about a video, so a video template leaves them out. */}
+                  {card.medium !== 'video' && card.useCase.filter((v) => v !== 'cinematic').map((value) => (
+                    <span key={value} data-template-use-case={value} className="inline-flex items-center rounded-full bg-[#F4F4F5] px-2.5 py-1 text-[#52525B]">
                       {useCaseLabels[value] ?? value}
                     </span>
                   ))}
@@ -431,6 +465,10 @@ export default async function TemplatePage({ params }: RouteParams) {
                             // docs/PERSONAL-STUDIO.md §3.3 — a template's locked parts, flag on or off: the card's
                             // public projection only (which parts, never the lock block's words).
                             ...(card.locks ? { locks: card.locks, lockCopy: dict.editSheet } : {}),
+                            // docs/PERSONAL-STUDIO.md §3.4.9 (S2) — the styling projection (names only) and the declared
+                            // parts with the make card's words; only on a template that declares them.
+                            ...(card.styling ? { styling: card.styling, lockCopy: dict.editSheet } : {}),
+                            ...(makeParts ? { parts: makeParts } : {}),
                             labels: {
                               badge: dict.renders.studio.badge,
                               operatorBadge: dict.renders.studio.operatorBadge,

@@ -11,7 +11,10 @@ import { PremiumEditor } from './premium-editor';
 import { TemplateDirectorPanel, type DirectorImageSetSpec } from './template-director-panel';
 import type { PublicRecipe } from '@/lib/recipes/public';
 import type { CustomDirectorRefSlot, PersonalDirectorSpec } from '@/lib/template-director/schema';
-import type { PublicTemplateLocks } from '@/lib/template-director/locks';
+import { locksFromPublic, type PublicTemplateLocks } from '@/lib/template-director/locks';
+import { explicitStyleParts, type OwnStylePart, type PublicTemplateStyling } from '@/lib/template-director/styling';
+import { orderSpecField, type StyleChoice, type StyleChoices, type TemplatePartRow, type TemplatePartsCopy } from '@/lib/template-director/parts-view';
+import { TemplatePartsCard } from './template-parts-card';
 import { shrinkPhoto } from '@/lib/images/client-photo';
 export { shrinkPhoto } from '@/lib/images/client-photo';
 import type { EditScope } from '@/lib/premium-editing/contract';
@@ -146,6 +149,17 @@ export interface StudioLive {
    */
   locks?: PublicTemplateLocks;
   lockCopy?: Dictionary['editSheet'];
+  /**
+   * docs/PERSONAL-STUDIO.md §3.4.9 (S2) — the template's styling (the catalogue card's public projection), handed in
+   * only when the template declares one.
+   */
+  styling?: PublicTemplateStyling;
+  /**
+   * §3.4.4 · §3.4.9 (S2) — the parts the template declares (locks and styling), one row per part with the admin's
+   * descriptions, and the words; handed in only when it declares any. Shown above the pay button, where the buyer picks
+   * the template's or their own hair and makeup on a styled template.
+   */
+  parts?: { rows: TemplatePartRow[]; all: boolean; copy: TemplatePartsCopy };
   labels: {
     badge: string;
     /** Operators render for real without a charge (founder, 2026-09-10). */
@@ -348,6 +362,10 @@ export function TwingsStudio({
   const [paymentMode, setPaymentMode] = useState<'monthly' | 'single'>('monthly');
   const [usageExhausted, setUsageExhausted] = useState(false);
   const [selectedFrames, setSelectedFrames] = useState<number[] | null>(null);
+  // §3.4.9 (S2): the buyer's hair and makeup choice on a styled template ("템플릿 스타일" by default), and the make card's
+  // "add an outfit photo" request to the edit panel.
+  const [styleChoices, setStyleChoices] = useState<StyleChoices>({});
+  const [outfitPhotoRequest, setOutfitPhotoRequest] = useState(0);
   const [selectivePriceOverride, setSelectivePriceOverride] = useState<string | null>(null);
   const [effectiveStorePlatform, setEffectiveStorePlatform] = useState<StorePlatform>(
     storePlatform ?? 'web',
@@ -399,6 +417,11 @@ export function TwingsStudio({
   const monthlyResolution = monthlyResolutions.find((option) => option.id === resolution) ?? monthlyResolutions[0] ?? null;
   const monthlyUsePercent = monthlyResolution ? subscriptionUseByResolution?.[monthlyResolution.id] ?? subscriptionUsePercent : subscriptionUsePercent;
   const insufficientUsage = monthlyUsePercent !== null && (subscription?.remainingPercent ?? 0) < monthlyUsePercent;
+  // §3.4.9 (S2): what the customer's edits change explicitly wins over the choice (the server rule, `ownChoiceFor`).
+  const partRowsLive = live?.parts?.rows ?? [];
+  const overriddenParts = live?.parts
+    ? explicitStyleParts(directorDraft.directorSpec, { sheet: live.editSheet ? directorDraft.directorSpec?.sheet ?? null : null })
+    : [];
 
   useEffect(() => {
     const nextStyle = styles.find(item => item.id === initialStyleId) ?? styles[0];
@@ -567,8 +590,11 @@ export function TwingsStudio({
         if (selectedFrames && selectedFrames.length > 0) {
           form.set('selectedFrames', selectedFrames.join(','));
         }
-        if (directorDraft.directorSpec) {
-          form.set('directorSpec', JSON.stringify(directorDraft.directorSpec));
+        // §3.4.9 (S2): the hair or makeup the buyer keeps as their own rides the spec as `own`; with none chosen the
+        // spec is exactly the panel's (`withOwnChoice` hands the same value back), so the request is as before.
+        const orderSpec = orderSpecField(directorDraft.directorSpec, partRowsLive, styleChoices, overriddenParts);
+        if (orderSpec !== null) {
+          form.set('directorSpec', orderSpec);
         }
         for (const slot of ['look_ref', 'prop_ref', 'scene_ref'] as const) {
           const customFile = directorDraft.slotFiles[slot];
@@ -896,7 +922,8 @@ export function TwingsStudio({
                           {!isVideoStyle(style) && style.blurb && <span className="font-mono text-[0.72rem] opacity-55">{style.blurb}</span>}
                           <span className="mt-1 flex items-baseline justify-between font-label text-[0.7rem] tracking-[0.12em] uppercase">
                             {!monthly && <span className="text-accent">{style.price}</span>}
-                            <span className="opacity-45">{labels.runtimeLabel.replace('{seconds}', style.runtime)}</span>
+                            {/* 2026-11-24: an unknown length says nothing rather than "0초". */}
+                            {Number(style.runtime) > 0 && <span className="opacity-45">{labels.runtimeLabel.replace('{seconds}', style.runtime)}</span>}
                           </span>
                         </span>
                       </button>
@@ -985,6 +1012,8 @@ export function TwingsStudio({
                   editSheet={live.editSheet}
                   locks={live.locks ?? null}
                   lockCopy={live.lockCopy ?? null}
+                  {...(live.styling ? { styling: live.styling } : {})}
+                  {...(live.parts ? { outfitPhotoRequest } : {})}
                   onSelectedFramesChange={(indices, quote) => {
                     setSelectedFrames(indices);
                     if (quote.isPartialSelection) {
@@ -996,6 +1025,24 @@ export function TwingsStudio({
                     } else {
                       setSelectivePriceOverride(null);
                     }
+                  }}
+                  disabled={submitting}
+                />
+              )}
+
+              {/* §3.4.4 · §3.4.9 (S2): what the template decides, right above the button and outside the folding panel. */}
+              {live.parts && (
+                <TemplatePartsCard
+                  rows={live.parts.rows}
+                  all={live.parts.all}
+                  copy={live.parts.copy}
+                  choices={styleChoices}
+                  {...(monthly ? {} : { onChoose: (part: OwnStylePart, choice: StyleChoice) => setStyleChoices((current) => ({ ...current, [part]: choice })) })}
+                  overridden={overriddenParts}
+                  outfitPhoto={{
+                    open: !editorOpen && !locksFromPublic(live.locks).refs.includes('look_ref'),
+                    attached: Boolean(directorDraft.slotFiles.look_ref),
+                    onAdd: () => setOutfitPhotoRequest((n) => n + 1),
                   }}
                   disabled={submitting}
                 />
