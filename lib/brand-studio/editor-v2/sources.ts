@@ -72,8 +72,10 @@ export function editorSources(
 }
 
 /**
- * How many of the organization's assets the editor page reads (`assetsOf`, newest first): the library's
- * video assets and the record below come from that one read.
+ * How many of the organization's assets the editor page reads (`assetsOf(deps.sql, choice.id, 200)`, newest
+ * first, the same call as the current editor's page): the library's video assets and the record below come from
+ * that one read. tests/brand-studio/editor-v2/flag-gate.test.ts holds the page to that call and
+ * tests/brand-studio/editor-v2/missing-record.test.ts holds this number to it, so the two cannot drift apart.
  */
 export const EDITOR_ASSET_LIMIT = 200;
 

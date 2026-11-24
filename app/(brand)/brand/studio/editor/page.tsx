@@ -64,7 +64,7 @@ export default async function StudioEditorV2Page({
 
   const { deps } = ctx;
   const media = createStudioMediaStore();
-  const [rawAssets, rawJobs] = await Promise.all([assetsOf(deps.sql, choice.id, EDITOR_ASSET_LIMIT), jobsOf(deps.sql, choice.id, 60)]);
+  const [rawAssets, rawJobs] = await Promise.all([assetsOf(deps.sql, choice.id, 200), jobsOf(deps.sql, choice.id, 60)]);
   const assets = rawAssets.filter((asset) => asset.kind === 'video').map((asset) => assetView(asset, media));
   const jobs = await viewsOf(deps.sql, rawJobs, media);
   const videoOutputs = jobs.flatMap((job) =>

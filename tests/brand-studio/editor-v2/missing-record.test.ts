@@ -38,6 +38,11 @@ describe('which asset a cut reads', () => {
 });
 
 describe('the record is complete only below the page’s limit', () => {
+  it('the limit is the page’s own read: assetsOf(deps.sql, choice.id, 200), which flag-gate.test.ts holds the page to', () => {
+    // A smaller read than this number would make a cut-off list look complete; keep both at 200 or change both.
+    expect(EDITOR_ASSET_LIMIT).toBe(200);
+  });
+
   it(`fewer than ${EDITOR_ASSET_LIMIT} assets: complete; exactly the limit: maybe more beyond it`, () => {
     expect(assetRecordOf(ids(EDITOR_ASSET_LIMIT - 1)).complete).toBe(true);
     expect(assetRecordOf(ids(EDITOR_ASSET_LIMIT)).complete).toBe(false);
