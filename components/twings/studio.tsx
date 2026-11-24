@@ -129,6 +129,11 @@ export interface StudioLive {
   /** docs/CAST-CATEGORIES.md §3 — the pet and partner photo fields' words. */
   cast?: Dictionary['cast']['photo'];
   subscription?: { copy: Dictionary['creatorSubscription']; editorCopy: Dictionary['premiumEditor'] };
+  /**
+   * docs/PERSONAL-STUDIO.md §3.1 — the edit sheet card's words, handed in only when `TWINGS_PERSONAL_EDIT_SHEET`
+   * is on. Present, the director panel shows the sheet card and the order carries the sheet; absent, chips as before.
+   */
+  editSheet?: Dictionary['editSheet'];
   labels: {
     badge: string;
     /** Operators render for real without a charge (founder, 2026-09-10). */
@@ -955,6 +960,7 @@ export function TwingsStudio({
                   medium={chosen?.videoSrc ? 'video' : 'image'}
                   disclosedRecipe={disclosedRecipe}
                   onDraftChange={setDirectorDraft}
+                  editSheet={live.editSheet}
                   onSelectedFramesChange={(indices, quote) => {
                     setSelectedFrames(indices);
                     if (quote.isPartialSelection) {

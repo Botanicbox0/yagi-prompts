@@ -23,7 +23,7 @@ const makers = vi.hoisted(() => [{
   links: [], publicEmail: null, tools: [], openToBrands: true, avatar: null, cover: null, templateCount: 1, openRecipeCount: 1, latestPublishedAt: null,
 }]);
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/flags', () => ({ RENDER_PIPELINE_MODE: 'off', RENDER_PIPELINE_PUBLIC: false }));
+vi.mock('@/lib/flags', () => ({ RENDER_PIPELINE_MODE: 'off', RENDER_PIPELINE_PUBLIC: false, personalEditSheetOpen: () => false }));
 vi.mock('@/lib/creator-subscriptions/cached-availability', () => ({
   cachedSubscriptionAvailability: async () => ({ status: 'preparing', version: 'verified', plans: { creator: { status: 'preparing' }, premium: { status: 'preparing' } }, editing: 'preparing', premiumEditRequestsPerPeriod: null }),
 }));

@@ -5940,4 +5940,44 @@ export const ko: Dictionary = {
     errNotAvailableYet: '현재 단계에서는 지원되지 않는 기능입니다.',
     detailLabel: '상세',
   },
+
+  /**
+   * docs/PERSONAL-STUDIO.md §2.3, §3.1 — 템플릿 페이지의 지시서 카드(플래그 `TWINGS_PERSONAL_EDIT_SHEET`).
+   * PROVISIONAL: not final, a wording pass replaces these strings. What each key must convey is noted next to the
+   * same key in messages/en.ts. Never name models, providers, prompts or internal terms here.
+   */
+  editSheet: {
+    title: '고칠 내용',
+    empty: '바꾸고 싶은 것을 적어 주세요. 여기에 정리해 드릴게요.',
+    changeHeading: '바꿀 것',
+    keepHeading: '그대로 둘 것',
+    excludeHeading: '빼야 할 것',
+    slots: {
+      outfit: '의상',
+      makeup: '메이크업',
+      hair: '헤어',
+      prop: '소품',
+      shot_action: '연출',
+      lighting_mood: '분위기',
+    },
+    photoAttached: '첨부한 사진',
+    shotOne: '{n}번째 컷',
+    shotRange: '{from}~{to}번째 컷',
+    revert: '되돌리기',
+    revertLabel: '{item} 되돌리기',
+    removeLabel: '{item} 빼기',
+    pendingTag: '보내기 전',
+    pendingTooLong: '요청이 길어 일부만 담겼어요. 먼저 보내서 정리해 주세요.',
+    full: '바꿀 것은 {max}개까지 담을 수 있어요. 하나를 빼고 다시 보내 주세요.',
+    questionLabel: '하나만 여쭤볼게요',
+    questionOptional: '답하지 않아도 바로 만들 수 있어요.',
+    updated: '고칠 내용에 담았어요.',
+    unchanged: '바뀐 것이 없어요. 조금 다르게 적어 주세요.',
+    rateLimited: '요청이 너무 많아요. 잠시 후 다시 보내 주세요.',
+    retry: '요청을 담지 못했어요. 다시 보내 주세요.',
+    refusedIdentity: '본인 얼굴로만 만들 수 있어요. 다른 사람 얼굴은 사용할 수 없어요.',
+    refusedUnsafe: '의상, 헤어, 소품, 연출 같은 장면 요청만 담을 수 있어요.',
+    refusedUnsupported: '이 장면에서는 바꿀 수 없는 부분이에요.',
+    refusedTooLarge: '요청이 너무 길어요. 짧게 나눠서 보내 주세요.',
+  },
 };
