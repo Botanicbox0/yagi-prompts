@@ -63,7 +63,8 @@ describe('allowance precedence, grace window & extra credits', () => {
       source: 'default',
     });
 
-    // 2. Assign plan b2b_49, but no plan default set yet -> falls through to env default
+    // 2. Assign plan b2b_49, but no plan default set yet -> R3 item 6 (changed on purpose): the plan's confirmed credits
+    //    (46,000 x 10 KRW), no longer the env default.
     expect(
       await setPlanAssignment({ sql: f.sql }, admin(), {
         organizationId: f.orgId,
@@ -75,10 +76,10 @@ describe('allowance precedence, grace window & extra credits', () => {
       }),
     ).toMatchObject({ ok: true });
     expect(await loadAllowance(f.sql, f.orgId, { defaultMonthlyKrw: 12_000 }, now)).toMatchObject({
-      capKrw: 12_000,
-      baseCapKrw: 12_000,
+      capKrw: 460_000,
+      baseCapKrw: 460_000,
       extraKrw: 0,
-      source: 'default',
+      source: 'plan',
     });
 
     // 3. Configure plan default (S3 two-step preview -> confirm: true) -> now resolves from plan default!
@@ -431,7 +432,8 @@ describe('migration safety & deploy-order resilience', () => {
     });
     if (preview.ok) {
       expect(preview.affectedOrganizations.map((o) => o.name).sort()).toEqual(['Beta Agency', 'Studio fixture brand']);
-      expect(preview.affectedOrganizations.every((o) => o.beforeCapKrw === 0 && o.afterCapKrw === 120_000)).toBe(true);
+      // R3 item 6 (changed on purpose): "before" is the plan's confirmed credits (27,000 x 10 KRW), not the env default 0.
+      expect(preview.affectedOrganizations.every((o) => o.beforeCapKrw === 270_000 && o.afterCapKrw === 120_000)).toBe(true);
     }
     expect(await loadPlanAllowanceDefaults(f.sql)).toHaveLength(0);
 
@@ -503,12 +505,18 @@ describe('migration safety & deploy-order resilience', () => {
     });
     vi.stubEnv('BRAND_STUDIO_DEFAULT_MONTHLY_KRW', '50000');
     try {
-      // Gate gives 50,000 from env default; setting plan default = 50,000 changes 0 orgs!
+      // R3 item 6 (changed on purpose): an active paid plan with no stored default runs on its confirmed credits
+      // (270,000 KRW for b2b_29), so the preview compares against that — the env default (50,000) no longer applies to it.
+      const sameAsConfirmed = await setPlanAllowanceDefault({ sql: f.sql }, admin(), {
+        planId: 'b2b_29',
+        monthlyCapKrw: 270_000,
+      });
+      expect(sameAsConfirmed).toMatchObject({ ok: true, applied: false, affectedCount: 0 });
       const sameAsEnv = await setPlanAllowanceDefault({ sql: f.sql }, admin(), {
         planId: 'b2b_29',
         monthlyCapKrw: 50_000,
       });
-      expect(sameAsEnv).toMatchObject({ ok: true, applied: false, affectedCount: 0 });
+      expect(sameAsEnv).toMatchObject({ ok: true, applied: false, affectedCount: 1 });
 
       const raiseTo120 = await setPlanAllowanceDefault({ sql: f.sql }, admin(), {
         planId: 'b2b_29',
@@ -516,7 +524,7 @@ describe('migration safety & deploy-order resilience', () => {
       });
       expect(raiseTo120).toMatchObject({ ok: true, applied: false, affectedCount: 1 });
       if (raiseTo120.ok) {
-        expect(raiseTo120.affectedOrganizations[0]).toMatchObject({ beforeCapKrw: 50_000, afterCapKrw: 120_000 });
+        expect(raiseTo120.affectedOrganizations[0]).toMatchObject({ beforeCapKrw: 270_000, afterCapKrw: 120_000 });
       }
     } finally {
       vi.unstubAllEnvs();

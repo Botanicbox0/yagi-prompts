@@ -17,7 +17,7 @@ import { useElementSize, useMediaQuery } from "../use-media";
 import type { StudioJobView, StudioOutputView } from "@/lib/brand-studio/contracts";
 import { creditsOf } from "@/lib/brand-studio/credits";
 import { studioModelOrLegacy } from "@/lib/brand-studio/models";
-import { credits, errorLine, fill, type StudioCopy, type StudioLocale } from "../copy";
+import { credits, fill, runFailedLine, type StudioCopy, type StudioLocale } from "../copy";
 
 /** A sibling's result in the same place as `output` in its own run (its 2nd picture for this one's 2nd), else its first. */
 export function siblingOutput(job: Pick<StudioJobView, "outputs">, output: Pick<StudioOutputView, "id"> | null, run: StudioJobView): StudioOutputView | null {
@@ -57,7 +57,7 @@ export function compareEntries(job: StudioJobView, output: StudioOutputView | nu
       const reason = shown
         ? null
         : run.status === "failed"
-          ? errorLine(copy, run.errorCode)
+          ? runFailedLine(copy, run.kind, run.errorCode)
           : run.status === "canceled"
             ? copy.board.canceled
             : (copy.board.stage[run.status as keyof typeof copy.board.stage] ?? copy.board.stage.queued);

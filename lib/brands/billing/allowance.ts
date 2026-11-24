@@ -17,9 +17,16 @@ import {
   type PaidBrandPlanId,
 } from './math';
 import { brandWorkspaceApprovalOpen } from '@/lib/flags';
+import { resolvePlanCapKrw } from './plan-credits';
 import { hasTable, loadAllowanceSchemaState } from './schema-guard';
 import { syncPlanDefaultSnapshot } from './snapshot';
-import { CYCLE_ALREADY_INVOICED, higherPlanNeedsUpgrade, PLAN_UPGRADE_REQUIRED, startDayMoveBlocked } from './cycle-invoices';
+import {
+  CYCLE_ALREADY_INVOICED,
+  higherPlanNeedsUpgrade,
+  lowerPlanWaitsForNextCycle,
+  PLAN_UPGRADE_REQUIRED,
+  startDayMoveBlocked,
+} from './cycle-invoices';
 import { loadWorkspaceApprovalSchemaReady } from './workspace-approval-schema';
 import type {
   BrandAllowanceGrant,
@@ -158,8 +165,9 @@ export async function setPlanAllowanceDefault(
           todayKst,
           graceDays,
         );
-        const beforeCapKrw = active && previousCapKrw !== null ? previousCapKrw : effectiveEnvDefault;
-        const afterCapKrw = active && v.monthlyCapKrw !== null ? v.monthlyCapKrw : effectiveEnvDefault;
+        // R3 item 6: an unset default (before, or after a clear) is the plan's confirmed credits, not the env default.
+        const beforeCapKrw = active ? (resolvePlanCapKrw(v.planId, previousCapKrw) ?? effectiveEnvDefault) : effectiveEnvDefault;
+        const afterCapKrw = active ? (resolvePlanCapKrw(v.planId, v.monthlyCapKrw) ?? effectiveEnvDefault) : effectiveEnvDefault;
         if (beforeCapKrw !== afterCapKrw) {
           affectedOrganizations.push({
             organizationId: String(org.organization_id),
@@ -300,6 +308,13 @@ export async function setPlanAndAllowance(
         if (stored && (await higherPlanNeedsUpgrade(sql, v.organizationId, stored.plan_id, v.planId, kstDayOf(deps.now?.() ?? new Date())))) {
           return { ok: false as const, code: 'conflict' as const, detail: PLAN_UPGRADE_REQUIRED };
         }
+        // R3 item 7 (+ fix round 1): a lower plan waits for the next cycle; the detail names why and the day.
+        const downgrade = stored
+          ? await lowerPlanWaitsForNextCycle(sql, v.organizationId, stored.plan_id, v.planId, kstDayOf(deps.now?.() ?? new Date()))
+          : null;
+        if (downgrade) {
+          return { ok: false as const, code: 'conflict' as const, detail: `${downgrade.code}:${downgrade.day}` };
+        }
       }
       const next = revision + 1;
 
@@ -337,8 +352,11 @@ export async function setPlanAndAllowance(
           kstDayOf(new Date()),
           planGraceDaysFromEnv(),
         ).active;
+        // R3 item 6: the snapshot holds the cap that applies (stored default, else the paid plan's confirmed credits).
         const planDefaultSnapshot =
-          v.allowanceMode === 'plan_default' && planIsActive ? ((await loadPlanAllowanceDefault(sql, v.planId)) ?? 0) : 0;
+          v.allowanceMode === 'plan_default' && planIsActive
+            ? (resolvePlanCapKrw(v.planId, await loadPlanAllowanceDefault(sql, v.planId)) ?? 0)
+            : 0;
         const capKrw = v.allowanceMode === 'override' ? v.monthlyCapKrw! : planDefaultSnapshot;
         const isOverride = v.allowanceMode === 'override';
 

@@ -145,7 +145,7 @@ values ('deb648e9-c2df-43d4-b2a7-7f9eff8180d9', array['generative_media','sound'
 - **예약 만료 10분 스윕**: 기존 10분 주기 크론(`/api/brand-rooms/notices/tick`)이 `expireStaleStudioReservations`와 1일 초과 `brand_discount_code_attempts` 배치 정리를 함께 멱등 실행한다. 10분 패스는 **① 10분 초과 작업 리스 해제, ② `held`/`queued` 24시간 초과 및 `running`/`finishing` 6시간 초과만** 만료 처리하며, 일시적 네트워크 끊김으로 정상 실행 중인 계정 레인(`sunra_mcp`) 작업이 잘리지 않도록 30분 유휴 계정 레인 판정은 일일 스윕(`sweepStudio`)에만 둔다.
 - **대표 확인·결정 대기 (임의로 확정하지 않음)**:
   1. 플랜(`b2b_29`·`b2b_49`·`b2b_69`·`project_only`)별 기본 제공 월 크레딧/한도 금액 (현재 기본값: 미설정 → 환경 기본값으로 폴백).
-  2. 플랜 종료일(`ends_on`) 경과 후 생성 유예 일수 (현재 기본값: `BRAND_PLAN_GRACE_DAYS = 7`일).
+  2. 플랜 종료일(`ends_on`) 경과 후 생성 유예 일수 (코드 기본값 7일. 운영은 2026-11-24부터 `BRAND_PLAN_GRACE_DAYS=14`로 14일).
   3. 플랜 정가가 부가세 별도인지 포함인지 여부 (현재 기본값: `BRAND_PLAN_PRICES_VAT_EXCLUSIVE = true` 부가세 별도).
   4. 첫 달 시작일 기준 일할 계산 기본 적용 여부 (현재 기본값: 초안에 일할 계산을 제안하되 편집 가능).
   5. B2B 별지 약관 문안 (해지·환불·할인 환수 기준).

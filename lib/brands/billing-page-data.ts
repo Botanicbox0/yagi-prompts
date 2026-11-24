@@ -12,6 +12,7 @@ import {
   requireDbAdmin,
 } from '@/lib/brands/billing';
 import { listBrandInvoices } from '@/lib/brands/billing/invoices';
+import { customerSeesInvoice } from '@/lib/brands/billing/overview';
 import {
   addCalendarDays,
   BRAND_PLAN_GRACE_DAYS_DEFAULT,
@@ -266,7 +267,7 @@ export async function loadBrandBillingPageState(
             }
           : null,
         invoices: allInvoices
-          .filter((inv) => inv.status !== 'draft')
+          .filter(customerSeesInvoice)
           .map((inv) => ({
             id: inv.id,
             period: inv.period,

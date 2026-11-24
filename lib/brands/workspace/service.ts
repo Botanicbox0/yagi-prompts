@@ -17,7 +17,7 @@ import {
   BrandHttpsUrlSchema, BrandOrganizationSchema, BrandProjectSchema, BrandProjectStatusSchema, BrandContentSchema,
   BrandDecisionSchema, BrandMessageSchema, BrandPostSchema, BrandReportSchema, BrandAttachmentSchema,
   BRAND_ATTACHMENT_LIMITS, normalizeBrandPostUrl,
-  BrandInvitationSchema, BrandInvitationAcceptSchema, BrandMemberRevokeSchema,
+  BrandInvitationSchema, BrandInvitationAcceptSchema, BrandMemberRevokeSchema, BrandInvitationCancelSchema,
   BrandCriteriaSchema,
   BrandPostMetricsSchema, BrandPostMetricsBatchSchema,
   BrandExternalPostsSchema, BrandProjectCoverSchema, BRAND_COVER_MIMES,
@@ -836,13 +836,13 @@ export async function loadBrandMembers(deps: BrandWorkspaceDeps, viewer: Viewer,
     const members = (await sql.query(`select m.id,m.user_id,m.role,m.status,p.email from brand_memberships m
       join profiles p on p.id=m.user_id where m.organization_id=$1 order by m.created_at`, [organizationId])).rows;
     // A campaign-only invitation names its campaign, but only once that campaign is shared with the client.
-    const invitations = (await sql.query(`select i.id,i.email,i.role,i.expires_at,i.accepted_at,i.revoked_at,i.project_id,p.client_visible as project_shared,
+    const invitations = (await sql.query(`select i.id,i.email,i.role,i.expires_at,i.accepted_at,i.revoked_at,i.project_id,i.issued_by_studio,p.client_visible as project_shared,
       case when p.client_visible then p.title end as project_title from brand_invites i left join brand_projects p on p.id=i.project_id and p.organization_id=i.organization_id
       where i.organization_id=$1 order by i.created_at desc`, [organizationId])).rows;
     return { organization: { id: String(org.id), name: String(org.name) }, members: members.map(m => ({
       id: String(m.id), userId: String(m.user_id), email: m.role !== 'owner' || m.user_id === viewer.userId ? String(m.email) : null,
       role: m.role as BrandRole, status: m.status as 'active' | 'revoked', isSelf: m.user_id === viewer.userId,
-    })), invitations: invitations.map(i => ({ id: String(i.id), email: i.role === 'owner' ? null : String(i.email), role: i.role as 'owner' | 'editor' | 'viewer', expiresAt: stamp(i.expires_at),
+    })), invitations: invitations.map(i => ({ id: String(i.id), email: i.role === 'owner' ? null : String(i.email), role: i.role as 'owner' | 'editor' | 'viewer', issuedByStudio: i.issued_by_studio === true, expiresAt: stamp(i.expires_at),
       project: i.project_id ? { shared: i.project_shared === true, title: i.project_title == null ? null : String(i.project_title) } : null,
       status: i.revoked_at ? 'revoked' as const : i.accepted_at ? 'accepted' as const : +new Date(stamp(i.expires_at)) <= Date.now() ? 'expired' as const : 'pending' as const })) };
   }); } catch (error) { if (error instanceof Denied) return null; throw error; }
@@ -875,6 +875,25 @@ export async function createBrandInvitation(deps: BrandWorkspaceDeps, viewer: Vi
     await sql.query(`insert into brand_invites(id,organization_id,email,role,token_hash,expires_at,created_by,request_id)
       values($1,$2,$3,$4,$5,now()+interval '7 days',$6,$7)`, [id, v.organizationId, v.email, v.role, createHash('sha256').update(token).digest('hex'), userId, v.requestId]);
     return { id, token };
+  });
+}
+/**
+ * An owner cancels a still-pending invitation to their brand's workspace (the team page). Authorized exactly
+ * like `createBrandInvitation`: brand row locked first (the lock order of issue, accept and revoke), then the
+ * caller must hold an active owner seat in that brand. Only a workspace invitation of that brand that is
+ * neither accepted nor already revoked is reached, and only one the brand itself issued: an invitation the TWINGS
+ * team sent (an owner seat, a handover) stays the team's to withdraw. Anything else answers not_found. Campaign invitations keep
+ * their own path (the room's people panel, `invite.cancel` in lib/brand-rooms/invites.ts).
+ */
+export async function cancelBrandInvitation(deps: BrandWorkspaceDeps, viewer: Viewer, input: unknown): Promise<BrandOutcome> {
+  return mutation(deps, viewer, BrandInvitationCancelSchema, input, async (sql, userId, v) => {
+    await sql.query('select id from brand_organizations where id=$1 for update', [v.organizationId]);
+    if (await member(sql, userId, v.organizationId) !== 'owner') throw new Denied('forbidden');
+    const cancelled = (await sql.query(`update brand_invites set revoked_at=now()
+      where organization_id=$1 and id=$2 and project_id is null and not issued_by_studio and accepted_at is null and revoked_at is null returning id`,
+    [v.organizationId, v.invitationId])).rows[0];
+    if (!cancelled) throw new Denied('not_found');
+    return { id: String(cancelled.id) };
   });
 }
 /**
@@ -1117,6 +1136,19 @@ export async function loadBrandSupport(deps:BrandWorkspaceDeps,viewer:Viewer,id:
  try{return await deps.sql.transaction(async sql=>{
   if(isStudio)await studio(sql,viewer.userId!);else await memberOrStaff(sql,viewer.userId!,id,deps.verifiedEmail);
   return (await sql.query('select id,body,author_role,created_at from brand_support_messages where organization_id=$1 order by created_at,id',[id])).rows.map(r=>({id:String(r.id),body:String(r.body),authorRole:r.author_role as BrandMessage['authorRole'],createdAt:stamp(r.created_at)}));
+ });}catch(e){if(e instanceof Denied)return null;throw e}
+}
+/**
+ * The support launcher's mount-time read: only the time of the newest team reply (null when there is none),
+ * authorized exactly as `loadBrandSupport` (active membership, else the TWINGS team's read view). One indexed
+ * query, no message bodies; replies still outside the workspace arrive with the full read when the window opens.
+ */
+export async function loadBrandSupportLatestStudioReply(deps:BrandWorkspaceDeps,viewer:Viewer,id:string):Promise<{latestStudioReplyAt:string|null}|null> {
+ if(!uuid(viewer.userId)||!uuid(id))return null;
+ try{return await deps.sql.transaction(async sql=>{
+  await memberOrStaff(sql,viewer.userId!,id,deps.verifiedEmail);
+  const row=(await sql.query("select created_at from brand_support_messages where organization_id=$1 and author_role='studio' order by created_at desc limit 1",[id])).rows[0];
+  return {latestStudioReplyAt:row?stamp(row.created_at):null};
  });}catch(e){if(e instanceof Denied)return null;throw e}
 }
 /** `entry` as for `sendBrandMessage`: server-provided, never from the request. Viewer-role organization members may send support messages. */

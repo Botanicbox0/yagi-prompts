@@ -1,5 +1,5 @@
 {
- "note": "Recorded from origin/main (14d21d56) with BRAND_BILLING_AUTO_ISSUE off, on the schema with every migration and without 0182 (identical; both include this branch's 0186). SQL whitespace collapsed, UUIDs replaced by <uuid>. Scenario: tests/brands/helpers/invoice-flag-off-parity.ts (plan written for one organization, invoices for one without a plan).",
+ "note": "Recorded from origin/main (14d21d56) with BRAND_BILLING_AUTO_ISSUE off, on the schema with every migration and without 0182 (identical; both include this branch's 0186). SQL whitespace collapsed, UUIDs replaced by <uuid>. Scenario: tests/brands/helpers/invoice-flag-off-parity.ts (plan written for one organization, invoices for one without a plan). R3 (claude/brand-billing-manual-path): the setPlan op re-derived from the code, every other op unchanged — the plan organization's allowance snapshot now holds the plan's confirmed credits when no plan default row is stored (R3 item 6).",
  "ops": [
   {
    "op": "setPlan",
@@ -66,6 +66,14 @@
     {
      "text": "select p.plan_id, p.started_on::text as started_on, p.ends_on::text as ends_on, d.monthly_cap_krw as default_cap from brand_plan_assignments p left join brand_plan_allowance_defaults d on d.plan_id = p.plan_id where p.organization_id = $1",
      "params": [
+      "<uuid>"
+     ]
+    },
+    {
+     "text": "insert into brand_studio_allowances (organization_id, monthly_cap_krw, is_override, preferred_lane, note, updated_by, updated_at) values ($1, $2, false, null, '', $3, now()) on conflict (organization_id) do update set monthly_cap_krw = excluded.monthly_cap_krw, updated_by = excluded.updated_by, updated_at = now() where brand_studio_allowances.is_override = false",
+     "params": [
+      "<uuid>",
+      270000,
       "<uuid>"
      ]
     },

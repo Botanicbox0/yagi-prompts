@@ -5,7 +5,7 @@ export type BrandRole = 'owner' | 'editor' | 'viewer';
 export type BrandProjectStatus = 'requested' | 'active' | 'completed' | 'cancelled';
 export type ProductionMode = 'creator' | 'studio';
 export type BrandFailureCode = 'sign_in_required' | 'not_found' | 'forbidden' | 'invalid' | 'conflict' | 'rate_limited' | 'not_active' | 'not_approved' | 'consent_required' | 'storage_unavailable' | 'storage_quota_exceeded' | 'not_shared' | 'existing_member_role_mismatch' | 'feature_unavailable';
-export type BrandOutcome<T = { id: string }> = ({ ok: true } & T) | { ok: false; code: BrandFailureCode; field?: string; reason?: UploadLimitReason };
+export type BrandOutcome<T = { id: string }> = ({ ok: true } & T) | { ok: false; code: BrandFailureCode; field?: string; reason?: UploadLimitReason; detail?: string };
 export interface BrandOrganization { id: string; name: string; role: BrandRole }
 export interface BrandReferenceLink { url: string; note: string }
 export interface BrandCriteria {
@@ -107,7 +107,7 @@ export interface BrandMembers {
   organization: { id: string; name: string };
   members: Array<{ id: string; userId: string; email: string | null; role: BrandRole; status: 'active' | 'revoked'; isSelf: boolean }>;
   /** `project`: a campaign-only invitation. Its title is known only once the campaign is shared with the client. */
-  invitations: Array<{ id: string; email: string | null; role: 'owner' | 'editor' | 'viewer'; expiresAt: string; status: 'pending' | 'accepted' | 'revoked' | 'expired'; project: { shared: boolean; title: string | null } | null }>;
+  invitations: Array<{ id: string; email: string | null; role: 'owner' | 'editor' | 'viewer'; /** Sent by the TWINGS team: the brand's owners see it but do not cancel it. */ issuedByStudio: boolean; expiresAt: string; status: 'pending' | 'accepted' | 'revoked' | 'expired'; project: { shared: boolean; title: string | null } | null }>;
 }
 
 export interface BrandContract { id:string; documentKey:string;title:string;version:number;attachmentId:string;shared:boolean;revision:number;createdAt:string }

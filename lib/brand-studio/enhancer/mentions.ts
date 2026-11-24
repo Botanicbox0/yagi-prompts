@@ -176,6 +176,76 @@ export function findMissingReferences(
   return [...missing.values()];
 }
 
+/** The word for a new number in the same family as the one written ("두" → "세", "첫째" → "둘째", "second" → "first"). */
+function ordinalWordFor(written: string, to: number): string | null {
+  const pick = (table: Record<string, number>) => Object.keys(table).find((word) => table[word] === to) ?? null;
+  if (Object.hasOwn(KO_ORDINAL_SHORT, written)) return pick(KO_ORDINAL_SHORT) ?? `${to}번째`;
+  if (Object.hasOwn(KO_ORDINALS, written)) return pick(KO_ORDINALS) ?? String(to);
+  return pick(EN_ORDINALS);
+}
+
+const ORDINAL_WORD_START = new RegExp(
+  `^(${[...Object.keys(KO_ORDINAL_SHORT), ...Object.keys(KO_ORDINALS), ...Object.keys(EN_ORDINALS)].sort((a, b) => b.length - a.length).join('|')})`,
+  'i',
+);
+
+/** One mention's text with its numbers renumbered, written the same way. */
+function renumberSpan(text: string, numbers: readonly number[], map: (n: number) => number): string {
+  const digits = [...text.matchAll(/\d{1,2}/g)];
+  // A range ("이미지 1~3", "image 1-2") is never rewritten number by number: "2~1" or "1~3" would name other pictures.
+  const ranged = digits.some((d) => RANGE_JOINER.test(text.slice(d.index! + d[0].length)));
+  if (digits.length === numbers.length && digits.length && !ranged) {
+    let out = text;
+    for (const d of digits.reverse()) out = out.slice(0, d.index) + String(map(Number(d[0]))) + out.slice(d.index! + d[0].length);
+    return out;
+  }
+  const mapped = numbers.map(map);
+  if (mapped.every((n, i) => n === numbers[i])) return text;
+  if (digits.length) {
+    // The same pictures in another order: the range still names exactly them.
+    const same = [...mapped].sort((a, b) => a - b).join() === [...numbers].sort((a, b) => a - b).join();
+    if (same) return text;
+    // Otherwise spelled out as a list ("이미지 1, 3"), which the matcher reads as those pictures.
+    const first = digits[0]!;
+    const last = digits[digits.length - 1]!;
+    return text.slice(0, first.index) + mapped.join(', ') + text.slice(last.index! + last[0].length);
+  }
+  // An ordinal word ("두 번째 이미지", "첫째 그림", "the second image").
+  const word = ORDINAL_WORD_START.exec(text)?.[1];
+  const english = Boolean(word && Object.hasOwn(EN_ORDINALS, word.toLowerCase()));
+  const next = word ? ordinalWordFor(english ? word.toLowerCase() : word, mapped[0]!) : null;
+  if (!word || !next) return text;
+  // "Second image" stays capitalised: "First image".
+  const cased = english && word[0] !== word[0]!.toLowerCase() ? next[0]!.toUpperCase() + next.slice(1) : next;
+  return cased + text.slice(word.length);
+}
+
+/**
+ * Gives every mention a new number, written the way it was typed: "@image1" → "@image2", "두 번째 이미지" →
+ * "세 번째 이미지", "images 1 and 3" → "images 2 and 1". `renumber` answers the new number, or null to leave
+ * that number as written (a mention of nothing). Used when a reference moves in the tray.
+ */
+export function renumberReferenceMentions(prompt: string, renumber: (kind: MentionKind | 'any', number: number) => number | null): string {
+  const spans = new Map<string, { kind: MentionKind | 'any'; start: number; end: number; numbers: number[] }>();
+  for (const m of listReferenceMentions(prompt)) {
+    const key = `${m.start}:${m.end}`;
+    const span = spans.get(key) ?? { kind: m.kind, start: m.start, end: m.end, numbers: [] };
+    span.numbers.push(m.number);
+    spans.set(key, span);
+  }
+  let out = prompt;
+  for (const span of [...spans.values()].sort((a, b) => b.start - a.start)) {
+    const map = (n: number) => {
+      const to = renumber(span.kind, n);
+      return to !== null && to >= 1 ? to : n;
+    };
+    const text = prompt.slice(span.start, span.end);
+    const next = renumberSpan(text, span.numbers, map);
+    if (next !== text) out = out.slice(0, span.start) + next + out.slice(span.end);
+  }
+  return out;
+}
+
 /**
  * Rewrites every mention with `resolve` (kind, number) -> replacement. A mention the resolver
  * returns null for is left as written. Lists become "A, B and C".

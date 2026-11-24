@@ -619,6 +619,7 @@ export function SoundStudio(props: SoundStudioProps) {
           locale={locale}
           amountTemplate={props.creditsCopy.amount}
           busy={creating}
+          closed={soundClosed}
           showExamples={!tracks.some((t) => t.outputId) && openJobs.length === 0}
           error={composerError}
           onCreate={(input) => void create(input)}

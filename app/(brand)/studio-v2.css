@@ -194,7 +194,7 @@ textarea.bs-field { resize: vertical; }
 .bs-mention-tip { position: absolute; z-index: 3; max-width: min(320px, calc(100% - 16px)); margin: 0; padding: 4px 8px; border-radius: 8px; background: var(--ys-active-bg); box-shadow: var(--ys-float); color: var(--ys-active-fg); font-size: 12px; font-weight: 600; line-height: 16px; white-space: normal; pointer-events: none; transform: translate(-50%, calc(-100% - 6px)); }
 .bs-mention-tip[data-bound="false"] { width: max-content; font-weight: 500; }
 .bs-tray-item[data-linked] .bs-thumb { box-shadow: 0 0 0 2px var(--ys-surface, #111113), 0 0 0 4px var(--ys-accent, #ff58ae); }
-.bs-tray-item[data-linked] .bs-thumb-n { padding: 0 5px; border-radius: 5px; background: color-mix(in srgb, var(--ys-accent, #ff58ae) 30%, transparent); color: var(--ys-accent-text, var(--ys-accent)); font-weight: 600; }
+.bs-tray-item[data-linked] .bs-thumb-n { padding: 0 5px; margin: 0 -5px; border-radius: 5px; background: color-mix(in srgb, var(--ys-accent, #ff58ae) 30%, transparent); color: var(--ys-accent-text, var(--ys-accent)); font-weight: 600; }
 /* Windows high contrast: the field shows its own words in system colours; the painted layer only keeps its size. */
 @media (forced-colors: active) {
   .bs-prompt-backdrop { visibility: hidden; }
@@ -284,7 +284,9 @@ textarea.bs-field { resize: vertical; }
 .bs-thumb-kind .bs-icon { width: 10px; height: 10px; fill: currentColor; }
 .bs-thumb-audio { display: block; width: 100%; height: 100%; background: var(--ys-raised); }
 .bs-thumb-n { min-width: 14px; font-family: var(--ys-mono); font-size: 11px; line-height: 14px; font-variant-numeric: tabular-nums; text-align: center; color: var(--ys-ink-muted); transition: background-color 150ms var(--ys-ease), color 150ms var(--ys-ease); }
-.bs-tray-item[data-mentioned] .bs-thumb-n { padding: 0 5px; border-radius: 5px; background: color-mix(in srgb, var(--ys-accent, #ff58ae) 16%, transparent); color: var(--ys-accent-text, var(--ys-accent)); font-weight: 600; }
+.bs-tray-item[data-mentioned] .bs-thumb-n { padding: 0 5px; margin: 0 -5px; border-radius: 5px; background: color-mix(in srgb, var(--ys-accent, #ff58ae) 16%, transparent); color: var(--ys-accent-text, var(--ys-accent)); font-weight: 600; }
+/* The label reserves its emphasised (semibold) width all the time, so pointing at a picture never widens it or moves its ✕. */
+.bs-tray-item .bs-thumb-n[data-text]::after { content: attr(data-text); display: block; height: 0; overflow: hidden; visibility: hidden; font-weight: 600; }
 .bs-thumb-x { position: absolute; top: -6px; right: -6px; z-index: 2; display: grid; place-items: center; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 50%; background: var(--ys-surface); box-shadow: 0 0 0 1px var(--ys-line-strong), var(--ys-card); color: var(--ys-ink); cursor: pointer; opacity: 0; transition: opacity 150ms var(--ys-ease); }
 .bs-thumb-x .bs-icon { width: 11px; height: 11px; stroke-width: 2.4; }
 .bs-tray-item:hover .bs-thumb-x, .bs-tray-item:focus-within .bs-thumb-x, .bs-region-ref:hover .bs-thumb-x, .bs-region-ref:focus-within .bs-thumb-x { opacity: 1; }

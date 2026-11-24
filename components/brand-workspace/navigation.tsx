@@ -12,7 +12,6 @@ import type { NavigationVisibility } from './access';
 import { RailNavigation } from './rail-nav';
 import type { RailMode } from './rail-mode';
 
-const ALL: NavigationVisibility = { studio: true, identity: true, settings: true, members: true };
 const NAV_ORDER_STORAGE_KEY = 'twings_brand_nav_order_v1';
 
 /** `creators`: given only while the creator pool is open (TWINGS_INFLUENCERS); shown to owners and editors. */
@@ -338,9 +337,22 @@ function Scoped({ scope, studioV2 = false, shell, locale = 'ko', railExpanded = 
   );
 }
 
-/** Without a scope (signed out, e.g. the invitation landing) every destination is shown; each page authorizes itself. */
+/**
+ * The bar with nowhere to go yet: no tabs, only the topbar frame's marker, so the lockup, the brand line,
+ * language and sign-out keep their places in the bar.
+ */
+function NoTabs() {
+  return <span aria-hidden="true" data-brand-layout-mode="topbar" data-brand-nav-empty="" />;
+}
+
+/**
+ * No tabs while there is nowhere to go: signed out (the invitation landing, whose own sign-in is the one
+ * action), or signed in with no brand at all, where every tab could only say "no brand yet". An account
+ * waiting for a campaign it accepted to be shared (`pendingShare`, read by the layout) keeps the tabs.
+ */
 export function WorkspaceNavigation({
   scope,
+  pendingShare = false,
   studioV2,
   shell,
   locale,
@@ -351,10 +363,9 @@ export function WorkspaceNavigation({
   railModes,
   soundStudio,
   ...labels
-}: Labels & RailInputs & { scope?: BrandWorkspaceScope | null }) {
-  return scope ? (
+}: Labels & RailInputs & { scope?: BrandWorkspaceScope | null; pendingShare?: boolean }) {
+  if (!scope || (scope.choices.length === 0 && !pendingShare)) return <NoTabs />;
+  return (
     <Scoped scope={scope} studioV2={studioV2} shell={shell} locale={locale} railExpanded={railExpanded} rooms={rooms} roomsCopy={roomsCopy} homeLabel={homeLabel} railModes={railModes} soundStudio={soundStudio} {...labels} />
-  ) : (
-    <Links labels={labels} visible={ALL} pool layoutMode="topbar" scope={(path) => path} billingShown={Boolean(labels.billing)} />
   );
 }

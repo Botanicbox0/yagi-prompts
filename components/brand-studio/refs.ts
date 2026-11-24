@@ -10,7 +10,7 @@ import {
   type StudioOutputView,
   type StudioReference,
 } from "@/lib/brand-studio/contracts";
-import type { MentionKind } from "@/lib/brand-studio/enhancer/mentions";
+import { renumberReferenceMentions, type MentionKind } from "@/lib/brand-studio/enhancer/mentions";
 import { fill, type StudioCopy } from "./copy";
 
 export interface TrayItem {
@@ -112,6 +112,29 @@ export function moveInTray<T>(items: readonly T[], from: number, to: number): T[
   return next;
 }
 
+/**
+ * The typed words after a reference moved in the tray: every mention keeps naming the picture it named
+ * (`@image1` for a picture now third reads `@image3`). Kind words count among their own kind, a bare "@N"
+ * counts every chip; a mention of nothing stays as typed.
+ */
+export function renumberAfterMove(
+  text: string,
+  before: readonly Pick<TrayItem, "key" | "kind">[],
+  after: readonly Pick<TrayItem, "key" | "kind">[],
+): string {
+  if (!text) return text;
+  const was = trayNumbers(before);
+  const now = trayNumbers(after);
+  const at = new Map(after.map((item, i) => [item.key, i]));
+  return renumberReferenceMentions(text, (kind, n) => {
+    const from = kind === "any" ? n - 1 : before.findIndex((item, i) => item.kind === kind && was[i] === n);
+    const item = before[from];
+    const to = item ? at.get(item.key) : undefined;
+    if (to === undefined) return null;
+    return kind === "any" ? to + 1 : now[to]!;
+  });
+}
+
 /** The library's key for a tray item (`a:<id>` / `o:<id>`), so the tray can tell which source it holds. */
 export function refSourceOf(item: Pick<TrayItem, "assetId" | "outputId">): RefSource {
   return item.assetId ? { assetId: item.assetId } : { outputId: item.outputId! };
@@ -130,7 +153,8 @@ export function addToTray(items: readonly TrayItem[], item: TrayItem, first = fa
 
 export function updateTrayItem(items: readonly TrayItem[], key: string, patch: Partial<Omit<TrayItem, "key" | "kind">>): TrayItem[] {
   return items.map((item) => {
-    if (item.key !== key) return item;
+    // One picture opens the shot and one closes it: choosing 시작 장면 (or 마지막 장면) here takes it off the others.
+    if (item.key !== key) return patch.frame && item.frame === patch.frame ? { ...item, frame: undefined } : item;
     // A role picked (or cleared) here is the customer's: a recognised one arriving later does not replace it.
     if (!("role" in patch)) return { ...item, ...patch };
     const { roleCheck: _picked, ...rest } = item;
@@ -140,6 +164,11 @@ export function updateTrayItem(items: readonly TrayItem[], key: string, patch: P
 
 export function removeFromTray(items: readonly TrayItem[], key: string): TrayItem[] {
   return items.filter((item) => item.key !== key);
+}
+
+/** The tray key of a source (`a:<assetId>` / `o:<outputId>`), as `trayItemFromAsset` / `trayItemFromOutput` set it. */
+export function refKeyOf(source: RefSource): string {
+  return "assetId" in source ? `a:${source.assetId}` : `o:${source.outputId}`;
 }
 
 /** "영상으로": this picture opens the shot; no other picture keeps the opening role. */

@@ -52,6 +52,11 @@ export type WorkspaceSelection =
 export const ORGANIZATION_QUERY = 'organizationId';
 const PROJECT_ROUTE = /^\/brand\/projects\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\/|$)/i;
 
+/** Whether this account sees at least one campaign of the brand, from the scope the layout already loaded. */
+export function hasVisibleProject(scope: BrandWorkspaceScope, organizationId: string): boolean {
+  return Object.values(scope.projectOrganizations).includes(organizationId);
+}
+
 export function projectIdFromPath(pathname: string): string | null {
   return PROJECT_ROUTE.exec(pathname)?.[1]?.toLowerCase() ?? null;
 }

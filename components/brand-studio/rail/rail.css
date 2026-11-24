@@ -85,7 +85,8 @@
 .bsr-foot {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  /* On the left: the floating "실시간 문의" launcher covers the rail's bottom-right corner, link and all. */
+  justify-content: flex-start;
   padding-top: 6px;
   border-top: 1px solid var(--ys-hairline);
 }

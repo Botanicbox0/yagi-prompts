@@ -11,6 +11,9 @@ import {
   loadBrandBillingOverview,
 } from '@/lib/admin/brand-billing-console';
 import { formatAdminTime, formatCount, formatKrw } from '@/lib/admin/format';
+import { parsePlanDefaultPreviewDetail } from '@/lib/admin/billing-preview-detail';
+import { creditEquivalentHint } from '@/lib/admin/credit-hint';
+import { creditsOf, formatCredits } from '@/lib/brand-studio/credits';
 import { interpolate } from '@/lib/i18n/format';
 import { addCalendarDays, kstDayOf } from '@/lib/brands/billing/math';
 import {
@@ -109,12 +112,12 @@ export default async function BrandBillingOverviewPage(props?: { searchParams?: 
 
   const okCode = one(params, 'ok');
   const rawDetail = one(params, 'detail');
-  const preparedPlanCapMatch = okCode === 'prepared' && rawDetail ? /^(b2b_(?:29|49|69))=(\d+|unset)\b/.exec(rawDetail) : null;
-  const preparedPlanId = preparedPlanCapMatch?.[1];
-  const preparedCapValue = preparedPlanCapMatch?.[2];
+  // R3 item 1: the plan-default preview is read by the parser its formatter pairs with (lib/admin/billing-preview-detail.ts).
+  const preparedPlanDefault = okCode === 'prepared' ? parsePlanDefaultPreviewDetail(rawDetail) : null;
+  const preparedPlanId = preparedPlanDefault?.planId;
+  const preparedCapValue = preparedPlanDefault ? (preparedPlanDefault.capKrw === null ? 'unset' : String(preparedPlanDefault.capKrw)) : undefined;
   // Review round 2, item 9: the clear confirm sends back the digest of the previewed affected organizations.
-  const preparedClearDigest =
-    preparedCapValue === 'unset' ? /digest=([0-9a-f]{16})\b/.exec(rawDetail ?? '')?.[1] : undefined;
+  const preparedClearDigest = preparedCapValue === 'unset' ? (preparedPlanDefault?.digest ?? undefined) : undefined;
 
   return (
     <AdminShell dict={dict.admin} locale={locale} active="brandBilling">
@@ -466,7 +469,12 @@ export default async function BrandBillingOverviewPage(props?: { searchParams?: 
                         </div>
                         <div className="flex flex-wrap items-center gap-2 text-xs">
                           <StatusPill tone={row.monthlyCapKrw != null ? 'done' : 'progress'}>
-                            {row.monthlyCapKrw != null ? formatKrw(row.monthlyCapKrw, locale) : bb.unsetValue}
+                            {row.monthlyCapKrw != null
+                              ? formatKrw(row.monthlyCapKrw, locale)
+                              : // R3 item 6: unset means the plan's confirmed credits apply, not the env default.
+                                interpolate(bb.unsetConfirmedValue, {
+                                  credits: formatCredits(creditsOf(row.effectiveCapKrw), locale === 'en' ? 'en' : 'ko'),
+                                })}
                           </StatusPill>
                           <span className="opacity-80">
                             {interpolate(bb.followingOrgs, { count: formatCount(row.followingOrgCount, locale) })} /{' '}
@@ -503,6 +511,15 @@ export default async function BrandBillingOverviewPage(props?: { searchParams?: 
                             placeholder={row.monthlyCapKrw == null ? bb.unsetValue : undefined}
                             className={INPUT}
                           />
+                          <span className="admin-field-hint mt-1 block" data-credit-hint="plan-default">
+                            {creditEquivalentHint(
+                              preparedPlanId === row.planId && preparedCapValue !== undefined && preparedCapValue !== 'unset'
+                                ? Number(preparedCapValue)
+                                : row.effectiveCapKrw,
+                              locale,
+                              od.billing,
+                            )}
+                          </span>
                         </label>
                         <label className="text-xs sm:col-span-4">
                           <span className="font-semibold block mb-1">{bb.noteInputLabel}</span>

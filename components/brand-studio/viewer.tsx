@@ -16,7 +16,7 @@ import type { RegionBox, StudioAllowanceView, StudioAssetView, StudioJobView, St
 import type { BillingPlanCatalogueItem } from "@/lib/brands/billing-ui";
 import type { BrandBillingCopy } from "@/messages/brand-billing";
 import { studioModelOrLegacy, type StudioImageModel } from "@/lib/brand-studio/models";
-import { errorLine, fill, type StudioCopy, type StudioLocale } from "./copy";
+import { errorLine, fill, runFailedLine, type StudioCopy, type StudioLocale } from "./copy";
 import { qualityOf, regionCredits, regionInstructionForForm, regionProblem, type RegionProblem } from "./dock-model";
 import { CopyButton, promptToCopy, sentPromptCopyable } from "./copy-prompt";
 import { CompareSlider } from "./gallery/compare";
@@ -156,7 +156,13 @@ function useViewerDialog(docked: boolean) {
     if (dialog.open && modal === !docked) return;
     if (dialog.open) dialog.close();
     if (docked) dialog.show();
-    else dialog.showModal();
+    else {
+      dialog.showModal();
+      // The dialog itself takes focus, not its first button ("이전"), so Space and Enter press nothing.
+      // (Set here, not in the markup, so the rendered dialog stays as it was.)
+      dialog.tabIndex = -1;
+      dialog.focus({ preventScroll: true });
+    }
   }, [docked]);
   return ref;
 }
@@ -189,6 +195,15 @@ export function Viewer(props: ViewerProps) {
     if (event.defaultPrevented || (event.target as HTMLElement).closest?.("input, textarea, select")) return;
     if (event.key === "ArrowLeft" && index > 0) onIndex(index - 1);
     else if (event.key === "ArrowRight" && index < items.length - 1) onIndex(index + 1);
+    else if (event.key === " " && event.target === event.currentTarget) {
+      // Space plays or pauses a video result only while the dialog itself has focus; on a button, link, summary,
+      // field or the player it keeps its own meaning.
+      const video = event.currentTarget.querySelector<HTMLVideoElement>("video[controls]");
+      if (!video) return;
+      event.preventDefault();
+      if (video.paused) void video.play().catch(() => undefined);
+      else video.pause();
+    }
   };
   return (
     <dialog
@@ -215,6 +230,7 @@ export function Viewer(props: ViewerProps) {
       }}
       onCancel={(event) => {
         event.preventDefault();
+        if (Date.now() - confirmEscapedAt < 100) return;
         if (comparing) {
           compareToggleHadFocus = Date.now();
           setComparing(false);
@@ -248,6 +264,8 @@ export function Viewer(props: ViewerProps) {
 let switcherHadFocus = false;
 /** Set when "모델 비교" was pressed: the toggle moves between the side column and the row above the pictures. */
 let compareToggleHadFocus = 0;
+/** When an Escape last closed the delete question: the dialog's own `cancel` for that key press is ignored. */
+let confirmEscapedAt = 0;
 
 /**
  * "같이 만든 결과": the results of one request made on several models, one pill per model in the order they
@@ -304,7 +322,7 @@ export function SiblingSwitcher({
     // The short reason (the wall's tile keeps the longer one about references).
     const reason =
       run.status === "failed"
-        ? errorLine(copy, run.errorCode)
+        ? runFailedLine(copy, run.kind, run.errorCode)
         : run.status === "canceled"
           ? copy.board.canceled
           : (copy.board.stage[run.status as keyof typeof copy.board.stage] ?? copy.board.stage.queued);
@@ -507,6 +525,21 @@ function ViewerContent({
   const [sentLine, setSentLine] = useState<string | null>(null);
   const [copyToast, setCopyToast] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
+  // The delete question takes focus on 취소; closing it (Escape or 취소) puts focus back on 삭제.
+  const deleteButton = useRef<HTMLButtonElement>(null);
+  const cancelButton = useRef<HTMLButtonElement>(null);
+  const backToDelete = useRef(false);
+  const leaveConfirm = () => {
+    backToDelete.current = true;
+    setConfirming(false);
+  };
+  useEffect(() => {
+    if (confirming) cancelButton.current?.focus({ preventScroll: true });
+    else if (backToDelete.current) {
+      backToDelete.current = false;
+      deleteButton.current?.focus({ preventScroll: true });
+    }
+  }, [confirming]);
   const file = media(item);
   const job = item.type === "output" ? item.job : null;
   const id = useId();
@@ -683,7 +716,7 @@ function ViewerContent({
           {v.download}
         </a>
         {canCreate && output && !confirming && (
-          <button type="button" className="bs-btn" data-variant="ghost" data-size="sm" data-action="delete" onClick={() => setConfirming(true)}>
+          <button ref={deleteButton} type="button" className="bs-btn" data-variant="ghost" data-size="sm" data-action="delete" onClick={() => setConfirming(true)}>
             <StudioIcon name="trash" />
             {v.delete}
           </button>
@@ -695,13 +728,26 @@ function ViewerContent({
         </p>
       )}
       {confirming && output && (
-        <div className="bs-confirm-box" role="group" aria-label={v.delete} data-studio-delete-confirm>
+        <div
+          className="bs-confirm-box"
+          role="group"
+          aria-label={v.delete}
+          data-studio-delete-confirm
+          onKeyDown={(event) => {
+            // The first Escape closes only this question; the next one closes the viewer.
+            if (event.key !== "Escape") return;
+            event.preventDefault();
+            event.stopPropagation();
+            confirmEscapedAt = Date.now();
+            leaveConfirm();
+          }}
+        >
           <p>{v.deleteConfirm}</p>
           <div className="bs-row">
             <button type="button" className="bs-btn" data-variant="soft" data-size="sm" data-tone="danger" disabled={busy === "delete"} onClick={() => void actions.remove(output).then((gone) => !gone && setConfirming(false))}>
               {v.delete}
             </button>
-            <button type="button" className="bs-btn" data-variant="ghost" data-size="sm" onClick={() => setConfirming(false)}>
+            <button ref={cancelButton} type="button" className="bs-btn" data-variant="ghost" data-size="sm" onClick={leaveConfirm}>
               {v.cancel}
             </button>
           </div>

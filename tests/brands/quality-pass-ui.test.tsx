@@ -174,12 +174,14 @@ describe('workspace navigation', () => {
     expect(links('projectScoped')).not.toContain('href="/brand/settings');
     expect(links('projectScoped')).not.toContain('href="/brand/studio');
     expect(links('projectScoped')).toContain('href="/brand/library');
-    expect(links('fresh')).toContain('href="/brand/studio');
+    // An account with no brand yet has nowhere to go: no tabs (tests/brands/first-run-shell.test.tsx).
+    expect(links('fresh')).not.toContain('data-nav-item');
   });
 
-  it('shows everything while access is unknown (signed-out invitation landing)', () => {
+  it('shows no destinations while signed out (invitation landing); each page authorizes itself', () => {
     const page = renderToStaticMarkup(<WorkspaceNavigation {...labels} />);
-    for (const href of ['/brand', '/brand/studio', '/brand/library', '/brand/settings', '/brand/members']) expect(page).toContain(`href="${href}"`);
+    expect(page).not.toContain('href=');
+    expect(page).toContain('data-brand-layout-mode="topbar"');
   });
 });
 

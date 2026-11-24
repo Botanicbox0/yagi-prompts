@@ -205,9 +205,11 @@ describe('§7 plan-default admin display bug fixes & §6 flag-gated SSR', () => 
       note: '',
       expectedRevision: 0,
     });
+    // R3 item 6 (changed on purpose): clearing now returns to the confirmed 270,000 KRW, so the stored value must differ
+    // from it for the clear to affect the organization (it was 270,000 here before).
     await setPlanAllowanceDefault({ sql }, ADMIN_VIEWER, {
       planId: 'b2b_29',
-      monthlyCapKrw: 270_000,
+      monthlyCapKrw: 300_000,
       note: 'Initial cap',
       confirm: true,
     });

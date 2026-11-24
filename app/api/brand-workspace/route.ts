@@ -5,7 +5,7 @@ import { getVerifiedEmail } from "@/lib/auth/verified-email";
 import { getStorage } from "@/lib/storage";
 import { resolveRequestUrl, sameOriginMutation } from "@/lib/routing/surfaces";
 import {
-  updateBrandSettings, removeBrandOrganizationLogo, sendBrandSupport, loadBrandSupport, createBrandOrganization,
+  updateBrandSettings, removeBrandOrganizationLogo, sendBrandSupport, loadBrandSupport, loadBrandSupportLatestStudioReply, createBrandOrganization,
   createBrandProject,
   attachIntakeBriefFiles,
   approveBrandContent,
@@ -13,6 +13,7 @@ import {
   reserveBrandAttachment,
   completeBrandAttachment,
   createBrandInvitation,
+  cancelBrandInvitation,
   acceptBrandInvitation,
   revokeBrandMember,
 } from "@/lib/brands/workspace/service";
@@ -214,6 +215,10 @@ export async function POST(request: NextRequest) {
         }
         break;
       }
+      // The owner's cancel on the team page; authorized in the service like invitation.create.
+      case "invitation.cancel":
+        result = await cancelBrandInvitation({ sql }, viewer, input);
+        break;
       case "invitation.accept": {
         const verifiedEmail = await getVerifiedEmail(viewer.userId);
         // docs/BRAND-ROOMS-FEEDBACK.md §12: with invitations on, a project invitation binds to the account
@@ -411,6 +416,12 @@ export async function GET(request:NextRequest) {
  if(!sql||!viewer.userId)return json({ok:false},404);
  const organizationId = request.nextUrl.searchParams.get('organizationId') ?? '';
  const verifiedEmail = await getVerifiedEmail(viewer.userId);
+ // `&peek=1`: the support launcher's read on every page view. Same viewer, same access check and the same
+ // refusal as below, but only the newest team reply's time, and no outside call to pick up replies.
+ if (request.nextUrl.searchParams.get('peek') === '1') {
+  const peek = await loadBrandSupportLatestStudioReply({ sql, verifiedEmail }, viewer, organizationId);
+  return peek ? json({ ok: true, latestStudioReplyAt: peek.latestStudioReplyAt }) : json({ ok: false }, 404);
+ }
  const initialMessages=await loadBrandSupport({sql,verifiedEmail},viewer,organizationId);
  if(!initialMessages)return json({ok:false},404);
  if (organizationId) {

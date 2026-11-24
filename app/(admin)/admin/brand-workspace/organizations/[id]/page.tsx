@@ -26,6 +26,7 @@ import {
 import { cycleContaining, cycleStartAt, type BillingCycle } from '@/lib/brands/billing/cycle';
 import { hasColumn } from '@/lib/brands/billing/schema-guard';
 import { creditsOf, formatCredits } from '@/lib/brand-studio/credits';
+import { creditEquivalentHint } from '@/lib/admin/credit-hint';
 import { isSandboxedClientOrganization } from '@/lib/brands/features';
 import { MICRO_ROI_MODES } from '@/lib/brands/finish/micro-roi';
 import { BRAND_LOOK_PRESET_IDS } from '@/lib/brands/finish/color-grading';
@@ -39,6 +40,9 @@ import { loadWorkspaceApprovalPanel } from '@/lib/brands/billing/workspace-appro
 import { BrandWorkspaceApprovalCard } from '@/components/admin/brand-workspace-approval-card';
 import { formatBillingOutcomeDetail } from '@/lib/admin/brand-billing-console';
 import { parsePlanUpgradeDetail, type PlanUpgradeDetail } from '@/lib/admin/plan-upgrade-detail';
+import { parseReissueDetail, parseSubscriptionStartDetail } from '@/lib/admin/billing-preview-detail';
+import { resolvePlanCapKrw } from '@/lib/brands/billing/plan-credits';
+import { resolvePlanLifecycle } from '@/lib/brands/billing-ui';
 import { hasLiveSubscription, listPlanUpgradeCarries, upgradedCycleAwaitingIssue } from '@/lib/brands/billing/plan-upgrade-apply';
 import { formatAdminTime, formatCount, formatKrw, shortId } from '@/lib/admin/format';
 import { interpolate } from '@/lib/i18n/format';
@@ -222,22 +226,21 @@ export default async function StudioOrganization({
 
   const rawOk = one(queryParams, 'ok');
   const rawDetail = one(queryParams, 'detail');
-  const startPreviewMatch =
-    rawOk === 'prepared' && rawDetail
-      ? /^(b2b_(?:29|49|69))\|(\d{4}-\d{2}-\d{2})\|early=(0|1)\b/.exec(rawDetail)
-      : null;
-  const startPreviewPlan = startPreviewMatch?.[1];
-  const startPreviewDate = startPreviewMatch?.[2];
-  const startPreviewEarly = startPreviewMatch?.[3] === '1';
-  const isReissuePreview = rawOk === 'prepared' && Boolean(rawDetail?.startsWith('reissue='));
+  // R3 item 1: each step-1 preview is parsed by the one parser its operation's formatter pairs with
+  // (lib/admin/billing-preview-detail.ts); a detail no parser recognises gets the neutral headline.
+  const startPreview = rawOk === 'prepared' ? parseSubscriptionStartDetail(rawDetail) : null;
+  const reissuePreview = rawOk === 'prepared' ? parseReissueDetail(rawDetail) : null;
+  const startPreviewPlan = startPreview?.planId;
+  const startPreviewDate = startPreview?.startedOn;
+  const startPreviewEarly = startPreview?.activateBeforePayment === true;
+  const isReissuePreview = reissuePreview !== null;
   // Review round 2, item 9: step 2 sends back the digest the preview returned.
-  const previewDigestToken = rawOk === 'prepared' ? /digest=([0-9a-f]{16})\b/.exec(rawDetail ?? '')?.[1] : undefined;
-  const startPreviewDigest = startPreviewMatch ? previewDigestToken : undefined;
+  const startPreviewDigest = startPreview?.digest;
   // Round 3, item 1: the start preview warns about a first-invoice payment window under 3 days.
-  const startShortWindow = Boolean(startPreviewMatch && rawDetail?.includes('short_window=1'));
-  const reissuePreviewDigest = isReissuePreview ? previewDigestToken : undefined;
+  const startShortWindow = startPreview?.shortWindow === true;
+  const reissuePreviewDigest = reissuePreview?.digest;
   // Round 4, B9: the reissue preview carries the same short-payment-window warning as the start preview.
-  const reissueShortWindow = Boolean(isReissuePreview && rawDetail?.includes('short_window=1'));
+  const reissueShortWindow = reissuePreview?.shortWindow === true;
 
   const formattedDetail = formatBillingOutcomeDetail(rawDetail, locale === 'en' ? 'en' : 'ko');
   // B1c: moving the start day under an invoiced cycle is refused with `cycle_already_invoiced`; the shared formatter
@@ -252,21 +255,25 @@ export default async function StudioOrganization({
       : rawDetail?.includes('cycle_already_invoiced')
       ? `${od.billing.cycleAlreadyInvoiced} (${rawDetail})`
       : formattedDetail;
-  const defaultAllowanceMode = detailOps?.allowanceRow
-    ? detailOps.allowanceRow.isOverride === false
-      ? 'plan_default'
-      : 'override'
-    : plan
-      ? 'plan_default'
-      : 'override';
-  const defaultCapInput =
-    detailOps?.allowanceRow?.isOverride === true ? detailOps.allowanceRow.monthlyCapKrw : '';
+  // R3 item 8: "월 한도 기준" preselects what is true — an override row: "개별 한도 직접 지정" with its value; anything else
+  // (no row, a plan-default row): "플랜 기본값 따름", which saves as rendered (no cap needed).
+  const hasOverrideRow = detailOps?.allowanceRow?.isOverride === true;
+  const defaultAllowanceMode = hasOverrideRow ? 'override' : 'plan_default';
+  const defaultCapInput = hasOverrideRow ? detailOps!.allowanceRow!.monthlyCapKrw : '';
+  // R3 item 6: what an unset plan default means now — the plan's confirmed credits.
+  const planDefaultApplies = plan ? resolvePlanCapKrw(plan.planId, detailOps?.planDefaultCapKrw ?? null) : null;
+  const creditHint = (krw: number | null | undefined) => creditEquivalentHint(krw, locale, od.billing);
+  // R3 item 8: in grace the plan line names the end day and the last grace day, as the customer page does.
+  const planLifecycle = plan
+    ? resolvePlanLifecycle({ ...plan, active: planStatus.active, inGrace: planStatus.inGrace }, todayKst, graceDays)
+    : null;
 
   const jobStatusTone = (st: string) =>
     st === 'succeeded' ? 'done' : st === 'failed' ? 'fail' : st === 'canceled' || st === 'held' ? 'hold' : 'progress';
   const invoiceStatusTone = (st: string, overdue: boolean) =>
     st === 'paid' ? 'done' : overdue ? 'fail' : st === 'issued' ? 'action' : st === 'void' ? 'hold' : 'progress';
   const subPanel = detailOps?.subscriptionPanel ?? null;
+  const bookkeepingReady = detailOps?.invoiceBookkeeping.ready === true;
   const sub = subPanel?.subscription ?? null;
   const isSandboxedOrg = isSandboxedClientOrganization(org);
   const subStatusTone = (st: string) =>
@@ -435,11 +442,16 @@ export default async function StudioOrganization({
       <OutcomeBanner
         dict={{
           ...dict.admin,
+          // R3 item 1: each prepared state its own headline; anything else the neutral one (never the early-access line).
           okPrepared: upgradePreview
             ? od.billing.planUpgradePreviewedBanner
             : isReissuePreview
               ? od.billing.subscriptionReissuePreviewedBanner
-              : od.billing.subscriptionPreviewedBanner,
+              : startPreview
+                ? startPreview.activateBeforePayment
+                  ? od.billing.subscriptionPreviewedBanner
+                  : od.billing.subscriptionStartPreviewedBanner
+                : od.billing.previewNeutralBanner,
         }}
         ok={rawOk}
         err={one(queryParams, 'err')}
@@ -493,7 +505,7 @@ export default async function StudioOrganization({
                 ? [
                     `${formatKrw(BRAND_PLANS[plan.planId].monthlyKrw, locale)} · ${b.billingModes[plan.billingMode]}`,
                     planStatus.inGrace
-                      ? interpolate(od.overview.graceSuffix, { date: plan.endsOn ?? '' })
+                      ? interpolate(od.overview.graceSuffix, { ends: plan.endsOn ?? '', until: planLifecycle?.graceUntil ?? plan.endsOn ?? '' })
                       : plan.endsOn
                         ? interpolate(od.overview.endsSuffix, { date: plan.endsOn })
                         : null,
@@ -726,10 +738,12 @@ export default async function StudioOrganization({
           <Panel title={od.billing.planAllowanceHeading} id="billing-plan-allowance">
             <p className="admin-field-hint mb-3">{od.billing.planAllowanceHint}</p>
             <div className="mb-3 space-y-1 text-xs font-medium opacity-80">
-              <p>
+              <p data-plan-default-current>
                 {detailOps?.planDefaultCapKrw != null
                   ? interpolate(od.billing.planDefaultCurrent, { amount: formatKrw(detailOps.planDefaultCapKrw, locale) })
-                  : od.billing.planDefaultUnset}
+                  : planDefaultApplies !== null
+                    ? interpolate(od.billing.planDefaultUnsetConfirmed, { credits: credits(planDefaultApplies) })
+                    : od.billing.planDefaultUnset}
               </p>
               <p>
                 {interpolate(od.billing.effectiveCapNow, {
@@ -845,6 +859,9 @@ export default async function StudioOrganization({
                     defaultValue={defaultCapInput}
                     className={INPUT}
                   />
+                  <span className="admin-field-hint mt-1 block" data-credit-hint="override">
+                    {creditHint(typeof defaultCapInput === 'number' ? defaultCapInput : null)}
+                  </span>
                 </label>
                 <label className="text-xs">
                   <span className="font-semibold block mb-1">{od.billing.preferredLane}</span>
@@ -997,6 +1014,9 @@ export default async function StudioOrganization({
                 <label className="text-xs">
                   <span className="font-semibold block mb-1">{od.billing.extraAmount}</span>
                   <input name="amountKrw" type="number" min={1000} max={100_000_000} step={1000} required className={INPUT} />
+                  <span className="admin-field-hint mt-1 block" data-credit-hint="extra">
+                    {creditHint(null)}
+                  </span>
                 </label>
                 <label className="text-xs">
                   <span className="font-semibold block mb-1">{od.billing.extraMonth}</span>
@@ -1187,18 +1207,20 @@ export default async function StudioOrganization({
                   { key: 'vat', label: od.billing.invoiceCols.vat, numeric: true },
                   { key: 'total', label: od.billing.invoiceCols.total, numeric: true },
                   { key: 'status', label: od.billing.invoiceCols.status },
-                  ...(subPanel?.enabled && subPanel.schemaReady
-                    ? [{ key: 'tax', label: od.billing.taxInvoiceLabel }]
-                    : []),
+                  // R3 item 2: the tax-invoice column and control follow the 0182 columns, not the automatic billing flag.
+                  ...(bookkeepingReady ? [{ key: 'tax', label: od.billing.taxInvoiceLabel }] : []),
                   { key: 'actions', label: od.billing.invoiceCols.actions },
                 ]}
                 rows={detailOps.invoices.map((inv) => {
                   const meta = subPanel?.invoiceMeta[inv.id];
+                  const books = detailOps.invoiceBookkeeping.byInvoice[inv.id];
+                  // R3 item 2: recording the Hometax date and reference is manual bookkeeping — open with the flag off, on
+                  // an issued or paid bank-transfer invoice of a non-sandboxed organization, once the 0182 columns exist.
                   const canRecordTax =
-                    subPanel?.enabled &&
-                    subPanel.schemaReady &&
+                    bookkeepingReady &&
+                    !isSandboxedOrg &&
                     (inv.status === 'issued' || inv.status === 'paid') &&
-                    (meta?.collectionMethod == null || meta.collectionMethod === 'transfer');
+                    (books?.collectionMethod == null || books.collectionMethod === 'transfer');
                   return {
                     key: inv.id,
                     data: { 'data-invoice-row': inv.id, 'data-invoice-status': inv.status },
@@ -1251,20 +1273,21 @@ export default async function StudioOrganization({
                             {od.billing.invoiceStatuses[inv.status]}
                             {inv.overdue ? ` · ${od.billing.overdueBadge}` : ''}
                           </StatusPill>
-                          {subPanel?.enabled && subPanel.schemaReady && meta?.dueOn && (
-                            <span className="admin-cell-sub">
-                              {od.billing.invoiceDueOn}: {meta.dueOn}
+                          {/* R3 item 4: the stored due date, flag on or off (a manually issued cycle invoice has one). */}
+                          {bookkeepingReady && books?.dueOn && (
+                            <span className="admin-cell-sub" data-invoice-due-on={books.dueOn}>
+                              {od.billing.invoiceDueOn}: {books.dueOn}
                             </span>
                           )}
                           {inv.memo && <span className="admin-cell-sub">{inv.memo}</span>}
                         </span>
                       ),
-                      ...(subPanel?.enabled && subPanel.schemaReady
+                      ...(bookkeepingReady
                         ? {
-                            tax: meta?.taxInvoiceIssuedOn ? (
+                            tax: books?.taxInvoiceIssuedOn ? (
                               <span className="text-xs">
-                                <div>{meta.taxInvoiceIssuedOn}</div>
-                                {meta.taxInvoiceRef && <span className="admin-cell-sub">{meta.taxInvoiceRef}</span>}
+                                <div>{books.taxInvoiceIssuedOn}</div>
+                                {books.taxInvoiceRef && <span className="admin-cell-sub">{books.taxInvoiceRef}</span>}
                               </span>
                             ) : (
                               <span className="text-xs opacity-70">{od.billing.taxInvoiceUnissued}</span>
@@ -1359,14 +1382,14 @@ export default async function StudioOrganization({
                                 <input
                                   name="issuedOn"
                                   type="date"
-                                  defaultValue={meta?.taxInvoiceIssuedOn ?? todayKst}
+                                  defaultValue={books?.taxInvoiceIssuedOn ?? todayKst}
                                   required
                                   title={od.billing.taxInvoiceIssuedOnLabel}
                                   className={INPUT}
                                 />
                                 <input
                                   name="ref"
-                                  defaultValue={meta?.taxInvoiceRef ?? ''}
+                                  defaultValue={books?.taxInvoiceRef ?? ''}
                                   placeholder={od.billing.taxInvoiceRefLabel}
                                   required
                                   maxLength={120}
@@ -1387,7 +1410,7 @@ export default async function StudioOrganization({
                           {inv.status === 'void' && inv.voidReason && (
                             <span className="admin-cell-sub">{inv.voidReason}</span>
                           )}
-                          {inv.status === 'void' && meta?.taxInvoiceIssuedOn && (
+                          {inv.status === 'void' && books?.taxInvoiceIssuedOn && (
                             <span className="admin-cell-sub" data-void-needs-corrective-tax-invoice>
                               {od.billing.invoiceVoidNeedsCorrection}
                             </span>
@@ -1641,7 +1664,7 @@ export default async function StudioOrganization({
                     )}
                     <input type="hidden" name="organizationId" value={id} />
                     <input type="hidden" name="collectionMethod" value="transfer" />
-                    {startPreviewMatch && (
+                    {startPreview && (
                       <>
                         <input type="hidden" name="previewPlanId" value={startPreviewPlan} />
                         <input

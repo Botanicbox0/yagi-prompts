@@ -1824,6 +1824,8 @@ export const en = {
       editBadge: 'Partial edit',
       finalBadge: '1080p',
       noPrompt: 'No prompt',
+      failedImage: 'This image could not be made. Please try again.',
+      failedVideo: 'This video could not be made. Please try again.',
     },
     dock: {
       label: 'What to make',
@@ -2793,6 +2795,8 @@ export const en = {
       "active": "Active member",
       "settings": "Settings",
       "support": "Contact the studio",
+      // 대표 확인 대기
+      "supportNewReply": "Contact the studio, new reply",
       "supportHint": "Ask us about your brand workspace. Send campaign revisions from the relevant campaign.",
       "supportEmpty": "Leave a message whenever you need a hand.",
       "supportTitle": "Conversations",
@@ -5512,6 +5516,7 @@ export const en = {
     brandStatusFinal: 'This campaign has ended. Its status cannot change any more.',
     inviteHiddenCampaign: 'This campaign is not shared with the client yet. Campaign-only invitations open once it is shared. For brand-wide access, invite from the brand access page.',
     errBrandConflict: 'The campaign changed in the meantime, or that change is not possible from its current status. Refresh to see where it stands.',
+    errBillingConflict: 'That change is not possible in the current state. Check the detail below, refresh to see where it stands, then try again.',
     errCollaborationRateLimited: 'Too many requests. Try again shortly.',
     errStudioRateLimited: 'Too many changes in a short time. Try again in 10 minutes.',
     errBrandNotActive: 'Only an active campaign accepts this. Move the campaign to active first.',

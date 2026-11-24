@@ -634,6 +634,8 @@ function CutPanel({ api }: { api: EditorApi }) {
               disabled={api.readOnly}
               onChange={(value) => api.setClipAudio(span.index, value === 0 ? clip.volume : value / 100, value === 0)}
             />
+            {/* A real film's cut is heard in the preview while it plays; the sample footage has no sound. */}
+            {!api.real && <p className={styles.note} data-editor-cut-sound-note>{copy.sound.listen.unavailable}</p>}
           </Section>
           <button type="button" className={styles.quietBtn} onClick={() => api.removeClips([clip.id])} disabled={api.readOnly}>
             <EditorIcon name="trash" />

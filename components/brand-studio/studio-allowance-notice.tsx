@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { BillingRequestDialog } from '@/components/brand-billing/billing-request-form';
 import s from '@/components/brand-billing/brand-billing.module.css';
 import {
@@ -164,23 +165,34 @@ export function StudioAllowanceNotice({
       >
         {ctaLabel}
       </button>
-      {c ? (
-        <BillingRequestDialog
-          open={open}
-          onClose={() => setOpen(false)}
-          organizationId={organizationId}
-          copy={c.requestForm}
-          tierNames={c.planSection.tierNames}
-          planCatalogue={planCatalogue}
-          vatLabel={c.planSection.vatSeparate}
-          locale={locale}
-          initialIntent={intent}
-          allowIntentSwitch={kind === 'closed'}
-          neededCredits={typeof neededCredits === 'number' ? neededCredits : undefined}
-          remainingCredits={typeof remainingCredits === 'number' ? remainingCredits : undefined}
-          surface={surface}
-        />
-      ) : null}
+      {/*
+        The request dialog has its own <form>. This notice sits inside the prompt bar's <form>, and a form
+        nested in a form is submitted as the outer one: "요청 전달" pressed 만들기 instead and the request was
+        never sent. So the dialog is drawn under <body>, and its submit stops here (React events still climb
+        from a portal to the prompt bar).
+      */}
+      {c && open && typeof document !== 'undefined'
+        ? createPortal(
+            <div style={{ display: 'contents' }} data-studio-allowance-dialog onSubmit={(event) => event.stopPropagation()}>
+              <BillingRequestDialog
+                open={open}
+                onClose={() => setOpen(false)}
+                organizationId={organizationId}
+                copy={c.requestForm}
+                tierNames={c.planSection.tierNames}
+                planCatalogue={planCatalogue}
+                vatLabel={c.planSection.vatSeparate}
+                locale={locale}
+                initialIntent={intent}
+                allowIntentSwitch={kind === 'closed'}
+                neededCredits={typeof neededCredits === 'number' ? neededCredits : undefined}
+                remainingCredits={typeof remainingCredits === 'number' ? remainingCredits : undefined}
+                surface={surface}
+              />
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }

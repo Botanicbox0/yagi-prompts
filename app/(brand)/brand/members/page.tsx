@@ -126,18 +126,7 @@ export default async function MembersPage({
                 </p>
               </div>
             </div>
-            <span
-              style={{
-                padding: "4px 10px",
-                borderRadius: "999px",
-                background: "var(--ys-panel)",
-                color: "var(--ys-ink-secondary)",
-                fontSize: "11px",
-                fontWeight: 600,
-              }}
-            >
-              {b.inviteExpiry}
-            </span>
+            {/* The 7-day rule is said once, under the composer's title, where the link is made. */}
           </section>
 
           {/* 2. SOTA Quick Invite Composer + Role Capabilities Matrix */}
@@ -330,9 +319,26 @@ export default async function MembersPage({
                         {formatBrandTimestamp(i.expiresAt, locale)}
                       </p>
                     </div>
-                    <span className="bw-status">
-                      {b.invitationStates[i.status]}
-                    </span>
+                    <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "flex-end", gap: "8px", flexWrap: "wrap" }}>
+                      <span className="bw-status">
+                        {b.invitationStates[i.status]}
+                      </span>
+                      {/* Owners cancel a pending workspace invitation they issued here; campaign invitations are managed in their room,
+                          and one the TWINGS team sent is the team's to withdraw.
+                          The TWINGS team reads this list and changes it in the admin console. */}
+                      {!staff && !i.project && !i.issuedByStudio && i.status === "pending" && (
+                        <span data-invitation-cancel={i.id}>
+                          <ActionForm
+                            operation="invitation.cancel"
+                            fixed={{ organizationId: team.organization.id, invitationId: i.id }}
+                            b={b}
+                            submit={b.confirm.revokeInviteAction}
+                            tone="secondary"
+                            confirm={{ prompt: b.confirm.revokeInvite, action: b.confirm.revokeInviteAction }}
+                          />
+                        </span>
+                      )}
+                    </div>
                   </li>
                 ))}
               </ul>
