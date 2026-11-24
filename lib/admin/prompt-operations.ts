@@ -43,13 +43,14 @@ import {
   slugify,
   toTemplateCast,
   type PromptMedia,
+  type TemplateCast,
 } from '@/lib/prompts/schemas';
 import { ADMIN_PROMPTS_PATH, adminPromptPath } from '@/lib/prompts/links';
 import { announceTemplate, markPromptAnnounced } from '@/lib/prompts/announce';
 import { buildImageTemplateSet, writeImageTemplateSet } from '@/lib/prompts/image-templates';
 import { aspectsForMedium, enginesForMedium, imageFitsAspect, isImageAspect, isImageEngine, type ImageAspect, type ImageEngineId } from '@/lib/images/engines';
 import { checkLockBlock, lockBlockRefusalDetail } from '@/lib/template-director/locks';
-import { checkStylingBlock, stylingBlockRefusalDetail } from '@/lib/template-director/styling';
+import { checkStylingBlock, stylingBlockRefusalDetail, stylingRequiredDetail } from '@/lib/template-director/styling';
 import { planStylingDeclaration, templateCardStyling } from '@/lib/template-director/compile-prompts';
 import { recipeSchemaReady } from '@/lib/recipes/repo';
 import { TEMPLATE_AUDIENCES, type TemplateAudience } from '@/lib/template-look/look';
@@ -212,6 +213,18 @@ function stylingBlockRefusal(field: string, promptText: string): string | null {
   return check.state === 'malformed' ? stylingBlockRefusalDetail(field, check.problems) : null;
 }
 
+/**
+ * docs/PERSONAL-STUDIO.md §3.4.9, rule 3 (founder, 2026-11-25: what a template does not specify follows the buyer's
+ * photo) — a NEW person template, video or image, solo or couple, says how its hair and makeup are made: a prompt with
+ * no `Template styling:` block is refused (`stylingRequired`). A pet template has no hair or makeup to declare. Only
+ * creation asks: an update of a template saved without one is not refused (existing templates are declared one by one
+ * after review; the edit form shows a warning line).
+ */
+function stylingRequiredRefusal(field: string, promptText: string, cast: TemplateCast | undefined): string | null {
+  if (cast === 'pet') return null;
+  return checkStylingBlock(promptText).state === 'none' ? stylingRequiredDetail(field) : null;
+}
+
 const Uuid = z.string().uuid();
 const NOT_FOUND_DETAIL = 'the prompt this form points at no longer exists';
 
@@ -299,6 +312,8 @@ const createPrompt: AdminOperation<{ input: z.infer<typeof AuthoringSchema>; for
     if (!template.ok) return fail('invalid', template.detail);
     const locks = lockBlockRefusal('promptText', input.promptText);
     if (locks !== null) return fail('invalid', locks);
+    const required = stylingRequiredRefusal('promptText', input.promptText, template.value.cast);
+    if (required !== null) return fail('stylingRequired', required);
     const { look, ...fields } = template.value;
     const lookRefused = await lookRefusal(ctx, look);
     if (lookRefused !== null) return fail('invalid', lookRefused);
@@ -428,6 +443,9 @@ const createImageSet: AdminOperation<{ input: z.infer<typeof ImageSetForm>; form
       if (locks !== null) validationErrors.push(locks);
     }
     if (validationErrors.length > 0 || !built.ok) return fail('invalid', validationErrors.join('; '));
+    // Rule 3: every frame is a result step the compile reads with the buyer's photo, so each one declares its styling.
+    const undeclared = frames.flatMap((frame, index) => stylingRequiredRefusal(`frame ${index + 1}`, frame.promptText, 'solo') ?? []);
+    if (undeclared.length > 0) return fail('stylingRequired', undeclared.join('; '));
 
     const id = randomUUID();
 

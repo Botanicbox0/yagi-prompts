@@ -16,6 +16,7 @@ import {
 } from '@/lib/template-director/locks';
 import { checkStylingBlock, type PublicTemplateStyling } from '@/lib/template-director/styling';
 import { LockRefusalNotice } from '@/components/admin/prompt-create-feedback';
+import { TemplateStylingHelper } from '@/components/admin/template-styling-helper';
 import { visibilityLabel, visibilityOptions } from '@/components/admin/labels';
 import type { Dictionary } from '@/lib/i18n/dictionaries';
 import type { PromptRow } from '@/lib/prompts/repo';
@@ -230,10 +231,11 @@ export function stylingPartLabels(styling: PublicTemplateStyling, dict: Dict): s
 
 /**
  * Under the prompt field: what the SAVED block locks (edit form only; nothing when there is no block), what its
- * styling block declares (§3.4.9: next to the lock line, with a warning when it does not read), and a collapsed example
- * an author can copy. Admin-only, so it names the parts; the block's own words stay in the field above.
+ * styling block declares (§3.4.9: next to the lock line, with a warning when it does not read, and — rule 3 — a warning
+ * when a person template has none: it still saves, but a new template could not be made that way), and a collapsed
+ * example an author can copy. Admin-only, so it names the parts; the block's own words stay in the field above.
  */
-function TemplateLocksNote({ promptText, dict }: { promptText: string | null; dict: Dict }) {
+function TemplateLocksNote({ promptText, cast, dict }: { promptText: string | null; cast: PromptRow['cast'] | null; dict: Dict }) {
   const a = dict.admin;
   const check = promptText === null ? null : checkLockBlock(promptText);
   const styling = promptText === null ? null : checkStylingBlock(promptText);
@@ -252,6 +254,11 @@ function TemplateLocksNote({ promptText, dict }: { promptText: string | null; di
       {styling?.state === 'malformed' && (
         <p data-template-styling="malformed" className="font-mono text-[0.72rem] text-accent">
           {a.templateStylingMalformed}
+        </p>
+      )}
+      {styling?.state === 'none' && cast !== 'pet' && (
+        <p data-template-styling="missing" className="font-mono text-[0.72rem] text-accent">
+          {a.templateStylingMissing}
         </p>
       )}
       {(check?.state === 'malformed' || check?.state === 'header_typo') && (
@@ -352,6 +359,13 @@ export function PromptFields({ row, dict, look }: {
         </div>
       </div>
 
+      {/* §3.4.9, rule 3: a person template says how its hair and makeup are made; the helper writes the block. */}
+      <TemplateStylingHelper
+        copy={a.stylingHelper}
+        partLabels={{ hair: dict.editSheet.slots.hair, makeup: dict.editSheet.slots.makeup }}
+        initialPrompt={row?.promptText ?? ''}
+        initialCast={row?.cast ?? 'solo'}
+      />
       <Field label={a.fieldPromptBody}>
         <textarea
           name="promptText"
@@ -363,7 +377,7 @@ export function PromptFields({ row, dict, look }: {
           className={INPUT}
         />
       </Field>
-      <TemplateLocksNote promptText={row?.promptText ?? null} dict={dict} />
+      <TemplateLocksNote promptText={row?.promptText ?? null} cast={row?.cast ?? null} dict={dict} />
 
       <details open={row !== null} className="border border-hairline p-3">
         <summary className="cursor-pointer font-label text-eyebrow">{a.promptOptionalDetails}</summary>

@@ -5802,7 +5802,7 @@ export const en = {
     setAspect: 'Aspect',
     setFramesHeading: 'Frames',
     setDropZone: 'Drop {min}–{max} images at once. Add a prompt JSON and the prompts fill in by file name.',
-    setPromptHint: 'Call the customer’s photo Image 1 or @image1 in each prompt. A set cannot carry other reference images.',
+    setPromptHint: 'Call the customer’s photo Image 1 or @image1 in each prompt. A set cannot carry other reference images. End every frame’s prompt with a Template styling: block saying whether the template sets the hair and makeup or follows the photo, or the set is not published.',
     setFrameLabel: 'Frame {n}',
     setThumbnail: 'Main image',
     setMoveUp: 'Up',
@@ -5866,6 +5866,19 @@ export const en = {
     templateStylingField: 'Styling block',
     templateStylingDeclareHint: 'Paste one block: it is written into the main text and every step prompt an order reads, together. Save it empty to remove it everywhere. A "Styled by the template" description names only the template\'s style: one that says to follow the photo (photo, reference, Image 1) is not saved. A part that follows the photo gets a "- Taken from the photo: " line; a hair or makeup part with no line follows the photo too.',
     templateStylingDeclare: 'Save styling',
+    /** docs/PERSONAL-STUDIO.md §3.4.9, rule 3 (2026-11-25): a new person template says how its hair and makeup are made. */
+    templateStylingMissing:
+      'No styling block. This template still saves as it is; after review, say whether the template sets the hair and makeup or follows the buyer’s photo. A new template cannot be created without the block.',
+    stylingRequiredExample: 'Example block (the hair and the makeup both follow the buyer’s photo). Paste it at the end of the prompt, after a blank line.',
+    stylingHelper: {
+      heading: 'Who sets the hair and makeup?',
+      hint: 'Anything you leave alone follows the buyer’s photo. Pick, then press "Add to prompt" to put the styling block at the end of the prompt below.',
+      photo: 'Buyer’s photo (default)',
+      template: 'Set by the template',
+      notePlaceholder: 'The template’s look, short, in English. e.g. a sleek low bun',
+      insert: 'Add to prompt',
+      noteInvalid: 'Describe it in English, up to 120 characters, with no @ handle and nothing about following the photo.',
+    },
     /** docs/PERSONAL-STUDIO.md §3.4.4 (T1a): the marks editor on a template with a lock block (`prompt.marks`). */
     templateMarks: {
       heading: 'Fixed parts: descriptions and ranges',
@@ -6090,6 +6103,7 @@ export const en = {
     errAssetIncomplete: 'An asset is missing its hash or its staged file. Upload it again.',
     errStorage: 'The stored file could not be read.',
     errUpload: 'That upload was refused — check the size, the length and the file type.',
+    errStylingRequired: 'Say whether the template sets the hair and makeup, or follows the buyer’s photo.',
     errNotPublishable: 'Not ready to publish — the detail below says exactly what is missing.',
     errDeadlineNotPassed: 'Placements open after the deadline, not before.',
     errDuplicatePlacement: 'That place is already taken in this contest.',

@@ -9,8 +9,10 @@ import { parseRecipe } from '@/lib/recipes/schema';
 import { findImageSetProblems } from '@/components/admin/image-set-form';
 import { adminHarness, upload, type AdminHarness } from '../helpers/admin';
 import { runner } from '../helpers/pglite';
+import { TEMPLATE_STYLING_DEFAULT_BLOCK } from '@/lib/template-director/styling';
 
-const prompt = (n: number) => `Image 1 is the person. Keep their face. Frame ${n}, a quiet studio portrait.`;
+// Every frame of a new set declares its styling (docs/PERSONAL-STUDIO.md §3.4.9, rule 3).
+const prompt = (n: number) => `Image 1 is the person. Keep their face. Frame ${n}, a quiet studio portrait.\n\n${TEMPLATE_STYLING_DEFAULT_BLOCK}`;
 const fields = (overrides: Record<string, unknown> = {}) => ({
   title: 'Three Quiet Portraits',
   titleKo: '조용한 초상 세 컷',
@@ -80,11 +82,11 @@ describe('prompt.createSet', () => {
 
   // Slack 2026-11-02: "@image1 프롬프트 이미 작성되어있는데 없다고 안넘어감".
   it('accepts the photo written @image1 and stores it as the set\'s Image 1', async () => {
-    const outcome = await harness.run('prompt.createSet', fields({ frame0Prompt: '@image1 is the person. Keep their face. A quiet studio portrait.' }));
+    const outcome = await harness.run('prompt.createSet', fields({ frame0Prompt: `@image1 is the person. Keep their face. A quiet studio portrait.\n\n${TEMPLATE_STYLING_DEFAULT_BLOCK}` }));
     expect(outcome).toMatchObject({ ok: true, detail: 'three-quiet-portraits' });
     const row = (await loadPromptBySlug(sql(), 'three-quiet-portraits'))!;
     const recipe = (await loadTemplateRecipe(sql(), row.id))!;
-    expect(recipe.steps[0]!.prompt).toBe('{{selfie}} is the person. Keep their face. A quiet studio portrait.');
+    expect(recipe.steps[0]!.prompt).toBe(`{{selfie}} is the person. Keep their face. A quiet studio portrait.\n\n${TEMPLATE_STYLING_DEFAULT_BLOCK}`);
   });
 
   it('still refuses another reference written as a handle', async () => {

@@ -5,7 +5,7 @@ import { getDictionary } from '@/lib/i18n/dictionaries';
 import { interpolate } from '@/lib/i18n/format';
 import { loadPromptBySlug } from '@/lib/prompts/repo';
 import { TEMPLATE_KEEP_LINE_PREFIX, lockRefusalCopy, lockRefusalLines } from '@/lib/template-director/locks';
-import { TEMPLATE_STYLING_KEY_PHRASES } from '@/lib/template-director/styling';
+import { TEMPLATE_STYLING_DEFAULT_BLOCK, TEMPLATE_STYLING_KEY_PHRASES } from '@/lib/template-director/styling';
 import { adminHarness, upload, type AdminHarness } from '../helpers/admin';
 import { runner } from '../helpers/pglite';
 
@@ -126,7 +126,9 @@ describe('prompt.create, prompt.update and prompt.createSet check the styling bl
   });
 
   it('checks every frame prompt of an image set', async () => {
-    const photo = (n: number) => `Image 1 is the person. Keep their face. Frame ${n}, a quiet studio portrait.`;
+    const plain = (n: number) => `Image 1 is the person. Keep their face. Frame ${n}, a quiet studio portrait.`;
+    // Rule 3: every frame of a new set declares its styling; the frames around the one under test take the default.
+    const photo = (n: number) => `${plain(n)}\n\n${TEMPLATE_STYLING_DEFAULT_BLOCK}`;
     const set = (frame1Prompt: string) => ({
       title: 'Three Styled Portraits',
       titleKo: '스타일 초상 세 컷',
@@ -144,11 +146,11 @@ describe('prompt.create, prompt.update and prompt.createSet check the styling bl
       frame1: upload('two.webp', 'TWO', 'image/webp'),
       frame2: upload('three.webp', 'THREE', 'image/webp'),
     });
-    const refused = await harness.run('prompt.createSet', set(`${photo(2)}\n\nTemplate styling:\n${STYLED}the hairstyle.`));
+    const refused = await harness.run('prompt.createSet', set(`${plain(2)}\n\nTemplate styling:\n${STYLED}the hairstyle.`));
     expect(refused).toMatchObject({ ok: false, code: 'invalid' });
     expect(refused.detail).toContain('frame 2: template styling: line 4 unknown_line');
     expect(await loadPromptBySlug(sql(), 'three-styled-portraits')).toBeNull();
-    expect(await harness.run('prompt.createSet', set(`${photo(2)}\n\nTemplate styling:\n${HAIR}`))).toMatchObject({ ok: true });
+    expect(await harness.run('prompt.createSet', set(`${plain(2)}\n\nTemplate styling:\n${HAIR}`))).toMatchObject({ ok: true });
   });
 });
 
@@ -165,7 +167,7 @@ describe('a refused save is said in sentences', () => {
   });
 
   it('on the template page', async () => {
-    expect(await harness.run('prompt.create', { title: 'Styling page', titleKo: '스타일 페이지', promptText: BASE, useCase: 'brand-ad', textVisibility: 'public', models: ['seedance-2.5'], poster: upload('poster.png', 'POSTER-BYTES', 'image/png') })).toMatchObject({ ok: true });
+    expect(await harness.run('prompt.create', { title: 'Styling page', titleKo: '스타일 페이지', promptText: VALID, useCase: 'brand-ad', textVisibility: 'public', models: ['seedance-2.5'], poster: upload('poster.png', 'POSTER-BYTES', 'image/png') })).toMatchObject({ ok: true });
     const id = (await loadPromptBySlug(sql(), 'styling-page'))!.id;
     const page = await AdminPromptItemPage({
       params: Promise.resolve({ id }),

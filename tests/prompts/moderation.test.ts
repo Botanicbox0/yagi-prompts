@@ -11,6 +11,7 @@ import { seedPrompts } from '../../scripts/seed';
 import { FIXTURE_USERS } from '../../scripts/fixtures';
 import { adminHarness, formOf, upload, viewerOf, type AdminHarness } from '../helpers/admin';
 import { runner } from '../helpers/pglite';
+import { TEMPLATE_STYLING_DEFAULT_BLOCK } from '@/lib/template-director/styling';
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 const read = (...parts: string[]) => readFileSync(join(ROOT, ...parts), 'utf8');
@@ -171,7 +172,8 @@ describe('prompt moderation operations (§13.2/F)', () => {
     slug: 'studio-locked-off',
     title: 'Studio locked off',
     titleKo: '스튜디오 고정 샷',
-    promptText: 'Locked-off wide on a seamless backdrop, single softbox, no camera move.',
+    // A new person template declares its hair and makeup (docs/PERSONAL-STUDIO.md §3.4.9, rule 3).
+    promptText: `Locked-off wide on a seamless backdrop, single softbox, no camera move.\n\n${TEMPLATE_STYLING_DEFAULT_BLOCK}`,
     useCase: ['brand-ad'],
     textVisibility: 'pro',
     featured: 'on',

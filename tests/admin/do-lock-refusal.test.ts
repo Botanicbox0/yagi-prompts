@@ -50,6 +50,13 @@ describe('/admin/do and a lock-block refusal', () => {
     expect(await response.json()).toEqual({ ok: false, code: 'invalid', field: 'promptText', detail: LOCK_DETAIL });
   });
 
+  it('hands a create refused for a missing styling block (rule 3) back on the prompt field', async () => {
+    handlers.dispatchAdmin.mockResolvedValue({ ok: false, code: 'stylingRequired', detail: 'promptText: template styling: missing' });
+    const response = await POST(request('prompt.create', ENHANCED));
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ ok: false, code: 'stylingRequired', field: 'promptText' });
+  });
+
   it.each([
     ['a missing poster', { ok: false, code: 'invalid', detail: 'poster: a YAGI prompt needs a poster image' }, { ok: false, code: 'invalid', field: 'poster' }],
     ['a missing use case', { ok: false, code: 'invalid', detail: 'useCase: Array must contain at least 1 element(s)' }, { ok: false, code: 'invalid', field: 'useCase' }],

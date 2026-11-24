@@ -228,6 +228,7 @@ const ERROR_KEYS = {
   assetIncomplete: "errAssetIncomplete",
   storage: "errStorage",
   upload: "errUpload",
+  stylingRequired: "errStylingRequired",
   notPublishable: "errNotPublishable",
   deadlineNotPassed: "errDeadlineNotPassed",
   duplicatePlacement: "errDuplicatePlacement",

@@ -80,11 +80,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // docs/PERSONAL-STUDIO.md §3.3 (C3): the lock-block refusal is the one detail this answer carries. It is the
     // operation's own fixed-prefix sentence (lines and kinds), recognised by `readLockBlockRefusal`; nothing else is echoed.
     const lock = !outcome.ok && outcome.code === 'invalid' && readLockBlockRefusal(outcome.detail ?? '')?.field === 'promptText';
+    // docs/PERSONAL-STUDIO.md §3.4.9, rule 3: a person template without a styling block; the form says it with the example.
+    const styling = !outcome.ok && outcome.code === 'stylingRequired';
     return NextResponse.json(outcome.ok
       ? { ok: true, to: outcomeUrl(back, outcome) }
       : lock
         ? { ok: false, code: outcome.code, field: 'promptText', detail: outcome.detail }
-        : { ok: false, code: outcome.code, field: ['useCase', 'poster'].includes(field ?? '') ? field : undefined },
+        : styling
+          ? { ok: false, code: outcome.code, field: 'promptText' }
+          : { ok: false, code: outcome.code, field: ['useCase', 'poster'].includes(field ?? '') ? field : undefined },
     { status: outcome.ok ? 200 : 400, headers: NO_STORE });
   }
   if (name === 'prompt.createSet' && request.headers.get('accept') === 'application/vnd.twings.admin-form+json') {

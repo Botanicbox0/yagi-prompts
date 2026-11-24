@@ -5769,7 +5769,7 @@ export const ko: Dictionary = {
     setAspect: '화면비',
     setFramesHeading: '컷',
     setDropZone: '이미지 {min}~{max}장을 한꺼번에 끌어다 놓으세요. 프롬프트 JSON을 함께 놓으면 파일 이름을 보고 프롬프트까지 채웁니다.',
-    setPromptHint: '고객 사진은 프롬프트에서 Image 1 또는 @image1로 씁니다. 세트에는 다른 참조 이미지를 넣을 수 없습니다.',
+    setPromptHint: '고객 사진은 프롬프트에서 Image 1 또는 @image1로 씁니다. 세트에는 다른 참조 이미지를 넣을 수 없습니다. 장마다 프롬프트 끝에 Template styling: 블록을 적어 헤어와 메이크업을 템플릿이 정하는지 사진을 따르는지 밝혀야 게시됩니다.',
     setFrameLabel: '{n}번 컷',
     setThumbnail: '대표 이미지',
     setMoveUp: '위로',
@@ -5831,6 +5831,19 @@ export const ko: Dictionary = {
     templateStylingField: '스타일 블록',
     templateStylingDeclareHint: '블록 하나를 붙여 넣으면 본문과 주문 때 읽는 모든 단계 프롬프트에 한 번에 적습니다. 비우고 저장하면 모두에서 지웁니다. 템플릿이 꾸민 줄의 설명에는 템플릿이 정한 모양만 적습니다. 사진을 따르라는 말(photo, reference, Image 1)이 들어 있으면 저장되지 않습니다. 사진을 따르는 항목은 "- Taken from the photo: " 줄로 적거나, 헤어·메이크업이면 줄을 빼도 사진을 따릅니다.',
     templateStylingDeclare: '스타일 선언 저장',
+    /** docs/PERSONAL-STUDIO.md §3.4.9, rule 3 (2026-11-25): a new person template says how its hair and makeup are made. */
+    templateStylingMissing:
+      '스타일 블록이 없습니다. 지금은 그대로 저장되지만, 검토한 뒤 헤어와 메이크업을 템플릿이 정하는지 구매자 사진을 따르는지 적어 주세요. 새 템플릿은 이 블록이 없으면 만들 수 없습니다.',
+    stylingRequiredExample: '예시 블록 (헤어와 메이크업 모두 구매자 사진을 따를 때). 프롬프트 끝에 빈 줄을 두고 붙여 넣으세요.',
+    stylingHelper: {
+      heading: '헤어·메이크업은 누가 정하나요',
+      hint: '고르지 않으면 구매자 사진을 따릅니다. 고른 뒤 "프롬프트에 넣기"를 누르면 아래 프롬프트 끝에 스타일 블록이 들어갑니다.',
+      photo: '사진 따름 (기본)',
+      template: '템플릿이 정함',
+      notePlaceholder: '템플릿이 정한 모양을 영어로 짧게. 예: a sleek low bun',
+      insert: '프롬프트에 넣기',
+      noteInvalid: '설명을 영어로 120자 안에 적어 주세요. @ 핸들과 사진을 따르라는 말은 넣을 수 없습니다.',
+    },
     /** docs/PERSONAL-STUDIO.md §3.4.4 (T1a): the marks editor on a template with a lock block (`prompt.marks`). */
     templateMarks: {
       heading: '고정 항목 설명과 구간',
@@ -6046,6 +6059,7 @@ export const ko: Dictionary = {
     errAssetIncomplete: '에셋의 해시 또는 스테이징 파일이 없습니다. 다시 업로드하세요.',
     errStorage: '저장된 파일을 읽지 못했습니다.',
     errUpload: '업로드가 거부됐습니다. 용량과 길이, 파일 형식을 확인해 주세요.',
+    errStylingRequired: '헤어와 메이크업을 템플릿이 정하는지, 구매자 사진을 따르는지 적어 주세요.',
     errNotPublishable: '아직 공개할 수 없습니다. 아래 상세에서 누락 항목을 확인하세요.',
     errDeadlineNotPassed: '수상 지정은 마감 이후에만 가능합니다.',
     errDuplicatePlacement: '이 콘테스트에서 이미 사용 중인 순위입니다.',

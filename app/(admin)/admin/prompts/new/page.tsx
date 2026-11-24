@@ -5,6 +5,7 @@ import { interpolate } from '@/lib/i18n/format';
 import { USE_CASE_MAX, USE_CASE_MIN } from '@/lib/prompts/schemas';
 import { ADMIN_PROMPTS_PATH, ADMIN_PROMPT_NEW_PATH, ADMIN_PROMPT_NEW_SET_PATH } from '@/lib/prompts/links';
 import { lockRefusalCopy } from '@/lib/template-director/locks';
+import { TEMPLATE_STYLING_DEFAULT_BLOCK } from '@/lib/template-director/styling';
 import { AdminShell, BUTTON_PRIMARY, OpForm, OutcomeBanner, Panel } from '@/components/admin/chrome';
 import { AdminPageHeader } from '@/components/admin/patterns';
 import { PromptFields } from '@/components/admin/prompt-fields';
@@ -92,6 +93,13 @@ export default async function AdminPromptNewPage({ searchParams }: { searchParam
           {refused.text}
         </p>
       )}
+      {/* docs/PERSONAL-STUDIO.md §3.4.9, rule 3: a person template without a styling block (no-JS answer). */}
+      {err === 'stylingRequired' && (
+        <div data-refused-field="promptText" data-styling-required className="mt-3 rounded-[10px] border border-accent px-3.5 py-2.5 text-[13px]">
+          <p className="text-accent">{a.stylingRequiredExample}</p>
+          <pre className="mt-2 overflow-auto font-mono text-[12px] whitespace-pre-wrap select-all">{TEMPLATE_STYLING_DEFAULT_BLOCK}</pre>
+        </div>
+      )}
 
       <section data-template-steps className="admin-spec-card">
         <div className="admin-spec-head">
@@ -119,6 +127,7 @@ export default async function AdminPromptNewPage({ searchParams }: { searchParam
           uncertain: a.promptPublishUncertain, retained: a.promptInputsRetained, publishing: a.promptPublishing,
           draftRestored: a.promptDraftRestored, draftDiscard: a.promptDraftDiscard, draftSavedAt: a.promptDraftSavedAt,
           lockCopy: lockRefusalCopy(a),
+          stylingRequired: a.errStylingRequired, stylingExample: TEMPLATE_STYLING_DEFAULT_BLOCK,
         }}>
         <OpForm op="prompt.create" back={ADMIN_PROMPT_NEW_PATH} className="flex flex-col gap-4">
           <PromptFields row={null} dict={dict} {...(lookReady ? { look: 'any' as const } : {})} />

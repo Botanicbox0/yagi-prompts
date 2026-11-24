@@ -332,6 +332,47 @@ export const TEMPLATE_STYLING_EXAMPLE = renderStylingBlock([
   { part: 'outfit', from: 'photo' },
 ]);
 
+// --- Rule 3 on the save side: a new person template declares its styling --------------------------------------------
+
+/**
+ * The block a new person template takes when its author sets neither the hair nor the makeup (rule 3: both follow the
+ * buyer's photo). The example a `stylingRequired` refusal shows, and what the admin helper writes by default.
+ */
+export const TEMPLATE_STYLING_DEFAULT_BLOCK = renderStylingBlock([
+  { part: 'hair', from: 'photo' },
+  { part: 'makeup', from: 'photo' },
+]);
+
+/**
+ * The detail of a `stylingRequired` refusal: `<field>: template styling: missing`. Not a block-problem detail
+ * (`readLockBlockRefusal` reads no kind in it), so the forms say it with their own sentence and the example block.
+ */
+export function stylingRequiredDetail(field: string): string {
+  return `${field}: template styling: missing`;
+}
+
+/** One part in the admin helper: follows the buyer's photo (the default), or set by the template with its description. */
+export type StylingHelperChoice = { from: 'photo' } | { from: 'template'; note: string };
+
+/**
+ * The block the admin helper writes for the hair and the makeup, checked as a save checks it (`checkStylingBlock`): a
+ * template style needs a description within the limit, without an `@` handle or a clause about the photo. Refused,
+ * the parts whose description does not pass.
+ */
+export function stylingHelperBlock(
+  choices: Readonly<Record<OwnStylePart, StylingHelperChoice>>,
+): { ok: true; block: string } | { ok: false; parts: OwnStylePart[] } {
+  const entries: StylingEntry[] = OWN_STYLE_PARTS.map((part) => {
+    const choice = choices[part];
+    return choice.from === 'template' ? { part, from: 'template', note: cleanNote(choice.note) } : { part, from: 'photo' };
+  });
+  const bad = OWN_STYLE_PARTS.filter((part, i) => {
+    const entry = entries[i]!;
+    return entry.from === 'template' && checkStylingBlock(renderStylingBlock([entry])).state !== 'ok';
+  });
+  return bad.length > 0 ? { ok: false, parts: bad } : { ok: true, block: renderStylingBlock(entries) };
+}
+
 // --- The buyer's choice ---------------------------------------------------------------------------------------------
 
 /**
