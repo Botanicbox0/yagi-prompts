@@ -1824,6 +1824,8 @@ export const en = {
       editBadge: 'Partial edit',
       finalBadge: '1080p',
       noPrompt: 'No prompt',
+      failedImage: 'This image could not be made. Please try again.',
+      failedVideo: 'This video could not be made. Please try again.',
     },
     dock: {
       label: 'What to make',

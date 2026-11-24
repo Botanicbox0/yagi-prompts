@@ -35,6 +35,24 @@ export function errorLine(
   return (code && Object.hasOwn(errors, code) ? errors[code as StudioErrorCode] : undefined) ?? errors.failed;
 }
 
+const VIDEO_RUN_KINDS: ReadonlySet<string> = new Set(["video", "video_remix", "video_final", "video_revise"]);
+
+/**
+ * A failed run's line on its card: its own code's sentence, or, for a plain failure (or a code without one),
+ * "이미지를 …" / "영상을 생성하지 못했어요" by the run's kind. `errors.failed` names no medium (it is every
+ * operation's fallback).
+ */
+export function runFailedLine(copy: StudioCopy, kind: string, code: string | null | undefined): string {
+  if (code && code !== "failed" && Object.hasOwn(copy.errors, code)) return errorLine(copy, code);
+  return VIDEO_RUN_KINDS.has(kind) ? copy.board.failedVideo : copy.board.failedImage;
+}
+
+/** "스튜디오를 불러오지 못했어요." plus the code's own sentence, or alone when the code says nothing more (`failed`, unknown). */
+export function loadFailedLine(copy: StudioCopy, code: string | null | undefined): string {
+  if (!code || code === "failed" || !Object.hasOwn(copy.errors, code)) return copy.state.loadFailed;
+  return `${copy.state.loadFailed} ${errorLine(copy, code)}`;
+}
+
 /** Upload error copy that surfaces the pre-approval 500 MB / 50-file reason when present. */
 export function studioUploadErrorLine(copy: StudioCopy, code: string | null | undefined, reason?: UploadLimitReason | null): string {
   if (code === "storage_quota_exceeded" && isUnapprovedUploadReason(reason)) {
