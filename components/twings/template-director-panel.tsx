@@ -474,6 +474,10 @@ export function TemplateDirectorPanel({
     const ref = REF_OF_SLOT[preset.slot];
     return slotOpen(preset.slot) && (!ref || !lockState.refs.includes(ref));
   });
+  // The request box's example never suggests a fixed part: with locks it is an expression change, and none at all
+  // when the direction itself is fixed. Without locks it is the example it always was.
+  const requestPlaceholder =
+    activeLocks && lockWords ? (slotOpen('shot_action') ? lockWords.lockedPlaceholder : '') : copy.inputPlaceholder;
 
   const totalSetFrames =
     imageSetSpec && imageSetSpec.totalFrames > 1
@@ -2566,7 +2570,7 @@ export function TemplateDirectorPanel({
               maxLength={MAX_DIRECTOR_INPUT_CHARS}
               disabled={disabled || submitting}
               value={userMessage}
-              placeholder={copy.inputPlaceholder}
+              placeholder={requestPlaceholder}
               onChange={(e) => setUserMessage(e.currentTarget.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {

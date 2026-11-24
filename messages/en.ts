@@ -6041,13 +6041,13 @@ export const en = {
     /** Refusal: the request is too long. */
     refusedTooLarge: 'That request is too long. Send it in shorter parts.',
     /** docs/PERSONAL-STUDIO.md §3.3 — heading of the card's first section: the parts of this template that are fixed. */
-    lockedHeading: "Can't be changed",
-    /** One line under the fixed parts: they are fixed by this template itself. */
-    lockedNote: 'These parts are fixed in this template.',
+    lockedHeading: 'Fixed parts',
+    /** One line under the fixed parts: they are fixed by this template itself and cannot be changed. */
+    lockedNote: "These can't be changed in this template.",
     /** Shown instead of the list when the whole template is fixed (nothing can be changed). */
     lockedAll: 'Everything in this template is fixed.',
-    /** The parts every template keeps as they are, in one line: camera and cut rhythm, light and colour, timing. */
-    skeleton: 'Camera and cut rhythm, light and colour, scene timing',
+    /** The parts every template keeps as they are, in one line: camera work, cut rhythm, light and colour, timing. */
+    skeleton: 'Camera work, cut rhythm, light and colour, scene timing',
     /** Names of fixed parts that are not one of the slots above (the product, the logo, the sound). */
     locks: {
       product: 'Product',
@@ -6055,9 +6055,11 @@ export const en = {
       sound: 'Sound',
     },
     /** Live line when a request asked to change only fixed parts: nothing was added. */
-    refusedLocked: "That part is fixed in this template and can't be changed.",
+    refusedLocked: "That part is fixed and can't be changed.",
     /** Live line when a request was added but the part of it about fixed parts was left out. */
-    updatedLocked: 'Added to your changes. Fixed parts stay as they are.',
+    updatedLocked: 'Added what can be changed. Fixed parts stay as they are.',
+    /** Example in the request box on a template with fixed parts: a change it allows (an expression), nothing fixed. */
+    lockedPlaceholder: 'e.g. Have me smile softly at the camera at the end',
   },
 } as const;
 

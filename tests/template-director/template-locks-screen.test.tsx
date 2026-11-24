@@ -333,6 +333,19 @@ describe('TemplateDirectorPanel with template locks (flag off: no editSheet)', (
     expect(plain).not.toContain('data-template-lock-part');
   });
 
+  it('the request box suggests nothing a lock forbids: the locked example, or none when the direction is fixed', () => {
+    const placeholder = (html: string) => html.match(/<textarea[^>]*placeholder="([^"]*)"/)?.[1];
+    const escaped = (text: string) => text.replace(/'/g, '&#x27;');
+    expect(placeholder(panel({ locks: CAMPAIGN, lockCopy: ko.editSheet }))).toBe(ko.editSheet.lockedPlaceholder);
+    expect(placeholder(panel({ locale: 'en', locks: SOUND, lockCopy: en.editSheet }))).toBe(escaped(en.editSheet.lockedPlaceholder));
+    expect(placeholder(panel({ editSheet: ko.editSheet, locks: PROP_ONLY }))).toBe(ko.editSheet.lockedPlaceholder);
+    const direction = projected([{ kind: 'slot', slot: 'shot_action' }]);
+    expect(placeholder(panel({ locks: direction, lockCopy: ko.editSheet }))).toBe('');
+    expect(placeholder(panel({ locks: ALL, lockCopy: ko.editSheet }))).toBe('');
+    // Without locks it is the example it always was.
+    expect(placeholder(panel())).toBe('예: 2번째 컷에서 컵 대신 내 향수를 들고 정면을 보며 살짝 웃게 해줘');
+  });
+
   it('English names the parts in English', () => {
     const html = panel({ locale: 'en', locks: CAMPAIGN, lockCopy: en.editSheet });
     const row = html.slice(html.indexOf('data-template-locked-elements'), html.indexOf('data-director-predictive-presets'));
@@ -365,16 +378,41 @@ describe('TemplateDirectorPanel with template locks (flag on: editSheet)', () =>
 // --- Copy -----------------------------------------------------------------------------------------------------------
 
 describe('lock copy', () => {
-  const keys = ['lockedHeading', 'lockedNote', 'lockedAll', 'skeleton', 'refusedLocked', 'updatedLocked'] as const;
+  const keys = ['lockedHeading', 'lockedNote', 'lockedAll', 'skeleton', 'refusedLocked', 'updatedLocked', 'lockedPlaceholder'] as const;
 
   it('exists in both languages, with the three named parts', () => {
     for (const dict of [ko, en]) {
       for (const key of keys) expect(dict.editSheet[key].trim().length, key).toBeGreaterThan(0);
       for (const part of ['product', 'logo', 'sound'] as const) expect(dict.editSheet.locks[part].trim().length).toBeGreaterThan(0);
     }
-    expect(ko.editSheet.lockedHeading).toBe('바꿀 수 없는 것');
-    expect(en.editSheet.lockedHeading).toBe("Can't be changed");
   });
+
+  it('is the reviewed wording (provisional)', () => {
+    expect({ ...pick(ko.editSheet), locks: ko.editSheet.locks }).toEqual({
+      lockedHeading: '고정된 부분',
+      lockedNote: '이 템플릿에서는 바꿀 수 없어요.',
+      lockedAll: '모든 부분이 고정된 템플릿이에요.',
+      skeleton: '카메라 연출, 컷 리듬, 조명과 색감, 장면 타이밍',
+      refusedLocked: '고정된 부분이라 바꿀 수 없어요.',
+      updatedLocked: '바꿀 수 있는 것만 고칠 내용에 담았어요. 고정된 부분은 그대로 둬요.',
+      lockedPlaceholder: '예: 마지막에 카메라를 보며 살짝 웃게 해 주세요',
+      locks: { product: '제품', logo: '로고', sound: '소리' },
+    });
+    expect({ ...pick(en.editSheet), locks: en.editSheet.locks }).toEqual({
+      lockedHeading: 'Fixed parts',
+      lockedNote: "These can't be changed in this template.",
+      lockedAll: 'Everything in this template is fixed.',
+      skeleton: 'Camera work, cut rhythm, light and colour, scene timing',
+      refusedLocked: "That part is fixed and can't be changed.",
+      updatedLocked: 'Added what can be changed. Fixed parts stay as they are.',
+      lockedPlaceholder: 'e.g. Have me smile softly at the camera at the end',
+      locks: { product: 'Product', logo: 'Logo', sound: 'Sound' },
+    });
+  });
+
+  function pick(copy: EditSheetCopy) {
+    return Object.fromEntries(keys.map((key) => [key, copy[key]]));
+  }
 
   it('never mentions campaigns, brands, models, providers or prompts', () => {
     const banned = /campaign|brand|model|provider|prompt|engine|gemini|seedance|캠페인|브랜드|모델|프롬프트|엔진|제공사/i;

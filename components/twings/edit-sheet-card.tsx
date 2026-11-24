@@ -13,7 +13,6 @@ import type { Dictionary } from '@/lib/i18n/dictionaries';
 import { interpolate } from '@/lib/i18n/format';
 import { normSheetText, sheetTextKey } from '@/lib/revision/sheet-core';
 import {
-  heuristicSlotOf,
   locksFromPublic,
   lockVerdict,
   type PublicTemplateLocks,
@@ -73,12 +72,11 @@ const isUnrangedAction = (l: PersonalSheetChange): boolean => l.slot === 'shot_a
 
 /**
  * docs/PERSONAL-STUDIO.md §3.3 — whether a template lock would keep typed text out of the video: the line it folds
- * into (an unranged action) is closed or names a locked part, or the text is about a closed part by the same keyword
- * lists the server reads a note with. Over-blocking is acceptable here, under-blocking is not.
+ * into (an unranged action) fails `lockVerdict`, the same check the compile applies to that line (a closed action
+ * slot, a closed slot the text is about by the keyword lists, or a named locked part).
  */
 function lockedPendingText(text: string, locks: TemplateLocks): boolean {
-  if (!locks.any) return false;
-  return lockVerdict({ slot: 'shot_action', text }, locks) !== 'ok' || locks.slots.includes(heuristicSlotOf(text));
+  return locks.any && lockVerdict({ slot: 'shot_action', text }, locks) !== 'ok';
 }
 
 export function foldPendingForOrder(

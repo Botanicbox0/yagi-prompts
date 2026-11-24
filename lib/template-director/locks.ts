@@ -48,14 +48,33 @@ export const REF_OF_SLOT: Partial<Record<DirectorEditableSlot, CustomDirectorRef
   lighting_mood: 'scene_ref',
 };
 
-/** The slot a typed request is about, by the heuristic's keyword lists (first match wins). */
+/**
+ * The heuristic's keyword lists, in the order it tries them. `shot_action` has no list: it is what a text with no
+ * keyword falls to, never a positive match.
+ */
+const SLOT_KEYWORDS: ReadonlyArray<readonly [DirectorEditableSlot, RegExp]> = [
+  ['outfit', /드레스|자켓|재킷|코트|셔츠|옷|의상|착장|outfit|dress|jacket/i],
+  ['makeup', /화장|메이크업|블러셔|립|피부|makeup|lip/i],
+  ['hair', /머리|헤어|앞머리|로우번|단발|생머리|안경|선글라스|hair|bangs/i],
+  ['prop', /소품|가방|가지고|들고|제품|컵|prop|product/i],
+  ['lighting_mood', /조명|배경|분위기|색감|lighting|mood|background/i],
+];
+
+/** The slot a text is about by the keyword lists (first match wins), or null when no keyword matched. */
+export function heuristicSlotMatch(text: string): DirectorEditableSlot | null {
+  const value = String(text ?? '');
+  return SLOT_KEYWORDS.find(([, re]) => re.test(value))?.[0] ?? null;
+}
+
+/** The slot a typed request is about, by the heuristic's keyword lists (first match wins; none = `shot_action`). */
 export function heuristicSlotOf(text: string): DirectorEditableSlot {
-  if (/드레스|자켓|재킷|코트|셔츠|옷|의상|착장|outfit|dress|jacket/i.test(text)) return 'outfit';
-  if (/화장|메이크업|블러셔|립|피부|makeup|lip/i.test(text)) return 'makeup';
-  if (/머리|헤어|앞머리|로우번|단발|생머리|안경|선글라스|hair|bangs/i.test(text)) return 'hair';
-  if (/소품|가방|가지고|들고|제품|컵|prop|product/i.test(text)) return 'prop';
-  if (/조명|배경|분위기|색감|lighting|mood|background/i.test(text)) return 'lighting_mood';
-  return 'shot_action';
+  return heuristicSlotMatch(text) ?? 'shot_action';
+}
+
+/** Every slot whose keyword list the text matches (positive matches only, in list order). */
+export function keywordSlotsOf(text: string): DirectorEditableSlot[] {
+  const value = String(text ?? '');
+  return SLOT_KEYWORDS.filter(([, re]) => re.test(value)).map(([slot]) => slot);
 }
 
 // --- Model ----------------------------------------------------------------------------------------------------------
@@ -392,11 +411,32 @@ export function lockTextHit(text: string, locks: TemplateLocks): boolean {
   return locks.named.some((kind) => NAMED_TEXT[kind].test(normalized));
 }
 
+/**
+ * Whether a text is about a closed slot by the keyword lists, whatever slot it is filed under ("빨간 드레스로" filed
+ * as an action on a wardrobe-locked template). Only a POSITIVE keyword match counts: a text no list matches is never
+ * read as `shot_action`, so a direction-locked template judges such a line by its own slot alone. Every list that
+ * matches counts, not only the first (over-blocking is acceptable here, under-blocking is not).
+ */
+export function lockedSlotText(text: string, locks: TemplateLocks): boolean {
+  if (!locks.any || locks.slots.length === 0) return false;
+  return keywordSlotsOf(String(text ?? '').normalize('NFKC')).some((slot) => locks.slots.includes(slot));
+}
+
+/**
+ * Whether a free text (an exclusion, a chip summary, an override, a shot edit) touches a locked part: it names one
+ * (`lockTextHit`) or is about a closed slot (`lockedSlotText`). `keep` lines are never screened with this.
+ */
+export function lockedPartText(text: string, locks: TemplateLocks): boolean {
+  return lockTextHit(text, locks) || lockedSlotText(text, locks);
+}
+
 const overlaps = (a: { from: number; to: number }, b: { from: number; to: number }): boolean => a.from <= b.to && b.from <= a.to;
 
 /**
- * Why a change line may not land: its slot is closed ('slot'), its shots overlap a locked range ('shots'; an
- * unranged line is not caught here), or its text names a locked part ('named'). 'ok' otherwise.
+ * Why a change line may not land: its slot is closed, or its text is about a closed slot by the keyword lists
+ * ('slot'), its shots overlap a locked range ('shots'; an unranged line is not caught here), or its text names a
+ * locked part ('named'). 'ok' otherwise. Every caller (the turn, the sheet guard, the compile, the screen's fold of
+ * unsent text) reads locks through this, so a line filed under an open slot cannot carry a closed one.
  */
 export function lockVerdict(
   line: { slot: DirectorEditableSlot; text: string; shots?: { from: number; to: number } },
@@ -404,6 +444,7 @@ export function lockVerdict(
 ): 'ok' | 'slot' | 'shots' | 'named' {
   if (!locks.any) return 'ok';
   if (locks.slots.includes(line.slot)) return 'slot';
+  if (lockedSlotText(line.text, locks)) return 'slot';
   if (line.shots && locks.shots.some((r) => overlaps(r, line.shots!))) return 'shots';
   if (lockTextHit(line.text, locks)) return 'named';
   return 'ok';
@@ -413,26 +454,32 @@ const inLockedShot = (shot: number, locks: TemplateLocks): boolean => locks.shot
 
 // --- Applying locks -------------------------------------------------------------------------------------------------
 
-/** A (cleaned) sheet without its locked change lines and the exclusions that name a locked part. */
+/**
+ * A (cleaned) sheet without its locked change lines and the exclusions that touch a locked part (named, or about a
+ * closed slot: "no hairpins" on a hair-locked template). `keep` lines are never dropped.
+ */
 export function lockSheet(sheet: PersonalEditSheet, locks: TemplateLocks): { sheet: PersonalEditSheet; dropped: number } {
   if (!locks.any) return { sheet, dropped: 0 };
   const change = sheet.change.filter((l) => lockVerdict(l, locks) === 'ok');
-  const exclude = sheet.exclude.filter((t) => !lockTextHit(t, locks));
+  const exclude = sheet.exclude.filter((t) => !lockedPartText(t, locks));
   const dropped = sheet.change.length - change.length + (sheet.exclude.length - exclude.length);
   return dropped === 0 ? { sheet, dropped } : { sheet: { ...sheet, change, exclude }, dropped };
 }
 
-/** Summary chips without those in a closed slot or naming a locked part. */
+/** Summary chips without those in a closed slot, about a closed slot, or naming a locked part (`lockVerdict`). */
 export function lockChips(chips: readonly DirectorSummaryChip[], locks: TemplateLocks): DirectorSummaryChip[] {
   if (!locks.any) return [...chips];
-  return chips.filter((c) => !locks.slots.includes(c.slot) && !lockTextHit(c.summaryKo, locks));
+  return chips.filter((c) => lockVerdict({ slot: c.slot, text: c.summaryKo }, locks) === 'ok');
 }
 
-/** The intent with every locked override nulled, locked shot edits and exclusions that name a locked part dropped. */
+/**
+ * The intent with every locked override nulled, and locked shot edits and exclusions dropped: an override in a
+ * closed slot, or any of them touching a locked part (named, or about a closed slot).
+ */
 export function lockIntent<T extends DirectorEditIntent>(intent: T, locks: TemplateLocks): T {
   if (!locks.any) return intent;
   const keep = (slot: DirectorEditableSlot, value: string | null | undefined): string | null | undefined =>
-    value == null || (!locks.slots.includes(slot) && !lockTextHit(value, locks)) ? value : null;
+    value == null || (!locks.slots.includes(slot) && !lockedPartText(value, locks)) ? value : null;
   return {
     ...intent,
     hairOverrideEn: keep('hair', intent.hairOverrideEn) ?? null,
@@ -441,8 +488,8 @@ export function lockIntent<T extends DirectorEditIntent>(intent: T, locks: Templ
     propOverrideEn: keep('prop', intent.propOverrideEn) ?? null,
     shotEdits: locks.slots.includes('shot_action')
       ? []
-      : intent.shotEdits.filter((e) => !inLockedShot(e.shotIndex, locks) && !lockTextHit(e.actionEn, locks)),
-    strictExclusionsEn: intent.strictExclusionsEn.filter((t) => !lockTextHit(t, locks)),
+      : intent.shotEdits.filter((e) => !inLockedShot(e.shotIndex, locks) && !lockedPartText(e.actionEn, locks)),
+    strictExclusionsEn: intent.strictExclusionsEn.filter((t) => !lockedPartText(t, locks)),
   } as T;
 }
 
@@ -465,6 +512,9 @@ export function intentHasContent(intent: DirectorEditIntent | null | undefined):
  * reference photos, background music (a sound lock keeps the template's audio as written), and locked sheet lines
  * and exclusions (the same filter `guardPersonalSheet(sheet, locks)` applies; the compiler guards the sheet's text
  * again before reading it). With `NO_LOCKS` it returns the same object.
+ *
+ * A note line is filed under the classifier's slot (no keyword = `shot_action`, as before) and judged by
+ * `lockVerdict`, so it gets the same keyword rule as a sheet line on top of what it already had.
  */
 export function lockSpec(spec: PersonalDirectorSpec | null, locks: TemplateLocks): PersonalDirectorSpec | null {
   if (!spec || !locks.any) return spec;
@@ -474,7 +524,7 @@ export function lockSpec(spec: PersonalDirectorSpec | null, locks: TemplateLocks
   if (typeof spec.userMessage === 'string') {
     const kept = spec.userMessage
       .split('\n')
-      .filter((l) => l.trim() !== '' && !lockTextHit(l, locks) && !locks.slots.includes(heuristicSlotOf(l)));
+      .filter((l) => l.trim() !== '' && lockVerdict({ slot: heuristicSlotOf(l), text: l }, locks) === 'ok');
     next.userMessage = kept.length > 0 ? kept.join('\n') : null;
   }
   if (spec.slotOverrides) next.slotOverrides = spec.slotOverrides.filter((ref) => !locks.refs.includes(ref));
