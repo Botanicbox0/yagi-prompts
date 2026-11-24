@@ -189,7 +189,8 @@ export function brandStudioEditAssistOpen(env: Record<string, string | undefined
  * The rebuilt editing studio (docs/BRAND-EDITING-STUDIO-V2.md): four workspaces (cut, colour, sound,
  * captions) around one preview and one timeline. Since V1 the flag opens `/brand/studio/editor` on the
  * organization's own film (the film the current editor keeps, on frames, with a frame-exact export);
- * `?sample=1` still opens the sample film. Default OFF: open only when the server environment says
+ * `?sample=1` still opens the sample film (for a listed organization only while
+ * `BRAND_WORKSPACE_PROTOTYPE_LAYER=on`, see below). Default OFF: open only when the server environment says
  * exactly `BRAND_STUDIO_EDITOR_V2=on`. Off means the route answers 404 and every other screen is as it
  * was. The studio route guard runs first, so a sandboxed organization gets 404 whatever this flag says.
  *
@@ -335,8 +336,11 @@ export function brandRoomInvitesOpen(env: NodeJS.ProcessEnv = process.env): bool
 
 /**
  * Prototype layer on `/brand/projects/[id]` (`HumanHandoff`, `BriefConcierge`, `AestheticEngine`,
- * `ReviewStage`) and preview links to demo/sample routes. Default OFF: open only when the server
- * environment says exactly `BRAND_WORKSPACE_PROTOTYPE_LAYER=on`.
+ * `ReviewStage`) and preview links to demo/sample routes: the current editor's link to the editing studio
+ * v2's sample film, and in the editing studio v2 an organization's own film's way to the sample film (its
+ * locked workspaces' link and `?sample=1`; an organization not in `BRAND_STUDIO_EDITOR_V2_ORGS` only ever
+ * gets the sample film there). Default OFF: open only when the server environment says exactly
+ * `BRAND_WORKSPACE_PROTOTYPE_LAYER=on`.
  */
 export function brandWorkspacePrototypeLayerOpen(env: Record<string, string | undefined> = process.env): boolean {
   return env.BRAND_WORKSPACE_PROTOTYPE_LAYER === 'on';

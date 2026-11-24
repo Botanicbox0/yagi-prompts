@@ -13,7 +13,8 @@ vitest suite: run it against a local server started with BRAND_STUDIO_V2=on BRAN
   EDITOR_BASE_URL=http://localhost:3611 EDITOR_ORG_ID=<organization id> python scripts/editor-v2-frame-check.py [capture-dir]
 
 It runs on the sample film (`?sample=1`). The organization's own film is checked by
-scripts/editor-v2-roundtrip-check.py.
+scripts/editor-v2-roundtrip-check.py. When the organization is listed in BRAND_STUDIO_EDITOR_V2_ORGS the server
+also needs BRAND_WORKSPACE_PROTOTYPE_LAYER=on: without it a listed organization's `?sample=1` opens its own film.
 """
 import json
 import os

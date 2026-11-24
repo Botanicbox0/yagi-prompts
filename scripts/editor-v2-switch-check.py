@@ -12,7 +12,8 @@ Run it twice against a local server started with BRAND_STUDIO_V2=on and BRAND_ST
               its link "back to the new editor" (no tag) opens the new editor;
             - the new editor's way back opens the current editor (classic=1);
             - a clip= link through the compose address arrives in the new editor with the clip appended.
-  unlisted  the server WITHOUT the variable (review round 1, item 2): the compose address shows the
+  unlisted  the server WITHOUT the variable (review round 1, item 2) and with BRAND_WORKSPACE_PROTOTYPE_LAYER=on
+            (the link below is behind it since 2026-11-23): the compose address shows the
             current editor, and its link previews the SAMPLE film (`?sample=1`, the structure-preview tag,
             the sample notice as its tooltip). Opening the new editor's own address directly, with no
             `sample` and with a `clip=` link, also shows the sample film, and editing there leaves the
