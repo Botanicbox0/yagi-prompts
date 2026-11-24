@@ -254,10 +254,9 @@ export function PromptDetailMedia({
 
   const showBeats = Boolean(hasVideo && keyframes && keyframes.length > 0);
   const showFixed = Boolean(fixed && (fixed.parts.length > 0 || fixed.all));
-  const wrapped = showBeats || showFixed;
 
   const stageContent = (
-    <div ref={wrapped ? undefined : hostRef} data-media-host={wrapped ? undefined : true} className={outerClass} style={!aspect && ratio ? { aspectRatio: ratio } : undefined}>
+    <div ref={showBeats ? undefined : hostRef} data-media-host={showBeats ? undefined : true} className={outerClass} style={!aspect && ratio ? { aspectRatio: ratio } : undefined}>
       <div className={stageClass}>
         {hasPoster && (
           // eslint-disable-next-line @next/next/no-img-element -- gateway URL with auth headers on private tiers; next/image cannot proxy
@@ -336,40 +335,45 @@ export function PromptDetailMedia({
     </div>
   );
 
-  if (wrapped) {
-    return (
+  const media =
+    showBeats && keyframes ? (
       <div ref={hostRef} data-media-host className="flex w-full flex-col gap-3">
         {stageContent}
-        {showBeats && keyframes && (
-          <VideoKeyframeStrip
-            keyframes={keyframes}
-            posterSrc={poster?.src ?? null}
-            videoSrc={video?.src ?? null}
-            videoRef={videoRef}
-            aspect={aspect}
-            locale={locale}
-            alt={alt}
-            onSelectBeat={() => {
-              // A beat ends a range loop: the strip has already seeked to the beat inside this same tap.
-              if (loopRef.current) applyLoop({ type: 'beat' });
-              setIntent('playing');
-            }}
-          />
-        )}
-        {showFixed && fixed && (
-          <TemplateFixedStrip
-            parts={fixed.parts}
-            all={fixed.all}
-            copy={fixed.copy}
-            videoSrc={hasVideo ? video!.src : null}
-            aspect={aspect}
-            activeId={loop?.id ?? null}
-            onSelect={selectPart}
-          />
-        )}
+        <VideoKeyframeStrip
+          keyframes={keyframes}
+          posterSrc={poster?.src ?? null}
+          videoSrc={video?.src ?? null}
+          videoRef={videoRef}
+          aspect={aspect}
+          locale={locale}
+          alt={alt}
+          onSelectBeat={() => {
+            // A beat ends a range loop: the strip has already seeked to the beat inside this same tap.
+            if (loopRef.current) applyLoop({ type: 'beat' });
+            setIntent('playing');
+          }}
+        />
       </div>
+    ) : (
+      stageContent
     );
-  }
 
-  return stageContent;
+  if (!showFixed || !fixed) return media;
+
+  // The fixed row sits OUTSIDE the observed host: the playback pool arms a clip when 60% of its host is on screen, and a
+  // host this row made taller would never reach that on a phone (or a short laptop screen).
+  return (
+    <div data-template-media className="flex w-full flex-col gap-3">
+      {media}
+      <TemplateFixedStrip
+        parts={fixed.parts}
+        all={fixed.all}
+        copy={fixed.copy}
+        videoSrc={hasVideo ? video!.src : null}
+        aspect={aspect}
+        activeId={loop?.id ?? null}
+        onSelect={selectPart}
+      />
+    </div>
+  );
 }

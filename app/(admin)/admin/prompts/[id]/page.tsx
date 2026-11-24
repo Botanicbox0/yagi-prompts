@@ -247,6 +247,7 @@ export default async function AdminPromptItemPage({
           {interpolate(a.templateLocksLine, { parts: markParts.map((part) => part.label).join(' · ') })}
         </p>
         <TemplateMarksEditor
+          op="prompt.marks"
           promptId={row.id}
           back={back}
           durationSeconds={row.runtimeSeconds ?? 10}

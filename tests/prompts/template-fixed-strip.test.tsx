@@ -115,7 +115,7 @@ describe('a declared template', () => {
     expect(html).toContain('이 템플릿에서 정해진 것');
     for (const key of ['product', 'hair', 'shots-2-3']) expect(html).toContain(`data-fixed-part="${key}"`);
     expect(html).toContain('핑크 단발');
-    expect(html).toContain('0:03–0:06');
+    expect(html).toContain('0:03–0:07');
     expect(html).toContain('바꿀 수 없어요');
     expect(html).toContain('영상 전체');
     expect(html).toContain('누르면 그 장면만 다시 볼 수 있어요.');
@@ -125,6 +125,18 @@ describe('a declared template', () => {
     expect(html).toContain('tabular-nums');
     // The lock block's words never reach the page.
     for (const needle of ['PRIVATE-TAIL', 'pink bob', 'Template locks', 'Keep exactly']) expect(html.includes(needle), needle).toBe(false);
+  });
+
+  it('leaves the observed media host exactly as before and puts the row outside it (the playback pool arms on its ratio)', () => {
+    const html = renderToStaticMarkup(
+      <PromptDetailMedia poster={{ src: '/poster.jpg', mime: 'image/jpeg' }} video={{ src: '/clip.mp4', mime: 'video/mp4' }} alt="Seoul runway" aspect="9:16" locale="ko" keyframes={defaultTimelineKeyframes(10, 4)} controls={controlsKo} fallback={null} fixed={{ parts: partsFor('ko'), all: false, copy: fixedCopy(ko) }} />,
+    );
+    // React hoists the poster's preload <link> to the front of both; the host markup itself is byte-identical.
+    const preload = /^<link[^>]*\/>/;
+    const hostMarkup = baseline.detailMedia.beatsKo.replace(preload, '');
+    expect(html.replace(preload, '').startsWith(`<div data-template-media="true" class="flex w-full flex-col gap-3">${hostMarkup}`)).toBe(true);
+    expect(html.indexOf('data-template-fixed')).toBeGreaterThan(html.indexOf(hostMarkup) + hostMarkup.length - 1);
+    expect(html.match(/data-media-host/g)).toHaveLength(1);
   });
 
   it('speaks English on the English page, with no Korean', () => {
@@ -155,10 +167,12 @@ describe('a declared template', () => {
     expect(renderToStaticMarkup(createElement(TemplateFixedStrip, { parts: [], all: false, copy: fixedCopy(ko) }))).toBe('');
   });
 
-  it('formats the range: from–to, a lone start, the whole video, and nothing for a shot range', () => {
+  it('formats the range: the whole seconds around from–to, a lone start, the whole video, and nothing for a shot range', () => {
     const copy = fixedCopy(ko);
     const part = (over: Partial<TemplatePartView>): TemplatePartView => ({ id: 'x', key: 'hair', state: 'locked', label: '헤어', desc: null, from: null, to: null, choice: false, ...over });
-    expect(fixedRangeText(part({ from: 3.2, to: 6.4 }), copy)).toBe('0:03–0:06');
+    expect(fixedRangeText(part({ from: 3.2, to: 6.4 }), copy)).toBe('0:03–0:07');
+    expect(fixedRangeText(part({ from: 8.25, to: 8.75 }), copy)).toBe('0:08–0:09');
+    expect(fixedRangeText(part({ from: 2.5, to: 3 }), copy)).toBe('0:02–0:03');
     expect(fixedRangeText(part({ from: 3.2 }), copy)).toBe('0:03');
     expect(fixedRangeText(part({}), copy)).toBe('영상 전체');
     expect(fixedRangeText(part({ key: 'shots-2-3' }), copy)).toBeNull();

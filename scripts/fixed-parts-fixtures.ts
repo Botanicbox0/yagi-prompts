@@ -56,5 +56,5 @@ export const FIXED_PARTS_PROMPT_FIXTURES: PromptFixture[] = [
 export const FIXED_PARTS_MARKS: VideoKeyframe[] = [
   { index: 0, timeSeconds: 2.5, endSeconds: 3, part: 'outfit', labelKo: '큐빅 장식 데님', labelEn: 'Rhinestone denim' },
   { index: 1, timeSeconds: 8.25, endSeconds: 8.75, part: 'outfit', labelKo: '스터드 벨트', labelEn: 'Studded belt' },
-  { index: 2, timeSeconds: 10.25, endSeconds: 11, part: 'prop', labelKo: '은색 붐박스', labelEn: 'Silver boombox' },
+  { index: 2, timeSeconds: 10.5, endSeconds: 11, part: 'prop', labelKo: '은색 붐박스', labelEn: 'Silver boombox' },
 ];

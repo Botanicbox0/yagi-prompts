@@ -37,9 +37,16 @@ export interface TemplateFixedStripProps {
   onSelect?: (part: TemplatePartView) => void;
 }
 
-/** "0:03–0:06", "0:03", the whole-video words, or null for a shot range (its name already says where). */
+/**
+ * "0:03–0:07" (the whole seconds that enclose the range: 3.2–6.4 s, and 8.25–8.75 s reads "0:08–0:09", never
+ * "0:08–0:08"), "0:03" for a range with no end, the whole-video words, or null for a shot range (its name says where).
+ */
 export function fixedRangeText(part: TemplatePartView, copy: Pick<TemplateFixedCopy, 'wholeVideo'>): string | null {
-  if (part.from !== null) return part.to !== null ? `${formatClock(part.from)}–${formatClock(part.to)}` : formatClock(part.from);
+  if (part.from !== null) {
+    if (part.to === null) return formatClock(part.from);
+    const end = Math.max(Math.ceil(part.to), Math.floor(part.from) + 1);
+    return `${formatClock(part.from)}–${formatClock(end)}`;
+  }
   return part.key.startsWith('shots-') ? null : copy.wholeVideo;
 }
 

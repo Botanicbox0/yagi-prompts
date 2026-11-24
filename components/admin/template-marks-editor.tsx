@@ -10,6 +10,7 @@ import type { VideoKeyframe } from '@/lib/prompts/keyframes';
  * part against the stored prompt again; the select only offers the declared parts.
  */
 export function TemplateMarksEditor({
+  op,
   promptId,
   back,
   durationSeconds,
@@ -20,6 +21,8 @@ export function TemplateMarksEditor({
   copy,
   locale,
 }: {
+  /** The operation it posts, named on the page like an `OpForm`'s (tests/prompts/moderation.test.ts reads the screens). */
+  op: 'prompt.marks';
   promptId: string;
   back: string;
   durationSeconds: number;
@@ -32,7 +35,7 @@ export function TemplateMarksEditor({
 }) {
   const save = async (marks: VideoKeyframe[]) => {
     const form = new FormData();
-    form.set(OP_FIELD, 'prompt.marks');
+    form.set(OP_FIELD, op);
     form.set(BACK_FIELD, back);
     form.set('id', promptId);
     form.set('marks', JSON.stringify(marks.map(({ thumbUrl: _thumb, ...mark }) => mark)));
