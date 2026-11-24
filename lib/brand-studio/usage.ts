@@ -212,7 +212,7 @@ export async function usedKrwIn(sql: SqlRunner, organizationId: string, window: 
  * Precedence for `baseCapKrw`:
  *   1. An explicit override row in `brand_studio_allowances` (`is_override = true`; pre-0176 rows
  *      all default to `true`) -> `source: 'override'`.
- *   2. An active paid plan assignment in `brand_plan_assignments` (within `BRAND_PLAN_GRACE_DAYS`, default 7): its
+ *   2. An active paid plan assignment in `brand_plan_assignments` (within `BRAND_PLAN_GRACE_DAYS`: code default 7, production sets 14 since 2026-11-24): its
  *      cap in `brand_plan_allowance_defaults`, or with none stored its confirmed credits x 10 (R3 item 6,
  *      `resolvePlanCapKrw`) -> `source: 'plan'`.
  *   3. Otherwise `env.defaultMonthlyKrw` -> `source: 'default'`.
