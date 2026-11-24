@@ -8,6 +8,8 @@ import { lockRefusalCopy } from '@/lib/template-director/locks';
 import { AdminShell, BUTTON_PRIMARY, OpForm, OutcomeBanner, Panel } from '@/components/admin/chrome';
 import { AdminPageHeader } from '@/components/admin/patterns';
 import { PromptFields } from '@/components/admin/prompt-fields';
+import { getSqlRunner } from '@/lib/db/connect';
+import { promptLookSchemaReady } from '@/lib/prompts/repo';
 import { PromptCreateFeedback } from '@/components/admin/prompt-create-feedback';
 
 /**
@@ -43,7 +45,9 @@ export default async function AdminPromptNewPage({ searchParams }: { searchParam
   // The layout's check is not enough on its own: a client navigation request can ask for this page
   // segment alone, and then the layout does not run. Every admin page verifies the admin itself.
   await requireAdmin();
-  const [locale, params] = await Promise.all([getLocaleFromHeaders(), searchParams]);
+  const [locale, params, sql] = await Promise.all([getLocaleFromHeaders(), searchParams, getSqlRunner()]);
+  // docs/PERSONAL-STUDIO.md §3.4.10 — the style select, once 0190 is applied; a new template starts "for anyone".
+  const lookReady = sql !== null && (await promptLookSchemaReady(sql).catch(() => false));
   const dict = getDictionary(locale);
   const a = dict.admin;
   const caps = { min: USE_CASE_MIN, max: USE_CASE_MAX };
@@ -117,7 +121,7 @@ export default async function AdminPromptNewPage({ searchParams }: { searchParam
           lockCopy: lockRefusalCopy(a),
         }}>
         <OpForm op="prompt.create" back={ADMIN_PROMPT_NEW_PATH} className="flex flex-col gap-4">
-          <PromptFields row={null} dict={dict} />
+          <PromptFields row={null} dict={dict} {...(lookReady ? { look: 'any' as const } : {})} />
           <div>
             <button type="submit" data-template-publish className={BUTTON_PRIMARY}>
               {a.publishPrompt}

@@ -23,6 +23,7 @@ vi.mock('@/lib/flags', () => ({
   get RENDER_PIPELINE_MODE() { return state.mode; },
   get RENDER_PIPELINE_PUBLIC() { return state.mode === 'on'; },
   personalEditSheetOpen: () => false,
+  templateLookOpen: () => false,
 }));
 vi.mock('@/lib/creator-subscriptions/cached-availability', () => ({ cachedSubscriptionAvailability: vi.fn(async () => state.availability) }));
 vi.mock('@/lib/prompts/public-catalog', () => ({ getPromptCatalog: async () => ({ video: [film], image: [] }) }));

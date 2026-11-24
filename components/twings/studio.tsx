@@ -15,6 +15,8 @@ import { locksFromPublic, type PublicTemplateLocks } from '@/lib/template-direct
 import { explicitStyleParts, type OwnStylePart, type PublicTemplateStyling } from '@/lib/template-director/styling';
 import { orderSpecField, type StyleChoice, type StyleChoices, type TemplatePartRow, type TemplatePartsCopy } from '@/lib/template-director/parts-view';
 import { TemplatePartsCard } from './template-parts-card';
+import { LookMismatch } from '@/components/template-look/look-mismatch';
+import type { TemplateLook } from '@/lib/template-look/look';
 import { shrinkPhoto } from '@/lib/images/client-photo';
 export { shrinkPhoto } from '@/lib/images/client-photo';
 import type { EditScope } from '@/lib/premium-editing/contract';
@@ -160,6 +162,11 @@ export interface StudioLive {
    * the template's or their own hair and makeup on a styled template.
    */
   parts?: { rows: TemplatePartRow[]; all: boolean; copy: TemplatePartsCopy };
+  /**
+   * docs/PERSONAL-STUDIO.md §3.4.10 — a template written for one style, and the line shown above the button when the
+   * viewer picked the other one. Handed in only with `TWINGS_TEMPLATE_LOOK=on`; never blocks the button.
+   */
+  templateLook?: { look: TemplateLook; note: string };
   labels: {
     badge: string;
     /** Operators render for real without a charge (founder, 2026-09-10). */
@@ -1126,6 +1133,7 @@ export function TwingsStudio({
                     {identity === 'pending' ? live.labels.identityPending : live.labels.identityNotice}
                   </p>
                 )}
+                {live.templateLook && <LookMismatch template={live.templateLook.look} note={live.templateLook.note} className="mb-3" />}
                 <button
                   ref={payRef}
                   type="button"

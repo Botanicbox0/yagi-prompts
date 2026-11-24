@@ -23,6 +23,8 @@ import { CreativeAvatar, CreativeLinks, placeOf } from '@/components/makers/iden
 import { RevealEmail, ShareProfile } from '@/components/makers/islands';
 import { WorksGallery } from '@/components/makers/works-gallery';
 import { MakerRecipeHub } from '@/components/makers/recipe-hub';
+import { templateLookOpen } from '@/lib/flags';
+import { TemplateLookIsland } from '@/components/template-look/look-island';
 
 /**
  * `/[locale]/makers/[handle]` — an AI creative's public page (docs/PLATFORM-2.0.md §7.5·§20).
@@ -240,6 +242,8 @@ export default async function MakerPage({ params }: RouteParams) {
           )}
 
           <a href={templatesHref(locale, 'video')} className="mt-12 inline-flex min-h-11 items-center text-sm font-medium underline underline-offset-4">{t.browse} →</a>
+          {/* docs/PERSONAL-STUDIO.md §3.4.10 — the template style, only with the switch on. */}
+          {templateLookOpen() && <TemplateLookIsland copy={dict.templateLook} />}
         </div>
       </main>
       <MarketingFooter locale={locale} dict={dict} />

@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
-import { coupleTemplatesOpen, petTemplatesOpen } from '@/lib/flags';
+import { coupleTemplatesOpen, petTemplatesOpen, templateLookOpen } from '@/lib/flags';
 import { castShelf, castShelfSize, type CastSection } from '@/lib/prompts/catalog';
 import { getPromptCatalog } from '@/lib/prompts/public-catalog';
 import { castRest } from '@/lib/prompts/links';
@@ -12,6 +12,7 @@ import { FaqSection } from '@/lib/seo/faq-section';
 import { MarketingFooter, MarketingNav } from '@/components/marketing/chrome';
 import { PersonalIdentity } from '@/components/audience/personal-identity';
 import { CastShelfSection } from './cast-shelf';
+import { TemplateLookIsland } from '@/components/template-look/look-island';
 
 /**
  * docs/CAST-CATEGORIES.md §5 — `/{locale}/pet` and `/{locale}/couple`, one page body. Static + tag
@@ -42,6 +43,8 @@ export async function CastPage({ locale, cast }: { locale: Locale; cast: CastSec
           <CastShelfSection locale={locale} dict={dict} cast={cast} shelf={shelf} mode="page" />
           {/* The GEO definition (AGENTS.md §7), under the cards like the medium tabs. */}
           <p data-service-definition className="mt-16 max-w-2xl border-t border-hairline pt-6 text-sm leading-relaxed text-black/60">{copy.definition}</p>
+          {/* docs/PERSONAL-STUDIO.md §3.4.10 — the template style, only with the switch on. */}
+          {templateLookOpen() && <TemplateLookIsland copy={dict.templateLook} />}
         </div>
       </main>
       <FaqSection dict={dict} locale={locale} placement="template" path={`/${locale}${rest}`} />

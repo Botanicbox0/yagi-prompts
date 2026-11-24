@@ -6127,4 +6127,23 @@ export const ko: Dictionary = {
     styleOutfitPhotoCta: '옷 사진 올리기',
     styleOutfitAttached: '올린 옷 사진으로 만들어요.',
   },
+  // docs/PERSONAL-STUDIO.md §3.4.10 — 템플릿 스타일(TWINGS_TEMPLATE_LOOK). 대표 확정 전 임시 문구. 성별이 아니라 스타일로 부르고,
+  // 여성 스타일을 언제나 먼저 둔다.
+  templateLook: {
+    female: '여성 스타일',
+    male: '남성 스타일',
+    question: '고른 스타일의 템플릿을 먼저 보여 드려요. 설정에서 언제든 바꿀 수 있어요.',
+    later: '나중에',
+    reveal: '다른 스타일도 보기',
+    few: '남성 스타일 템플릿은 아직 적어요. 새로 나오면 여기에 보여요.',
+    mismatch: '지금 고른 스타일과 다른 템플릿이에요. 그대로 만들 수 있어요.',
+    factLabel: '스타일',
+    settingsLabel: '템플릿 스타일',
+    settingsHint: '목록에는 고른 스타일과 누구나 쓰는 템플릿이 보여요. 정하지 않으면 전부 보여요.',
+    unset: '정하지 않음',
+    saved: '바꿨어요.',
+    error: '저장하지 못했어요. 잠시 뒤 다시 해 주세요.',
+    adminLabel: '대상',
+    adminAny: '누구나',
+  },
 };

@@ -10,6 +10,7 @@ import { CastShelfSection } from '@/components/templates/cast-shelf';
 import { CAST_SECTIONS, castShelf, soloCatalog } from '@/lib/prompts/catalog';
 import { FaqSection } from '@/lib/seo/faq-section';
 import { FirstRunSheet } from '@/components/onboarding/first-run-sheet';
+import { templateLookOpen } from '@/lib/flags';
 
 /**
  * `/[locale]/video` — the VIDEO tab (docs/TEMPLATES-IA.md §2). Static + tag `prompts` + the 1h TTL
@@ -62,7 +63,7 @@ export default async function VideoTemplatesPage({ params }: RouteParams) {
       <FaqSection dict={dict} locale={locale} placement="template" path={`/${locale}/video`} />
       <MarketingFooter locale={locale} dict={dict} />
       {/* docs/PLATFORM-2.0.md §3.2-1 — once, for a new account; the server markup is empty. */}
-      <FirstRunSheet copy={dict.firstRun} locale={locale} />
+      <FirstRunSheet copy={dict.firstRun} locale={locale} {...(templateLookOpen() ? { look: dict.templateLook } : {})} />
     </PersonalIdentity>
   );
 }

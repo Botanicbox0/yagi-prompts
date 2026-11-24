@@ -19,7 +19,7 @@ import { signInHref } from '@/lib/billing/links';
 import { identityVerifyHref } from '@/lib/identity/links';
 import { templateMetadata, unresolvedTemplateMetadata } from '@/lib/seo/template-metadata';
 import { storefrontOpen } from '@/lib/auth/purchase-gate';
-import { personalEditSheetOpen } from '@/lib/flags';
+import { personalEditSheetOpen, templateLookOpen } from '@/lib/flags';
 import { FaqSection } from '@/lib/seo/faq-section';
 import { JsonLd } from '@/lib/seo/json-ld';
 import { siteUrl } from '@/lib/seo/site-url';
@@ -34,6 +34,8 @@ import { makerProfileRest } from '@/components/prompts/card-frame';
 import { promptLabels, useCaseLabel } from '@/components/prompts/labels';
 import { campaignLabels } from '@/components/campaigns/labels';
 import { TwingsStudio, type StudioStyle } from '@/components/twings/studio';
+import { TemplateLookIsland } from '@/components/template-look/look-island';
+import { LookMismatch } from '@/components/template-look/look-mismatch';
 import { formatResolutionPrice, offeredResolutions } from '@/lib/twings/resolution';
 import { templateSubscriptionQuote } from '@/lib/twings/subscription-plan';
 import { cachedSubscriptionAvailability } from '@/lib/creator-subscriptions/cached-availability';
@@ -211,14 +213,21 @@ export default async function TemplatePage({ params }: RouteParams) {
   // A set template (2026-10-27): one order, one example per frame it makes.
   const gallery = card.gallery ?? [];
   const setSize = gallery.length > 1 ? gallery.length : null;
+  // docs/PERSONAL-STUDIO.md §3.4.10 — the card carries `look` only with the switch on; `lookOpen` gates every addition.
+  const lookOpen = templateLookOpen();
+  const templateLook = lookOpen ? card.look ?? null : null;
   const facts: Array<[string, string]> = [
     card.medium === 'video' && card.runtimeSeconds
       ? [t.runtimeLabel, interpolate(dict.studio.runtimeLabel, { seconds: String(card.runtimeSeconds) })]
       : [t.mediumLabel, setSize ? interpolate(t.setOutput, { n: String(setSize) }) : dict.nav[card.medium]],
     [t.aspectFact, card.aspectDefault ?? defaultAspect(card.medium)],
     ...(resolutions.length > 0 ? [[t.resolutionFact, resolutions[0]!] as [string, string]] : []),
+    // docs/PERSONAL-STUDIO.md §3.4.10 — one quiet fact on a template written for one style (switch on only).
+    ...(templateLook ? [[dict.templateLook.factLabel, dict.templateLook[templateLook]] as [string, string]] : []),
     [t.waitLabel, interpolate(t.waitValue, { minutes: String(waitMinutes) })],
   ];
+  // §3.4.10: the line the make box and the make card show when the viewer picked the other style (client-side only).
+  const lookMismatch = templateLook ? <LookMismatch template={templateLook} note={dict.templateLook.mismatch} className="mt-1.5" /> : null;
 
   // The campaigns that ask for THIS template — the earn loop, one click from the make loop.
   const campaigns = campaignCatalog.campaigns.filter((c) => c.styleSlug === card.slug && isCampaignPublic(c.status));
@@ -439,6 +448,7 @@ export default async function TemplatePage({ params }: RouteParams) {
                       </dl>
                       {/* Founder, 2026-11-15: 720p is the default and it is enough — say so where the price is decided. */}
                       {resolutions.length > 0 && <p data-resolution-standard className="mt-1.5 text-xs text-black/65">{t.resolutionStandard}</p>}
+                      {lookMismatch}
                     </MakeLauncher>
 
                     {/* The make card as a sheet: studio, refund and AI notes, the photo guide. Every `#make` opens it. */}
@@ -469,6 +479,8 @@ export default async function TemplatePage({ params }: RouteParams) {
                             // parts with the make card's words; only on a template that declares them.
                             ...(card.styling ? { styling: card.styling, lockCopy: dict.editSheet } : {}),
                             ...(makeParts ? { parts: makeParts } : {}),
+                            // docs/PERSONAL-STUDIO.md §3.4.10 — a one-style template's mismatch line, above the button.
+                            ...(templateLook ? { templateLook: { look: templateLook, note: dict.templateLook.mismatch } } : {}),
                             labels: {
                               badge: dict.renders.studio.badge,
                               operatorBadge: dict.renders.studio.operatorBadge,
@@ -603,6 +615,8 @@ export default async function TemplatePage({ params }: RouteParams) {
       <FaqSection dict={dict} locale={locale} placement="template" path={`/${locale}/t/${slug}`} availability={availability} />
       </SubscriptionAvailabilityProvider>
       <MarketingFooter locale={locale} dict={dict} />
+      {/* docs/PERSONAL-STUDIO.md §3.4.10 — the related templates follow the viewer's style; the question, once. */}
+      {lookOpen && <TemplateLookIsland copy={dict.templateLook} />}
       {/* Room for the phone's sticky make bar, so it never sits on the footer's last line. */}
       {style !== null && <div aria-hidden="true" className="h-24 md:hidden" />}
     </PersonalIdentity>

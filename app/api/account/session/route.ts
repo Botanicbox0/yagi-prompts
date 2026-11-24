@@ -5,6 +5,10 @@ import { getSqlRunner } from '@/lib/db/connect';
 import { displayNameOf, loadCreatorProfile } from '@/lib/creators/profile';
 import { resolveSurface } from '@/lib/routing/surfaces';
 import { CONCIERGE_UID_COOKIE, conciergeUserScopeKey } from '@/lib/support/concierge-scope';
+import { templateLookOpen } from '@/lib/flags';
+import type { TemplateLook } from '@/lib/template-look/look';
+import { requestHasLookCookie, syncLookCookie, writeLookCookie } from '@/lib/template-look/cookie';
+import { loadViewerLook, templateLookSchemaReady } from '@/lib/template-look/repo';
 
 export const dynamic = 'force-dynamic';
 const headers = {
@@ -15,10 +19,29 @@ const headers = {
 
 function anonSessionResponse(request: Request): Response {
   const hasCookie = request.headers.get('cookie')?.includes(`${CONCIERGE_UID_COOKIE}=`) ?? false;
-  if (!hasCookie) return Response.json({ signedIn: false }, { headers });
+  // docs/PERSONAL-STUDIO.md §3.4.10: a signed-out browser keeps no template style (switch on only).
+  const staleLook = templateLookOpen() && requestHasLookCookie(request);
+  if (!hasCookie && !staleLook) return Response.json({ signedIn: false }, { headers });
   const response = NextResponse.json({ signedIn: false }, { headers });
-  response.cookies.set(CONCIERGE_UID_COOKIE, '', { path: '/', sameSite: 'lax', maxAge: 0 });
+  if (hasCookie) response.cookies.set(CONCIERGE_UID_COOKIE, '', { path: '/', sameSite: 'lax', maxAge: 0 });
+  if (staleLook) writeLookCookie(response, null);
   return response;
+}
+
+/**
+ * docs/PERSONAL-STUDIO.md §3.4.10 — with the switch on, the stored template style rides on this answer (the one request
+ * every page's header already makes), and the `tw_look` cookie is brought in line with it, which is how a second device
+ * learns the choice. `undefined` (the key left out) = the switch off or 0190 not applied: the page then asks nothing.
+ */
+async function viewerLookField(userId: string): Promise<{ look?: TemplateLook | null }> {
+  if (!templateLookOpen()) return {};
+  try {
+    const sql = await getSqlRunner();
+    if (sql === null || !(await templateLookSchemaReady(sql))) return {};
+    return { look: await loadViewerLook(sql, userId) };
+  } catch {
+    return {};
+  }
 }
 
 /** A private client island can personalize the nav without putting identity in cached HTML. */
@@ -42,7 +65,8 @@ export async function GET(request: Request): Promise<Response> {
     if (!user) return anonSessionResponse(request);
     // An unavailable profile store must not make a valid Google/Kakao session look signed out.
   }
-  const response = NextResponse.json({ signedIn: true, displayName }, { headers });
+  const lookField = await viewerLookField(userId);
+  const response = NextResponse.json({ signedIn: true, displayName, ...lookField }, { headers });
   response.cookies.set(CONCIERGE_UID_COOKIE, conciergeUserScopeKey(userId), {
     path: '/',
     sameSite: 'lax',
@@ -50,5 +74,6 @@ export async function GET(request: Request): Promise<Response> {
     secure: process.env.NODE_ENV === 'production',
     maxAge: 30 * 86_400,
   });
+  if (lookField.look !== undefined) syncLookCookie(request, response, lookField.look);
   return response;
 }

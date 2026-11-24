@@ -367,6 +367,51 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
     expect(glue).not.toMatch(/create\s+policy/i);
   });
 
+  it('0190/0191 — the template style: prompt_items.look (any by default), profiles.template_look + its time, server only', async () => {
+    const db = await freshDb();
+    const user = '00000000-0000-4000-8000-000000000190';
+    await db.query('insert into auth.users (id) values ($1)', [user]);
+    await db.query(`insert into profiles (id, email, locale) values ($1, 'look@twings.test', 'ko')`, [user]);
+    const { rows: columns } = await db.query<{ table_name: string; column_name: string; data_type: string; is_nullable: string; column_default: string | null }>(
+      `select table_name, column_name, data_type, is_nullable, column_default from information_schema.columns
+        where table_schema = 'public'
+          and ((table_name = 'prompt_items' and column_name = 'look')
+            or (table_name = 'profiles' and column_name in ('template_look', 'template_look_set_at')))
+        order by table_name, column_name`,
+    );
+    expect(columns).toEqual([
+      { table_name: 'profiles', column_name: 'template_look', data_type: 'text', is_nullable: 'YES', column_default: null },
+      { table_name: 'profiles', column_name: 'template_look_set_at', data_type: 'timestamp with time zone', is_nullable: 'YES', column_default: null },
+      { table_name: 'prompt_items', column_name: 'look', data_type: 'text', is_nullable: 'NO', column_default: "'any'::text" },
+    ]);
+    // A new profile has not chosen; the two styles are the only values; NULL clears it.
+    expect((await db.query<{ template_look: string | null }>('select template_look from profiles where id = $1', [user])).rows[0]!.template_look).toBeNull();
+    for (const look of ['female', 'male']) await db.query('update profiles set template_look = $2 where id = $1', [user, look]);
+    await db.query('update profiles set template_look = null where id = $1', [user]);
+    for (const bad of ['any', 'Female', '']) await expect(db.query('update profiles set template_look = $2 where id = $1', [user, bad])).rejects.toThrow();
+    // Both checks exist and are validated.
+    const { rows: checks } = await db.query<{ conname: string; valid: boolean }>(
+      `select conname, convalidated as valid from pg_constraint where conname in ('prompt_items_look_known', 'profiles_template_look_known') order by conname`,
+    );
+    expect(checks).toEqual([{ conname: 'profiles_template_look_known', valid: true }, { conname: 'prompt_items_look_known', valid: true }]);
+    const { rows: lookDef } = await db.query<{ def: string }>(`select pg_get_constraintdef(oid) as def from pg_constraint where conname = 'prompt_items_look_known'`);
+    for (const value of ['any', 'female', 'male']) expect(lookDef[0]!.def).toContain(`'${value}'`);
+    expect(lookDef[0]!.def).not.toContain("'unisex'");
+    // Safe to apply twice.
+    await db.exec(readFileSync(join(MIGRATIONS_DIR, '0190_core_template_look.sql'), 'utf8'));
+    expect((await db.query<{ n: number }>(`select count(*)::int as n from pg_constraint where conname in ('prompt_items_look_known', 'profiles_template_look_known') and convalidated`)).rows[0]!.n).toBe(2);
+    await db.close();
+
+    // 0191 re-asserts the deny-all posture of both tables; nothing is opened, no policy anywhere.
+    const glue = readFileSync(join(MIGRATIONS_DIR, '0191_glue_template_look.sql'), 'utf8');
+    for (const table of ['profiles', 'prompt_items']) expect(glue, `0191 covers ${table}`).toContain(`'${table}'`);
+    expect(glue).toContain('enable row level security');
+    expect(glue).toContain('force  row level security');
+    expect(glue).toContain('revoke all on public.%I from anon, authenticated');
+    expect(glue).not.toMatch(/create\s+policy|grant\s+(select|insert|update|delete|all)/i);
+    expect(readFileSync(join(MIGRATIONS_DIR, '0190_core_template_look.sql'), 'utf8').startsWith('-- 클라우드 적용 필요')).toBe(true);
+  });
+
   it('forces deny-all RLS on EVERY table in the glue migration (§6 security posture)', async () => {
     const db = await freshDb();
     const { rows } = await db.query<{ table_name: string }>(

@@ -2,6 +2,7 @@ import { badgeFor } from '@/lib/content/badges';
 import type { PromptCard } from './catalog';
 import type { TemplateCast, TemplateMedium } from './schemas';
 import { USE_CASES } from './use-cases';
+import { isTemplateLook, lookHides, toTemplateAudience, type TemplateAudience, type TemplateLook } from '@/lib/template-look/look';
 
 /**
  * What a buyer can sort the template lists by (founder, 2026-11-24, said for the second time).
@@ -56,6 +57,20 @@ export interface CardFacets {
   style: StyleFacet | null;
   useCase: string[];
   cast: TemplateCast;
+  /**
+   * docs/PERSONAL-STUDIO.md §3.4.10 — who the template is written for; absent = for anyone (every card unless
+   * labelled, and every card while the switch is off).
+   */
+  look?: TemplateLook;
+}
+
+/**
+ * docs/PERSONAL-STUDIO.md §3.4.10 — what the viewer chose (null: not chosen, signed out, or the switch off) and whether
+ * they asked to see the other style too on this page ("다른 스타일도 보기").
+ */
+export interface ViewerLook {
+  look: TemplateLook | null;
+  showAll: boolean;
 }
 
 export interface ListFacet {
@@ -79,7 +94,7 @@ function isStyleFacet(value: unknown): value is StyleFacet {
   return typeof value === 'string' && (STYLE_OPTIONS as readonly string[]).includes(value);
 }
 
-type FacetCard = Pick<PromptCard, 'medium' | 'runtimeSeconds' | 'publishedAt' | 'useCase'> & Partial<Pick<PromptCard, 'cast' | 'locks' | 'styling'>>;
+type FacetCard = Pick<PromptCard, 'medium' | 'runtimeSeconds' | 'publishedAt' | 'useCase'> & Partial<Pick<PromptCard, 'cast' | 'locks' | 'styling' | 'look'>>;
 
 const LOOK_PARTS: readonly string[] = ['hair', 'makeup'];
 
@@ -102,6 +117,7 @@ export function cardFacets(card: FacetCard, now?: Date | number): CardFacets {
     style: styleFacet(card),
     useCase: [...card.useCase],
     cast: card.cast ?? 'solo',
+    ...(isTemplateLook(card.look) ? { look: card.look } : {}),
   };
 }
 
@@ -114,7 +130,14 @@ export function facetsFromDataset(dataset: Partial<Record<string, string | undef
     style: isStyleFacet(dataset.style) ? dataset.style : null,
     useCase: (dataset.useCase ?? '').split(/\s+/).filter(Boolean),
     cast: cast === 'pet' || cast === 'couple' ? cast : 'solo',
+    // No `data-look`, or `any` (the switch off, or a template for anyone), reads as no label: never hidden.
+    ...(isTemplateLook(dataset.look) ? { look: dataset.look } : {}),
   };
+}
+
+/** The `data-look` value a card writes while the switch is on: `any` | `female` | `male`. */
+export function lookAttribute(facets: Pick<CardFacets, 'look'>): TemplateAudience {
+  return toTemplateAudience(facets.look);
 }
 
 /**
@@ -158,4 +181,21 @@ export function matchesFilter(facets: CardFacets, filter: FilterState): boolean 
   if (filter.style !== undefined && facets.style !== filter.style) return false;
   if (filter.useCase !== undefined && !facets.useCase.includes(filter.useCase)) return false;
   return true;
+}
+
+/**
+ * docs/PERSONAL-STUDIO.md §3.4.10 — is this card hidden by the viewer's style alone? Never with no choice, never for a
+ * template written for anyone, never after "show the other style too".
+ */
+export function hiddenByLook(facets: Pick<CardFacets, 'look'>, viewer: ViewerLook | null | undefined): boolean {
+  return Boolean(viewer && !viewer.showAll && lookHides(toTemplateAudience(facets.look), viewer.look));
+}
+
+/**
+ * THE visibility rule for a card in a list: the chips (`matchesFilter`) and the viewer's style together. Every place that
+ * sets a card's `hidden` (the list filter, the style island, the home curation) asks this one function, so the count,
+ * the "nothing matches" line and the chips always agree with what is on screen.
+ */
+export function cardVisible(facets: CardFacets, filter: FilterState, viewer?: ViewerLook | null): boolean {
+  return matchesFilter(facets, filter) && !hiddenByLook(facets, viewer);
 }

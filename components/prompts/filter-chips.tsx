@@ -1,8 +1,10 @@
 'use client';
 
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { filterHref, readFilterState, type OfferedFilters } from '@/lib/navigation/public-state';
-import { facetsFromDataset, matchesFilter, type FacetGroup, type FilterState } from '@/lib/prompts/facets';
+import { cardVisible, facetsFromDataset, hiddenByLook, matchesFilter, type FacetGroup, type FilterState, type ViewerLook } from '@/lib/prompts/facets';
+import { FEW_TEMPLATES_THRESHOLD } from '@/lib/template-look/look';
+import { useViewerLook } from '@/components/template-look/use-viewer-look';
 import { pillClassName } from './pill';
 
 /**
@@ -50,26 +52,60 @@ interface FilterItem {
   hidden: boolean;
 }
 
-interface FilterRail {
+export interface FilterRail {
   querySelectorAll(selector: string): ArrayLike<FilterItem> & Iterable<FilterItem>;
   querySelector(selector: string): { hidden: boolean } | null;
+}
+
+/** What one pass over a rail found (docs/PERSONAL-STUDIO.md §3.4.10 adds the style counts). */
+export interface RailVisibility {
+  /** Cards on screen. */
+  visible: number;
+  /** Cards the chips allow but the viewer's style hides ("다른 스타일도 보기" would bring them back). */
+  lookHidden: number;
+  /** Cards the viewer's style allows, whatever the chips say (the "few so far" line counts these). */
+  lookShown: number;
+}
+
+/**
+ * THE one pass that sets `hidden` on a rail's cards: `cardVisible` (lib/prompts/facets.ts) decides from the card's
+ * facets, the chips and the viewer's style together, so nothing else fights over the attribute. The rail's own "nothing
+ * here" line shows when the rail is empty, and its "다른 스타일도 보기" button (drawn only with the switch on) when the
+ * style alone emptied it.
+ */
+export function applyRailVisibility(scope: FilterRail, filter: FilterState, viewer?: ViewerLook | null, itemSelector = '[data-prompt-item]'): RailVisibility {
+  let visible = 0;
+  let lookHidden = 0;
+  let lookShown = 0;
+  for (const item of Array.from(scope.querySelectorAll(itemSelector))) {
+    const facets = facetsFromDataset(item.dataset);
+    item.hidden = !cardVisible(facets, filter, viewer);
+    if (!item.hidden) visible += 1;
+    const styleHides = hiddenByLook(facets, viewer);
+    if (!styleHides) lookShown += 1;
+    else if (matchesFilter(facets, filter)) lookHidden += 1;
+  }
+  const empty = scope.querySelector('[data-rail-filtered-empty]');
+  if (empty) empty.hidden = visible > 0;
+  const reveal = scope.querySelector('[data-look-reveal]');
+  if (reveal) reveal.hidden = !(visible === 0 && lookHidden > 0);
+  return { visible, lookHidden, lookShown };
 }
 
 /**
  * Shows the matching cards of ONE rail (`[data-rail="<rail>"]`) and returns how many are visible.
  * The rail's own "nothing here" line says so when the filter empties it.
  */
-export function applyListFilter(root: { querySelector(selector: string): FilterRail | null }, rail: string, filter: FilterState): number {
+export function applyListFilter(root: { querySelector(selector: string): FilterRail | null }, rail: string, filter: FilterState, viewer?: ViewerLook | null): number {
   const scope = root.querySelector(`[data-rail="${rail}"]`);
   if (!scope) return 0;
-  let visible = 0;
-  for (const item of Array.from(scope.querySelectorAll('[data-prompt-item]'))) {
-    item.hidden = !matchesFilter(facetsFromDataset(item.dataset), filter);
-    if (!item.hidden) visible += 1;
-  }
-  const empty = scope.querySelector('[data-rail-filtered-empty]');
-  if (empty) empty.hidden = visible > 0;
-  return visible;
+  return applyRailVisibility(scope, filter, viewer).visible;
+}
+
+/** docs/PERSONAL-STUDIO.md §3.4.10 — the list's style words, handed in only with the switch on. */
+export interface ListFilterLook {
+  /** "There are only a few men's-style templates so far…", shown under the count only then. */
+  few: string;
 }
 
 export function ListFilter({
@@ -77,6 +113,7 @@ export function ListFilter({
   facets,
   labels,
   total,
+  look,
 }: {
   /** The `data-rail` id of the grid this filter owns. */
   rail: string;
@@ -85,10 +122,17 @@ export function ListFilter({
   labels: { heading: string; all: string; count: string; reset: string };
   /** The unfiltered card count, so the count line is in the static HTML before hydration. */
   total: number;
+  /** docs/PERSONAL-STUDIO.md §3.4.10 — present only with `TWINGS_TEMPLATE_LOOK=on`; absent, the filter is as before. */
+  look?: ListFilterLook;
 }) {
   const navigation = useRef<HTMLDivElement>(null);
   const [filter, setFilter] = useState<FilterState>({});
   const [count, setCount] = useState<number>(total);
+  const [lookShown, setLookShown] = useState<number>(total);
+  const lookOn = Boolean(look);
+  const viewer = useViewerLook(lookOn);
+  const viewerStyle = viewer?.look ?? null;
+  const viewerShowAll = viewer?.showAll ?? false;
   const choosable = facets.length > 0;
   const offered: OfferedFilters = Object.fromEntries(facets.map((facet) => [facet.group, facet.options.map((option) => option.value)]));
   const offeredKey = JSON.stringify(offered);
@@ -115,10 +159,15 @@ export function ListFilter({
     commit(next);
   };
 
-  useEffect(() => {
-    setCount(applyListFilter(document as unknown as Parameters<typeof applyListFilter>[0], rail, filter));
-    return () => { applyListFilter(document as unknown as Parameters<typeof applyListFilter>[0], rail, {}); };
-  }, [filter, rail]);
+  // A layout effect: with a style chosen, the other style's cards go before the browser paints the hydrated list.
+  useLayoutEffect(() => {
+    const root = document as unknown as Parameters<typeof applyListFilter>[0];
+    const scope = root.querySelector(`[data-rail="${rail}"]`);
+    const result = scope ? applyRailVisibility(scope, filter, lookOn ? { look: viewerStyle, showAll: viewerShowAll } : null) : { visible: 0, lookHidden: 0, lookShown: 0 };
+    setCount(result.visible);
+    setLookShown(result.lookShown);
+    return () => { applyListFilter(root, rail, {}); };
+  }, [filter, rail, lookOn, viewerStyle, viewerShowAll]);
 
   useEffect(() => {
     const group = navigation.current;
@@ -203,6 +252,10 @@ export function ListFilter({
         <span data-filter-count role="status" aria-live="polite">{labels.count.replace('{count}', String(count))}</span>
         {active && <button type="button" onClick={() => commit({})} className="min-h-8 text-black underline underline-offset-4">{labels.reset}</button>}
       </div>
+      {/* §3.4.10 (women-first): only for the men's style, and only while it shows fewer than three — never a size claim. */}
+      {look && viewerStyle === 'male' && !viewerShowAll && lookShown < FEW_TEMPLATES_THRESHOLD && (
+        <p data-look-few className="text-xs leading-relaxed text-black/55">{look.few}</p>
+      )}
     </div>
   </>;
 }

@@ -26,6 +26,8 @@ import { SubscriptionAvailabilityProvider } from '@/components/twings/subscripti
 import { DEFAULT_HERO_EVIDENCE, heroEvidence } from '@/lib/content/slots';
 import { evidenceWithMedia } from '@/lib/content/landing-media';
 import { getLandingMedia } from '@/lib/content/landing-media-server';
+import { templateLookOpen } from '@/lib/flags';
+import { TemplateLookIsland } from '@/components/template-look/look-island';
 export const revalidate = 3600;
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
   const { locale: raw } = await params;
@@ -56,6 +58,7 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
   // §7.5 (founder 2026-10-30 & 2026-11-04): one feed per medium — originals and AI creatives' templates mixed by `railOrder`.
   // The hero showcases the top editorial studio original (`giant-daydream` / `city-fashion-montage` / `aquarium-goldfish` / `fashion-show-arrival`).
   const featured = pickHeroFeaturedTemplate(templates.video);
+  const lookOpen = templateLookOpen();
   const clientSafeCard = (card: (typeof templates.video)[number]) => ({ ...card, models: [], modelLabels: [] });
   const orderedVideos = railOrder(templates.video).map(clientSafeCard);
   const orderedImages = railOrder(templates.image).map(clientSafeCard);
@@ -78,6 +81,7 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
             cardAuthorPattern={labels.cardAuthor}
             cardAuthorAnonymous={labels.cardAuthorAnonymous}
             copy={dict.creatorJourney.sequenceDispatch}
+            {...(lookOpen ? { look: true } : {})}
           />
           <PromptRail id="video" heading={t.video.rail} lede={t.video.railLede} cards={templates.video} locale={locale} labels={labels} useCaseLabels={useCaseLabels} emptyLabel={t.video.emptyTitle} filteredEmptyLabel={dict.prompts.filterEmpty} topClassName="mt-0" />
           <div className="mt-8 flex flex-wrap items-center gap-6">
@@ -98,6 +102,8 @@ export default async function LandingPage({ params }: { params: Promise<{ locale
       {recruiting.length > 0 ? <section data-section data-theme="light" className="section"><div className="audience-shell py-16"><CampaignRail id="campaigns" heading={dict.campaigns.railRecruiting} lede={dict.campaigns.railRecruitingLede} cards={recruiting} styles={styles} locale={locale} labels={campaignLabels(dict)} now={Date.now()} /><a href={campaignsHref(locale)} className="mt-8 inline-flex min-h-11 items-center text-sm underline underline-offset-4">{dict.creatorJourney.campaignCta} ↗</a></div></section> : <CreatorCampaignDoor dict={dict} locale={locale} />}
       <FaqSection dict={dict} locale={locale} placement="landing" path={`/${locale}`} availability={availability} />
       <BrandDoor dict={dict} locale={locale} />
+      {/* docs/PERSONAL-STUDIO.md §3.4.10 — the curation above owns every card's `hidden` here, so only the question. */}
+      {lookOpen && <TemplateLookIsland copy={dict.templateLook} scope={null} />}
     </main>
     </SubscriptionAvailabilityProvider>
     <MarketingFooter locale={locale} dict={dict} />

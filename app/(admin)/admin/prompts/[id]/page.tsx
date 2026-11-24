@@ -5,7 +5,7 @@ import { getSqlRunner } from '@/lib/db/connect';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { getLocaleFromHeaders } from '@/lib/i18n/server';
 import { formatDate, interpolate } from '@/lib/i18n/format';
-import { loadPromptById, type PromptRow } from '@/lib/prompts/repo';
+import { loadPromptById, loadPromptLook, type PromptRow } from '@/lib/prompts/repo';
 import { ADMIN_PROMPTS_PATH, adminPromptPath, promptHref } from '@/lib/prompts/links';
 import { slugify } from '@/lib/prompts/schemas';
 import {
@@ -114,6 +114,8 @@ export default async function AdminPromptItemPage({
 
   const row = sql === null ? null : await loadPromptById(sql, id);
   if (row === null) notFound();
+  // docs/PERSONAL-STUDIO.md §3.4.10 — the style select, once 0190 is applied (null without it: no select).
+  const look = sql === null ? null : await loadPromptLook(sql, row.id);
 
   const back = adminPromptPath(row.id);
   const banner = (
@@ -361,7 +363,7 @@ export default async function AdminPromptItemPage({
           data-prompt-published={row.slug}
         >
           <input type="hidden" name="id" value={row.id} />
-          <PromptFields row={row} dict={dict} />
+          <PromptFields row={row} dict={dict} {...(look !== null ? { look } : {})} />
           <div>
             <button type="submit" className={BUTTON_PRIMARY}>
               {a.saveEdits}
