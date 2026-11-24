@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, type RefObject } from 'react';
+import { captureFrames } from '@/lib/media/capture-frames';
 import { formatKeyframeSeconds, type VideoKeyframe } from '@/lib/prompts/keyframes';
 
 export interface VideoKeyframeStripProps {
@@ -45,68 +46,23 @@ export function VideoKeyframeStrip({
 
   useEffect(() => {
     if (!videoSrc || typeof document === 'undefined') return;
-    if (keyframes.every((kf) => Boolean(kf.thumbUrl))) return;
+    const missing = keyframes.filter((kf) => !kf.thumbUrl);
+    if (missing.length === 0) return;
 
-    let cancelled = false;
-    const probe = document.createElement('video');
-    probe.muted = true;
-    probe.playsInline = true;
-    probe.preload = 'metadata';
-    if (/^https?:\/\//i.test(videoSrc) && !videoSrc.startsWith(window.location.origin)) {
-      probe.crossOrigin = 'anonymous';
-    }
-    probe.src = videoSrc;
-
-    const captureBeats = async () => {
-      try {
-        await new Promise<void>((resolve, reject) => {
-          probe.onloadedmetadata = () => resolve();
-          probe.onerror = () => reject(new Error('video_meta_error'));
-        });
-        const w = 160;
-        const h = probe.videoWidth && probe.videoHeight
-          ? Math.max(90, Math.round((w * probe.videoHeight) / probe.videoWidth))
-          : 120;
-        const canvas = document.createElement('canvas');
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-
-        const nextThumbs: Record<number, string> = {};
-        for (const kf of keyframes) {
-          if (cancelled || kf.thumbUrl) continue;
-          const target = Math.min(Math.max(0, kf.timeSeconds), Math.max(0, (probe.duration || kf.timeSeconds) - 0.05));
-          await new Promise<void>((resolve) => {
-            const onSeeked = () => {
-              probe.removeEventListener('seeked', onSeeked);
-              resolve();
-            };
-            probe.addEventListener('seeked', onSeeked, { once: true });
-            probe.currentTime = target;
-          });
-          if (cancelled) return;
-          ctx.drawImage(probe, 0, 0, w, h);
-          try {
-            nextThumbs[kf.index] = canvas.toDataURL('image/jpeg', 0.72);
-          } catch {
-            return;
-          }
-        }
-        if (!cancelled && Object.keys(nextThumbs).length > 0) {
-          setSampledThumbs(nextThumbs);
-        }
-      } catch {
-        // Cross-origin video or headless environment without canvas codec cleanly keeps poster/stored thumbs.
-      }
-    };
-
-    void captureBeats();
-    return () => {
-      cancelled = true;
-      probe.removeAttribute('src');
-      probe.load();
-    };
+    // The shared capture (lib/media/capture-frames.ts): one probe per clip, a timeout per seek, and a cross-origin
+    // file under its own cache entry (`?cors=1`) so the canvas can be read. A frame it cannot read keeps the tile's
+    // fallback below (stored thumb, then a `#t=` video tile, then the poster).
+    const controller = new AbortController();
+    void captureFrames(videoSrc, missing.map((kf) => kf.timeSeconds), { signal: controller.signal }).then((frames) => {
+      if (controller.signal.aborted) return;
+      const nextThumbs: Record<number, string> = {};
+      missing.forEach((kf, i) => {
+        const frame = frames[i];
+        if (frame) nextThumbs[kf.index] = frame;
+      });
+      if (Object.keys(nextThumbs).length > 0) setSampledThumbs(nextThumbs);
+    });
+    return () => controller.abort();
   }, [videoSrc, keyframes]);
 
   if (!keyframes.length) return null;

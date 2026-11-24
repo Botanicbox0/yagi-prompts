@@ -29,6 +29,11 @@ import {
   UseCaseChecks,
 } from '@/components/admin/prompt-fields';
 import { visibilityLabel } from '@/components/admin/labels';
+import { TemplateMarksEditor } from '@/components/admin/template-marks-editor';
+import { adminMediaPath, promptAdminRef } from '@/lib/media/admin-authorize';
+import { KEYFRAMES_MAX, loadPromptKeyframesBySlug, splitKeyframes } from '@/lib/prompts/keyframes';
+import { parsePromptMedia } from '@/lib/prompts/schemas';
+import { declaredPartKeysOfPrompt, partLabel } from '@/lib/template-director/parts-view';
 
 /**
  * `/admin/prompts/{id}` — one prompt, everything you can do to it (2026-08-15).
@@ -227,6 +232,34 @@ export default async function AdminPromptItemPage({
     );
   }
 
+  // docs/PERSONAL-STUDIO.md §3.4.4 (T1a): a film whose saved prompt declares parts gets the marks editor (a short
+  // description and an example-video range per part, `prompt.marks`) under the editor, with the same lock line.
+  const declared = row.medium === 'video' ? declaredPartKeysOfPrompt(row.promptText) : [];
+  const markParts = declared.flatMap((key) => {
+    const label = partLabel(key, dict.editSheet);
+    return label === null ? [] : [{ key, label }];
+  });
+  const stored = markParts.length > 0 && sql !== null ? splitKeyframes((await loadPromptKeyframesBySlug(sql, row.slug)) ?? []) : null;
+  const marksEditor =
+    stored === null ? null : (
+      <section data-template-marks-panel className="mt-4 flex flex-col gap-3">
+        <p data-template-marks-locks className="font-mono text-[0.72rem] opacity-70">
+          {interpolate(a.templateLocksLine, { parts: markParts.map((part) => part.label).join(' · ') })}
+        </p>
+        <TemplateMarksEditor
+          promptId={row.id}
+          back={back}
+          durationSeconds={row.runtimeSeconds ?? 10}
+          videoSrc={parsePromptMedia(row.media).video ? adminMediaPath(promptAdminRef(row.id, 'video')) : null}
+          parts={markParts}
+          initialMarks={stored.marks.filter((mark) => declared.includes(mark.part))}
+          maxMarks={KEYFRAMES_MAX - stored.beats.length}
+          copy={a.templateMarks}
+          locale={locale}
+        />
+      </section>
+    );
+
   return (
     <AdminShell dict={a} locale={locale} active="prompts">
       <Header row={row} dict={dict} locale={locale} />
@@ -310,7 +343,7 @@ export default async function AdminPromptItemPage({
             </button>
           </div>
         </OpForm>
-
+        {marksEditor}
       </Panel>
     </AdminShell>
   );

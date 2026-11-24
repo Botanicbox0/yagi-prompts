@@ -2,8 +2,11 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { observeCardArming } from '@/lib/media/card-arming';
+import { rangeLoopReducer, rangeLoopSeek, type RangeLoop, type RangeLoopAction } from '@/lib/media/range-loop';
 import { VideoKeyframeStrip } from './video-keyframe-strip';
+import { TemplateFixedStrip, type TemplateFixedCopy } from './template-fixed-strip';
 import type { VideoKeyframe } from '@/lib/prompts/keyframes';
+import type { TemplatePartView } from '@/lib/template-director/parts-view';
 
 export interface DetailMediaSource {
   src: string;
@@ -57,6 +60,17 @@ function frameAspectClass(aspect?: string | null): string {
 /** `auto` follows the arming pool; `paused`/`playing` are the reader's own choice and win. */
 type PlaybackIntent = 'auto' | 'paused' | 'playing';
 
+/**
+ * docs/PERSONAL-STUDIO.md §3.4.4 (T1a) — the parts the template decides, shown under the keyframe strip. Absent (or
+ * nothing declared), the block renders exactly as before.
+ */
+export interface DetailMediaFixed {
+  parts: readonly TemplatePartView[];
+  /** The template's lock block did not parse: everything is fixed. */
+  all: boolean;
+  copy: TemplateFixedCopy;
+}
+
 const CONTROL =
   'inline-flex min-h-9 items-center gap-1.5 rounded-full bg-black/45 px-3 py-1.5 text-xs font-medium text-white backdrop-blur-md transition-colors hover:bg-black/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white';
 
@@ -70,6 +84,7 @@ export function PromptDetailMedia({
   controls,
   keyframes,
   locale = 'ko',
+  fixed = null,
 }: {
   poster: DetailMediaSource | null;
   video: DetailMediaSource | null;
@@ -80,6 +95,7 @@ export function PromptDetailMedia({
   controls: DetailMediaControls;
   keyframes?: readonly VideoKeyframe[] | null;
   locale?: 'ko' | 'en';
+  fixed?: DetailMediaFixed | null;
 }) {
   const [videoFailed, setVideoFailed] = useState(false);
   const [posterFailed, setPosterFailed] = useState(false);
@@ -94,6 +110,16 @@ export function PromptDetailMedia({
   const intentRef = useRef<PlaybackIntent>('auto');
   mutedRef.current = muted;
   intentRef.current = intent;
+  // The range a tapped fixed part replays. The ref is the truth the frame loop reads; it changes inside the tap
+  // itself, so a beat tap that seeks elsewhere is never pulled back by a loop that is about to end.
+  const [loop, setLoop] = useState<RangeLoop | null>(null);
+  const loopRef = useRef<RangeLoop | null>(null);
+  const applyLoop = (action: RangeLoopAction): RangeLoop | null => {
+    const next = rangeLoopReducer(loopRef.current, action);
+    loopRef.current = next;
+    setLoop(next);
+    return next;
+  };
 
   const hasPoster = poster !== null && !posterFailed;
   const hasVideo = video !== null && !videoFailed;
@@ -103,7 +129,29 @@ export function PromptDetailMedia({
     setPosterFailed(false);
     setMuted(true);
     setIntent('auto');
+    loopRef.current = null;
+    setLoop(null);
   }, [video?.src, poster?.src]);
+
+  // While a range loops, check every frame (timeupdate only fires about four times a second).
+  useEffect(() => {
+    if (!loop || typeof requestAnimationFrame === 'undefined') return;
+    let frame = 0;
+    const tick = () => {
+      const el = videoRef.current;
+      const target = el ? rangeLoopSeek(loopRef.current, el.currentTime) : null;
+      if (el && target !== null) {
+        try {
+          el.currentTime = target;
+        } catch {
+          // An element that cannot seek yet keeps playing; the next frame tries again.
+        }
+      }
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [loop]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
@@ -159,6 +207,7 @@ export function PromptDetailMedia({
     const el = videoRef.current;
     if (playing) {
       setIntent('paused');
+      if (loopRef.current) applyLoop({ type: 'pause' });
       el?.pause();
       return;
     }
@@ -181,8 +230,30 @@ export function PromptDetailMedia({
     }
   };
 
+  // Tapping a fixed part: seek to its start and replay the range (on reduced motion: seek only, no play). Tapping the
+  // same part again clears the loop and leaves playback as it is.
+  const selectPart = (part: TemplatePartView) => {
+    if (part.from === null) return;
+    const next = applyLoop({ type: 'tap', id: part.id, from: part.from, to: part.to });
+    const el = videoRef.current;
+    if (!next || !el) return;
+    try {
+      el.currentTime = next.from;
+    } catch {
+      // Unready media ignores the seek; the loop pulls it into range once it plays.
+    }
+    if (reducedMotion) return;
+    setIntent('playing');
+    el.muted = mutedRef.current;
+    el.play()?.catch?.(() => {});
+  };
+
+  const showBeats = Boolean(hasVideo && keyframes && keyframes.length > 0);
+  const showFixed = Boolean(fixed && (fixed.parts.length > 0 || fixed.all));
+  const wrapped = showBeats || showFixed;
+
   const stageContent = (
-    <div ref={keyframes?.length && hasVideo ? undefined : hostRef} data-media-host={keyframes?.length && hasVideo ? undefined : true} className={outerClass} style={!aspect && ratio ? { aspectRatio: ratio } : undefined}>
+    <div ref={wrapped ? undefined : hostRef} data-media-host={wrapped ? undefined : true} className={outerClass} style={!aspect && ratio ? { aspectRatio: ratio } : undefined}>
       <div className={stageClass}>
         {hasPoster && (
           // eslint-disable-next-line @next/next/no-img-element -- gateway URL with auth headers on private tiers; next/image cannot proxy
@@ -261,20 +332,37 @@ export function PromptDetailMedia({
     </div>
   );
 
-  if (hasVideo && keyframes && keyframes.length > 0) {
+  if (wrapped) {
     return (
       <div ref={hostRef} data-media-host className="flex w-full flex-col gap-3">
         {stageContent}
-        <VideoKeyframeStrip
-          keyframes={keyframes}
-          posterSrc={poster?.src ?? null}
-          videoSrc={video?.src ?? null}
-          videoRef={videoRef}
-          aspect={aspect}
-          locale={locale}
-          alt={alt}
-          onSelectBeat={() => setIntent('playing')}
-        />
+        {showBeats && keyframes && (
+          <VideoKeyframeStrip
+            keyframes={keyframes}
+            posterSrc={poster?.src ?? null}
+            videoSrc={video?.src ?? null}
+            videoRef={videoRef}
+            aspect={aspect}
+            locale={locale}
+            alt={alt}
+            onSelectBeat={() => {
+              // A beat ends a range loop: the strip has already seeked to the beat inside this same tap.
+              if (loopRef.current) applyLoop({ type: 'beat' });
+              setIntent('playing');
+            }}
+          />
+        )}
+        {showFixed && fixed && (
+          <TemplateFixedStrip
+            parts={fixed.parts}
+            all={fixed.all}
+            copy={fixed.copy}
+            videoSrc={hasVideo ? video!.src : null}
+            aspect={aspect}
+            activeId={loop?.id ?? null}
+            onSelect={selectPart}
+          />
+        )}
       </div>
     );
   }

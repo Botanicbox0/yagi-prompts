@@ -1,4 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { deflateSync } from 'node:zlib';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import type { StorageDriver } from '@/lib/storage';
@@ -189,6 +191,8 @@ function placeholderMp4(label: string, durationSeconds: number): Uint8Array {
 
 /** Deterministic, clearly-labelled placeholder bytes (§9: fixture media is labelled as such). */
 function placeholderBytes(spec: AssetSpec): Uint8Array {
+  // A local-only fixture that needs a real picture names a repo file (AssetSpec.file).
+  if (spec.file) return new Uint8Array(readFileSync(resolve(spec.file)));
   if (spec.mime === 'image/png') return placeholderPng(spec.label, spec.w, spec.h);
   if (spec.mime === 'video/mp4') return placeholderMp4(spec.label, spec.duration_s ?? 6);
   return new TextEncoder().encode(`${PLACEHOLDER_NOTE(spec.label)}\n`);

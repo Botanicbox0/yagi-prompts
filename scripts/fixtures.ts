@@ -31,6 +31,11 @@ export interface AssetSpec {
   w?: number;
   h?: number;
   duration_s?: number;
+  /**
+   * LOCAL fixtures only: a repo file whose bytes are used instead of the generated placeholder — for a screen that
+   * needs a real picture to work (frames captured from the example video, docs/PERSONAL-STUDIO.md §3.4.4).
+   */
+  file?: string;
 }
 
 export type AssetFactory = (spec: AssetSpec) => AssetRef;

@@ -3911,6 +3911,17 @@ export const en = {
       transformImage: 'One selfie puts you in this photo',
       transformVideo: 'One selfie puts you in this scene',
     },
+    /**
+     * docs/PERSONAL-STUDIO.md §3.4.4 (T1a) — the row under the example video: the parts this template fixes, so a
+     * buyer knows before paying. `heading` names the row; `locked` says the part cannot be changed; `wholeVideo` is the
+     * range of a part with no marked range; `hint` says a tap replays that range. PROVISIONAL (wording pass pending).
+     */
+    fixed: {
+      heading: 'What this template decides',
+      locked: "Can't be changed",
+      wholeVideo: 'Whole video',
+      hint: 'Tap to replay just that part.',
+    },
     notForSale: "Coming soon",
     notForSaleBody: "Generation is not available for this template yet. You can browse its sample results.",
     closedBrowseVideoCta: "Browse other video templates",
@@ -5811,6 +5822,24 @@ export const en = {
     templateLocksLine: 'Locks: {parts}',
     templateLocksAll: 'Locks: everything. The saved lock block cannot be read, so customers can change nothing. Fix the block and save again.',
     templateLocksTypo: 'No locks. Some lines look like a lock block but are not read, so customers can change anything. Fix them before the next save.',
+    /** docs/PERSONAL-STUDIO.md §3.4.4 (T1a): the marks editor on a template with a lock block (`prompt.marks`). */
+    templateMarks: {
+      heading: 'Fixed parts: descriptions and ranges',
+      lede: 'The descriptions and example-video ranges shown under "What this template decides" on the template page. Only parts named in the lock block can have one. Saving replaces this template\'s descriptions and ranges; the keyframe beats stay.',
+      part: 'Part',
+      start: 'Start',
+      end: 'End',
+      descKo: 'Description (KO, up to 40 characters)',
+      descEn: 'Description (EN, up to 40 characters)',
+      add: 'Add a range',
+      remove: 'Remove this range',
+      empty: 'No ranges yet. Without one, the page shows only the part names and "Whole video".',
+      selected: 'Selected range',
+      save: 'Save descriptions and ranges',
+      saving: 'Saving...',
+      saved: 'Saved. The template page updates shortly.',
+      failed: 'Not saved. Reload the page and try again.',
+    },
     /** A save refused because of the lock block, then one sentence per problem. */
     lockRefused: 'Not saved: the template lock block has a problem.',
     lockProblemUnknownLine: 'Line {line}: not a lock line, or a part that cannot be locked. If text follows the block directly, put a blank line between them.',
