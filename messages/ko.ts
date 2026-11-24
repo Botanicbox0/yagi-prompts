@@ -2805,6 +2805,8 @@ export const ko: Dictionary = {
       "active": "참여 중",
       "settings": "설정",
       "support": "스튜디오에 문의",
+      // 대표 확인 대기
+      "supportNewReply": "스튜디오에 문의 · 새 답변이 있어요",
       "supportHint": "브랜드 운영에 관한 문의를 남겨주세요. 캠페인 수정 요청은 해당 캠페인에서 보내주세요.",
       "supportEmpty": "궁금한 점이 있으면 편하게 남겨주세요.",
       "supportTitle": "문의 내역",

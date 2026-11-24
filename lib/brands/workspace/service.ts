@@ -1119,6 +1119,19 @@ export async function loadBrandSupport(deps:BrandWorkspaceDeps,viewer:Viewer,id:
   return (await sql.query('select id,body,author_role,created_at from brand_support_messages where organization_id=$1 order by created_at,id',[id])).rows.map(r=>({id:String(r.id),body:String(r.body),authorRole:r.author_role as BrandMessage['authorRole'],createdAt:stamp(r.created_at)}));
  });}catch(e){if(e instanceof Denied)return null;throw e}
 }
+/**
+ * The support launcher's mount-time read: only the time of the newest team reply (null when there is none),
+ * authorized exactly as `loadBrandSupport` (active membership, else the TWINGS team's read view). One indexed
+ * query, no message bodies; replies still outside the workspace arrive with the full read when the window opens.
+ */
+export async function loadBrandSupportLatestStudioReply(deps:BrandWorkspaceDeps,viewer:Viewer,id:string):Promise<{latestStudioReplyAt:string|null}|null> {
+ if(!uuid(viewer.userId)||!uuid(id))return null;
+ try{return await deps.sql.transaction(async sql=>{
+  await memberOrStaff(sql,viewer.userId!,id,deps.verifiedEmail);
+  const row=(await sql.query("select created_at from brand_support_messages where organization_id=$1 and author_role='studio' order by created_at desc limit 1",[id])).rows[0];
+  return {latestStudioReplyAt:row?stamp(row.created_at):null};
+ });}catch(e){if(e instanceof Denied)return null;throw e}
+}
 /** `entry` as for `sendBrandMessage`: server-provided, never from the request. Viewer-role organization members may send support messages. */
 export interface SendBrandSupportOptions {
   noticeKind?: 'support_message' | 'allowance_request' | 'plan_request';

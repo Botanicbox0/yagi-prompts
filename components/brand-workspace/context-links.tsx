@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState, type ReactNode } from 'react';
-import { scopedHref, sectionVisibility, selectedChoice, type BrandWorkspaceScope } from '@/lib/brands/workspace/selection';
+import { hasVisibleProject, scopedHref, sectionVisibility, selectedChoice, type BrandWorkspaceScope } from '@/lib/brands/workspace/selection';
 import { BRAND_HOME_PATH, brandHomeVisible } from '@/lib/brands/workspace/home';
 import { useWorkspaceSelection } from './identity';
 import { SupportDrawer } from './support';
@@ -67,5 +67,14 @@ export function WorkspaceSupport({ scope, b, locale }: { scope: BrandWorkspaceSc
   if (!choice || choice.role === 'guest' || (choice.role === 'studio' && !clientReady)) return null;
   const effectiveRole = choice.role === 'studio' ? 'owner' : choice.role;
   // Remount on brand change: an open thread or unsent message must not carry into another brand.
-  return <SupportDrawer key={choice.id} organizations={[{ id: choice.id, name: choice.name, role: effectiveRole }]} b={b} locale={locale} />;
+  // Campaign questions are offered only to a brand with a campaign (the scope already lists them).
+  return (
+    <SupportDrawer
+      key={choice.id}
+      organizations={[{ id: choice.id, name: choice.name, role: effectiveRole }]}
+      b={b}
+      locale={locale}
+      hasProjects={hasVisibleProject(scope, choice.id)}
+    />
+  );
 }

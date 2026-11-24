@@ -25,14 +25,66 @@ function toBrandHandle(name: string): string {
   return `@${slug || "brand"}`;
 }
 
+/** Where this browser remembers, per brand, the newest team reply the support window has shown. */
+export function supportSeenStorageKey(organizationId: string): string {
+  return `twings_brand_support_seen_v1:${organizationId}`;
+}
+
+function readSeen(organizationId: string): string | null {
+  try {
+    return window.localStorage.getItem(supportSeenStorageKey(organizationId));
+  } catch {
+    return null;
+  }
+}
+
+function writeSeen(organizationId: string, at: string): void {
+  try {
+    window.localStorage.setItem(supportSeenStorageKey(organizationId), at);
+  } catch {
+    // Private mode or full storage: the dot still clears on this page.
+  }
+}
+
+function timeOf(value: string | null): number | null {
+  const time = value ? Date.parse(value) : Number.NaN;
+  return Number.isFinite(time) ? time : null;
+}
+
+/** The later of two times; an unreadable one never wins (and alone gives null). */
+function laterOf(a: string | null, b: string | null): string | null {
+  const ta = timeOf(a);
+  const tb = timeOf(b);
+  if (tb === null) return ta === null ? null : a;
+  if (ta === null) return b;
+  return tb > ta ? b : a;
+}
+
+function newestStudioReply(messages: BrandMessage[]): string | null {
+  let newest: string | null = null;
+  for (const m of messages) if (m.authorRole === "studio") newest = laterOf(newest, m.createdAt);
+  return newest;
+}
+
+/** A team reply this browser has not shown yet: there is one, and nothing readable was seen at or after it. */
+function unseen(latest: string | null, seen: string | null): boolean {
+  const l = timeOf(latest);
+  if (l === null) return false;
+  const s = timeOf(seen);
+  return s === null || l > s;
+}
+
 export function SupportDrawer({
   organizations,
   b,
   locale,
+  hasProjects = false,
 }: {
   organizations: BrandOrganization[];
   b: BrandCopy;
   locale: string;
+  /** The brand has at least one campaign: the campaign question chips apply. Without one, only the quote chip. */
+  hasProjects?: boolean;
 }) {
   const concierge = b.managed.concierge;
   const list = useRef<HTMLDivElement>(null);
@@ -52,22 +104,77 @@ export function SupportDrawer({
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const [draft, setDraft] = useState("");
-  const [seenCount, setSeenCount] = useState(0);
+  // The newest team reply known for a brand, and the newest one this browser has shown (the dot: the first is later).
+  const [teamReplies, setTeamReplies] = useState<{
+    organizationId: string;
+    latest: string | null;
+    seen: string | null;
+  } | null>(null);
+  // The brand whose thread `messages` holds (it lags behind `organizationId` until a load answers).
+  const loadedFor = useRef("");
   const titleId = useId();
 
   const currentOrg =
     organizations.find((o) => o.id === organizationId) ?? organizations[0];
   const brandHandle = currentOrg ? toBrandHandle(currentOrg.name) : "@brand";
-  const quickTopics = [
-    { label: concierge.topics.timelineLabel, text: concierge.topics.timelineText },
-    { label: concierge.topics.creatorsLabel, text: concierge.topics.creatorsText },
-    { label: concierge.topics.quoteLabel, text: concierge.topics.quoteText },
-    { label: concierge.topics.feedbackLabel, text: concierge.topics.feedbackText },
-  ];
+  const quoteTopic = { label: concierge.topics.quoteLabel, text: concierge.topics.quoteText };
+  // A brand with no campaign yet is offered only the question that is already true for it.
+  const quickTopics = hasProjects
+    ? [
+        { label: concierge.topics.timelineLabel, text: concierge.topics.timelineText },
+        { label: concierge.topics.creatorsLabel, text: concierge.topics.creatorsText },
+        quoteTopic,
+        { label: concierge.topics.feedbackLabel, text: concierge.topics.feedbackText },
+      ]
+    : [quoteTopic];
 
   useEffect(() => {
     if (list.current) list.current.scrollTop = list.current.scrollHeight;
   }, [messages.length, isOpen]);
+
+  // One cheap read per brand shown: the newest team reply's time only, never the thread and never the
+  // outside call the full read makes. Nothing polls while the window is closed; a failed read is no dot.
+  useEffect(() => {
+    if (!organizationId) return;
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        const res = await fetch(
+          `/api/brand-workspace?organizationId=${encodeURIComponent(organizationId)}&peek=1`,
+          { method: "GET", cache: "no-store", credentials: "same-origin", signal: controller.signal },
+        );
+        if (!res.ok) return;
+        const body = (await res.json()) as { ok?: unknown; latestStudioReplyAt?: unknown } | null;
+        if (controller.signal.aborted || body?.ok !== true) return;
+        const latest =
+          typeof body.latestStudioReplyAt === "string" ? laterOf(null, body.latestStudioReplyAt) : null;
+        const seen = readSeen(organizationId);
+        setTeamReplies((current) =>
+          current?.organizationId === organizationId
+            ? { organizationId, latest: laterOf(current.latest, latest), seen: laterOf(current.seen, seen) }
+            : { organizationId, latest, seen },
+        );
+      } catch {
+        // Unknown: no dot.
+      }
+    })();
+    return () => controller.abort();
+  }, [organizationId]);
+
+  // While the window is open, every team reply it has shown counts as seen, here and in this browser's storage.
+  useEffect(() => {
+    if (!isOpen || !organizationId) return;
+    const own = teamReplies?.organizationId === organizationId ? teamReplies : null;
+    const shown = loadedFor.current === organizationId ? newestStudioReply(messages) : null;
+    const latest = laterOf(own?.latest ?? null, shown);
+    const seen = laterOf(own ? own.seen : readSeen(organizationId), latest);
+    const stored = readSeen(organizationId);
+    const keep = laterOf(stored, seen);
+    if (keep && keep !== stored) writeSeen(organizationId, keep);
+    if (!own || own.latest !== latest || own.seen !== seen) {
+      setTeamReplies({ organizationId, latest, seen });
+    }
+  }, [isOpen, organizationId, messages, teamReplies]);
 
   const refresh = useCallback(
     async (id = organizationId, silent = false): Promise<boolean> => {
@@ -80,18 +187,16 @@ export function SupportDrawer({
         );
         const data = await r.json();
         if (!r.ok || !data.ok) throw Error();
+        loadedFor.current = id;
         setMessages(data.messages);
         setLoad("ready");
-        if (isOpen) {
-          setSeenCount(data.messages.length);
-        }
         return true;
       } catch {
         if (!silent) setLoad("failed");
         return false;
       }
     },
-    [organizationId, isOpen],
+    [organizationId],
   );
 
   // Live poll every 4s while the ChannelTalk/Sendbird widget is open and tab is visible
@@ -235,7 +340,10 @@ export function SupportDrawer({
     textareaRef.current?.focus();
   }
 
-  const unreadCount = Math.max(0, messages.length - seenCount);
+  // The dot is the launcher's only signal (no count: nothing is known before the window opens but the newest
+  // reply's time): a team reply this browser has not shown yet for the brand shown.
+  const ownReplies = teamReplies?.organizationId === organizationId ? teamReplies : null;
+  const newReply = !isOpen && ownReplies !== null && unseen(ownReplies.latest, ownReplies.seen);
   const canWrite = Boolean(currentOrg);
 
   return (
@@ -244,11 +352,11 @@ export function SupportDrawer({
         type="button"
         className={`bw-support-launch ${isOpen ? "bw-support-launch-open" : ""}`}
         onClick={toggleWidget}
-        aria-label={b.managed.support}
+        aria-label={newReply ? b.managed.supportNewReply : b.managed.support}
         aria-expanded={isOpen}
         data-concierge-launcher
       >
-        <span className="bw-support-launch-dot" aria-hidden="true" />
+        {newReply ? <span className="bw-support-launch-dot" aria-hidden="true" data-concierge-new /> : null}
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M4 4h16v12H9l-5 4V4Z" />
           <path d="M8 8h8M8 12h5" />
@@ -256,11 +364,6 @@ export function SupportDrawer({
         <span className="bw-support-launch-label">
           {concierge.launcher}
         </span>
-        {!isOpen && unreadCount > 0 && (
-          <span className="bw-support-unread" data-concierge-unread>
-            {unreadCount}
-          </span>
-        )}
       </button>
 
       <dialog
