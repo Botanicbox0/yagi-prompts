@@ -5,7 +5,8 @@ import { directUploadFailure, uploadMime } from '@/lib/admin/direct-upload';
 import { imageFitsAspect, type ImageAspect } from '@/lib/images/engines';
 import { IMAGE_SET_FRAMES_MAX, IMAGE_SET_FRAMES_MIN, normalizeSetPrompt, PROMPT_TEXT_MIN, setPromptIssue } from '@/lib/prompts/schemas';
 import { interpolate } from '@/lib/i18n/format';
-import { MAX_STEP_PROMPT_CHARS, setPromptTooLong } from '@/lib/recipes/schema';
+import { setPromptTooLong } from '@/lib/recipes/schema';
+import { DEFAULT_PROMPT_CHARS } from '@/lib/engines/prompt-limits';
 
 import { put, sha256Hex, STAGING_URL_PATH, UploadRefused } from '@/components/admin/media-drop';
 
@@ -157,7 +158,8 @@ export function findImageSetProblems({
     } else {
       const normalized = normalizeSetPrompt(prompt);
       if (setPromptTooLong(normalized)) {
-        problems.push(interpolate(labels.errPromptLong, { ...vars, max: MAX_STEP_PROMPT_CHARS }));
+        // A set renders on image engines, which all keep the default limit (lib/engines/prompt-limits.ts).
+        problems.push(interpolate(labels.errPromptLong, { ...vars, max: DEFAULT_PROMPT_CHARS }));
       }
       const issue = setPromptIssue(normalized);
       if (issue === 'no_photo') {

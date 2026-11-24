@@ -5,6 +5,7 @@ import { formatKrw, suggestedKrw } from '@/lib/twings/products';
 import { costFloor } from '@/lib/twings/cost-model';
 import { baseKrw, makeEarning, providerKrw } from '@/lib/twings/template-price';
 import { videoModelForEngine } from '@/lib/video/models';
+import { formatPromptChars, templatePromptCharLimit } from '@/lib/engines/prompt-limits';
 import { PROMPT_TEXT_MAX, PROMPT_TEXT_MIN, TEMPLATE_CASTS, TEMPLATE_MEDIA } from '@/lib/prompts/schemas';
 import { promptHref } from '@/lib/prompts/links';
 import {
@@ -230,6 +231,20 @@ export function stylingPartLabels(styling: PublicTemplateStyling, dict: Dict): s
 }
 
 /**
+ * Founder, 2026-11-25: Seedance 2.5 takes 15,000 characters per clip. A saved prompt longer than the limit of the model
+ * its template renders on is flagged here; the save itself is not refused (older templates run longer).
+ */
+function PromptLengthNote({ row, dict }: { row: PromptRow | null; dict: Dict }) {
+  const limit = row === null ? null : templatePromptCharLimit(row);
+  if (row === null || limit === null || row.promptText.length <= limit) return null;
+  return (
+    <p data-prompt-over-limit={row.promptText.length} className="font-mono text-[0.72rem] text-accent">
+      {interpolate(dict.admin.promptOverEngineLimit, { max: formatPromptChars(limit) })}
+    </p>
+  );
+}
+
+/**
  * Under the prompt field: what the SAVED block locks (edit form only; nothing when there is no block), what its
  * styling block declares (§3.4.9: next to the lock line, with a warning when it does not read, and — rule 3 — a warning
  * when a person template has none: it still saves, but a new template could not be made that way), and a collapsed
@@ -385,6 +400,7 @@ export function PromptFields({ row, dict, look, recipeTemplate = false }: {
         />
       </Field>
       <TemplateLocksNote promptText={row?.promptText ?? null} cast={row?.cast ?? null} recipeTemplate={recipeTemplate} dict={dict} />
+      <PromptLengthNote row={row} dict={dict} />
 
       <details open={row !== null} className="border border-hairline p-3">
         <summary className="cursor-pointer font-label text-eyebrow">{a.promptOptionalDetails}</summary>

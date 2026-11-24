@@ -5,6 +5,7 @@ import {
   SKIN_MATTE_CONTRACT_A10
 } from '@/lib/brands/briefs/compiler';
 import { personalEditSheetOpen } from '@/lib/flags';
+import { SEEDANCE_25_PROMPT_CHARS, verifiedPromptCharLimit } from '@/lib/engines/prompt-limits';
 import {
   GEMINI_DIRECTOR_THINKING_LEVEL,
   PERSONAL_NO_BGM_AUDIO_CONTRACT_EN,
@@ -2035,6 +2036,18 @@ function withCustomRefSlots(
 
 export const DIRECTOR_REWRITE_MAX_ATTEMPTS = 2 as const;
 export const DIRECTOR_REWRITE_FALLBACK_LOG_TAG = '[template-director] stage2_rewrite_fallback' as const;
+export const DIRECTOR_OVER_ENGINE_LIMIT_LOG_TAG = '[template-director] prompt_over_engine_limit' as const;
+
+/**
+ * Founder, 2026-11-25: Seedance 2.5 takes up to 15,000 characters per clip. The most the compiled text may hold: the
+ * verified limit of the engine (the model the clip renders on) when the caller names it — none for an engine without
+ * one — and, for a film whose caller names no engine (the render pass does not yet), Seedance 2.5's: the only verified
+ * video limit (lib/engines/prompt-limits.ts).
+ */
+function compiledPromptLimit(input: { engine?: string | null; medium: 'image' | 'video' }): number | null {
+  if (input.engine !== undefined) return verifiedPromptCharLimit(input.engine);
+  return input.medium === 'video' ? SEEDANCE_25_PROMPT_CHARS : null;
+}
 
 /**
  * A log-safe code for a rewrite error: our own `snake_case:codes` as is, otherwise the error's name and its
@@ -2070,9 +2083,19 @@ export async function compileDirectorPromptDetailed(
     hasSceneRef?: boolean;
     directorSpec?: PersonalDirectorSpec | null;
     referenceSlots?: readonly DirectorRewriteInput['referenceSlots'][number][];
+    /** The engine (the model) this clip renders on; it sets how long the compiled text may be (`compiledPromptLimit`). */
+    engine?: string | null;
   },
   deps: { env?: Record<string, string | undefined>; fetch?: typeof fetch } = {}
 ): Promise<DirectorCompileResult> {
+  // A customised prompt longer than the engine takes is never cut: the template's own text goes unchanged, with one
+  // warning. Its lock and styling blocks are in that text, so neither is ever dropped.
+  const limit = compiledPromptLimit(rawInput);
+  const fits = (text: string): boolean => limit === null || text.length <= limit;
+  const overLimit = (text: string): DirectorCompileResult => {
+    console.warn(DIRECTOR_OVER_ENGINE_LIMIT_LOG_TAG, { engine: rawInput.engine ?? null, chars: text.length });
+    return { prompt: rawInput.basePrompt, path: 'unchanged' };
+  };
   // docs/PERSONAL-STUDIO.md §3.3 — the template's locks come from its own prompt text. A base prompt without the
   // `Template locks:` header gives NO_LOCKS, and every branch below that reads `locks` checks `locks.any` first.
   const locks = parseTemplateLocks(rawInput.basePrompt);
@@ -2103,7 +2126,8 @@ export async function compileDirectorPromptDetailed(
 
   const config = directorConfigFromEnv(env);
   if (!config || input.medium !== 'video') {
-    return { prompt: deterministicCompile(input, env, locks, own), path: 'deterministic', ...sheetMark };
+    const prompt = deterministicCompile(input, env, locks, own);
+    return fits(prompt) ? { prompt, path: 'deterministic', ...sheetMark } : overLimit(prompt);
   }
 
   const director = createFlashTemplateDirector(config, { fetch: deps.fetch });
@@ -2182,7 +2206,10 @@ export async function compileDirectorPromptDetailed(
     try {
       const rewritten = await director.rewritePrompt(rewriteInput);
       const prompt = unwrapServerOnlyPrompt(rewritten.compiledPrompt);
-      return { prompt: locks.any ? ensureTemplateLocks(prompt, locks) : prompt, path: 'rewrite', ...sheetMark };
+      const compiled = locks.any ? ensureTemplateLocks(prompt, locks) : prompt;
+      // Longer than the engine takes = a failed verification: try again, then the deterministic fallback.
+      if (!fits(compiled)) throw new Error('stage2_prompt_verification_failed:over_engine_limit');
+      return { prompt: compiled, path: 'rewrite', ...sheetMark };
     } catch (error) {
       lastError = error;
     }
@@ -2190,7 +2217,8 @@ export async function compileDirectorPromptDetailed(
   console.warn(
     `${DIRECTOR_REWRITE_FALLBACK_LOG_TAG} attempts=${DIRECTOR_REWRITE_MAX_ATTEMPTS} error=${rewriteErrorCode(lastError)}`
   );
-  return { prompt: deterministicCompile(input, env, locks, own), path: 'deterministic_fallback', ...sheetMark };
+  const fallback = deterministicCompile(input, env, locks, own);
+  return fits(fallback) ? { prompt: fallback, path: 'deterministic_fallback', ...sheetMark } : overLimit(fallback);
 }
 
 /**

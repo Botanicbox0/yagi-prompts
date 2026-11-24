@@ -54,6 +54,7 @@ import { checkStylingBlock, stylingBlockRefusalDetail, stylingRequiredDetail } f
 import { planStylingDeclaration, templateCardStyling } from '@/lib/template-director/compile-prompts';
 import { recipeSchemaReady } from '@/lib/recipes/repo';
 import { TEMPLATE_AUDIENCES, type TemplateAudience } from '@/lib/template-look/look';
+import { formatPromptChars, templatePromptCharLimit } from '@/lib/engines/prompt-limits';
 import { fail, ok, type AdminContext, type AdminOutcome } from './context';
 import * as f from './form';
 import type { AdminOperation, ParseResult } from './operations';
@@ -761,8 +762,8 @@ const declareStyling: AdminOperation<z.infer<typeof DeclareStyling>> = {
     const outcome = await ctx.sql.transaction(async (tx): Promise<AdminOutcome | { slug: string; parts: { styled: string[]; photo: string[] } | null; texts: number; recipeChanged: boolean }> => {
       // The cast is the `cast_kind` column (0078; `cast` is a reserved word), read the way the catalogue reads it
       // (lib/prompts/repo.ts): absent before 0078 = solo.
-      const { rows } = await tx.query<{ slug: string; audience: string; prompt_text: string; cast_kind: string | null; recipe: unknown }>(
-        "select slug, audience::text as audience, prompt_text, coalesce(to_jsonb(p.*)->>'cast_kind', 'solo') as cast_kind, to_jsonb(p.*)->'recipe' as recipe from prompt_items p where id = $1 for update",
+      const { rows } = await tx.query<{ slug: string; audience: string; prompt_text: string; cast_kind: string | null; recipe: unknown; medium: string; engine: string | null; runtime_seconds: number | null }>(
+        "select slug, audience::text as audience, prompt_text, coalesce(to_jsonb(p.*)->>'cast_kind', 'solo') as cast_kind, to_jsonb(p.*)->'recipe' as recipe, medium::text as medium, engine, runtime_seconds from prompt_items p where id = $1 for update",
         [input.id],
       );
       const row = rows[0];
@@ -773,6 +774,12 @@ const declareStyling: AdminOperation<z.infer<typeof DeclareStyling>> = {
         input.block,
       );
       if (!plan.ok) return fail('invalid', `declareStyling: ${plan.detail}`);
+      // Founder 2026-11-25: Seedance 2.5 takes 15,000 characters per clip. A block that pushes the main prompt past its
+      // model's limit is refused; a recipe's steps are held to theirs by the plan's recipe check.
+      const limit = templatePromptCharLimit({ medium: row.medium, engine: row.engine, runtimeSeconds: row.runtime_seconds });
+      if (limit !== null && plan.promptText.length > limit && plan.promptText.length > row.prompt_text.length) {
+        return fail('invalid', `declareStyling: with the block the prompt would run to ${formatPromptChars(plan.promptText.length)} characters; Seedance 2.5 takes up to ${formatPromptChars(limit)} per clip`);
+      }
       if (plan.recipeChanged) {
         const { rows: formats } = await tx.query<{ ready: boolean }>("select to_regclass('public.platform_formats') is not null as ready");
         if (formats[0]?.ready === true) {
