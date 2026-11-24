@@ -1875,6 +1875,10 @@ export const ko: Dictionary = {
       closedTitle: '아직 이용 한도가 활성화되지 않았어요',
       closedBody: '크레딧은 이미지나 영상을 만들 때 사용해요. 플랜이 확정되면 바로 제작할 수 있어요. 아래에서 이용 신청을 해주시면 워크스페이스 채팅으로 안내해 드릴게요.',
       closedAction: '이용 신청',
+      // 대표 확인 대기 — 이용 신청을 보낸 뒤의 닫힌 스튜디오 안내 (로컬 문구 모델 2패스 초안)
+      closedRequestedTitle: '이용 신청이 접수되었어요',
+      closedRequestedBody: '담당 팀이 확인한 뒤 제작 기능을 열어 드릴게요. 안내는 워크스페이스 채팅으로 보내 드려요.',
+      closedRequestedAction: '추가 문의하기',
       closedRequestOrgFallback: '우리 브랜드',
       closedRequestDraft: '브랜드명: {organization}\n스튜디오 이용을 신청합니다.\n제작하고 싶은 콘텐츠: (예: 제품 사진, 숏폼 영상, 예상 촬영량 등)',
       readOnly: '결과와 에셋은 볼 수 있어요. 만들기는 관리자와 편집자만 할 수 있어요.',

@@ -815,8 +815,9 @@ export function StudioApp({ organizationId, organizationName, locale, copy, bill
             ))}
           </ul>
         </div>
-      ) : (
-        <p className="bs-muted">{canCreate ? copy.dock.closedBody : copy.board.emptyReadOnly}</p>
+      ) : canCreate ? null : (
+        // Closed for someone who can create: the banner below (ClosedAllowanceBanner) says it, once.
+        <p className="bs-muted">{copy.board.emptyReadOnly}</p>
       )}
     </div>
   );

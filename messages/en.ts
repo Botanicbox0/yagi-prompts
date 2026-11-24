@@ -1864,6 +1864,10 @@ export const en = {
       closedTitle: 'Studio access is not active yet',
       closedBody: 'Credits are used when creating images or videos. Once your plan is confirmed, you can start right away. Request access below and our team will follow up in your workspace chat.',
       closedAction: 'Request access',
+      // 대표 확인 대기 — the closed studio after an access request was sent
+      closedRequestedTitle: 'We received your request',
+      closedRequestedBody: 'Our team will open the studio once they have reviewed it. We will follow up in your workspace chat.',
+      closedRequestedAction: 'Send a follow-up',
       closedRequestOrgFallback: 'Our brand',
       closedRequestDraft: 'Brand: {organization}\nRequesting studio access.\nWhat we plan to make: (e.g. product photos, short-form videos, expected volume)',
       readOnly: 'You can look through results and assets. Owners and editors can create.',

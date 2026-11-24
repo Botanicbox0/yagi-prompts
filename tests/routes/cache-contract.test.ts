@@ -219,6 +219,8 @@ describe('route cache modes (§3.4 / §4)', () => {
       // lib/content/landing-media.ts — the replace screen and the local-mode image route.
       ['app', '(admin)', 'admin', 'landing-media', 'page.tsx'],
       ['app', 'api', 'landing-media', '[...slot]', 'route.ts'],
+      // The closed studio's "access request already sent" answer: per member, never cached.
+      ['app', 'api', 'brand-workspace', 'access-request', 'route.ts'],
     ]) {
       expect(read(...file), file.join('/')).toMatch(/export const dynamic\s*=\s*(['"])force-dynamic\1/);
     }
