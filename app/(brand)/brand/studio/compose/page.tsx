@@ -165,6 +165,11 @@ export default async function StudioComposePage({
       initialFolderItems={initialFolderItems}
       editAssist={studioEnv().editAssist === true}
       musicGeneration={studioEnv().musicGeneration === true}
+      uploadCopy={{
+        uploading: dict.brandStudio.assets.uploading,
+        errors: dict.brandStudio.errors,
+        unapprovedUpload: dict.brandStudio.unapprovedUpload,
+      }}
     />
   );
 }

@@ -63,6 +63,20 @@ export function redoHistory<T>(history: History<T>): History<T> {
   };
 }
 
+/**
+ * The same change applied to every step, past and future too, without adding a step (a device file that
+ * finished uploading: undo must not bring its tab-only address back). `fn` returns its input when it has
+ * nothing to change; when no step changes, the same history comes back.
+ */
+export function mapHistory<T>(history: History<T>, fn: (value: T) => T): History<T> {
+  const past = history.past.map(fn);
+  const present = fn(history.present);
+  const future = history.future.map(fn);
+  const same = (a: readonly T[], b: readonly T[]) => a.every((v, i) => v === b[i]);
+  if (present === history.present && same(past, history.past) && same(future, history.future)) return history;
+  return { past, present, future };
+}
+
 /** Swaps the present without a history step (loading the saved timeline). */
 export function replaceHistory<T>(history: History<T>, next: T): History<T> {
   return next === history.present ? history : { ...history, present: next };

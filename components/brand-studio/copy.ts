@@ -17,13 +17,20 @@ export function fill(template: string, values: Record<string, string | number>):
 }
 
 /** The customer sentence for an error code; anything unknown reads as the generic failure. */
-export function errorLine(copy: StudioCopy, code: string | null | undefined): string {
+export function errorLine(copy: Pick<StudioCopy, "errors">, code: string | null | undefined): string {
   const errors = copy.errors as Record<StudioErrorCode, string>;
   return (code && Object.hasOwn(errors, code) ? errors[code as StudioErrorCode] : undefined) ?? errors.failed;
 }
 
-/** Upload error copy that surfaces the pre-approval 500 MB / 50-file reason when present. */
-export function studioUploadErrorLine(copy: StudioCopy, code: string | null | undefined, reason?: UploadLimitReason | null): string {
+/**
+ * Upload error copy that surfaces the pre-approval 500 MB / 50-file reason when present. Takes only the two
+ * parts it reads, so a screen outside the studio (the editing studio's device uploads) can pass just those.
+ */
+export function studioUploadErrorLine(
+  copy: Pick<StudioCopy, "errors" | "unapprovedUpload">,
+  code: string | null | undefined,
+  reason?: UploadLimitReason | null,
+): string {
   if (code === "storage_quota_exceeded" && isUnapprovedUploadReason(reason)) {
     return reason === "unapproved_file_limit" ? copy.unapprovedUpload.fileLimitExceeded : copy.unapprovedUpload.quotaExceeded;
   }

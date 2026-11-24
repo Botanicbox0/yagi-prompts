@@ -52,6 +52,8 @@ export const studioComposeEn = {
     upscaleTab: 'Upscale',
     uploadLocal: '+ Upload file',
     uploadHint: 'MP4, MOV, MP3, WAV, JPG, PNG, or WEBP from your device',
+    /** On a cut, the music or a picked file whose upload failed or was refused: it plays from this tab only. */
+    tabOnly: 'Works in this tab only. It will be gone after a reload.',
     studioOutputs: 'Recent studio outputs',
     libraryVideos: 'Uploaded videos',
     libraryAudio: 'Audio in assets',
@@ -372,6 +374,7 @@ export const studioComposeKo: typeof studioComposeEn = {
     upscaleTab: '업스케일',
     uploadLocal: '+ 내 파일 올리기',
     uploadHint: '기기에 있는 MP4, MOV, MP3, WAV, JPG, PNG, WEBP 파일',
+    tabOnly: '지금 탭에서는 계속 쓸 수 있어요. 새로고침하면 사라져요.', // 대표 확인 대기 (Gemma 2패스, 2026-11-24)
     studioOutputs: '최근 생성한 영상',
     libraryVideos: '업로드한 영상',
     libraryAudio: '보관함 오디오',
