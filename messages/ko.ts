@@ -2805,8 +2805,8 @@ export const ko: Dictionary = {
       "active": "참여 중",
       "settings": "설정",
       "support": "스튜디오에 문의",
-      // 대표 확인 대기
-      "supportNewReply": "스튜디오에 문의 · 새 답변이 있어요",
+      // 대표 확인 대기 — 새 팀 답변이 있을 때 문의 버튼의 접근성 이름 (로컬 문구 모델 2패스 초안)
+      "supportNewReply": "스튜디오에 문의, 새로운 답변 있음",
       "supportHint": "브랜드 운영에 관한 문의를 남겨주세요. 캠페인 수정 요청은 해당 캠페인에서 보내주세요.",
       "supportEmpty": "궁금한 점이 있으면 편하게 남겨주세요.",
       "supportTitle": "문의 내역",

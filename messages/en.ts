@@ -2794,7 +2794,7 @@ export const en = {
       "settings": "Settings",
       "support": "Contact the studio",
       // 대표 확인 대기
-      "supportNewReply": "Contact the studio · new reply",
+      "supportNewReply": "Contact the studio, new reply",
       "supportHint": "Ask us about your brand workspace. Send campaign revisions from the relevant campaign.",
       "supportEmpty": "Leave a message whenever you need a hand.",
       "supportTitle": "Conversations",
