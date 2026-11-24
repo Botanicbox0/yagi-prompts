@@ -9,6 +9,8 @@
  *   `params.source = 'compose'`) under the organization lock. Export is free (docs/BRAND-EDITING-STUDIO.md
  *   §8-3: the browser encodes, we have no cost): the row carries `estimate_krw = usage_krw = 0`, no allowance
  *   is reserved, so an organization with no allowance or over its cap can still export. Idempotent by request id.
+ *   Any length is taken (`COMPOSE_FILM_MAX_SEC`, longer films are recorded at it), so no export stops on length,
+ *   whichever screen sends it.
  * - `render.refund`: Kept for pages loaded before export became free and for exports charged in the last
  *   `COMPOSE_RENDER_REFUND_WINDOW_MS`: marks the caller's own charged export row (`params.source = 'compose'`,
  *   `status = 'succeeded'`, `usage_krw > 0`) as `failed` (`usage_krw = null`). Free (0-KRW) export rows, older
@@ -34,7 +36,7 @@ import {
   parseComposeChatCommand,
 } from './chat-intent';
 import { COMPOSE_FINAL_RENDER_MODEL, COMPOSE_RENDER_REFUND_WINDOW_MS } from './credits';
-import { COMPOSE_ASPECTS, type ComposerProject, type TimelinePatch } from './timeline';
+import { COMPOSE_ASPECTS, COMPOSE_FILM_MAX_SEC, type ComposerProject, type TimelinePatch } from './timeline';
 
 export const COMPOSE_OPERATIONS = ['chat.edit', 'render.reserve', 'render.refund', 'assist.plan'] as const;
 export type ComposeOperation = (typeof COMPOSE_OPERATIONS)[number];
@@ -125,7 +127,13 @@ const ChatEditInputSchema = z.object({
 const RenderReserveInputSchema = z.object({
   organizationId: z.uuid(),
   requestId: z.string().regex(/^[A-Za-z0-9_-]{8,80}$/),
-  durationSec: z.number().min(0.3).max(300),
+  // No length is refused (A7): a film longer than any timeline built from library footage is recorded at that
+  // bound. The rule lives here so every screen that sends this record gets it (the editing studio, the video
+  // studio and the new editor's export).
+  durationSec: z
+    .number()
+    .min(0.3)
+    .transform((sec) => Math.min(sec, COMPOSE_FILM_MAX_SEC)),
 });
 
 const RenderRefundInputSchema = z.object({

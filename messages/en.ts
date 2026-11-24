@@ -2223,6 +2223,8 @@ export const en = {
       quotaExceeded: `Before your plan is confirmed, uploads are limited to ${formatLimitMb(UNAPPROVED_UPLOAD_QUOTA_BYTES)} MB and ${UNAPPROVED_UPLOAD_MAX_FILES} files. Delete unused files or ask the YAGI team in chat.`,
       fileLimitExceeded: `Before your plan is confirmed, you can upload up to ${UNAPPROVED_UPLOAD_MAX_FILES} files (${formatLimitMb(UNAPPROVED_UPLOAD_QUOTA_BYTES)} MB). Delete unused files or ask the YAGI team in chat.`,
     },
+    /** An upload that did not go through for no reason worth naming (copy.ts `studioUploadErrorLine`). */
+    uploadFailed: 'The file could not be uploaded. Please try again.',
     shareDialog: studioShareDialogEn,
   },
   brandWorkspace: {

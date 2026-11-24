@@ -165,7 +165,7 @@ async function completeOnce(deps: StudioDeps, viewer: Viewer, raw: unknown, atte
       } else {
         durationMs = v.seconds ? Math.round(v.seconds * 1000) : null;
       }
-      if (durationMs !== null && durationMs > 600_000) throw new StudioDenied('unsupported_file');
+      if (durationMs !== null && durationMs > STUDIO_LIMITS.mediaSecondsMax * 1000) throw new StudioDenied('unsupported_file');
       const { key } = await deps.media.put(bytes, verdict.mime);
       stored.push(key);
       releasedStagingKey = row.storage_key;

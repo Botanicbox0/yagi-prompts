@@ -59,6 +59,16 @@ import {
   type DetectedCut,
   type TimelinePatch,
 } from '@/lib/brand-studio/compose';
+import {
+  DEVICE_FILE_ACCEPT,
+  adoptDeviceUpload,
+  adoptDeviceUploads,
+  deviceFileAccept,
+  deviceFileKind,
+  deviceUploadRuns,
+  uploadDeviceFile,
+  type DeviceUploadAdoption,
+} from '@/lib/brand-studio/compose/device-files';
 import { exportCompositionMp4, type ComposeExportResult } from '@/lib/brand-studio/compose/export-client';
 import { exportProjectNleBundleZip } from '@/lib/brand-studio/compose/nle-export';
 import { musicCredits } from '@/lib/brand-studio/music/contracts';
@@ -74,8 +84,13 @@ import type { StudioComposeCopy } from '@/messages/studio-compose';
 import { AssistPanel, AssistPreviewBar } from './assist/assist-panel';
 import { useEditAssist } from './assist/use-edit-assist';
 import { makeComposeRequestId, postComposeOperation } from './compose-request';
-import { commitHistory, initHistory, redoHistory, replaceHistory, undoHistory, type History } from './history';
+import { startDeviceUploads, type ComposeUploadCopy, type DevicePick, type DeviceFileState } from './device-uploads';
+import { commitHistory, initHistory, mapHistory, redoHistory, replaceHistory, undoHistory, type History } from './history';
 import s from './video-composer.module.css';
+// The library's own upload indicator and notice (`.bsr-progress`, `.bsr-alert`) for device files (A8).
+import '../rail/rail.css';
+
+export type { ComposeUploadCopy, DeviceFileState } from './device-uploads';
 
 export interface VideoComposerProps {
   organizationId: string;
@@ -111,6 +126,8 @@ export interface VideoComposerProps {
    * only uploading and using your own audio; volume and removal stay on the timeline.
    */
   musicGeneration?: boolean;
+  /** The library's upload wording, for files picked from the device (A8). */
+  uploadCopy?: ComposeUploadCopy;
 }
 
 type ToolTab = 'clips' | 'color' | 'music' | 'captions' | 'upscale';
@@ -188,9 +205,31 @@ const MUSIC_STYLE_SPECS: Record<
   },
 };
 
+// The same address `composeSourceUrl` (device-files.ts) gives an uploaded device file, so a switched cut is
+// exactly a library cut (tests/brand-studio/compose/device-upload.test.ts and editor-v2/sources.test.ts).
 function sameOriginComposeUrl(organizationId: string, source: 'asset' | 'output', id: string): string {
   const q = new URLSearchParams({ organizationId, source, id });
   return `/api/brand-studio/compose?${q.toString()}`;
+}
+
+/** On a cut, the music or a picked file: the library's upload indicator, or the line that it stays in this tab. */
+export function DeviceFileNote({ state, uploading, tabOnly }: { state: DeviceFileState | undefined; uploading?: string; tabOnly: string }) {
+  if (state === 'uploading') {
+    return (
+      <div className="bsr-progress" role="status" data-compose-upload-state="uploading">
+        {uploading ? <p>{uploading}</p> : null}
+        <span className="bsr-progress-bar" aria-hidden="true" />
+      </div>
+    );
+  }
+  if (state === 'tab_only') {
+    return (
+      <p className="bsr-alert" data-compose-upload-state="tab-only">
+        {tabOnly}
+      </p>
+    );
+  }
+  return null;
 }
 
 async function postPostProduction(operation: string, input: Record<string, unknown>): Promise<Record<string, unknown>> {
@@ -232,6 +271,7 @@ export function VideoComposer({
   initialProject,
   editAssist = false,
   musicGeneration = false,
+  uploadCopy,
 }: VideoComposerProps) {
   const api = useMemo(() => createStudioApi({ organizationId }), [organizationId]);
   const [allowance, setAllowance] = useState<StudioAllowanceView>(initialAllowance);
@@ -264,6 +304,17 @@ export function VideoComposer({
   const frameShellRef = useRef<HTMLDivElement | null>(null);
   const activeClipUrlRef = useRef<string>('');
   const localBlobUrlsRef = useRef<string[]>([]);
+
+  // Device files (A8): each picked file is uploaded once, by its tab address; a finished one is adopted by
+  // every cut that plays it. `tabCopyRef` maps the asset address back to the tab copy so the preview keeps
+  // playing what it already has instead of reloading the file from the server.
+  const deviceRuns = useMemo(
+    () => deviceUploadRuns((file, measured) => uploadDeviceFile(api, organizationId, file, measured)),
+    [api, organizationId],
+  );
+  const [deviceFiles, setDeviceFiles] = useState<Record<string, DeviceFileState>>({});
+  const adoptionsRef = useRef(new Map<string, DeviceUploadAdoption>());
+  const tabCopyRef = useRef(new Map<string, string>());
 
   // Scene-cut detection state
   const [detectingCuts, setDetectingCuts] = useState(false);
@@ -453,7 +504,10 @@ export function VideoComposer({
 
   const commitProject = useCallback((next: ComposerProject) => {
     if (assistLockRef.current) return;
-    setHistory((h) => commitHistory(h, next));
+    // A timeline built from an older copy (a "말로 편집" draft made while a file was uploading) gets the
+    // finished uploads too, so it never brings a tab-only address back.
+    const settled = adoptDeviceUploads(next, adoptionsRef.current);
+    setHistory((h) => commitHistory(h, settled));
     setSavedAssetId(null);
   }, [assistLockRef]);
 
@@ -526,9 +580,11 @@ export function VideoComposer({
     const active = frameAtPlayhead.activeClip;
     if (!v || !active) return;
 
-    if (activeClipUrlRef.current !== active.clip.srcUrl) {
-      activeClipUrlRef.current = active.clip.srcUrl;
-      v.src = active.clip.srcUrl;
+    // A device file that finished uploading keeps playing from its tab copy (no reload, no jump).
+    const src = tabCopyRef.current.get(active.clip.srcUrl) ?? active.clip.srcUrl;
+    if (activeClipUrlRef.current !== src) {
+      activeClipUrlRef.current = src;
+      v.src = src;
       v.load();
     }
     v.muted = active.clip.muted;
@@ -559,9 +615,10 @@ export function VideoComposer({
       if (!a.paused) a.pause();
       return;
     }
-    if (a.getAttribute('data-bgm-src') !== bgm.srcUrl) {
-      a.setAttribute('data-bgm-src', bgm.srcUrl);
-      a.src = bgm.srcUrl;
+    const bgmSrc = tabCopyRef.current.get(bgm.srcUrl) ?? bgm.srcUrl;
+    if (a.getAttribute('data-bgm-src') !== bgmSrc) {
+      a.setAttribute('data-bgm-src', bgmSrc);
+      a.src = bgmSrc;
       a.load();
     }
     a.volume = bgm.volume;
@@ -1341,6 +1398,33 @@ export function VideoComposer({
 
   /* ---------------------------------------------------------------- Local File Uploads */
 
+  /**
+   * The device-file hooks (A8): a finished upload switches every cut, the music and the uploads list to the
+   * asset in place (no undo step; the preview keeps its tab copy). What goes up, and the lines shown, are decided
+   * in device-uploads.ts.
+   */
+  const runDeviceUploads = (picks: DevicePick[]) =>
+    startDeviceUploads(picks, {
+      start: (blobUrl, file, measured) => deviceRuns.start(blobUrl, file, measured),
+      canCreate,
+      ...(uploadCopy ? { uploadCopy } : {}),
+      tooLongTemplate: copy.status.deviceTooLong,
+      setState: (blobUrl, state) =>
+        setDeviceFiles((prev) => {
+          if (state) return { ...prev, [blobUrl]: state };
+          const { [blobUrl]: _settled, ...rest } = prev;
+          return rest;
+        }),
+      adopted: (blobUrl, asset, adoption) => {
+        adoptionsRef.current.set(blobUrl, adoption);
+        tabCopyRef.current.set(adoption.srcUrl, blobUrl);
+        setHistory((h) => mapHistory(h, (p) => adoptDeviceUpload(p, blobUrl, adoption)));
+        setAssets((prev) => (prev.some((a) => a.id === asset.id) ? prev : [asset, ...prev]));
+        setLocalMediaItems((prev) => prev.filter((item) => item.url !== blobUrl));
+      },
+      say: setStatusMessage,
+    });
+
   const handleLocalFilePick = async (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []);
     event.target.value = '';
@@ -1348,16 +1432,14 @@ export function VideoComposer({
 
     let current = project;
     let addedVideo = false;
+    // Uploads start after the timeline holds the new cuts, so a fast upload always has a cut to switch.
+    const picks: DevicePick[] = [];
     for (const file of files) {
-      const isVideo = file.type === 'video/mp4' || file.type === 'video/quicktime' || /\.(mp4|mov)$/i.test(file.name);
-      const isAudio = file.type === 'audio/mpeg' || file.type === 'audio/wav' || /\.(mp3|wav)$/i.test(file.name);
-      const isImage =
-        file.type === 'image/jpeg' ||
-        file.type === 'image/png' ||
-        file.type === 'image/webp' ||
-        /\.(jpe?g|png|webp)$/i.test(file.name);
+      const kind = deviceFileKind(file);
+      const isVideo = kind === 'video';
+      const isImage = kind === 'image';
 
-      if (!isVideo && !isAudio && !isImage) {
+      if (!kind) {
         setStatusMessage(copy.status.unsupportedFile);
         continue;
       }
@@ -1382,6 +1464,7 @@ export function VideoComposer({
         if (sourceTab === 'color') {
           void handleMatchColorReference({ label: cleanLabel, url: objectUrl, kind: 'image' });
         }
+        picks.push({ blobUrl: objectUrl, file, kind: 'image', measured: {} });
         continue;
       }
 
@@ -1424,12 +1507,14 @@ export function VideoComposer({
           },
         };
       }
+      picks.push({ blobUrl: objectUrl, file, kind: isVideo ? 'video' : 'audio', measured });
       setStatusMessage(interpolate(copy.status.localClipAdded, { name: file.name }));
     }
     if (current !== project) {
       commitProject(current);
       if (addedVideo) setSelectedClipIdx(Math.max(0, current.clips.length - 1));
     }
+    void runDeviceUploads(picks);
   };
 
   const handleGradeRefFilePick = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -1823,7 +1908,7 @@ export function VideoComposer({
             <span>{copy.sources.browser.uploadBtn}</span>
             <input
               type="file"
-              accept="video/mp4,video/quicktime,audio/mpeg,audio/wav,image/jpeg,image/png,image/webp,.mp4,.mov,.mp3,.wav,.jpg,.jpeg,.png,.webp"
+              accept={DEVICE_FILE_ACCEPT}
               multiple
               hidden
               onChange={(e) => void handleLocalFilePick(e)}
@@ -1875,6 +1960,9 @@ export function VideoComposer({
               <p className={s.sourceName} title={item.label}>
                 {item.label}
               </p>
+              {item.sourceKind === 'local' ? (
+                <DeviceFileNote state={deviceFiles[item.url]} uploading={uploadCopy?.uploading} tabOnly={copy.sources.tabOnly} />
+              ) : null}
               <div className={s.cardActions}>
                 {mode === 'timeline' && item.kind === 'video' ? (
                   <button
@@ -2347,7 +2435,7 @@ export function VideoComposer({
                     <span>{copy.musicGen.uploadAudioBtn}</span>
                     <input
                       type="file"
-                      accept="audio/mpeg,audio/wav,.mp3,.wav"
+                      accept={deviceFileAccept('audio')}
                       hidden
                       onChange={(e) => void handleLocalFilePick(e)}
                       data-compose-audio-upload-input
@@ -3024,6 +3112,7 @@ export function VideoComposer({
                       <p className={s.sourceName} title={clip.label}>
                         {clip.label}
                       </p>
+                      <DeviceFileNote state={deviceFiles[clip.srcUrl]} uploading={uploadCopy?.uploading} tabOnly={copy.sources.tabOnly} />
 
                       {visibleTicks.length > 0 ? (
                         <div className={s.cutTickTrack} data-compose-cut-ticks={index}>
@@ -3105,6 +3194,7 @@ export function VideoComposer({
                   {shownProject.bgm.nonCommercialGuide ? (
                     <span className={s.summaryBadge}>CC BY-NC 4.0</span>
                   ) : null}
+                  <DeviceFileNote state={deviceFiles[shownProject.bgm.srcUrl]} uploading={uploadCopy?.uploading} tabOnly={copy.sources.tabOnly} />
                 </div>
                 <label className={s.headerActions} {...lockAttrs}>
                   <span>{copy.timeline.bgmVolume}</span>
