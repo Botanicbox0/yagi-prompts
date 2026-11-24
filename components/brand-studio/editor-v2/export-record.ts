@@ -6,8 +6,9 @@
  * `params.source = 'compose'`). The admin organization page, the organization list's last activity and the
  * per-member runs read that row. The service checks the person may create (owner or editor, not a guest).
  *
- * Asked once per export the person starts (export-job.ts), only for the organization's own film. Unlike the
- * current editor, the export never waits for it: a record that is refused, fails or hangs changes nothing about
+ * Asked once per export that really makes pictures (export-job.ts: at its first progress report of the picture
+ * phase, after the export's own checks before the first frame), only for the organization's own film; an export
+ * refused before its first frame leaves none. Unlike the current editor, the export never waits for it: a record that is refused, fails or hangs changes nothing about
  * the file. The request id starts with `ed2_` (the current editor's export ids start with `cmp_`), so the row
  * says which editor made the file without anything new on the server.
  */

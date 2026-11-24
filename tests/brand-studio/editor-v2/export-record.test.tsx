@@ -20,10 +20,15 @@ import { studioDeps, studioFixture, viewerOf, type StudioFixture } from '../serv
  *
  * The current editor asks for that record on every press of its export button
  * (components/brand-studio/compose/video-composer.tsx, `handleExport`). The new editor asks for the same record,
- * through the same request helper, once when an export of the organization's own film starts:
+ * through the same request helper, once per export of the organization's own film that really starts making
+ * pictures: at the export's first progress report of the picture phase, which `exportFilm` sends only after its
+ * own checks before the first frame (empty film, no encoder for that size and rate, no sound encoder, sound
+ * sources over the limit, footage or overlays that do not load) have passed (review round 1, item 1).
+ * - never for an export that stops before its first frame, so a refused press repeated leaves nothing;
  * - never for the sample film (it has no organization film);
  * - never again when the export starts over by itself after the browser took its encoder back (`restarts`);
- * - again for a new press after a cancel or a failure, as the current editor records every press;
+ * - kept when an export that started is cancelled or fails later, as the current editor's is; a new press is
+ *   a new record once it starts;
  * - never waiting for it: a record that is refused, fails or hangs leaves the export exactly as it was.
  *   (Here the new editor differs on purpose: the current editor stops its export when the record fails.)
  */
@@ -51,7 +56,7 @@ const RESULT: ExportFilmResult = {
   restarts: 0,
 } as unknown as ExportFilmResult;
 
-type Progress = { phase: 'video' | 'audio'; done: number; total: number; restarts?: number };
+type Progress = { phase: 'video' | 'audio'; done: number; total: number; restarts?: number; path?: 'seek' | 'decoder' };
 
 interface Harness {
   job: typeof import('@/components/brand-studio/editor-v2/export-job');
@@ -141,14 +146,19 @@ afterEach(() => {
   vi.resetModules();
 });
 
-describe('the export job asks for the record once per export the person starts', () => {
-  it('asks once when an export of the organization’s film starts, through the compose route, and does not wait for it', async () => {
+/** The export's first progress report of the picture phase: it has passed its checks and makes frames. */
+const FIRST_FRAME: Progress = { phase: 'video', done: 1, total: 48 };
+
+describe('the export job asks for the record once per export that starts making pictures', () => {
+  it('asks once at the first picture of an export of the organization’s film, through the compose route, and does not wait for it', async () => {
     const h = await harness(never);
     stubWindow();
     h.job.startExport(request({ recordFor: ORG }));
-    // The record hangs forever: the pictures are already being made.
+    // Pressed, not started yet: the export is still running its own checks before the first frame.
     expect(h.started()).toBe(1);
     expect(h.job.exportJobSnapshot().status).toBe('running');
+    expect(h.fetch).not.toHaveBeenCalled();
+    h.report(FIRST_FRAME);
     expect(h.fetch).toHaveBeenCalledTimes(1);
     const [url, init] = h.fetch.mock.calls[0]! as [string, RequestInit];
     expect(url).toBe('/api/brand-studio/compose');
@@ -159,21 +169,53 @@ describe('the export job asks for the record once per export the person starts',
     expect(body!.input.organizationId).toBe(ORG);
     expect(body!.input.durationSec).toBe(2);
     expect(String(body!.input.requestId)).toMatch(SERVICE_REQUEST_ID);
+    // The record hangs forever: the pictures go on, and the file is made.
+    for (let done = 2; done <= 48; done += 1) h.report({ phase: 'video', done, total: 48 });
+    h.report({ phase: 'audio', done: 1, total: 1 });
     await h.finish();
     expect(h.job.exportJobSnapshot().status).toBe('done');
     expect(h.fetch).toHaveBeenCalledTimes(1);
   });
 
+  it('the seek path’s first report (frame 0, before its first picture) counts as the start', async () => {
+    const h = await harness(okRecord);
+    stubWindow();
+    h.job.startExport(request({ recordFor: ORG }));
+    h.report({ phase: 'video', done: 0, total: 48, path: 'seek' });
+    h.report({ phase: 'video', done: 1, total: 48, path: 'seek' });
+    expect(recordBodies(h)).toHaveLength(1);
+    await h.finish();
+  });
+
+  for (const reason of ['empty', 'unsupported', 'memory', 'load'] as const) {
+    it(`an export that stops before its first frame (${reason}) leaves no record, however often it is pressed`, async () => {
+      const h = await harness(okRecord);
+      stubWindow();
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      for (let press = 1; press <= 3; press += 1) {
+        h.job.startExport(request({ recordFor: ORG }));
+        await h.stop(new h.ExportStop(reason, `refused before the first frame (${reason})`));
+        const now = h.job.exportJobSnapshot();
+        expect(now.status === 'failed' && now.reason).toBe(reason);
+      }
+      expect(h.started()).toBe(3);
+      expect(h.fetch).not.toHaveBeenCalled();
+      warn.mockRestore();
+    });
+  }
+
   it('the sample film (no organization film) records nothing and still exports', async () => {
     const h = await harness(okRecord);
     stubWindow();
     h.job.startExport(request());
+    h.report(FIRST_FRAME);
     expect(h.started()).toBe(1);
     await h.finish();
     expect(h.job.exportJobSnapshot().status).toBe('done');
     expect(h.fetch).not.toHaveBeenCalled();
     // An empty organization id is no organization either.
     h.job.startExport(request({ recordFor: '' }));
+    h.report(FIRST_FRAME);
     await h.finish();
     expect(h.fetch).not.toHaveBeenCalled();
   });
@@ -182,8 +224,11 @@ describe('the export job asks for the record once per export the person starts',
     const h = await harness(okRecord);
     stubWindow();
     h.job.startExport(request({ recordFor: ORG }));
+    h.report(FIRST_FRAME);
     h.report({ phase: 'video', done: 30, total: 48 });
+    expect(recordBodies(h)).toHaveLength(1);
     h.report({ phase: 'video', done: 0, total: 48, restarts: 1 });
+    h.report({ phase: 'video', done: 1, total: 48, restarts: 1 });
     h.report({ phase: 'audio', done: 0, total: 1, restarts: 2 });
     const now = h.job.exportJobSnapshot();
     expect(now.status === 'running' && now.restarts).toBe(2);
@@ -192,31 +237,61 @@ describe('the export job asks for the record once per export the person starts',
     expect(recordBodies(h)).toHaveLength(1);
   });
 
+  it('an export whose first report is already a restart had started (its encoder was made): one record', async () => {
+    const h = await harness(okRecord);
+    stubWindow();
+    h.job.startExport(request({ recordFor: ORG }));
+    h.report({ phase: 'video', done: 0, total: 48, restarts: 1 });
+    h.report({ phase: 'video', done: 1, total: 48, restarts: 1 });
+    expect(recordBodies(h)).toHaveLength(1);
+    await h.finish();
+  });
+
   it('a second press while it runs starts nothing and records nothing', async () => {
     const h = await harness(okRecord);
     stubWindow();
     h.job.startExport(request({ recordFor: ORG }));
+    h.report(FIRST_FRAME);
     h.job.startExport(request({ recordFor: ORG }));
+    h.report({ phase: 'video', done: 2, total: 48 });
     expect(h.started()).toBe(1);
     expect(recordBodies(h)).toHaveLength(1);
     await h.finish();
   });
 
-  it('a new press after a cancel or a failure is a new export and a new record, as the current editor records every press', async () => {
+  it('cancelled before its first frame: no record, even if a report slips out after the cancel', async () => {
     const h = await harness(okRecord);
     stubWindow();
     h.job.startExport(request({ recordFor: ORG }));
     h.job.cancelExport();
+    h.report(FIRST_FRAME);
     await h.stop(new h.ExportStop('cancelled', 'cancelled'));
     expect(h.job.exportJobSnapshot().status).toBe('failed');
+    expect(h.fetch).not.toHaveBeenCalled();
+  });
+
+  it('an export that started keeps its record when cancelled or failing later; a new press is a new record once it starts', async () => {
+    const h = await harness(okRecord);
+    stubWindow();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     h.job.startExport(request({ recordFor: ORG }));
+    h.report(FIRST_FRAME);
+    h.job.cancelExport();
+    await h.stop(new h.ExportStop('cancelled', 'cancelled'));
+    expect(h.job.exportJobSnapshot().status).toBe('failed');
+    expect(recordBodies(h)).toHaveLength(1);
+    h.job.startExport(request({ recordFor: ORG }));
+    h.report(FIRST_FRAME);
     await h.stop(new h.ExportStop('encode', 'encoder closed'));
+    expect(recordBodies(h)).toHaveLength(2);
     h.job.startExport(request({ recordFor: ORG }));
+    h.report(FIRST_FRAME);
     await h.finish();
     const bodies = recordBodies(h);
     expect(h.started()).toBe(3);
     expect(bodies).toHaveLength(3);
     expect(new Set(bodies.map((body) => body.input.requestId)).size).toBe(3);
+    warn.mockRestore();
   });
 
   const failures: Array<[string, () => Promise<Response>]> = [
@@ -232,8 +307,11 @@ describe('the export job asks for the record once per export the person starts',
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
       const notify = vi.fn();
       h.job.startExport(request({ recordFor: ORG, notify }));
+      h.report(FIRST_FRAME);
+      expect(h.fetch).toHaveBeenCalledTimes(1);
       await tick();
       expect(h.job.exportJobSnapshot().status).toBe('running');
+      h.report({ phase: 'video', done: 48, total: 48 });
       await h.finish();
       const done = h.job.exportJobSnapshot();
       expect(done.status).toBe('done');
@@ -288,6 +366,8 @@ describe('the export sheet asks for the record only on the organization’s own 
     const api = press(h, real(true));
     expect(api.organizationId).toBe(ORG);
     expect(h.started()).toBe(1);
+    expect(h.fetch).not.toHaveBeenCalled();
+    h.report(FIRST_FRAME);
     const bodies = recordBodies(h);
     expect(bodies).toHaveLength(1);
     expect(bodies[0]).toMatchObject({ operation: 'render.reserve', input: { organizationId: ORG, durationSec: 2 } });
@@ -299,6 +379,7 @@ describe('the export sheet asks for the record only on the organization’s own 
     const api = press(h, null);
     expect(api.organizationId).toBeNull();
     expect(h.started()).toBe(1);
+    h.report(FIRST_FRAME);
     expect(h.fetch).not.toHaveBeenCalled();
     await h.finish();
   });
