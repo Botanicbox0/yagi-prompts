@@ -14,6 +14,7 @@ import { loadRoomOverview, roomUnreadCounts } from '@/lib/brand-rooms/overview';
 import { studioEnv } from '@/lib/brand-studio/env';
 import { createStudioMediaStore } from '@/lib/brand-studio/media-store';
 import { jobsOf, viewsOf } from '@/lib/brand-studio/repo';
+import { allowanceViewWithRefill } from '@/lib/brand-studio/allowance-refill';
 import { allowanceView, loadAllowance } from '@/lib/brand-studio/usage';
 import { billingPlanCatalogue } from '@/lib/brands/billing-page-data';
 import { featureDenied, isSandboxedClientOrganization } from '@/lib/brands/features';
@@ -172,6 +173,10 @@ export default async function BrandWorkspaceHome({
   const activeProjects = workspace.projects.filter((p) => p.status === 'active').length;
   const studioLocale = locale === 'en' ? 'en' : 'ko';
   const dock = dict.brandStudio.dock;
+  // R4: the refill fact beside the window (no statement unless the base cap is 0); a failed read keeps today's view.
+  const allowanceForScreen = allowance
+    ? await allowanceViewWithRefill(sql, choice.id, allowance).catch(() => allowanceView(allowance))
+    : null;
 
   return (
     <WorkspaceHome
@@ -179,7 +184,7 @@ export default async function BrandWorkspaceHome({
       organizationName={choice.name}
       locale={studioLocale}
       layout={layout}
-      allowance={allowance ? allowanceView(allowance) : null}
+      allowance={allowanceForScreen}
       doors={homeDoorPictures(jobs, choice.id)}
       reviews={reviews}
       results={homeResults(jobs, choice.id)}
