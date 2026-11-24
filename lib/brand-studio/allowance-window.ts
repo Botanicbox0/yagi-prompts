@@ -50,3 +50,45 @@ export function windowText<T>(window: KnownWindow, month: T, cycle: T): T {
 export function windowDayInstant(day: string): Date {
   return kstDayStartUtc(day);
 }
+
+/* ------------------------------------------------------------------ refill (R4) */
+
+export type AllowanceRefillKind = 'cycle' | 'month' | 'none';
+
+/**
+ * R4: whether the credits refill at the window's end. They do whenever the allowance has a base cap above 0 (a plan
+ * cycle, an allowance override, an env default above 0); then the view carries no `refill` at all and every screen keeps
+ * the words it has (`cycle` / `month` name those cases for readers). `none`: the base cap is 0 and the cap comes only
+ * from grants, so nothing refills on a date. `trialThrough`: the organization's credits are its trial (an unrevoked
+ * trial grant counts now) — the last KST day (`YYYY-MM-DD`) the trial can be used, from the admin side's rule
+ * (lib/brands/billing/workspace-approval.ts `usableThrough`). Loaded by lib/brand-studio/allowance-refill.ts.
+ */
+export interface AllowanceRefillView {
+  kind: AllowanceRefillKind;
+  trialThrough?: string;
+}
+
+type KnownRefill = Pick<AllowanceRefillView, 'kind' | 'trialThrough'> | null | undefined;
+
+/**
+ * How a screen words the refill: today's words (`refills`, also for a view without the fact), the trial words with the
+ * trial's last day (`trial`), or no refill sentence at all (`hidden`, extra credits without a trial).
+ */
+export type RefillWording = { kind: 'refills' } | { kind: 'trial'; through: string } | { kind: 'hidden' };
+
+export function refillWording(refill: KnownRefill): RefillWording {
+  if (refill?.kind !== 'none') return { kind: 'refills' };
+  const through = refill.trialThrough;
+  return through && isValidCalendarDay(through) ? { kind: 'trial', through } : { kind: 'hidden' };
+}
+
+/**
+ * An existing sentence without its last sentence, for the `hidden` case: every customer string that carries the refill
+ * day carries it as its last sentence ("…남았어요. {date}에 다시 채워져요." → "…남았어요."), so no new sentence is
+ * written. Applied to the template before its placeholders are filled; tests/brands/billing-trial-copy.test.tsx pins
+ * every result. Empty when the text is one sentence.
+ */
+export function withoutLastSentence(text: string): string {
+  const cut = text.lastIndexOf('. ');
+  return cut < 0 ? '' : text.slice(0, cut + 1);
+}

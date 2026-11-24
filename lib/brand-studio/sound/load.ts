@@ -8,7 +8,8 @@ import type { StudioAllowanceView, StudioJobView } from '../contracts';
 import type { StudioEnv } from '../env';
 import { assetView, assetsOf, viewsOf } from '../repo';
 import type { AssetRow, JobRow } from '../types';
-import { allowanceView, loadAllowance } from '../usage';
+import { allowanceViewWithRefill } from '../allowance-refill';
+import { loadAllowance } from '../usage';
 import { mergeTracks, musicTracks, soundTracks, type SoundTrackView } from './library';
 import { soundVideos, type SoundVideoView } from './video-fit';
 
@@ -91,5 +92,5 @@ export async function loadSoundStudio(
     loadSoundVideos(sql, media, organizationId),
   ]);
   const made = musicTracks(organizationId, jobs, likes.rows.map((row) => `o:${row.output_id}`));
-  return { tracks: mergeTracks(made, files), jobs, allowance: allowanceView(allowance), videos };
+  return { tracks: mergeTracks(made, files), jobs, allowance: await allowanceViewWithRefill(sql, organizationId, allowance), videos };
 }

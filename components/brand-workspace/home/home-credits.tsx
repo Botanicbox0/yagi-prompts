@@ -1,11 +1,10 @@
 'use client';
 /**
- * The home's credits line: the rail meter's own figures and sentence (`meterFigures`, `credits.summary`),
+ * The home's credits line: the rail meter's own figures and sentence (`meterFigures`, `meterSummary`),
  * so the two never disagree. Credits only; the allowance in won never reaches the screen.
  */
-import { interpolate } from '@/lib/i18n/format';
 import type { StudioShellCopy } from '@/messages/studio-shell';
-import { meterFigures, type RailSummary } from '../rail-activity';
+import { meterFigures, meterSummary, type RailSummary } from '../rail-activity';
 
 export function HomeCredits({
   allowance,
@@ -22,7 +21,7 @@ export function HomeCredits({
   if (!figures) return null;
   return (
     <p className={className} data-home-credits data-low={figures.ratio < 0.1 ? 'true' : undefined}>
-      {interpolate(copy.credits.summary, { left: figures.leftText, total: figures.totalText, date: figures.date })}
+      {meterSummary(figures, copy)}
     </p>
   );
 }

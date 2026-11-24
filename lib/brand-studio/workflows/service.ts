@@ -22,7 +22,8 @@ import { normalizeLegacyStudioModelId, studioModelOrLegacy } from '@/lib/brand-s
 import { failure, guarded } from '@/lib/brand-studio/outcome';
 import { jobsByIds, jobsOf, openJobCount, readyAsset, readyOutput, tagsOf, viewsOf } from '@/lib/brand-studio/repo';
 import type { OutputRow, StudioDeps } from '@/lib/brand-studio/types';
-import { allowanceView, loadAllowance } from '@/lib/brand-studio/usage';
+import { allowanceViewWithRefill, loadAllowanceViewWithRefill } from '@/lib/brand-studio/allowance-refill';
+import { loadAllowance } from '@/lib/brand-studio/usage';
 import { imageRunKrw } from '@/lib/brand-studio/usage-rate';
 import { buildWorkflowWithAi, withoutStepPresets } from './ai-builder';
 import { verifyCharacterSheetConsistency, type ConsistencyCandidateSheet } from './consistency';
@@ -274,7 +275,7 @@ export async function loadWorkflowsHubState(
       return {
         ok: true as const,
         canCreate: seat.canCreate,
-        allowance: allowanceView(allowance),
+        allowance: await allowanceViewWithRefill(sql, organizationId, allowance, { now }),
         starters: [...STARTER_WORKFLOWS],
         workflows,
         playbooks,
@@ -1359,7 +1360,7 @@ export async function runWorkflow(
       const rawJobs = await jobsByIds(sql, v.organizationId, orderedJobIds);
       const byId = new Map((await viewsOf(sql, rawJobs, deps.media)).map((j) => [j.id, j]));
       const jobs = orderedJobIds.map((id) => byId.get(id)).filter((j): j is StudioJobView => Boolean(j));
-      const allowance = allowanceView(await loadAllowance(sql, v.organizationId, deps.env, deps.now?.() ?? new Date()));
+      const allowance = await loadAllowanceViewWithRefill(sql, v.organizationId, deps.env, deps.now?.() ?? new Date());
       return { folder, jobs, allowance };
     }),
   );

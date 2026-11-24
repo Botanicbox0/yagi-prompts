@@ -308,7 +308,7 @@ export async function loadWorkspaceApprovalPanel(
   const today = kstDayOf(now);
   const view = (grant: BrandTrialGrant | null): BrandTrialGrantView | null => {
     if (!grant) return null;
-    const activeNow = grant.revokedAt === null && grant.validMonth === month;
+    const activeNow = trialGrantActive(grant, month);
     return { ...grant, activeNow, daysLeft: activeNow ? diffCalendarDays(grant.validThrough, today) + 1 : 0 };
   };
   const approval = await selectApproval(sql, organizationId);
@@ -335,10 +335,52 @@ export async function loadWorkspaceApprovalPanel(
   };
 }
 
+/** A trial grant counts in `month` (KST `YYYY-MM`) while it is not revoked and that is its month. */
+function trialGrantActive(grant: Pick<BrandTrialGrant, 'revokedAt' | 'validMonth'>, month: string): boolean {
+  return grant.revokedAt === null && grant.validMonth === month;
+}
+
+/** What the customer screens need to know about an organization's trial (R4). */
+export interface BrandTrialUsability {
+  /** An unrevoked trial grant (the original or its carry) counts in the current KST month. */
+  activeNow: boolean;
+  /** The panel's `usableThrough`: the last KST day the trial can be used; null when revoked or absent. */
+  usableThrough: string | null;
+}
+
+/**
+ * R4, the customer side's one read of the trial: both trial grants of the organization (the original and its carry, at
+ * most one each) in ONE statement, judged with the admin panel's own rules (`trialGrantActive`, `usableThrough`), so the
+ * customer and the admin see the same day. Flag off, an id that is not a uuid, or 0184 not applied: null, with no
+ * statement beyond the cached schema probe.
+ */
+export async function loadTrialUsability(
+  sql: SqlRunner,
+  organizationId: string,
+  options: { now?: Date; env?: Env } = {},
+): Promise<BrandTrialUsability | null> {
+  if (!brandWorkspaceApprovalOpen(options.env)) return null;
+  if (!z.string().uuid().safeParse(organizationId).success) return null;
+  if (!(await loadWorkspaceApprovalSchemaReady(sql))) return null;
+  const grants = (
+    await sql.query<GrantRow>(`select ${GRANT_COLUMNS} from brand_allowance_grants where organization_id = $1 and kind = 'trial'`, [
+      organizationId,
+    ])
+  ).rows.map(trialGrantOf);
+  const original = grants.find((grant) => grant.carriedFrom === null) ?? null;
+  const carried = original ? (grants.find((grant) => grant.carriedFrom === original.id) ?? null) : null;
+  const month = kstMonthOf(options.now ?? new Date());
+  return {
+    activeNow: [original, carried].some((grant) => grant !== null && trialGrantActive(grant, month)),
+    usableThrough: usableThrough(original, carried),
+  };
+}
+
 /**
  * The last day the trial can still be used, from whichever grant is (or may become) active: the carried grant while it
  * is not revoked; else the original while it is not revoked — through the next month while its carry is still to
  * come, through its own month once the carry found nothing left. Null when both are revoked or there is no trial.
+ * Shared by the admin panel and the customer screens (`loadTrialUsability`).
  */
 function usableThrough(original: BrandTrialGrant | null, carried: BrandTrialGrant | null): string | null {
   if (carried && carried.revokedAt === null) return carried.validThrough;
