@@ -118,10 +118,19 @@ describe('the sheet names it and says what to do', () => {
     });
   }
 
-  it('music and effects point to the earlier editor, where they are changed today', () => {
+  it('music points to the earlier editor, where it is changed today; an effect has no such place, so its line sends nobody there (review item 3)', () => {
     expect(studioEditorKo.export.failed.soundMusic).toContain('예전 편집기');
-    expect(studioEditorKo.export.failed.soundEffect).toContain('예전 편집기');
     expect(studioEditorEn.export.failed.soundMusic).toMatch(/earlier editor/);
-    expect(studioEditorEn.export.failed.soundEffect).toMatch(/earlier editor/);
+    expect(studioEditorKo.export.failed.soundEffect).not.toContain('편집기');
+    expect(studioEditorEn.export.failed.soundEffect).not.toMatch(/editor/);
+    expect(studioEditorKo.export.failed.soundEffect).toContain('다시 시도');
+    expect(studioEditorEn.export.failed.soundEffect).toMatch(/try again/i);
+  });
+
+  it('a cut’s sound: the advice covers every cut of that clip, not one cut (review item 2)', () => {
+    expect(studioEditorKo.export.failed.soundCut).toContain('클립');
+    expect(studioEditorKo.export.failed.soundCut).toContain('모두');
+    expect(studioEditorEn.export.failed.soundCut).toMatch(/clip/);
+    expect(studioEditorEn.export.failed.soundCut).toMatch(/every cut/);
   });
 });

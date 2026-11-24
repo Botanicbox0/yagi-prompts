@@ -209,7 +209,14 @@ describe('the cut panel and the timeline show the missing file', () => {
       expect(copy.real.sourceMissing).not.toBe(copy.real.rateUnknown);
       expect(copy.export.sourceMissing).not.toBe(copy.export.rateUnknown);
       expect(copy.export.sourceMissing).toContain('{clip}');
+      // No replace action exists in this editor: the lines do not offer one (review item 9).
+      expect(`${copy.real.sourceMissing} ${copy.export.sourceMissing}`).not.toMatch(/바꿔|교체|replace/i);
     }
+    // Split pieces share a file: the advice covers every cut of that clip (review item 2).
+    expect(studioEditorKo.real.sourceMissing).toContain('모두');
+    expect(studioEditorKo.export.sourceMissing).toContain('모두');
+    expect(studioEditorEn.real.sourceMissing).toMatch(/every cut/);
+    expect(studioEditorEn.export.sourceMissing).toMatch(/every cut/);
   });
 });
 

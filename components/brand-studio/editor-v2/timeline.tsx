@@ -460,7 +460,7 @@ export function Timeline({ api }: { api: EditorApi }) {
                   <span className={styles.clipBadge}>{span.index + 1}</span>
                   {look && <span className={styles.clipLook} data-source={look.source} />}
                   {missing ? (
-                    // The file is not there (audit A4): the speed badge's place says so; the panel says what to do.
+                    // The file is confirmed missing (audit A4): the speed badge's place says so; the panel says what to do.
                     <span className={styles.clipRate}>{copy.timeline.missing}</span>
                   ) : span.clip.speedCurve ? (
                     <span className={styles.clipRate}>{copy.cut.clip.speedCurveBadge}</span>

@@ -183,7 +183,7 @@ type ExportCopy = EditorApi['copy']['export'];
 
 /**
  * Why the export cannot start, in this order: only looking, nothing to export, a browser that cannot, a cut
- * whose file is not there (`missing`, audit A4), a cut whose footage rate is not measured yet (`rate`: it
+ * whose file is confirmed missing (`missing`, audit A4: a 404 the organization's record confirms), a cut whose footage rate is not measured yet (`rate`: it
  * cannot be exported frame-exactly). The last two are the organization's film only, and name the first such cut.
  */
 export type ExportBlock = { as: 'read-only' | 'empty' | 'unsupported'; clip: null } | { as: 'missing' | 'rate'; clip: FrameClip };

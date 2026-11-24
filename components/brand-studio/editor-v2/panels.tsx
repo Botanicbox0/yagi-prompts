@@ -563,7 +563,8 @@ function CutPanel({ api }: { api: EditorApi }) {
       const dims = COMPOSE_DIMENSIONS[sequence.aspect];
       const outFrame = clipFrameAt(clip, clip.frames - 1, fps).mediaFrame + 1;
       const canSlide = !!material && material.ratio > dims.width / dims.height + 0.01 && reframe.fit === 'fill';
-      // A file that is not there says so, before (and instead of) "the rate has not been read yet" (audit A4).
+      // A file confirmed missing (a 404 the organization's record confirms) says so, before (and instead of) "the rate
+      // has not been read yet" (audit A4). A 404 alone keeps the old line.
       const missing = api.real && !!api.missingSources[clip.srcUrl];
       const rateUnknown = api.real && !!api.unknownRates[clip.srcUrl];
       return (

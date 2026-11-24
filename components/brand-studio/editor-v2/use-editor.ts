@@ -1172,7 +1172,7 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
     rates,
     unknownRates,
     variableRates,
-    /** Footage whose file is not there (404 / 410): its cuts say so, and the export is blocked for it (audit A4). */
+    /** Footage confirmed missing (a 404/410 the organization's record confirms): its cuts say so, and the export is blocked for it (audit A4). */
     missingSources,
     /** No cut's rate is measured yet: the film's rate is a stand-in and nothing frame-based is stored. */
     tentative,
