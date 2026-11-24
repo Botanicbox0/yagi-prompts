@@ -194,6 +194,8 @@ export const studioSoundEn = {
     redesign: 'Redesign description',
     paused: 'Please try again in a moment.',
     allowance: 'Not enough credits this month.',
+    // 대표 확인 대기 (2026-11-24): 로컬 Gemma 초안, 용어 "이번 이용 기간"
+    allowanceCycle: 'Not enough credits.',
     closed: "Creating music isn't available for this workspace right now.",
     busy: 'Too much music is being made at once. Please try again shortly.',
     generic: 'Something went wrong. Please try again.',
@@ -361,6 +363,8 @@ export const studioSoundKo: StudioSoundCopy = {
     redesign: '다르게 설계하기',
     paused: '잠시 뒤에 다시 시도해 주세요.',
     allowance: '이번 달 크레딧이 부족해요.',
+    // 대표 확인 대기 (2026-11-24): 로컬 Gemma 초안, 용어 "이번 이용 기간"
+    allowanceCycle: '크레딧이 부족해요.',
     closed: '지금은 이 워크스페이스에서 음악을 만들 수 없어요.',
     busy: '동시에 만드는 음악이 너무 많아요. 잠시 후 다시 시도해 주세요.',
     generic: '문제가 생겼어요. 다시 시도해 주세요.',
