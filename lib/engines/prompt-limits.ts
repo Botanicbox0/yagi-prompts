@@ -53,3 +53,28 @@ export function templatePromptCharLimit(template: { medium: string; engine: stri
 export function formatPromptChars(n: number): string {
   return n.toLocaleString('en-US');
 }
+
+/** One clip of a template (a prompt the compile reads) and how long it is against its limit (lib/prompts/prompt-length.ts). */
+export interface ClipLength {
+  /** 1-based, in the order the compile reads them. */
+  clip: number;
+  /** The recipe step, or null for a plain template's main text. */
+  stepId: string | null;
+  chars: number;
+  limit: number;
+}
+
+const REFUSAL = /prompt length: clip (\d+)(?: \(step [a-z][a-z0-9_]*\))? is ([\d,]+) characters; Seedance 2\.5 takes up to ([\d,]+) per clip/;
+
+/** A refusal a person can read as is; the admin screens read it back into their own sentence (`readPromptLengthRefusal`). */
+export function promptLengthRefusalDetail(field: string, clip: ClipLength): string {
+  const step = clip.stepId ? ` (step ${clip.stepId})` : '';
+  return `${field}: prompt length: clip ${clip.clip}${step} is ${formatPromptChars(clip.chars)} characters; Seedance 2.5 takes up to ${formatPromptChars(clip.limit)} per clip`;
+}
+
+export function readPromptLengthRefusal(detail: unknown): { clip: number; chars: number; limit: number } | null {
+  const match = typeof detail === 'string' ? REFUSAL.exec(detail) : null;
+  if (!match) return null;
+  const n = (s: string) => Number(s.replace(/,/g, ''));
+  return { clip: n(match[1]!), chars: n(match[2]!), limit: n(match[3]!) };
+}

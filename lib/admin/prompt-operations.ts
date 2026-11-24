@@ -19,6 +19,7 @@ import {
   setPromptTextVisibility,
   updatePrompt,
   updatePromptMedia,
+  type PromptRow,
 } from '@/lib/prompts/repo';
 import {
   ApprovalSchema,
@@ -54,7 +55,7 @@ import { checkStylingBlock, stylingBlockRefusalDetail, stylingRequiredDetail } f
 import { planStylingDeclaration, templateCardStyling } from '@/lib/template-director/compile-prompts';
 import { recipeSchemaReady } from '@/lib/recipes/repo';
 import { TEMPLATE_AUDIENCES, type TemplateAudience } from '@/lib/template-look/look';
-import { formatPromptChars, templatePromptCharLimit } from '@/lib/engines/prompt-limits';
+import { promptLengthRefusal, promptLengthUpdateRefusal, type TemplateLengthInput } from '@/lib/prompts/prompt-length';
 import { fail, ok, type AdminContext, type AdminOutcome } from './context';
 import * as f from './form';
 import type { AdminOperation, ParseResult } from './operations';
@@ -316,6 +317,9 @@ const createPrompt: AdminOperation<{ input: z.infer<typeof AuthoringSchema>; for
     const required = stylingRequiredRefusal('promptText', input.promptText, template.value.cast);
     if (required !== null) return fail('stylingRequired', required);
     const { look, ...fields } = template.value;
+    // Founder 2026-11-25: a new template is live at once, so every Seedance 2.5 clip must fit (lib/prompts/prompt-length.ts).
+    const length = promptLengthRefusal('promptText', { promptText: input.promptText, medium: fields.medium, engine: fields.engine, runtimeSeconds: fields.runtimeSeconds });
+    if (length !== null) return fail('invalid', length);
     const lookRefused = await lookRefusal(ctx, look);
     if (lookRefused !== null) return fail('invalid', lookRefused);
     const id = randomUUID();
@@ -495,6 +499,9 @@ const approve: AdminOperation<z.infer<typeof ApprovalSchema>> = {
   async run(ctx, input) {
     const row = await loadPromptById(ctx.sql, input.id);
     if (row === null || row.audience === 'brand') return fail('notFound', NOT_FOUND_DETAIL);
+    // Founder 2026-11-25: approving makes it live, so every Seedance 2.5 clip must fit (lib/prompts/prompt-length.ts).
+    const length = promptLengthRefusal('promptText', await lengthSource(ctx.sql, row));
+    if (length !== null) return fail('invalid', length);
 
     // §13.1 lifecycle: the copy to public keys happens at APPROVAL, which is the first moment the
     // bytes become marketing surface. Before that they sit in private staging, visible to admin
@@ -559,6 +566,10 @@ const editPrompt: AdminOperation<{ input: z.infer<typeof EditSchema>; form: Form
     const locks = lockBlockRefusal('promptText', input.promptText);
     if (locks !== null) return fail('invalid', locks);
     const { look, ...fields } = template.value;
+    // Founder 2026-11-25: a text over a clip's limit is refused, unless it shortens a clip that was already over.
+    const before = await lengthSource(ctx.sql, row);
+    const length = promptLengthUpdateRefusal('promptText', before, { ...before, promptText: input.promptText, medium: fields.medium, engine: fields.engine, runtimeSeconds: fields.runtimeSeconds });
+    if (length !== null) return fail('invalid', length);
     const lookRefused = await lookRefusal(ctx, look);
     if (lookRefused !== null) return fail('invalid', lookRefused);
     const lookBefore = look === undefined ? 'any' : (await loadPromptLook(ctx.sql, input.id)) ?? 'any';
@@ -630,6 +641,13 @@ const Archive = z.object({ id: Uuid, archived: z.boolean() });
 const archive: AdminOperation<z.infer<typeof Archive>> = {
   parse: (form) => parsed(Archive, { id: f.str(form, 'id'), archived: f.bool(form, 'archived') }),
   async run(ctx, input) {
+    if (!input.archived) {
+      // Founder 2026-11-25: back on sale only when every Seedance 2.5 clip fits (lib/prompts/prompt-length.ts).
+      const row = await loadPromptById(ctx.sql, input.id);
+      if (row === null) return fail('notFound', NOT_FOUND_DETAIL);
+      const length = promptLengthRefusal('promptText', await lengthSource(ctx.sql, row));
+      if (length !== null) return fail('invalid', length);
+    }
     const changed = await setPromptArchived(ctx.sql, input.id, input.archived);
     if (!changed) return fail('notFound', NOT_FOUND_DETAIL);
     ctx.revalidatePrompts?.();
@@ -739,6 +757,11 @@ const marks: AdminOperation<z.infer<typeof Marks>> = {
 // template styling: one declaration everywhere the compile reads (docs/PERSONAL-STUDIO.md §3.4.9, S2)
 // ---------------------------------------------------------------------------
 
+/** The saved row as the clip-length check reads it: its text, its recipe and the model it renders on. */
+async function lengthSource(sql: AdminContext['sql'], row: PromptRow): Promise<TemplateLengthInput> {
+  return { promptText: row.promptText, ...(await loadStylingSource(sql, row.id)), medium: row.medium, engine: row.engine, runtimeSeconds: row.runtimeSeconds };
+}
+
 /** The row's raw recipe and whether the render pass takes the recipe path at all (lib/template-director/compile-prompts.ts). */
 async function loadStylingSource(sql: AdminContext['sql'], id: string): Promise<{ recipe: unknown; recipeReady: boolean }> {
   const { rows } = await sql.query<{ recipe: unknown }>("select to_jsonb(p.*)->'recipe' as recipe from prompt_items p where id = $1", [id]);
@@ -769,17 +792,16 @@ const declareStyling: AdminOperation<z.infer<typeof DeclareStyling>> = {
       const row = rows[0];
       if (!row || row.audience === 'brand') return fail('notFound', NOT_FOUND_DETAIL);
       const cast = toTemplateCast(row.cast_kind);
+      const recipeReady = await recipeSchemaReady(tx);
       const plan = planStylingDeclaration(
-        { promptText: row.prompt_text, recipe: row.recipe, recipeReady: await recipeSchemaReady(tx), cast },
+        { promptText: row.prompt_text, recipe: row.recipe, recipeReady, cast },
         input.block,
       );
       if (!plan.ok) return fail('invalid', `declareStyling: ${plan.detail}`);
-      // Founder 2026-11-25: Seedance 2.5 takes 15,000 characters per clip. A block that pushes the main prompt past its
-      // model's limit is refused; a recipe's steps are held to theirs by the plan's recipe check.
-      const limit = templatePromptCharLimit({ medium: row.medium, engine: row.engine, runtimeSeconds: row.runtime_seconds });
-      if (limit !== null && plan.promptText.length > limit && plan.promptText.length > row.prompt_text.length) {
-        return fail('invalid', `declareStyling: with the block the prompt would run to ${formatPromptChars(plan.promptText.length)} characters; Seedance 2.5 takes up to ${formatPromptChars(limit)} per clip`);
-      }
+      // Founder 2026-11-25: a block that pushes a Seedance 2.5 clip past 15,000 characters is refused (removing one is not).
+      const engineOf = { medium: row.medium, engine: row.engine, runtimeSeconds: row.runtime_seconds };
+      const length = promptLengthUpdateRefusal('block', { promptText: row.prompt_text, recipe: row.recipe, recipeReady, ...engineOf }, { promptText: plan.promptText, recipe: plan.recipe, recipeReady, ...engineOf });
+      if (length !== null) return fail('invalid', `declareStyling: ${length}`);
       if (plan.recipeChanged) {
         const { rows: formats } = await tx.query<{ ready: boolean }>("select to_regclass('public.platform_formats') is not null as ready");
         if (formats[0]?.ready === true) {
