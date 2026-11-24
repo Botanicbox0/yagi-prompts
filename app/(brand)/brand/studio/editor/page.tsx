@@ -7,7 +7,7 @@ import { editorSources } from '@/lib/brand-studio/editor-v2/sources';
 import { createStudioMediaStore } from '@/lib/brand-studio/media-store';
 import { assetView, assetsOf, jobsOf, viewsOf } from '@/lib/brand-studio/repo';
 import { scopedHref } from '@/lib/brands/workspace/selection';
-import { brandStudioEditorV2DefaultFor, brandStudioEditorV2Open } from '@/lib/flags';
+import { brandStudioEditorV2DefaultFor, brandStudioEditorV2Open, brandWorkspacePrototypeLayerOpen } from '@/lib/flags';
 
 /**
  * `/brand/studio/editor` — the editing studio v2 (docs/BRAND-EDITING-STUDIO-V2.md §10, §11 V1).
@@ -20,8 +20,11 @@ import { brandStudioEditorV2DefaultFor, brandStudioEditorV2Open } from '@/lib/fl
  * For an organization on the list (`BRAND_STUDIO_EDITOR_V2_ORGS`, lib/flags.ts) it opens the
  * organization's own film: the film the current editor (`/brand/studio/compose`) keeps in this browser,
  * with the same clips the current editor offers (video assets and finished video-studio results, loaded
- * the same way). Every other organization, and `?sample=1`, gets the sample film, which reads and writes
- * nothing of the organization's, as the structure prototype did; `ws=` picks the workspace it opens on.
+ * the same way). Every other organization gets the sample film, which reads and writes nothing of the
+ * organization's, as the structure prototype did; `ws=` picks the workspace it opens on. A listed
+ * organization gets the sample film with `?sample=1` only while `BRAND_WORKSPACE_PROTOTYPE_LAYER=on` (the
+ * switch the current editor's link to it obeys); off, the address opens its own film and the own film's
+ * locked workspaces offer no sample film.
  * `exportPath=seek|decoder` forces the export's picture path for the checks (spec F, F5; no UI), and
  * `exportDownload=off` skips the finished file's automatic download for them (spec H, F9; no UI).
  */
@@ -51,7 +54,11 @@ export default async function StudioEditorV2Page({
   // one gets the sample film whatever the address says (`sample`, `clip`, anything): nothing of its own
   // is loaded or written, as before the switch (review round 1, item 2).
   const ownFilm = brandStudioEditorV2DefaultFor(choice.id);
-  if (!ownFilm || first(params.sample) === '1') {
+  // The sample film is part of the prototype layer, like the current editor's link to it (compose/page.tsx):
+  // off (the default), a listed organization's `?sample=1` opens its own film, and the film's locked
+  // workspaces offer no sample film.
+  const sampleFilm = brandWorkspacePrototypeLayerOpen();
+  if (!ownFilm || (sampleFilm && first(params.sample) === '1')) {
     return <EditorV2 copy={dict.studioEditor} currentEditorHref={currentEditorHref} initialWorkspace={initialWorkspace} exportPath={exportPath} autoDownload={autoDownload} real={null} />;
   }
 
@@ -80,7 +87,7 @@ export default async function StudioEditorV2Page({
         organizationName: choice.name,
         canEdit,
         sources: editorSources(choice.id, assets, videoOutputs),
-        sampleBase: scopedHref('/brand/studio/editor?sample=1', choice),
+        sampleBase: sampleFilm ? scopedHref('/brand/studio/editor?sample=1', choice) : null,
         gradeNames: { presets: dict.studioCompose.colorGrade.presets, reference: dict.studioCompose.colorGrade.activeRef },
       }}
     />

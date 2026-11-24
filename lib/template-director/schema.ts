@@ -310,6 +310,8 @@ export const PERSONAL_SHEET_LIMITS = {
   revertMax: 3,
   keepAddMax: 3,
   excludeAddMax: 3,
+  /** Locked parts one turn may report as asked for (docs/PERSONAL-STUDIO.md §3.3). */
+  lockedAskedMax: 8,
 } as const;
 
 export const PERSONAL_SHEET_BLOCKS = ['change', 'keep', 'exclude'] as const;
@@ -661,6 +663,12 @@ export const rawStage1SheetSchema = z.object({
     .nullish()
     .catch(null)
     .transform((value) => value ?? null),
+  /**
+   * docs/PERSONAL-STUDIO.md §3.3 — asked for only when the template has locks: the `lockedParts` entries this message
+   * asked to change. The model writes no line for them; the server counts the ones that name a real lock
+   * (`lockedAskCount`) so the screen can say the fixed part was left out. Absent or malformed = none.
+   */
+  lockedAsked: cappedModelList(z.string(), PERSONAL_SHEET_LIMITS.lockedAskedMax),
 });
 export type RawStage1SheetReading = z.output<typeof rawStage1SheetSchema>;
 
@@ -670,6 +678,73 @@ export const rawStage2RewriteSchema = z.object({
   preservedAudioRule: z.boolean(),
   preservedIdentityStrictLock: z.boolean()
 });
+
+/**
+ * Sent as `responseJsonSchema` with every Stage-2 rewrite: the wire shape `rawStage2RewriteSchema` parses. The three
+ * attestations stay required (tests/template-director/output-contract.test.ts keeps the two in step).
+ */
+export const STAGE2_REWRITE_RESPONSE_SCHEMA = {
+  type: 'object',
+  properties: {
+    rewrittenPrompt: { type: 'string' },
+    preservedCameraAndLighting: { type: 'boolean' },
+    preservedAudioRule: { type: 'boolean' },
+    preservedIdentityStrictLock: { type: 'boolean' },
+  },
+  required: ['rewrittenPrompt', 'preservedCameraAndLighting', 'preservedAudioRule', 'preservedIdentityStrictLock'],
+  additionalProperties: false,
+} as const;
+
+const NULLABLE_STRING = { type: ['string', 'null'] } as const;
+
+/**
+ * Sent as `responseJsonSchema` with every chips turn (Stage 1 without a sheet): the wire shape `rawStage1ChatSchema`
+ * parses. Lengths and the slot list are checked again by the parser and the lock filters.
+ */
+export const STAGE1_CHIPS_RESPONSE_SCHEMA = {
+  type: 'object',
+  properties: {
+    approved: { type: 'boolean' },
+    refusal: { type: 'string', enum: ['none', 'identity', 'unsafe', 'unsupported', 'too_large'] },
+    replyKo: { type: 'string' },
+    guardrailAdjustmentKo: NULLABLE_STRING,
+    readyToRender: { type: 'boolean' },
+    summaryChips: {
+      type: 'array',
+      maxItems: 5,
+      items: {
+        type: 'object',
+        properties: {
+          slot: { type: 'string', enum: [...DIRECTOR_EDITABLE_SLOTS] },
+          labelKo: { type: 'string' },
+          summaryKo: { type: 'string' },
+        },
+        required: ['slot', 'labelKo', 'summaryKo'],
+      },
+    },
+    structuredIntent: {
+      type: ['object', 'null'],
+      properties: {
+        hairOverrideEn: NULLABLE_STRING,
+        makeupOverrideEn: NULLABLE_STRING,
+        outfitOverrideEn: NULLABLE_STRING,
+        propOverrideEn: NULLABLE_STRING,
+        shotEdits: {
+          type: 'array',
+          maxItems: 4,
+          items: {
+            type: 'object',
+            properties: { shotIndex: { type: 'integer' }, actionEn: { type: 'string' } },
+            required: ['shotIndex', 'actionEn'],
+          },
+        },
+        strictExclusionsEn: { type: 'array', maxItems: 12, items: { type: 'string' } },
+      },
+      required: ['hairOverrideEn', 'makeupOverrideEn', 'outfitOverrideEn', 'propOverrideEn', 'shotEdits', 'strictExclusionsEn'],
+    },
+  },
+  required: ['approved', 'refusal', 'replyKo', 'guardrailAdjustmentKo', 'readyToRender', 'summaryChips', 'structuredIntent'],
+} as const;
 
 export const rawOpticalIdentityMasterSchema = z.object({
   strategy: z.enum(['passthrough_crop', 'surgical_inplace_edit']).default('passthrough_crop'),

@@ -225,6 +225,8 @@ export function brandRouteAllowed(pathname: string, method: string): boolean {
   if (pathname === '/api/brand-workspace/studio') return method === 'POST';
   // Secondary-usage payment (docs/SECONDARY-USAGE.md): create/confirm by POST, status by GET.
   if (pathname === '/api/brand-workspace/usage') return read || method === 'POST';
+  // The closed studio's "access request already sent" answer: members only, read only.
+  if (pathname === '/api/brand-workspace/access-request') return read;
   // Brand B2B billing (docs/BRAND-PRODUCT.md §6.4): owner/admin read-only JSON, profile edit, code redemption, and requests.
   // The cron door (`/api/brand-billing/tick`) is deliberately NOT reachable on this host.
   if (pathname === '/api/brand-billing') return read;
