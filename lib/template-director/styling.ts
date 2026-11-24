@@ -156,6 +156,7 @@ export type StylingBlockProblem =
   | { kind: 'second_header'; line: number }
   | { kind: 'duplicate_part'; line: number; text: string }
   | { kind: 'locked_part'; line: number; text: string }
+  | { kind: 'photo_clause'; line: number; text: string }
   | { kind: 'too_many_lines'; count: number; max: number };
 
 const problemText = (line: string): string => line.trim().slice(0, 120);
@@ -250,12 +251,28 @@ export function publicStyling(styling: TemplateStyling, locks: TemplateLocks): P
 // --- The save-time check --------------------------------------------------------------------------------------------
 
 /**
+ * A styled description that talks about following the buyer's photo ("colour and length stay as in the photo", "as
+ * in the reference", "Image 1"). A styled line names only the template's style: when the buyer keeps their own hair or
+ * makeup, its whole description becomes an `[Exclusions]` line ("the template's hairstyle (…)"), so a clause about the
+ * photo would tell the model to avoid the photo. A part (or the rest of a part) that follows the photo is its own
+ * "Taken from the photo" line, or no line at all (rule 3). Save-time only, like a locked part: the parse still reads such
+ * a line, so nothing a stored template compiles changes.
+ */
+const PHOTO_CLAUSE = /\b(?:photo(?:graph)?s?|references?|image[ \t_]*1)\b|사진/iu;
+
+export function stylingNoteFollowsPhoto(note: string): boolean {
+  return PHOTO_CLAUSE.test(note);
+}
+
+/**
  * What the admin save makes of a prompt's styling block. Refused (`malformed`): a block that does not parse (it would
- * claim nothing) and a part the lock block also names (`locked_part`; at read time the lock wins).
+ * claim nothing), a part the lock block also names (`locked_part`; at read time the lock wins) and a styled description
+ * that says to follow the photo (`photo_clause`, see `stylingNoteFollowsPhoto`).
  *
  * Agreement with `parseTemplateStyling`, by construction (both read through `readBlock`): `ok` only when the parse is
  * `any`, with the same public projection; `none` exactly when there is no header (the parse is `NO_STYLING`);
- * `malformed` with a problem other than `locked_part` exactly when a header is there and the parse is `NO_STYLING`.
+ * `malformed` with a problem other than `locked_part` and `photo_clause` exactly when a header is there and the parse
+ * is `NO_STYLING`.
  */
 export type StylingBlockCheck =
   | { state: 'none' }
@@ -270,9 +287,11 @@ export function checkStylingBlock(promptText: string): StylingBlockCheck {
   // A malformed lock block is refused by the lock check; only a readable one is held against the styling lines.
   const locks = parseTemplateLocks(promptText);
   const locked = locks.any && !locks.malformed ? entries.filter((e) => locks.slots.includes(e.part)) : [];
+  const clauses = entries.filter((e) => e.kind === 'styled' && stylingNoteFollowsPhoto(e.note));
   const lined = [
     ...problems.flatMap((p) => ('line' in p ? [p] : [])),
     ...locked.map((e) => ({ kind: 'locked_part' as const, line: e.at, text: problemText(e.line) })),
+    ...clauses.map((e) => ({ kind: 'photo_clause' as const, line: e.at, text: problemText(e.line) })),
   ].sort((x, y) => x.line - y.line);
   const all: StylingBlockProblem[] = [...lined, ...problems.filter((p) => !('line' in p))];
   if (all.length > 0) return { state: 'malformed', problems: all };

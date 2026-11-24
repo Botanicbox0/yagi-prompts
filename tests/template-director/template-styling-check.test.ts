@@ -97,6 +97,33 @@ describe('checkStylingBlock', () => {
     expect(checkStylingBlock(prompt)).toEqual({ state: 'ok', styling: { styled: ['hair'], photo: [] } });
   });
 
+  it('refuses a styled description that says to follow the photo; the parse still reads it (save-time only, like a locked part)', () => {
+    // "— swept back from the face; colour and length stay as in the photo" was written by hand once: if the buyer kept
+    // their own hair, the whole tail would have gone into [Exclusions], photo clause and all.
+    const tails = [
+      'swept back from the face; colour and length stay as in the photo.',
+      'the colour as in the reference.',
+      'matching Image 1, glossy finish.',
+      'same as image1 but tied.',
+      'kept like the photos show.',
+      'as in the photograph.',
+      '사진 그대로의 색.',
+    ];
+    for (const tail of tails) {
+      const prompt = text(BASE, '', 'Template styling:', `${STYLED}the hairstyle — ${tail}`, MAKEUP, '', 'Shot 1.');
+      const check = checkStylingBlock(prompt);
+      expect(check, tail).toEqual({ state: 'malformed', problems: [{ kind: 'photo_clause', line: 4, text: `${STYLED}the hairstyle — ${tail}` }] });
+      // The block still parses: nothing a live template compiles changes with this check.
+      expect(parseTemplateStyling(prompt).styled.map((s) => s.note), tail).toEqual([tail, '1990s smoky plum eyes and lips.']);
+    }
+    // Words that only look like it pass: a style, not a clause about the buyer's photo.
+    for (const tail of ['editorial photoshoot polish.', 'photographic film-grain softness.', 'a sleek low bun.', 'imagery of the 1990s.']) {
+      expect(checkStylingBlock(text('Template styling:', `${STYLED}the makeup — ${tail}`)).state, tail).toBe('ok');
+    }
+    // A photo line has no description; it is the right way to say it.
+    expect(checkStylingBlock(text('Template styling:', `${PHOTO}the hairstyle.`)).state).toBe('ok');
+  });
+
   it('finds no block in any seeded template or parity prompt', () => {
     const prompts = [...PROMPT_FIXTURES, ...CAST_PROMPT_FIXTURES].map((fixture) => fixture.text);
     for (const prompt of [...prompts, ...Object.values(PARITY_BASES)]) expect(checkStylingBlock(prompt)).toEqual({ state: 'none' });
@@ -116,8 +143,9 @@ describe('the checks agree with the parsers', () => {
     }
     if (check.state === 'malformed') {
       expect(check.problems.length, prompt).toBeGreaterThan(0);
-      const grammar = check.problems.some((p) => p.kind !== 'locked_part');
-      // A grammar problem means the parse claims nothing; a locked part alone is read, and the lock wins.
+      const grammar = check.problems.some((p) => p.kind !== 'locked_part' && p.kind !== 'photo_clause');
+      // A grammar problem means the parse claims nothing; a locked part alone is read, and the lock wins; a styled
+      // description that says to follow the photo is read too (refused at save only).
       expect(styling === NO_STYLING, prompt).toBe(grammar);
     }
     if (styling.any) expect(check.state, prompt).not.toBe('none');
@@ -167,6 +195,7 @@ describe('the checks agree with the parsers', () => {
       `${STYLED}the hairstyle.`,
       `${STYLED}the shoes — red.`,
       `${STYLED}the makeup — from @Image 2.`,
+      `${STYLED}the makeup — the colour as in the photo.`,
       `${KEEP}the product.`,
       `${KEEP}the hairstyle — a bob.`,
       `${KEEP}the wardrobe.`,
@@ -239,7 +268,24 @@ describe('the refusal an admin save returns', () => {
     expect(lockRefusalLines(lockDetail, a)!.title).toBe(a.lockRefused);
   });
 
+  it('a photo clause is said in its own sentence, and the rules say a description names the template style only', () => {
+    const check = checkStylingBlock(text(BASE, '', 'Template styling:', `${STYLED}the hairstyle — swept back; length as in the photo.`));
+    expect(check.state).toBe('malformed');
+    if (check.state !== 'malformed') return;
+    const detail = stylingBlockRefusalDetail('promptText', check.problems);
+    expect(detail).toMatch(/^promptText: template styling: line 4 photo_clause — "/);
+    expect(readLockBlockRefusal(detail)).toMatchObject({ field: 'promptText', items: [{ kind: 'photo_clause', line: 4 }], block: 'styling' });
+    for (const locale of ['ko', 'en'] as const) {
+      const copy = getDictionary(locale).admin;
+      const lines = lockRefusalLines(detail, copy)!;
+      expect(lines.title).toBe(copy.stylingRefused);
+      expect(lines.items).toEqual([interpolate(copy.stylingProblemPhotoClause, { line: 4 })]);
+      expect(copy.stylingProblemPhotoClause).toContain('Taken from the photo');
+    }
+  });
+
   it('reads no styling kind in a lock refusal, and no lock-only kind in a styling refusal', () => {
+    expect(readLockBlockRefusal('promptText: template locks: line 4 photo_clause')).toBeNull();
     expect(readLockBlockRefusal('promptText: template locks: line 4 duplicate_part')).toBeNull();
     expect(readLockBlockRefusal('promptText: template styling: line 4 header_typo')).toBeNull();
   });

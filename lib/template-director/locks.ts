@@ -495,6 +495,7 @@ const STYLING_BLOCK_PROBLEM_KINDS: ReadonlySet<string> = new Set<StylingBlockPro
   'second_header',
   'duplicate_part',
   'locked_part',
+  'photo_clause',
 ]);
 
 /**
@@ -589,6 +590,7 @@ export const LOCK_REFUSAL_COPY_KEYS = [
   'stylingProblemSecondHeader',
   'stylingProblemDuplicatePart',
   'stylingProblemLockedPart',
+  'stylingProblemPhotoClause',
   'stylingProblemTooManyLines',
   'stylingRules',
 ] as const;
@@ -615,6 +617,7 @@ const STYLING_PROBLEM_COPY: Readonly<Record<StylingBlockProblem['kind'], keyof L
   second_header: 'stylingProblemSecondHeader',
   duplicate_part: 'stylingProblemDuplicatePart',
   locked_part: 'stylingProblemLockedPart',
+  photo_clause: 'stylingProblemPhotoClause',
   too_many_lines: 'stylingProblemTooManyLines',
 };
 

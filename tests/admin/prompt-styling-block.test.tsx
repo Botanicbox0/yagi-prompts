@@ -75,6 +75,28 @@ describe('prompt.create, prompt.update and prompt.createSet check the styling bl
     expect(harness.promptsRevalidated).toBe(0);
   });
 
+  it('refuses a styled description that says to follow the photo, on create, update and the declaration', async () => {
+    const tail = 'swept back from the face; colour and length stay as in the photo.';
+    const clause = [BASE, '', 'Template styling:', `${STYLED}the hairstyle — ${tail}`].join('\n');
+    const created = await harness.run('prompt.create', authoring(clause));
+    expect(created).toMatchObject({ ok: false, code: 'invalid' });
+    expect(created.detail).toMatch(/^promptText: template styling: line 4 photo_clause — "/);
+    expect(await loadPromptBySlug(sql(), 'styling-test')).toBeNull();
+
+    expect(await harness.run('prompt.create', authoring(VALID))).toMatchObject({ ok: true });
+    const row = (await loadPromptBySlug(sql(), 'styling-test'))!;
+    const refused = await harness.run('prompt.update', {
+      id: row.id, slug: row.slug, title: row.title, titleKo: row.titleKo ?? '', promptText: clause, useCase: 'brand-ad',
+      handle: '', textVisibility: row.textVisibility, featured: '', models: row.models,
+    });
+    expect(refused).toMatchObject({ ok: false, code: 'invalid' });
+    expect(refused.detail).toMatch(/^promptText: template styling: line 4 photo_clause/);
+    const declared = await harness.run('prompt.declareStyling', { id: row.id, block: ['Template styling:', `${STYLED}the hairstyle — ${tail}`].join('\n') });
+    expect(declared).toMatchObject({ ok: false, code: 'invalid' });
+    expect(declared.detail).toMatch(/^declareStyling: block: template styling: line 2 photo_clause/);
+    expect((await loadPromptBySlug(sql(), 'styling-test'))!.promptText).toBe(VALID);
+  });
+
   it('names the lock block first when both are wrong', async () => {
     const outcome = await harness.run('prompt.create', authoring(BOTH_BAD));
     expect(outcome.detail).toMatch(/^promptText: template locks: line 4 unknown_line/);
