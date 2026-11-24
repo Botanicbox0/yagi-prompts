@@ -407,7 +407,7 @@ export const studioEditorEn = {
     empty: 'Add at least one cut to export.',
     unsupported: 'This browser cannot export the video. Open it in Chrome or Edge on a computer.',
     rateUnknown: 'Cannot export yet: the frame rate of "{clip}" has not been read. Open the film again.',
-    sourceMissing: 'Cannot export: the file of "{clip}" cannot be found. Delete that cut, or put another clip in its place.',
+    sourceMissing: 'Cannot export: the file of "{clip}" cannot be found. Delete that cut, or replace it with another clip.',
     warnSound: 'The sound of "{clip}" could not be read, so it is not in this file.',
     warnLastFrame: 'The last {count} frame(s) of "{clip}" go past the end of its footage, so they repeat its last picture.',
     warnLastFrameMany: 'The last {count} frames of "{clip}" could not be read from its footage, so they repeat its last picture. Check that part of the exported file.',
@@ -432,9 +432,9 @@ export const studioEditorEn = {
       frame: 'Export stopped: the frame at {time} (cut "{clip}") could not be read exactly.',
       load: 'Export stopped: "{clip}" could not be loaded.',
       sound: 'Export stopped: the sound could not be put together.',
-      soundMusic: 'Export stopped: the music "{name}" could not be read. Try again. If it stops again, take the music out or change it in the earlier editor.',
-      soundEffect: 'Export stopped: the sound effect "{name}" could not be read. Try again. If it stops again, take the effect out or change it in the earlier editor.',
-      soundCut: 'Export stopped: the sound of "{name}" could not be read. Try again. If it stops again, turn that cut’s sound off or delete the cut.',
+      soundMusic: 'Export stopped: the music "{name}" could not be read. If it keeps failing, take the music out or change it in the earlier editor.',
+      soundEffect: 'Export stopped: the sound effect "{name}" could not be read. If it keeps failing, take the effect out or change it in the earlier editor.',
+      soundCut: 'Export stopped: the sound of "{name}" could not be read. If it keeps failing, turn that cut’s sound off or delete the cut.',
       memory: 'Export did not start: the film’s source files add up to {total}, more than the {limit} this browser can handle at once. Export the film in parts.',
       encode: 'Export stopped: the video file could not be written.',
       hidden: 'The export stopped several times because this window was not on screen. Keep this window in front and export again.',
@@ -448,7 +448,7 @@ export const studioEditorEn = {
     splitNo: 'Put the playhead inside a cut to split it.',
     lastCut: 'The film needs at least one cut.',
     full: 'A film can hold up to {max} cuts.',
-    curveTooShort: 'This cut is too short for that speed shape. Make the cut longer, or pick a slower shape.',
+    curveTooShort: 'The cut is too short for this shape. Make the cut longer, or pick a slower shape.',
   },
   /** The organization's own film (V1): only cutting is real; the rest says so plainly. */
   real: {
@@ -467,7 +467,7 @@ export const studioEditorEn = {
     adding: 'Reading the clip…',
     sourceRate: 'Shot at {rate} fps, shown at the film’s {fps} fps.',
     rateUnknown: 'The clip’s own frame rate has not been read yet, so it follows the film’s {fps} fps for now. It is read again the next time the film opens.',
-    sourceMissing: 'The file of this cut cannot be found. It may have been deleted. Delete this cut, or put another clip in its place.',
+    sourceMissing: 'The file cannot be found. It may have been deleted. Delete this cut, or replace it with another clip.',
     rateVariable: 'This clip’s frames are not evenly spaced (variable frame rate), so it cannot be cut exactly on its frames.',
     rateTentative: 'The frame rate has not been read yet, so the film shows at {fps} fps for now. Your edits are saved. Exact frame positions are set once the rate is read, the next time the film opens.',
     rateTentativeShort: 'for now',
@@ -481,7 +481,7 @@ export const studioEditorEn = {
       classicSound: 'Adding your own music and setting its level are in the earlier editor.',
       classicCaptions: 'Adding and editing captions are in the earlier editor.',
       /** Beside the links to the earlier editor when a cut is outside its speeds (audit B5, measured). */
-      classicSpeed: 'Cuts slower than 0.25×, faster than 4× or on a speed curve play at a different speed in the earlier editor, so their length differs there. A caption or sound added to them there may land on other pictures here.',
+      classicSpeed: 'Cuts slower than 0.25×, faster than 4× or on a speed curve change speed and length in the earlier editor. A caption or sound added to them there may move in this editor.',
     },
     assistUnknown: 'For now it follows cut sentences like the examples below.',
     assistNotReady: 'That part is not ready yet. For now it follows cut sentences only.',
@@ -603,7 +603,7 @@ export const studioEditorKo: typeof studioEditorEn = {
       fit: '전체 보이기',
       position: '좌우 위치',
       sound: '이 컷의 소리',
-      // 대표 확인 대기 (Gemma 미실행)
+      // 대표 확인 대기 (Gemma 2패스, 2026-11-24)
       volume: '원본 소리 크기',
       mute: '소리 끄기',
       remove: '컷 지우기',
@@ -768,7 +768,7 @@ export const studioEditorKo: typeof studioEditorEn = {
     zoomFrames: '프레임 단위 보기',
     zoomFrame: '한 프레임 {px}px',
     zoomFar: '영상 전체',
-    // 대표 확인 대기 (Gemma 미실행)
+    // 대표 확인 대기 (Gemma 2패스, 2026-11-24)
     missing: '원본 없음',
   },
   assist: {
@@ -899,8 +899,8 @@ export const studioEditorKo: typeof studioEditorEn = {
     empty: '컷을 하나 이상 넣은 뒤 내보내 주세요.',
     unsupported: '이 브라우저에서는 영상을 내보낼 수 없습니다. PC의 Chrome이나 Edge에서 열어 주세요.',
     rateUnknown: '"{clip}" 클립의 초당 프레임 수를 아직 읽지 못해 내보낼 수 없습니다. 영상을 다시 열어 주세요.',
-    // 대표 확인 대기 (Gemma 미실행)
-    sourceMissing: '"{clip}" 클립의 원본 파일을 찾을 수 없어 내보낼 수 없습니다. 이 컷을 지우거나 그 자리에 다른 클립을 넣어 주세요.',
+    // 대표 확인 대기 (Gemma 2패스, 2026-11-24)
+    sourceMissing: '"{clip}" 클립의 원본 파일을 찾을 수 없어 내보낼 수 없습니다. 이 컷을 지우거나 다른 클립으로 바꿔 주세요.',
     warnSound: '"{clip}" 클립의 소리를 읽지 못해 이 파일에서 빠졌습니다.',
     warnLastFrame: '"{clip}" 클립 끝의 {count}프레임은 원본 영상이 끝난 뒤라 마지막 장면으로 채웠습니다.',
     warnLastFrameMany: '"{clip}" 클립 끝의 {count}프레임을 원본에서 읽지 못해 마지막 장면으로 채웠습니다. 내보낸 파일에서 그 부분을 확인해 주세요.',
@@ -925,12 +925,12 @@ export const studioEditorKo: typeof studioEditorEn = {
       frame: '내보내기를 멈췄습니다. {time} 지점("{clip}" 컷)의 화면을 읽지 못했습니다.',
       load: '내보내기를 멈췄습니다. "{clip}" 영상을 불러오지 못했습니다.',
       sound: '내보내기를 멈췄습니다. 소리를 합치지 못했습니다.',
-      // 대표 확인 대기 (Gemma 미실행)
-      soundMusic: '음악 "{name}" 파일을 읽지 못해 내보내기를 멈췄습니다. 다시 시도해도 같으면 예전 편집기에서 이 음악을 빼거나 바꿔 주세요.',
-      // 대표 확인 대기 (Gemma 미실행)
-      soundEffect: '효과음 "{name}" 파일을 읽지 못해 내보내기를 멈췄습니다. 다시 시도해도 같으면 예전 편집기에서 이 효과음을 빼거나 바꿔 주세요.',
-      // 대표 확인 대기 (Gemma 미실행)
-      soundCut: '"{name}" 컷의 소리를 읽지 못해 내보내기를 멈췄습니다. 다시 시도해도 같으면 이 컷의 소리를 끄거나 컷을 지워 주세요.',
+      // 대표 확인 대기 (Gemma 2패스, 2026-11-24)
+      soundMusic: '내보내기를 멈췄습니다. 음악 "{name}" 파일을 읽지 못했습니다. 계속 실패하면 예전 편집기에서 음악을 빼거나 바꿔 주세요.',
+      // 대표 확인 대기 (Gemma 2패스, 2026-11-24)
+      soundEffect: '내보내기를 멈췄습니다. 효과음 "{name}" 파일을 읽지 못했습니다. 계속 실패하면 예전 편집기에서 효과음을 빼거나 바꿔 주세요.',
+      // 대표 확인 대기 (Gemma 2패스, 2026-11-24)
+      soundCut: '내보내기를 멈췄습니다. "{name}" 컷의 소리를 읽지 못했습니다. 계속 실패하면 이 컷의 소리를 끄거나 컷을 지워 주세요.',
       memory: '내보낼 수 없습니다. 원본 파일을 합친 크기({total})가 이 브라우저의 한도({limit})를 넘습니다. 영상을 나눠 내보내 주세요.',
       encode: '내보내기를 멈췄습니다. 영상 파일을 만들지 못했습니다.',
       hidden: '이 창이 화면에 보이지 않아 내보내기가 반복해서 중단되었습니다. 창을 화면 앞에 둔 채로 다시 내보내 주세요.',
@@ -943,10 +943,10 @@ export const studioEditorKo: typeof studioEditorEn = {
   toast: {
     splitNo: '재생 위치를 컷 안쪽에 두면 나눌 수 있습니다.',
     lastCut: '영상에는 컷이 하나는 있어야 합니다.',
-    // 대표 확인 대기 (Gemma 미실행)
+    // 대표 확인 대기 (Gemma 2패스, 2026-11-24)
     full: '한 영상에는 컷을 {max}개까지 넣을 수 있습니다.',
-    // 대표 확인 대기 (Gemma 미실행)
-    curveTooShort: '이 컷은 너무 짧아 이 속도 모양을 넣을 수 없습니다. 컷을 늘리거나 더 느린 모양을 골라 주세요.',
+    // 대표 확인 대기 (Gemma 2패스, 2026-11-24)
+    curveTooShort: '컷이 너무 짧아 이 모양을 넣을 수 없습니다. 컷을 늘리거나 더 느린 모양을 골라 주세요.',
   },
   real: {
     filmName: '{name} 영상',
@@ -964,8 +964,8 @@ export const studioEditorKo: typeof studioEditorEn = {
     adding: '클립을 읽는 중입니다…',
     sourceRate: '원본은 {rate}fps이고, 영상의 {fps}fps에 맞춰 보여 줍니다.',
     rateUnknown: '클립의 초당 프레임 수를 아직 읽지 못해 임시로 영상의 {fps}fps에 맞춥니다. 다음에 영상을 열 때 다시 읽습니다.',
-    // 대표 확인 대기 (Gemma 미실행)
-    sourceMissing: '이 컷의 원본 파일을 찾을 수 없습니다. 지워졌을 수 있습니다. 이 컷을 지우거나 그 자리에 다른 클립을 넣어 주세요.',
+    // 대표 확인 대기 (Gemma 2패스, 2026-11-24)
+    sourceMissing: '원본 파일을 찾을 수 없습니다. 지워졌을 수 있습니다. 이 컷을 지우거나 다른 클립으로 바꿔 주세요.',
     rateVariable: '이 클립은 프레임 간격이 일정하지 않아 프레임 단위로 정확히 자를 수 없습니다.',
     rateTentative: '초당 프레임 수를 아직 읽지 못해 임시로 {fps}fps로 보여 줍니다. 고친 내용은 저장됩니다. 프레임 단위 위치는 다음에 영상을 열어 값을 읽은 뒤에 정해집니다.',
     rateTentativeShort: '임시',
@@ -978,8 +978,8 @@ export const studioEditorKo: typeof studioEditorEn = {
       classicColor: '색 프리셋과 참고 화면 색 맞추기는 예전 편집기에 있습니다.',
       classicSound: '내 음원 넣기와 음악 크기 조절은 예전 편집기에 있습니다.',
       classicCaptions: '자막 넣기와 고치기는 예전 편집기에 있습니다.',
-      // 대표 확인 대기 (Gemma 미실행)
-      classicSpeed: '0.25×보다 느리거나 4×보다 빠른 컷, 속도 곡선을 넣은 컷은 예전 편집기에서 다른 속도로 재생돼 길이가 달라집니다. 예전 편집기에서 그 컷에 넣은 자막이나 소리는 이 편집기에서 다른 장면에 놓일 수 있습니다.',
+      // 대표 확인 대기 (Gemma 2패스, 2026-11-24)
+      classicSpeed: '0.25×보다 느리거나 4×보다 빠른 컷, 속도 곡선 컷은 예전 편집기에서 속도와 길이가 바뀝니다. 예전 편집기에서 그 컷에 추가한 자막이나 소리의 위치가 이 편집기에서 달라질 수 있습니다.',
     },
     assistUnknown: '지금은 컷 편집만 말로 할 수 있습니다. 아래 예시처럼 적어 주세요.',
     assistNotReady: '그 작업은 아직 준비 중입니다. 지금은 컷 편집만 말로 할 수 있습니다.',
