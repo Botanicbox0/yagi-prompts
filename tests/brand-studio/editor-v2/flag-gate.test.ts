@@ -231,6 +231,7 @@ describe('/brand/studio/editor page gate', () => {
   it('opens the organization’s film with the clips the current editor offers: video only, same addresses', async () => {
     vi.stubEnv('BRAND_STUDIO_EDITOR_V2', 'on');
     vi.stubEnv('BRAND_STUDIO_EDITOR_V2_ORGS', ORG);
+    vi.stubEnv('BRAND_WORKSPACE_PROTOTYPE_LAYER', 'off');
     const Page = await loadPage();
     const element = (await Page({ searchParams: Promise.resolve({ organizationId: ORG }) })) as Element;
     expect((element.type as { name?: string }).name).toBe('EditorV2Stub');
@@ -241,7 +242,7 @@ describe('/brand/studio/editor page gate', () => {
     expect(mocks.jobsOf).toHaveBeenCalledWith(expect.anything(), ORG, 60);
     const real = element.props.real!;
     expect(real).toMatchObject({ organizationId: ORG, organizationName: 'Sample Brand', canEdit: true });
-    // No sample film while the prototype layer is off (the default; next tests).
+    // No sample film while the prototype layer is off (stubbed off above; it is the default, see the next tests).
     expect(real.sampleBase).toBeNull();
     expect(real.sources.map((s) => [s.key, s.kind, s.srcUrl, s.thumbUrl, s.label])).toEqual([
       [`o:${OUTPUT}`, 'output', `/api/brand-studio/compose?organizationId=${ORG}&source=output&id=${OUTPUT}`, '/media/o.jpg', 'A slow walk through the morning market'.slice(0, 36)],

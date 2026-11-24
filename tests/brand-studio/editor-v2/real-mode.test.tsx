@@ -192,7 +192,7 @@ describe('a real film shows nothing that comes from the sample data', () => {
     expect(render(studioEditorKo, 'captions', { ...real(), sampleBase: null })).toContain(studioEditorKo.real.locked.captionsKept);
   });
 
-  it('the body line without the sample film says only that it cannot be used on this film yet, in both languages', () => {
+  it('the body line without the sample film says only that the workspace cannot be used yet (on any film), in both languages', () => {
     for (const copy of [studioEditorKo, studioEditorEn]) {
       expect(copy.real.locked.bodyNoSample.length).toBeGreaterThan(5);
       expect(copy.real.locked.bodyNoSample).not.toBe(copy.real.locked.body);
