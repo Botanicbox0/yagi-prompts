@@ -42,6 +42,7 @@ import { ADMIN_PROMPTS_PATH, adminPromptPath } from '@/lib/prompts/links';
 import { announceTemplate, markPromptAnnounced } from '@/lib/prompts/announce';
 import { buildImageTemplateSet, writeImageTemplateSet } from '@/lib/prompts/image-templates';
 import { aspectsForMedium, enginesForMedium, imageFitsAspect, isImageAspect, isImageEngine, type ImageAspect, type ImageEngineId } from '@/lib/images/engines';
+import { checkLockBlock, lockBlockRefusalDetail } from '@/lib/template-director/locks';
 import { fail, ok, type AdminContext, type AdminOutcome } from './context';
 import * as f from './form';
 import type { AdminOperation, ParseResult } from './operations';
@@ -153,6 +154,16 @@ function templateFields(form: FormData): ParseResult<z.infer<typeof TemplateFiel
   });
 }
 
+/**
+ * docs/PERSONAL-STUDIO.md §3.3 (C3) — a `Template locks:` block that would lock everything (it does not parse) or
+ * that would not be read at all (a mistyped header, lock lines with no header) is refused before anything is
+ * written, with a detail that names the lines. A prompt with a valid block, or with none, saves exactly as before.
+ */
+function lockBlockRefusal(field: string, promptText: string): string | null {
+  const check = checkLockBlock(promptText);
+  return check.state === 'malformed' || check.state === 'header_typo' ? lockBlockRefusalDetail(field, check.problems) : null;
+}
+
 const Uuid = z.string().uuid();
 const NOT_FOUND_DETAIL = 'the prompt this form points at no longer exists';
 
@@ -238,6 +249,8 @@ const createPrompt: AdminOperation<{ input: z.infer<typeof AuthoringSchema>; for
   async run(ctx, { input, form }) {
     const template = templateFields(form);
     if (!template.ok) return fail('invalid', template.detail);
+    const locks = lockBlockRefusal('promptText', input.promptText);
+    if (locks !== null) return fail('invalid', locks);
     const id = randomUUID();
     const staged = await applyUploads(ctx, id, form, {});
     if (!staged.ok) return fail('upload', staged.detail);
@@ -356,6 +369,10 @@ const createImageSet: AdminOperation<{ input: z.infer<typeof ImageSetForm>; form
       if (size !== null && !imageFitsAspect(size.w, size.h, aspect)) {
         validationErrors.push(`frame ${index + 1}: ${size.w}x${size.h} is not ${aspect}`);
       }
+      // Each frame is a recipe step, and the set's prompt text is its first output step's (`legacyPromptText`), so
+      // every step gets the C3 check.
+      const locks = lockBlockRefusal(`frame ${index + 1}`, frames[index]!.promptText);
+      if (locks !== null) validationErrors.push(locks);
     }
     if (validationErrors.length > 0 || !built.ok) return fail('invalid', validationErrors.join('; '));
 
@@ -467,6 +484,8 @@ const editPrompt: AdminOperation<{ input: z.infer<typeof EditSchema>; form: Form
     if (row === null || row.audience === 'brand') return fail('notFound', NOT_FOUND_DETAIL);
     const template = templateFields(form);
     if (!template.ok) return fail('invalid', template.detail);
+    const locks = lockBlockRefusal('promptText', input.promptText);
+    if (locks !== null) return fail('invalid', locks);
 
     const staged = await applyUploads(ctx, input.id, form, parsePromptMedia(row.media));
     if (!staged.ok) return fail('upload', staged.detail);

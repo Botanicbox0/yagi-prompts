@@ -18,6 +18,8 @@
  * everything (`malformed`). A prompt without the header parses to `NO_LOCKS`, and every caller checks `locks.any`
  * before doing anything new, so such a prompt compiles exactly as before.
  *
+ * C3: the admin save refuses a malformed block and a block that would not be read at all (`checkLockBlock`).
+ *
  * Client-safe: plain functions over the types in `./schema`; no node-only imports.
  */
 import {
@@ -250,6 +252,62 @@ function mergeRanges(ranges: ReadonlyArray<{ from: number; to: number }>): Array
   return out;
 }
 
+/**
+ * One thing wrong with a prompt's lock block (C3), with its 1-based line in the prompt where it has one. `text` is the
+ * offending line, trimmed and cut to 120 characters.
+ */
+export type LockBlockProblem =
+  | { kind: 'unknown_line'; line: number; text: string }
+  | { kind: 'empty_block'; line: number }
+  | { kind: 'too_many_lines'; count: number; max: number }
+  | { kind: 'too_many_shot_ranges'; count: number; max: number }
+  | { kind: 'second_header'; line: number }
+  | { kind: 'header_typo'; line: number; text: string }
+  | { kind: 'lock_lines_without_header'; line: number };
+
+const problemText = (line: string): string => line.trim().slice(0, 120);
+
+/** The 0-based indexes of the `Template locks:` header lines. */
+const headerLines = (lines: readonly string[]): number[] => lines.flatMap((l, i) => (TEMPLATE_LOCKS_HEADER_LINE.test(l) ? [i] : []));
+
+/**
+ * The block that starts at the first header: the header line, then every line up to the next blank line (or the end).
+ * Any problem makes the block malformed. `parseTemplateLocks` and `checkLockBlock` both read it here, so the save-time
+ * check can never call "valid" a block the renders read as malformed, or the other way round.
+ */
+function readBlock(lines: readonly string[], headers: readonly number[]) {
+  const at = headers[0]!;
+  let end = at + 1;
+  while (end < lines.length && lines[end]!.trim() !== '') end += 1;
+  const block = lines.slice(at, end).join('\n').trimEnd();
+  const body = lines.slice(at + 1, end);
+
+  const entries: TemplateLock[] = [];
+  const notes: TemplateLockNote[] = [];
+  const lined: Array<Extract<LockBlockProblem, { line: number }>> = headers.slice(1).map((i) => ({ kind: 'second_header', line: i + 1 }));
+  if (body.length === 0) lined.push({ kind: 'empty_block', line: at + 1 });
+  let shotLines = 0;
+  body.forEach((raw, k) => {
+    const line = LOCK_LINE.exec(raw);
+    const read = line ? readLockKey(line[1]!) : null;
+    if (!read) {
+      // A second header inside the block is reported once, as itself.
+      if (!TEMPLATE_LOCKS_HEADER_LINE.test(raw)) lined.push({ kind: 'unknown_line', line: at + 2 + k, text: problemText(raw) });
+      return;
+    }
+    if (read.lock.kind === 'shots') shotLines += 1;
+    entries.push(read.lock);
+    const note = read.tail.replace(TAIL_LEAD, '').trimEnd();
+    if (note && note !== defaultTail(read.lock)) notes.push({ key: lockKey(read.lock), note });
+  });
+  const problems: LockBlockProblem[] = lined.sort((x, y) => x.line - y.line);
+  if (body.length > TEMPLATE_LOCK_LIMITS.max) problems.push({ kind: 'too_many_lines', count: body.length, max: TEMPLATE_LOCK_LIMITS.max });
+  if (shotLines > TEMPLATE_LOCK_LIMITS.shotRangesMax) {
+    problems.push({ kind: 'too_many_shot_ranges', count: shotLines, max: TEMPLATE_LOCK_LIMITS.shotRangesMax });
+  }
+  return { block, entries, notes, problems };
+}
+
 function everythingLocked(block: string, notes: TemplateLockNote[]): TemplateLocks {
   return freezeLocks({
     any: true,
@@ -270,33 +328,11 @@ function everythingLocked(block: string, notes: TemplateLockNote[]): TemplateLoc
 export function parseTemplateLocks(promptText: string): TemplateLocks {
   if (typeof promptText !== 'string' || !/template locks:/i.test(promptText)) return NO_LOCKS;
   const lines = promptText.split('\n');
-  const headers = lines.flatMap((l, i) => (TEMPLATE_LOCKS_HEADER_LINE.test(l) ? [i] : []));
+  const headers = headerLines(lines);
   if (headers.length === 0) return NO_LOCKS;
 
-  const at = headers[0]!;
-  let end = at + 1;
-  while (end < lines.length && lines[end]!.trim() !== '') end += 1;
-  const block = lines.slice(at, end).join('\n').trimEnd();
-  const body = lines.slice(at + 1, end);
-
-  const entries: TemplateLock[] = [];
-  const notes: TemplateLockNote[] = [];
-  let malformed = headers.length > 1 || body.length === 0 || body.length > TEMPLATE_LOCK_LIMITS.max;
-  let shotLines = 0;
-  for (const raw of body) {
-    const line = LOCK_LINE.exec(raw);
-    const read = line ? readLockKey(line[1]!) : null;
-    if (!read) {
-      malformed = true;
-      continue;
-    }
-    if (read.lock.kind === 'shots') shotLines += 1;
-    entries.push(read.lock);
-    const note = read.tail.replace(TAIL_LEAD, '').trimEnd();
-    if (note && note !== defaultTail(read.lock)) notes.push({ key: lockKey(read.lock), note });
-  }
-  if (shotLines > TEMPLATE_LOCK_LIMITS.shotRangesMax) malformed = true;
-  if (malformed) return everythingLocked(block, notes);
+  const { block, entries, notes, problems } = readBlock(lines, headers);
+  if (problems.length > 0) return everythingLocked(block, notes);
 
   const named = TEMPLATE_LOCK_NAMED.filter((kind) => entries.some((e) => e.kind === kind));
   const explicit = new Set(entries.flatMap((e) => (e.kind === 'slot' ? [e.slot] : [])));
@@ -385,6 +421,125 @@ export function lockLines(locks: TemplateLocks): string[] {
 export function editableSlotsFor(locks: TemplateLocks): DirectorEditableSlot[] {
   return DIRECTOR_EDITABLE_SLOTS.filter((slot) => !locks.slots.includes(slot));
 }
+
+// --- The save-time check (C3) ---------------------------------------------------------------------------------------
+
+/**
+ * docs/PERSONAL-STUDIO.md §3.3 (C3) — what the admin save makes of a prompt's lock block. Two authoring mistakes are
+ * refused: a block that does not parse (`malformed`: the template would lock everything) and a block that is not read at
+ * all (`header_typo`: a mistyped header, or lock lines with no header, so the template would lock nothing).
+ *
+ * Agreement with `parseTemplateLocks`, by construction: `ok` exactly when the parse is `any && !malformed`, `malformed`
+ * exactly when the parse is malformed (both read the block through `readBlock`), `none` and `header_typo` only when
+ * the parse is `NO_LOCKS`.
+ */
+export type LockBlockCheck =
+  | { state: 'none' }
+  | { state: 'ok'; locks: PublicTemplateLocks }
+  | { state: 'malformed'; problems: LockBlockProblem[] }
+  | { state: 'header_typo'; problems: LockBlockProblem[] };
+
+/**
+ * A header someone meant to write: "template" and "lock(s)" with any separator, alone on its line apart from list,
+ * heading and bold marks and punctuation (`## Template locks`, `**Template lock:**`), or followed by a colon and more
+ * (`Template lock: the product`). A sentence that only uses the words ("this template locks the camera") is not one.
+ */
+const LOOSE_HEADER = String.raw`^[\s>#*_\x60~\-+•]*(?:\d+[.)]\s*)?templates?[\s_.\-]*locks?`;
+const HEADER_ALONE = new RegExp(`${LOOSE_HEADER}[\\s:\\uFF1A*_\\x60~.\\-]*$`, 'i');
+const HEADER_LEAD = new RegExp(`${LOOSE_HEADER}[\\s*_\\x60~]*[:\\uFF1A]`, 'i');
+/** A keep line in any case and with any bullet: the canonical prefix's words at the start of a line. */
+const KEEP_WORDS = TEMPLATE_KEEP_LINE_PREFIX.replace(/^-\s*/, '').replace(/:\s*$/, '').replace(/ /g, '[ \\t]+');
+const KEEP_LINE_LOOSE = new RegExp(`^[ \\t]*(?:[-*+•][ \\t]*)?${KEEP_WORDS}\\b`, 'i');
+
+/** The save-time verdict on a prompt's lock block (C3). */
+export function checkLockBlock(promptText: string): LockBlockCheck {
+  const locks = parseTemplateLocks(promptText);
+  if (locks.any && !locks.malformed) return { state: 'ok', locks: publicLocks(locks)! };
+  const lines = typeof promptText === 'string' ? promptText.split('\n') : [];
+  if (locks.malformed) return { state: 'malformed', problems: readBlock(lines, headerLines(lines)).problems };
+  const problems = lines.flatMap((raw, i): LockBlockProblem[] => {
+    if (HEADER_ALONE.test(raw) || HEADER_LEAD.test(raw)) return [{ kind: 'header_typo', line: i + 1, text: problemText(raw) }];
+    if (KEEP_LINE_LOOSE.test(raw)) return [{ kind: 'lock_lines_without_header', line: i + 1 }];
+    return [];
+  });
+  return problems.length > 0 ? { state: 'header_typo', problems } : { state: 'none' };
+}
+
+const LOCK_BLOCK_PROBLEM_KINDS: ReadonlySet<string> = new Set<LockBlockProblem['kind']>([
+  'unknown_line',
+  'empty_block',
+  'too_many_lines',
+  'too_many_shot_ranges',
+  'second_header',
+  'header_typo',
+  'lock_lines_without_header',
+]);
+/** Problems named in a refusal; the rest are counted. */
+const REFUSAL_SHOWN = 3;
+/** The admin keeps 200 characters of a refusal's detail in the address it returns to (`outcomeUrl`). */
+const REFUSAL_MAX = 200;
+
+/**
+ * The detail an admin save returns when it refuses a block: `<field>: template locks: line 4 unknown_line,
+ * too_many_lines 13/12, +2 — "<the first problem's line>"`. Always within 200 characters; `readLockBlockRefusal`
+ * reads it back so the page can say it in the admin's language.
+ */
+export function lockBlockRefusalDetail(field: string, problems: readonly LockBlockProblem[]): string {
+  const tokens = problems.slice(0, REFUSAL_SHOWN).map((p) => ('line' in p ? `line ${p.line} ${p.kind}` : `${p.kind} ${p.count}/${p.max}`));
+  if (problems.length > REFUSAL_SHOWN) tokens.push(`+${problems.length - REFUSAL_SHOWN}`);
+  const head = `${field}: template locks: ${tokens.join(', ')}`;
+  const first = problems[0];
+  const said = first && 'text' in first ? first.text.replace(/"/g, "'").replace(/\s+/g, ' ').trim() : '';
+  const room = Math.min(60, REFUSAL_MAX - head.length - 5);
+  if (!said || room < 12) return head;
+  return `${head} — "${said.length > room ? `${said.slice(0, room - 1)}…` : said}"`;
+}
+
+/** A refusal detail read back: the problems it names (no text of their own), how many more there were, the quoted line. */
+export interface LockBlockRefusal {
+  field: string;
+  items: Array<{ kind: LockBlockProblem['kind']; line?: number; count?: number; max?: number }>;
+  more: number;
+  text: string;
+}
+
+/** Reads a `lockBlockRefusalDetail` back (also one cut short); null for any other detail. */
+export function readLockBlockRefusal(detail: string): LockBlockRefusal | null {
+  const value = String(detail ?? '');
+  const head = /^([\w ]+): template locks: /.exec(value);
+  if (!head) return null;
+  const rest = value.slice(head[0].length);
+  const quote = rest.indexOf(' — "');
+  const items: LockBlockRefusal['items'] = [];
+  let more = 0;
+  for (const token of (quote < 0 ? rest : rest.slice(0, quote)).split(', ')) {
+    const lined = /^line (\d+) ([a-z_]+)$/.exec(token);
+    const counted = /^([a-z_]+) (\d+)\/(\d+)$/.exec(token);
+    const extra = /^\+(\d+)$/.exec(token);
+    if (lined && LOCK_BLOCK_PROBLEM_KINDS.has(lined[2]!)) items.push({ kind: lined[2] as LockBlockProblem['kind'], line: Number(lined[1]) });
+    else if (counted && LOCK_BLOCK_PROBLEM_KINDS.has(counted[1]!)) {
+      items.push({ kind: counted[1] as LockBlockProblem['kind'], count: Number(counted[2]), max: Number(counted[3]) });
+    } else if (extra) more = Number(extra[1]);
+  }
+  if (items.length === 0) return null;
+  return { field: head[1]!, items, more, text: quote < 0 ? '' : rest.slice(quote + 4).replace(/"$/, '') };
+}
+
+/** The key phrases a lock line may name, in the order an author reads them (the admin's help and refusal). */
+export const TEMPLATE_LOCK_KEY_PHRASES: readonly string[] = Object.freeze([
+  ...TEMPLATE_LOCK_NAMED.map((kind) => NAMED_PHRASE[kind]),
+  'shot N',
+  'shots N–M',
+  ...DIRECTOR_EDITABLE_SLOTS.map((slot) => SLOT_PHRASE[slot]),
+]);
+
+/** A block an author can copy and trim: named parts, a shot range, and a slot described in the author's own words. */
+export const TEMPLATE_LOCK_EXAMPLE = renderLockBlock([
+  { kind: 'product' },
+  { kind: 'logo' },
+  { kind: 'shots', from: 2, to: 3 },
+  { kind: 'slot', slot: 'hair', note: 'a bright pink chin-length bob.' },
+]);
 
 // --- Verdicts -------------------------------------------------------------------------------------------------------
 

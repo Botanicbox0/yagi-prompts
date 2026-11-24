@@ -7,6 +7,15 @@ import { baseKrw, makeEarning, providerKrw } from '@/lib/twings/template-price';
 import { videoModelForEngine } from '@/lib/video/models';
 import { PROMPT_TEXT_MAX, PROMPT_TEXT_MIN, TEMPLATE_CASTS, TEMPLATE_MEDIA } from '@/lib/prompts/schemas';
 import { promptHref } from '@/lib/prompts/links';
+import {
+  TEMPLATE_LOCK_EXAMPLE,
+  TEMPLATE_LOCK_KEY_PHRASES,
+  TEMPLATE_LOCK_LIMITS,
+  checkLockBlock,
+  readLockBlockRefusal,
+  type LockBlockRefusal,
+  type PublicTemplateLocks,
+} from '@/lib/template-director/locks';
 import { visibilityLabel, visibilityOptions } from '@/components/admin/labels';
 import type { Dictionary } from '@/lib/i18n/dictionaries';
 import type { PromptRow } from '@/lib/prompts/repo';
@@ -192,6 +201,93 @@ function CostFloorNote({ row, dict }: { row: PromptRow | null; dict: Dict }) {
   );
 }
 
+// --- Template locks (docs/PERSONAL-STUDIO.md §3.3, C3) ------------------------------------------------------------
+
+/** How a lock block is written, with the parts a line may name (the same sentence under the field and in a refusal). */
+function lockRules(a: Dict['admin']): string {
+  return interpolate(a.lockRules, {
+    keys: TEMPLATE_LOCK_KEY_PHRASES.join(', '),
+    max: TEMPLATE_LOCK_LIMITS.max,
+    shots: TEMPLATE_LOCK_LIMITS.shotRangesMax,
+  });
+}
+
+/** The locked parts in the customer screen's words (C2): named parts, closed slots (the product covers the prop), shots. */
+function lockedPartLabels(locks: PublicTemplateLocks, dict: Dict): string[] {
+  const e = dict.editSheet;
+  const product = locks.named.includes('product');
+  return [
+    ...locks.named.map((kind) => e.locks[kind]),
+    ...locks.slots.filter((slot) => !(slot === 'prop' && product)).map((slot) => e.slots[slot]),
+    ...locks.shots.map((r) => (r.from === r.to ? interpolate(e.shotOne, { n: r.from }) : interpolate(e.shotRange, { from: r.from, to: r.to }))),
+  ];
+}
+
+/**
+ * Under the prompt field: what the SAVED block locks (edit form only; nothing when there is no block), and a collapsed
+ * example an author can copy. Admin-only, so it names the parts; the block's own words stay in the field above.
+ */
+function TemplateLocksNote({ promptText, dict }: { promptText: string | null; dict: Dict }) {
+  const a = dict.admin;
+  const check = promptText === null ? null : checkLockBlock(promptText);
+  return (
+    <>
+      {check?.state === 'ok' && (
+        <p data-template-locks="ok" className="font-mono text-[0.72rem] opacity-70">
+          {interpolate(a.templateLocksLine, { parts: lockedPartLabels(check.locks, dict).join(' · ') })}
+        </p>
+      )}
+      {(check?.state === 'malformed' || check?.state === 'header_typo') && (
+        <p data-template-locks={check.state} className="font-mono text-[0.72rem] text-accent">
+          {check.state === 'malformed' ? a.templateLocksAll : a.templateLocksTypo}
+        </p>
+      )}
+      <details data-template-locks-help className="border border-hairline p-3">
+        <summary className="cursor-pointer font-label text-eyebrow">{a.templateLocksHelp}</summary>
+        <p className="mt-2 font-mono text-[0.72rem] opacity-70">{lockRules(a)}</p>
+        <pre className="mt-2 overflow-auto border border-hairline p-3 font-mono text-[0.72rem] whitespace-pre-wrap select-all">
+          {TEMPLATE_LOCK_EXAMPLE}
+        </pre>
+      </details>
+    </>
+  );
+}
+
+const LOCK_PROBLEM_COPY = {
+  unknown_line: 'lockProblemUnknownLine',
+  empty_block: 'lockProblemEmptyBlock',
+  second_header: 'lockProblemSecondHeader',
+  header_typo: 'lockProblemHeaderTypo',
+  lock_lines_without_header: 'lockProblemWithoutHeader',
+  too_many_lines: 'lockProblemTooManyLines',
+  too_many_shot_ranges: 'lockProblemTooManyShotRanges',
+} as const satisfies Record<LockBlockRefusal['items'][number]['kind'], keyof Dict['admin']>;
+
+/**
+ * A save the lock check refused (`?err=invalid&detail=promptText: template locks: …`), in sentences: which line, what
+ * is wrong, and how a block is written. Nothing for any other detail.
+ */
+export function LockBlockRefusalNote({ detail, dict }: { detail: string | undefined; dict: Dict }) {
+  const refusal = detail ? readLockBlockRefusal(detail) : null;
+  if (refusal === null) return null;
+  const a = dict.admin;
+  return (
+    <div data-refused-field="promptText" data-lock-refusal className="mt-3 rounded-[10px] border border-accent px-3.5 py-2.5 text-[13px] text-accent">
+      <p className="font-medium">{a.lockRefused}</p>
+      <ul className="mt-1.5 list-disc pl-5">
+        {refusal.items.map((item, index) => (
+          <li key={`${item.kind}-${item.line ?? index}`}>
+            {interpolate(a[LOCK_PROBLEM_COPY[item.kind]], { line: item.line ?? '', count: item.count ?? '', max: item.max ?? '' })}
+            {index === 0 && refusal.text && <span className="block font-mono text-[12px] break-words opacity-80">{refusal.text}</span>}
+          </li>
+        ))}
+        {refusal.more > 0 && <li>{interpolate(a.lockProblemMore, { n: refusal.more })}</li>}
+      </ul>
+      <p className="mt-1.5">{lockRules(a)}</p>
+    </div>
+  );
+}
+
 export function PromptFields({ row, dict }: { row: PromptRow | null; dict: Dict }) {
   const a = dict.admin;
   const existing = row === null ? {} : parsePromptMedia(row.media);
@@ -266,6 +362,7 @@ export function PromptFields({ row, dict }: { row: PromptRow | null; dict: Dict 
           className={INPUT}
         />
       </Field>
+      <TemplateLocksNote promptText={row?.promptText ?? null} dict={dict} />
 
       <details open={row !== null} className="border border-hairline p-3">
         <summary className="cursor-pointer font-label text-eyebrow">{a.promptOptionalDetails}</summary>
