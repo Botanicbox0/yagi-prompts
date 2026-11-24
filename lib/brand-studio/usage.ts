@@ -24,6 +24,7 @@ import {
 import { cycleContaining, cycleWindow, type BillingCycle } from '@/lib/brands/billing/cycle';
 import { hasColumn, loadAllowanceSchemaState, loadSubscriptionSchemaReady } from '@/lib/brands/billing/schema-guard';
 import { brandBillingAutoIssueOpen } from '@/lib/flags';
+import { allowanceWindowView } from './allowance-window';
 import type { StudioAllowanceView } from './contracts';
 import { STUDIO_CREDIT_KRW } from './credits';
 import { planGraceDaysFromEnv } from './env';
@@ -425,8 +426,9 @@ export async function loadAllowance(
   };
 }
 
+/** What screens receive. `window` (R1) tells them whether the credits run on a billing cycle or the calendar month. */
 export function allowanceView(a: StudioAllowance): StudioAllowanceView {
-  return { capKrw: a.capKrw, usedKrw: a.usedKrw, resetsAt: a.resetsAt };
+  return { capKrw: a.capKrw, usedKrw: a.usedKrw, resetsAt: a.resetsAt, window: allowanceWindowView(a) };
 }
 
 export type AllowanceVerdict = { ok: true; allowance: StudioAllowance } | { ok: false; code: 'allowance_closed' | 'allowance_exhausted' };

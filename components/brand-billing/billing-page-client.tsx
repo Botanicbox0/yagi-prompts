@@ -1,6 +1,7 @@
 'use client';
 
 import { type ReactNode, useMemo, useState } from 'react';
+import { isCycleWindow } from '@/lib/brand-studio/allowance-window';
 import { formatCredits } from '@/lib/brand-studio/credits';
 import { BRAND_PLAN_GRACE_DAYS_DEFAULT, kstDayOf } from '@/lib/brands/billing/math';
 import {
@@ -423,7 +424,12 @@ export function BillingPageClient({
           <p className={s.panelSub}>
             {copy.usageSection.reset.replace('{resetDate}', allowance.resetsOn)}
           </p>
-          <p className={s.panelSub}>{copy.usageSection.explainer}</p>
+          <p className={s.panelSub}>
+            {/* R1: a billing cycle refills on its own day (the reset date above); the calendar month keeps today's text. */}
+            {isCycleWindow(allowance.window)
+              ? copy.usageSection.explainerCycle.replace('{date}', allowance.resetsOn)
+              : copy.usageSection.explainer}
+          </p>
 
           {!readOnly ? (
             <div className={s.actionsRow}>

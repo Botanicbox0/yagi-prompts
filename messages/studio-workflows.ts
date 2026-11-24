@@ -220,6 +220,8 @@ export const studioWorkflowsEn = {
     forbidden: 'Only workspace owners and editors can perform this action.',
     allowanceClosed: 'Studio credits are not active for this workspace yet.',
     allowanceExhausted: 'Not enough credits left this month to run all steps.',
+    // 대표 확인 대기 (2026-11-24): 로컬 Gemma 초안, 용어 "이번 이용 기간"
+    allowanceExhaustedCycle: 'Not enough credits left in this usage period to run every step.',
     tooManyRunning: 'Up to 6 studio jobs can run at once. Wait a moment and try again.',
     referenceMissing: 'The selected reference asset is no longer available.',
     failed: 'Could not complete the request right now. Please try again shortly.',
@@ -439,6 +441,8 @@ export const studioWorkflowsKo: typeof studioWorkflowsEn = {
     forbidden: '소유자 또는 편집자 권한 멤버만 실행할 수 있습니다.',
     allowanceClosed: '이 워크스페이스에는 아직 스튜디오 크레딧이 열려 있지 않습니다.',
     allowanceExhausted: '이번 달 남은 크레딧이 부족해 모든 단계를 실행할 수 없습니다.',
+    // 대표 확인 대기 (2026-11-24): 로컬 Gemma 초안, 용어 "이번 이용 기간"
+    allowanceExhaustedCycle: '이번 이용 기간 남은 크레딧이 부족해 모든 단계를 실행할 수 없습니다.',
     tooManyRunning: '동시에 최대 6개 작업까지 실행할 수 있습니다. 진행 중인 작업이 끝난 뒤 다시 시도해 주세요.',
     referenceMissing: '선택한 기준 에셋을 찾을 수 없습니다.',
     failed: '요청을 처리하지 못했어요. 잠시 후 다시 시도해 주세요.',
