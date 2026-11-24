@@ -16,8 +16,10 @@ import type { GradeNames } from '@/lib/brand-studio/editor-v2/film-contents';
 import { createFilmSession, type FilmConflict, type FilmSession } from '@/lib/brand-studio/editor-v2/film-session';
 import { mapLimit, measuredFromTiming, snapFilmFps, sourceFramesOf } from '@/lib/brand-studio/editor-v2/fps';
 import { emptyFilm, realAssistAllowed, realDoc, sampleHrefFor, workspaceLocked } from '@/lib/brand-studio/editor-v2/real';
+import type { StudioAssetView } from '@/lib/brand-studio/contracts';
 import {
   deepLinkSource,
+  editorSources,
   footageConfirmedMissing,
   missingAfterRead,
   parseClipParam,
@@ -297,6 +299,27 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const realRef = useRef(real);
   realRef.current = real;
+  /**
+   * Assets saved from this screen's exports ("에셋에 저장", export-keep.tsx): listed first among the clips without a
+   * reload, as the current editor prepends them to its list, and counted as the organization's own assets (a 404 on
+   * one of them is never taken for a missing file).
+   */
+  const [savedSources, setSavedSources] = useState<readonly EditorSource[]>([]);
+  const savedIdsRef = useRef<string[]>([]);
+  const sources = useMemo(() => {
+    const given = real?.sources ?? [];
+    return savedSources.length === 0 ? given : [...savedSources.filter((saved) => !given.some((source) => source.key === saved.key)), ...given];
+  }, [real?.sources, savedSources]);
+  const sourcesRef = useRef(sources);
+  sourcesRef.current = sources;
+  const noteSavedAsset = useCallback((asset: StudioAssetView) => {
+    const film = realRef.current;
+    if (!film) return;
+    const [source] = editorSources(film.organizationId, [asset], []);
+    if (!source) return;
+    savedIdsRef.current = [...savedIdsRef.current, asset.id.toLowerCase()];
+    setSavedSources((current) => (current.some((entry) => entry.key === source.key) ? current : [source, ...current]));
+  }, []);
   const blockedRef = useRef(blocked);
   blockedRef.current = blocked;
   const docRef = useRef(doc);
@@ -436,7 +459,7 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
   }
 
   const secondsOfSrc = useCallback((src: string): number | null => {
-    const source = realRef.current?.sources.find((entry) => entry.srcUrl === src);
+    const source = sourcesRef.current.find((entry) => entry.srcUrl === src);
     return source ? sourceSeconds(source) : null;
   }, []);
 
@@ -458,8 +481,10 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
   const noteMissing = useCallback((srcs: readonly string[]) => {
     const film = realRef.current;
     if (!film) return;
+    const saved = savedIdsRef.current;
+    const record = film.assets && saved.length > 0 ? { ...film.assets, ids: [...film.assets.ids, ...saved] } : film.assets;
     setMissingSources((current) =>
-      missingAfterRead(current, srcs, (src) => footageConfirmedMissing(src, footageNotFound(src), film.organizationId, film.assets)),
+      missingAfterRead(current, srcs, (src) => footageConfirmedMissing(src, footageNotFound(src), film.organizationId, record)),
     );
   }, []);
 
@@ -1171,7 +1196,9 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
     keepThisFilm,
     openOtherFilm,
     locked: workspaceLocked(isReal, workspace),
-    sources: real?.sources ?? [],
+    sources,
+    /** An asset just saved from this screen's export: listed first among the clips (export-keep.tsx). */
+    noteSavedAsset,
     addSource,
     busySource,
     rates,
