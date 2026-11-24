@@ -408,6 +408,11 @@ export interface DirectorChatTurnInput {
    * Present = the turn settles a sheet; absent = today's chips turn. Cleaned and guarded again before use.
    */
   sheetState?: PersonalSheetState;
+  /**
+   * Sheet turns only: the customer's screen language. The reply and the question come back in it (the field names,
+   * `replyKo` included, stay as they are). A chips turn ignores it and answers as before. Absent = 'ko'.
+   */
+  locale?: 'ko' | 'en';
 }
 
 export type DirectorRefusalCode = 'none' | 'identity' | 'unsafe' | 'unsupported' | 'too_large';
