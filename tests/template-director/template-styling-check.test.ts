@@ -94,7 +94,8 @@ describe('checkStylingBlock', () => {
   it('reads a lock block followed directly by a styling block as two valid blocks', () => {
     const prompt = text(BASE, '', 'Template locks:', `${KEEP}the product.`, 'Template styling:', HAIR);
     expect(checkLockBlock(prompt).state).toBe('ok');
-    expect(checkStylingBlock(prompt)).toEqual({ state: 'ok', styling: { styled: ['hair'], photo: [] } });
+    // Rule 3 (2026-11-25): the makeup the block leaves out follows the photo.
+    expect(checkStylingBlock(prompt)).toEqual({ state: 'ok', styling: { styled: ['hair'], photo: ['makeup'] } });
   });
 
   it('refuses a styled description that says to follow the photo; the parse still reads it (save-time only, like a locked part)', () => {

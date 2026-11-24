@@ -15,6 +15,10 @@
  * own instead: `own` in the spec, hair and makeup only), taken from the photo. The default is the template's style:
  * nothing changes for a buyer who leaves it alone.
  *
+ * Rule 3 (founder, 2026-11-25): what a template does not specify is the buyer's own. A valid block with no line for
+ * the hair or the makeup reads that part as taken from the photo (`implied`), on every screen; the compile sends
+ * nothing new for it (the block stays as written, and the rewrite is told only about styled parts).
+ *
  * FAIL QUIET: unlike locks, a malformed styling block parses to `NO_STYLING` (nothing is shown, nothing is claimed and
  * the prompt compiles as if the block were plain text). The admin save refuses it (`checkStylingBlock`), and refuses a
  * part that is both locked and declared here. At read time the lock wins.
@@ -91,8 +95,18 @@ export interface TemplateStyling {
   any: boolean;
   /** Parts the template styles, in block order. */
   styled: readonly TemplateStyledPart[];
-  /** Parts the template takes from the photo, in block order. */
+  /**
+   * Parts the template takes from the photo: the block's "Taken from the photo" lines in block order, then the
+   * `implied` parts.
+   */
   photo: readonly StylePart[];
+  /**
+   * Rule 3 (founder, 2026-11-25): the hair and the makeup are the buyer's own unless the template says otherwise, so a
+   * valid block with no line for one of them takes it from the photo. Present only when a valid block leaves one out (a
+   * block naming hair, makeup and wardrobe reads exactly as before). Never written into the prompt: the block text is
+   * as the template wrote it, and the compile sends nothing new for an implied part.
+   */
+  implied?: readonly OwnStylePart[];
   /** The block exactly as written in the prompt (header and lines, no trailing blank line); '' without one. */
   block: string;
 }
@@ -102,6 +116,7 @@ const freezeStyling = (styling: TemplateStyling): TemplateStyling =>
     ...styling,
     styled: Object.freeze(styling.styled.map((s) => Object.freeze({ part: s.part, note: s.note, line: s.line }))),
     photo: Object.freeze([...styling.photo]),
+    ...(styling.implied ? { implied: Object.freeze([...styling.implied]) } : {}),
   });
 
 export const NO_STYLING: TemplateStyling = freezeStyling({ any: false, styled: [], photo: [], block: '' });
@@ -191,12 +206,19 @@ function readBlock(lines: readonly string[], headers: readonly number[]) {
   return { block, entries, problems };
 }
 
+/**
+ * A valid block as the screens and the compile read it. Rule 3: the hair or makeup the block has no line for is
+ * `implied` and read as taken from the photo (after the written photo parts). The lock check and `applyOwnChoice` read
+ * the written lines only, so an implied part never meets a lock line or a buyer's `own`.
+ */
 function stylingOf(block: string, entries: ReadonlyArray<StylingLine>): TemplateStyling {
+  const implied = OWN_STYLE_PARTS.filter((part) => !entries.some((e) => e.part === part));
   return freezeStyling({
     any: true,
     styled: entries.flatMap((e) => (e.kind === 'styled' ? [{ part: e.part, note: e.note, line: e.line }] : [])),
-    photo: entries.flatMap((e) => (e.kind === 'photo' ? [e.part] : [])),
+    photo: [...entries.flatMap((e) => (e.kind === 'photo' ? [e.part] : [])), ...implied],
     block,
+    ...(implied.length > 0 ? { implied } : {}),
   });
 }
 
@@ -433,7 +455,8 @@ export function withOwnStyleSheetPlan(plan: SheetCompilePlan, plans: readonly Ow
 /**
  * What the rewrite is told about each styled part that is neither locked nor changed by the customer: kept as the
  * template styles it, or taken from the photo (`rule` carries the own part's canonical text; it never goes on the wire
- * as its own field).
+ * as its own field). A part taken from the photo, written or `implied`, is never listed: the rewrite follows the photo
+ * for it as for any part the template does not style.
  */
 export function templateStylingUses(
   styling: TemplateStyling,
