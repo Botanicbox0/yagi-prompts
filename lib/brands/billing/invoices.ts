@@ -1349,13 +1349,15 @@ export async function issueBrandInvoiceInTx(
   }
 
   const memo = v.memo !== undefined ? v.memo : String(row.memo ?? '');
-  // R3 item 4: an admin issuing a plan organization's CYCLE invoice fixes its due date then — the issue day + 14 (bank
-  // transfer), from the engine's one due-date function — when the column exists (0182; `select *` shows it). A
-  // calendar-month row (an organization without a plan) keeps exactly the statement it always ran. With the flag off
-  // nothing reads the date (overdue stays "more than 14 days after the issue instant", the cap is never halved).
+  // R3 item 4: an admin issuing a plan organization's CYCLE invoice fixes its due date then, through the engine's one
+  // due-date function — fix round 1 (M4): exactly the engine rule, `max(issue day, cycle start) + 14` (bank transfer),
+  // so an invoice issued before its cycle starts carries the date the engine keeps once the flag is on. Only when the
+  // column exists (0182; `select *` shows it). A calendar-month row (an organization without a plan) keeps exactly the
+  // statement it always ran. With the flag off nothing reads the date (overdue stays "more than 14 days after the
+  // issue instant", the cap is never halved).
   const manualDueOn =
     !subscriptionMeta && Object.prototype.hasOwnProperty.call(row, 'due_on') && row.cycle_start != null
-      ? dueOnForInvoice({ issueDay: kstDayOf(nowDate), method: 'transfer' })
+      ? dueOnForInvoice({ issueDay: kstDayOf(nowDate), cycleStart: dayOf(row.cycle_start), method: 'transfer' })
       : null;
   const updated = (
     subscriptionMeta
@@ -1538,12 +1540,12 @@ export async function markBrandInvoicePaid(
       if (v.paidAt !== undefined) {
         const paidDay = kstDayOf(new Date(paidAtIso));
         const todayKst = kstDayOf(nowDate);
-        const issuedAt = stamp(row.issued_at);
-        const issueDay = issuedAt ? kstDayOf(new Date(issuedAt)) : null;
         const afterToday = paidDay > todayKst;
-        const beforeIssue = issueDay !== null && paidDay < issueDay;
-        if (afterToday || beforeIssue) {
-          const subscribed =
+        // Whether a non-ended subscription owns the organization (flag on, 0182) — asked at most once, and only when a
+        // rule below needs it, so an in-range date runs no extra statement.
+        let subscribed: boolean | undefined;
+        const isSubscribed = async (): Promise<boolean> => {
+          subscribed ??=
             brandBillingAutoIssueOpen(deps.env) &&
             (await loadSubscriptionSchemaReady(sql)) &&
             Boolean(
@@ -1553,18 +1555,25 @@ export async function markBrandInvoicePaid(
                 ])
               ).rows[0],
             );
-          if (subscribed) {
-            // Review round 5, B4: a subscribed organization's payment cannot be dated after today (KST). A day before the
-            // issue day is the subscribed path's to judge (a first payment may precede a reissue; the rule below).
-            if (afterToday) return { ok: false as const, code: 'invalid' as const, detail: 'paid_at_in_future' };
-          } else {
-            // R3 item 3: the manual path — the paid day runs from the invoice's issue day through today (KST). Refused,
-            // nothing written; the detail carries the allowed range for the admin line.
-            const range = `${issueDay ?? todayKst}~${todayKst}`;
+          return subscribed;
+        };
+        // Review round 5, B4 (unchanged): a subscribed organization's payment cannot be dated after today (KST).
+        if (afterToday && (await isSubscribed())) {
+          return { ok: false as const, code: 'invalid' as const, detail: 'paid_at_in_future' };
+        }
+        // R3 item 3, fix round 1 (B1): the manual path bounds a CYCLE invoice (a plan organization's) to the days from its
+        // issue day through today (KST). A calendar-month invoice — an organization without a plan, an override
+        // organization, a legacy month row, a subscription's first invoice before its cycle — takes any date, exactly
+        // as before R3. The subscribed path keeps its own rules below. Refused, nothing written.
+        if (row.cycle_start != null) {
+          const issuedAt = stamp(row.issued_at);
+          const issueDay = issuedAt ? kstDayOf(new Date(issuedAt)) : null;
+          const beforeIssue = issueDay !== null && paidDay < issueDay;
+          if ((afterToday || beforeIssue) && !(await isSubscribed())) {
             return {
               ok: false as const,
               code: 'invalid' as const,
-              detail: `${afterToday ? PAID_AT_IN_FUTURE : PAID_AT_BEFORE_ISSUE}:${range}`,
+              detail: `${afterToday ? PAID_AT_IN_FUTURE : PAID_AT_BEFORE_ISSUE}:${issueDay ?? todayKst}~${todayKst}`,
             };
           }
         }

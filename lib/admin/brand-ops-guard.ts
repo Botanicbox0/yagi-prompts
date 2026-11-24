@@ -19,10 +19,8 @@ type AnyOperation = { parse(form: FormData): unknown; run(ctx: AdminContext, inp
 export function withBillingConflicts<T extends Record<string, AnyOperation>>(operations: T): T {
   const wrapped: Record<string, AnyOperation> = {};
   for (const [name, op] of Object.entries(operations)) {
-    wrapped[name] = {
-      parse: (form) => op.parse(form),
-      run: async (ctx, input) => asBillingConflict(await op.run(ctx, input)),
-    };
+    // Review m5: every other member of the operation is kept as it is; only `run` is wrapped.
+    wrapped[name] = { ...op, run: async (ctx: AdminContext, input: never) => asBillingConflict(await op.run(ctx, input)) };
   }
   return wrapped as T;
 }

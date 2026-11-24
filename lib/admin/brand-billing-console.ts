@@ -564,13 +564,34 @@ export function formatBillingOutcomeDetail(detail: string | undefined, locale: '
   // B1c-3: plan-upgrade refusals have their own lines (lib/admin/plan-upgrade-detail.ts).
   const upgrade = formatPlanUpgradeOutcomeDetail(detail, locale);
   if (upgrade) return upgrade;
-  // R3 item 7: a lower plan through the plan forms waits for the next cycle; the line names its start day.
-  const downgrade = /(?:^|:)plan_downgrade_next_cycle:(\d{4}-\d{2}-\d{2})$/.exec(detail);
+  // R3 item 7 (+ fix round 1, M1/M3): a lower plan through the plan forms; each refusal says what is true and names the day.
+  const downgrade =
+    /(?:^|:)(plan_downgrade_(?:next_cycle|next_issued|next_paid|cycle_issued_today|upgraded_cycle)):(\d{4}-\d{2}-\d{2})$/.exec(detail);
   if (downgrade) {
-    const day = calendarDayLabel(downgrade[1]!, locale);
-    return locale === 'ko'
-      ? `주기 중간에는 낮은 플랜으로 바꿀 수 없습니다. 다음 주기 시작일(${day})에 바꾸세요. (${detail})`
-      : `A lower plan cannot start in the middle of a cycle. Change it on the next cycle's start day (${day}). (${detail})`;
+    const day = calendarDayLabel(downgrade[2]!, locale);
+    const lines: Record<string, { ko: string; en: string }> = {
+      plan_downgrade_next_cycle: {
+        ko: `주기 중간에는 낮은 플랜으로 바꿀 수 없습니다. 다음 주기 시작일(${day})에 바꾸세요.`,
+        en: `A lower plan cannot start in the middle of a cycle. Change it on the next cycle's start day (${day}).`,
+      },
+      plan_downgrade_next_issued: {
+        ko: `다음 주기 청구서가 이미 발행되어 있습니다. 그 청구서를 취소한 뒤 다음 주기 시작일(${day})에 바꾸세요.`,
+        en: `The next cycle's invoice is already issued. Void it, then change the plan on the next cycle's start day (${day}).`,
+      },
+      plan_downgrade_next_paid: {
+        ko: `다음 주기 청구서도 이미 입금되어 그 주기는 지금 플랜으로 이용합니다. 낮은 플랜은 그다음 주기 시작일(${day})에 바꾸세요.`,
+        en: `The next cycle is already paid, so it keeps the current plan. Change to a lower plan on the start day of the cycle after it (${day}).`,
+      },
+      plan_downgrade_cycle_issued_today: {
+        ko: '오늘 시작한 주기의 청구서가 이미 발행되어 있습니다. 그 청구서를 취소하고 플랜을 바꾼 뒤 다시 발행하세요.',
+        en: "The invoice of the cycle that started today is already issued. Void it, change the plan, then issue the cycle's invoice again.",
+      },
+      plan_downgrade_upgraded_cycle: {
+        ko: `이번 주기는 플랜 올림으로 시작했습니다. 낮은 플랜은 다음 주기 시작일(${day})에 바꾸세요.`,
+        en: `This cycle began with a plan upgrade. Change to a lower plan on the next cycle's start day (${day}).`,
+      },
+    };
+    return `${lines[downgrade[1]!]![locale]} (${detail})`;
   }
   // R3 item 3: the manual paid day runs from the invoice's issue day through today; the line names that range.
   const paidRange = /(?:^|:)(paid_at_before_issue|paid_at_in_future):(\d{4}-\d{2}-\d{2})~(\d{4}-\d{2}-\d{2})$/.exec(detail);

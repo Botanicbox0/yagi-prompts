@@ -61,7 +61,8 @@ export function boundOutcomeDetail(detail: string): string {
   let points = Array.from(detail);
   if (points.length > OUTCOME_DETAIL_MAX_CHARS) points = points.slice(0, OUTCOME_DETAIL_MAX_CHARS);
   let out = points.join('');
-  while (encodeURIComponent(out).length > OUTCOME_DETAIL_MAX_ENCODED && points.length > 0) {
+  // Review m6: measured as `URLSearchParams` encodes it (it also escapes `!'()~`).
+  while (new URLSearchParams({ d: out }).toString().length - 2 > OUTCOME_DETAIL_MAX_ENCODED && points.length > 0) {
     points = points.slice(0, Math.max(0, points.length - Math.max(1, Math.ceil(points.length / 20))));
     out = points.join('');
   }

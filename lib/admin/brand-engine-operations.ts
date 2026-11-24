@@ -14,7 +14,7 @@ import type { AdminOperation } from './operations';
 import { fail, ok, type AdminContext } from './context';
 import { brandFailure } from './brand-workspace-operations';
 import { asBillingConflict } from './brand-ops-guard';
-import { PLAN_DOWNGRADE_NEXT_CYCLE } from '@/lib/brands/billing/cycle-invoices';
+import { PLAN_DOWNGRADE_CODES } from '@/lib/brands/billing/cycle-invoices';
 import * as f from './form';
 
 /**
@@ -111,9 +111,9 @@ const plan: AdminOperation<PlanInput> = {
     if (!result.ok && result.field === 'plan_upgrade_required') {
       return fail('billingConflict', 'conflict:plan_upgrade_required');
     }
-    // R3 item 7: a lower plan mid-cycle waits for the next cycle (the detail names its start day).
-    if (!result.ok && result.field === PLAN_DOWNGRADE_NEXT_CYCLE) {
-      return fail('billingConflict', `conflict:${PLAN_DOWNGRADE_NEXT_CYCLE}:${result.detail ?? ''}`);
+    // R3 item 7 (+ fix round 1): a lower plan waits for the next cycle (the field names why, the detail the day).
+    if (!result.ok && (PLAN_DOWNGRADE_CODES as readonly string[]).includes(result.field ?? '')) {
+      return fail('billingConflict', `conflict:${result.field}:${result.detail ?? ''}`);
     }
     if (!result.ok) return asBillingConflict(brandFailure(result.code));
     return ok('saved', { to: organizationPath(input.organizationId) });

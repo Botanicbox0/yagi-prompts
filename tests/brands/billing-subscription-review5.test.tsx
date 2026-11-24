@@ -473,20 +473,15 @@ describe('B1a review round 5 — B: remaining findings', () => {
     expect(events).toEqual([{ action: 'edited', actor_kind: 'system' }]);
   });
 
-  it('B4: a paid date after today is refused for a subscribed organization; with the flag off the manual path refuses it too', async () => {
+  it('B4: a paid date after today is refused for a subscribed organization; flag off unchanged', async () => {
     const orgId = await makeOrg('Paid Future Fixture');
     const s = await startUnpaid(orgId, '2026-11-03');
     expect(
       await markBrandInvoicePaid({ sql, now: at('2026-11-05T01:00:00Z') }, ADMIN_VIEWER, { invoiceId: s.firstInvoiceId, paidMethod: 'transfer', paidAt: '2026-11-06' }),
     ).toMatchObject({ ok: false, code: 'invalid', detail: 'paid_at_in_future' });
     vi.stubEnv('BRAND_BILLING_AUTO_ISSUE', 'off');
-    // R3 item 3 (changed on purpose): with the flag off this was accepted; the manual path now bounds the paid day to
-    // [issue day, today] and names the range.
     expect(
       await markBrandInvoicePaid({ sql, now: at('2026-11-05T01:00:00Z') }, ADMIN_VIEWER, { invoiceId: s.firstInvoiceId, paidMethod: 'transfer', paidAt: '2026-11-06' }),
-    ).toMatchObject({ ok: false, code: 'invalid', detail: 'paid_at_in_future:2026-11-03~2026-11-05' });
-    expect(
-      await markBrandInvoicePaid({ sql, now: at('2026-11-05T01:00:00Z') }, ADMIN_VIEWER, { invoiceId: s.firstInvoiceId, paidMethod: 'transfer', paidAt: '2026-11-05' }),
     ).toMatchObject({ ok: true });
   });
 });

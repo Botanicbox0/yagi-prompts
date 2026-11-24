@@ -10,7 +10,6 @@ import {
   CYCLE_ALREADY_INVOICED,
   higherPlanNeedsUpgrade,
   lowerPlanWaitsForNextCycle,
-  PLAN_DOWNGRADE_NEXT_CYCLE,
   PLAN_UPGRADE_REQUIRED,
   startDayMoveBlocked,
 } from './billing/cycle-invoices';
@@ -204,11 +203,11 @@ export async function upsertPlanAssignmentInTx(
     if (stored && (await higherPlanNeedsUpgrade(sql, params.organizationId, stored.plan_id, params.planId, kstDayOf(params.now ?? new Date())))) {
       return { ok: false, code: 'conflict', field: PLAN_UPGRADE_REQUIRED };
     }
-    // R3 item 7: a lower paid plan waits for the next cycle while an issued or paid invoice covers today.
-    const nextCycleStart = stored
+    // R3 item 7 (+ fix round 1): a lower plan waits for the next cycle; the field names why, the detail the day.
+    const downgrade = stored
       ? await lowerPlanWaitsForNextCycle(sql, params.organizationId, stored.plan_id, params.planId, kstDayOf(params.now ?? new Date()))
       : null;
-    if (nextCycleStart) return { ok: false, code: 'conflict', field: PLAN_DOWNGRADE_NEXT_CYCLE, detail: nextCycleStart };
+    if (downgrade) return { ok: false, code: 'conflict', field: downgrade.code, detail: downgrade.day };
   }
   const next = revision + 1;
   const actorId = params.actor.kind === 'admin' ? params.actor.userId : null;

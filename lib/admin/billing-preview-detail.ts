@@ -79,8 +79,9 @@ export function parseReissueDetail(detail: string | null | undefined): ReissueDe
  * stops before it passes these lengths and says how many more there are (`,+N`), so the whole detail always fits the
  * outcome URL (`OUTCOME_DETAIL_MAX_CHARS` / `OUTCOME_DETAIL_MAX_ENCODED` in lib/admin/dispatch.ts).
  */
-export const PLAN_DEFAULT_NAMES_MAX_CHARS = 600;
-export const PLAN_DEFAULT_NAMES_MAX_ENCODED = 1800;
+// Fix round 1 (review m4): no more customer organization names in the redirect URL (and request logs) than before R3.
+export const PLAN_DEFAULT_NAMES_MAX_CHARS = 160;
+export const PLAN_DEFAULT_NAMES_MAX_ENCODED = 480;
 
 export interface PlanDefaultPreviewInput {
   planId: PaidPlan;

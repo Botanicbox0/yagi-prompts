@@ -6,7 +6,7 @@
  */
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import { cycleStartAt } from './cycle';
-import { hasColumn } from './schema-guard';
+import { hasColumn, hasTable } from './schema-guard';
 
 async function coverageSql(sql: SqlRunner): Promise<{ kindFilter: string; startExpr: string; endExpr: string }> {
   const withKind = await hasColumn(sql, 'brand_invoices', 'kind');
@@ -119,16 +119,45 @@ export async function higherPlanNeedsUpgrade(
   return subscriptionInvoiceOverlaps(sql, organizationId, { start: todayKst, end: nextDay(todayKst) });
 }
 
-/** R3 item 7: refusal marker when a plan form lowers the plan mid-cycle; the detail is the next cycle's start day. */
-export const PLAN_DOWNGRADE_NEXT_CYCLE = 'plan_downgrade_next_cycle' as const;
+/**
+ * B1c-3: the reason stamped on the invoice event a plan upgrade writes (`snapshot.reason`, with `snapshot.upgradedOn` =
+ * the day of the upgrade = the new plan start day). The source of truth for "this cycle began with an upgrade".
+ */
+export const PLAN_UPGRADE_REASON = 'plan_upgrade' as const;
 
 /**
- * R3 item 7 (founder rule, confirmed 2026-11-24: a downgrade takes effect from the next cycle's start day). While an
- * ISSUED or PAID non-void subscription invoice covers today, an admin plan form may not move a paid plan to a LOWER paid
- * plan — the customer has been billed for the higher one. Returns the day the covering invoice ends (= the next cycle's
- * start; a calendar-month row: the next month's 1st), or null when the change is allowed. A draft alone does not block
- * (on the boundary day the admin changes the plan before issuing the new cycle's invoice). Same or higher plans,
- * `project_only`, and an organization with no such invoice run no query.
+ * R3 item 7 + fix round 1 (M1, M3): why a plan form may not lower the plan today. The detail is a KST day:
+ * - `plan_downgrade_next_cycle`        — mid-cycle; change it on the day named (the next cycle's start);
+ * - `plan_downgrade_next_issued`       — the next cycle's invoice is already issued; void it, then change it on the day named;
+ * - `plan_downgrade_next_paid`         — the next cycle is already paid and keeps its plan; the day named starts the cycle after it;
+ * - `plan_downgrade_cycle_issued_today`— today starts a cycle whose invoice is issued (unpaid); void it, change, issue again;
+ * - `plan_downgrade_upgraded_cycle`    — this cycle began with "플랜 올림"; the day named is the next cycle's start.
+ */
+export const PLAN_DOWNGRADE_NEXT_CYCLE = 'plan_downgrade_next_cycle' as const;
+export const PLAN_DOWNGRADE_NEXT_ISSUED = 'plan_downgrade_next_issued' as const;
+export const PLAN_DOWNGRADE_NEXT_PAID = 'plan_downgrade_next_paid' as const;
+export const PLAN_DOWNGRADE_CYCLE_ISSUED_TODAY = 'plan_downgrade_cycle_issued_today' as const;
+export const PLAN_DOWNGRADE_UPGRADED_CYCLE = 'plan_downgrade_upgraded_cycle' as const;
+export const PLAN_DOWNGRADE_CODES = [
+  PLAN_DOWNGRADE_NEXT_CYCLE,
+  PLAN_DOWNGRADE_NEXT_ISSUED,
+  PLAN_DOWNGRADE_NEXT_PAID,
+  PLAN_DOWNGRADE_CYCLE_ISSUED_TODAY,
+  PLAN_DOWNGRADE_UPGRADED_CYCLE,
+] as const;
+export type PlanDowngradeRefusal = { code: (typeof PLAN_DOWNGRADE_CODES)[number]; day: string };
+
+/**
+ * R3 item 7 (founder rule, confirmed 2026-11-24: a downgrade takes effect from the next cycle's start day). An admin plan
+ * form may not move a paid plan to a LOWER plan — fix round 1 (M2): `project_only` counts as lower than every paid plan —
+ * when the customer has been billed for the higher one:
+ * 1. (M3) the current cycle began with a plan upgrade (the upgrade event's `upgradedOn` = the plan's start day, and today is
+ *    inside that first cycle) — whatever its invoice's status, even a voided draft: the carry was given for the higher plan;
+ * 2. an ISSUED or PAID non-void subscription invoice covers today (a draft alone does not block: on the boundary day the
+ *    admin changes the plan before issuing the new cycle's invoice). Then (M1) the refusal names what is true: today is the
+ *    first day of an issued, unpaid cycle; or the next cycle's invoice is already issued (void it first) or paid (it keeps
+ *    the plan); else mid-cycle with the covering invoice's end (a calendar-month row: the next month's 1st).
+ * Null when the change is allowed. Same or higher plans run no query.
  */
 export async function lowerPlanWaitsForNextCycle(
   sql: SqlRunner,
@@ -136,22 +165,50 @@ export async function lowerPlanWaitsForNextCycle(
   currentPlanId: string,
   newPlanId: string,
   todayKst: string,
-): Promise<string | null> {
+): Promise<PlanDowngradeRefusal | null> {
   const current = PLAN_RANK[currentPlanId] ?? 0;
   const next = PLAN_RANK[newPlanId] ?? 0;
-  if (next === 0 || current === 0 || next >= current) return null;
+  if (current === 0 || next >= current) return null;
+
+  if (await hasTable(sql, 'brand_invoice_events')) {
+    const upgraded = (
+      await sql.query<{ started_on: string }>(
+        `select a.started_on::text as started_on
+           from brand_plan_assignments a
+          where a.organization_id = $1
+            and exists (select 1 from brand_invoice_events e
+                         where e.organization_id = a.organization_id and e.action = 'edited'
+                           and e.snapshot->>'reason' = $2 and e.snapshot->>'upgradedOn' = a.started_on::text)`,
+        [organizationId, PLAN_UPGRADE_REASON],
+      )
+    ).rows[0];
+    if (upgraded) {
+      const start = String(upgraded.started_on).slice(0, 10);
+      const end = cycleStartAt(start, 1);
+      if (start <= todayKst && todayKst < end) return { code: PLAN_DOWNGRADE_UPGRADED_CYCLE, day: end };
+    }
+  }
+
   const c = await coverageSql(sql);
-  const row = (
-    await sql.query<{ next_start: string }>(
-      `select (${c.endExpr})::text as next_start from brand_invoices
-        where organization_id = $1 and status in ('issued', 'paid')${c.kindFilter}
-          and ${c.startExpr} <= $2::date and ${c.endExpr} > $2::date
-        order by ${c.endExpr} desc
-        limit 1`,
+  const rows = (
+    await sql.query<{ status: string; start: string; end: string }>(
+      `select status, (${c.startExpr})::text as start, (${c.endExpr})::text as end from brand_invoices
+        where organization_id = $1 and status in ('issued', 'paid')${c.kindFilter} and ${c.endExpr} > $2::date
+        order by ${c.startExpr}, created_at`,
       [organizationId, todayKst],
     )
-  ).rows[0];
-  return row ? String(row.next_start).slice(0, 10) : null;
+  ).rows.map((r) => ({ status: String(r.status), start: String(r.start).slice(0, 10), end: String(r.end).slice(0, 10) }));
+  const cover = rows.find((r) => r.start <= todayKst && todayKst < r.end);
+  if (!cover) return null;
+  if (cover.start === todayKst && cover.status === 'issued') return { code: PLAN_DOWNGRADE_CYCLE_ISSUED_TODAY, day: todayKst };
+  // The issued or paid invoices that follow the covering one without a gap.
+  let cursor = cover.end;
+  for (const r of rows) {
+    if (r.start !== cursor) continue;
+    if (r.status !== 'paid') return { code: PLAN_DOWNGRADE_NEXT_ISSUED, day: r.start };
+    cursor = r.end;
+  }
+  return cursor === cover.end ? { code: PLAN_DOWNGRADE_NEXT_CYCLE, day: cover.end } : { code: PLAN_DOWNGRADE_NEXT_PAID, day: cursor };
 }
 
 function nextDay(day: string): string {

@@ -10,6 +10,7 @@ import { lockOrganizationForSubscription, previewDigest, reconcileSubscriptionIn
 import { BrandBillingDenied, requireDbAdmin } from './access';
 import { insertAllowanceGrantInTx, loadPlanAllowanceDefaults } from './allowance';
 import { kstDayStartUtc } from './cycle';
+import { PLAN_UPGRADE_REASON } from './cycle-invoices';
 import { appendInvoiceEvent, draftBrandInvoiceInTx, voidBrandInvoiceInTx, type InvoiceActor, type ValidatedDraftInvoiceInput } from './invoices';
 import { kstDayOf, kstMonthOf, PAID_BRAND_PLAN_IDS, type PaidBrandPlanId } from './math';
 import { BRAND_PLAN_LIST_KRW, resolvePlanCapKrw } from './plan-credits';
@@ -81,8 +82,11 @@ const UpgradeInput = z.object({
   previewDigest: z.string().trim().regex(/^[0-9a-f]{16}$/).optional(),
 });
 
-/** Marker on the cut invoice's audit event; also how a second confirm on the same day is recognised. */
-export const PLAN_UPGRADE_REASON = 'plan_upgrade' as const;
+/**
+ * Marker on the cut invoice's audit event; also how a second confirm on the same day is recognised. Defined in
+ * cycle-invoices.ts since R3 fix round 1 (the plan forms read it there: a cycle that began with an upgrade).
+ */
+export { PLAN_UPGRADE_REASON };
 
 type Deps = { sql: SqlRunner; now?: () => Date; env?: Record<string, string | undefined>; graceDays?: number };
 

@@ -264,7 +264,8 @@ describe('R3 item 4: a manually issued cycle invoice stores its due date', () =>
     const drafted = await draftBrandInvoice({ sql, now: at('2027-02-10T01:00:00Z') }, ADMIN_VIEWER, { organizationId: orgId, cycle: 'next' });
     if (!drafted.ok) throw new Error(`draft ${drafted.code} ${drafted.detail ?? ''}`);
     expect(await issueBrandInvoice({ sql, now: at('2027-02-10T01:00:00Z') }, ADMIN_VIEWER, { invoiceId: drafted.invoice.id })).toMatchObject({ ok: true });
-    expect(await invoiceRow(drafted.invoice.id)).toMatchObject({ due_on: '2027-02-24' });
+    // Fix round 1, M4: the engine's rule — max(issue day 02-10, cycle start 02-17) + 14 — the date adoption would compute.
+    expect(await invoiceRow(drafted.invoice.id)).toMatchObject({ due_on: '2027-03-03' });
 
     vi.stubEnv('BRAND_BILLING_AUTO_ISSUE', 'on');
     await runBrandSubscriptionTick({ sql, now: at('2027-02-11T01:00:00Z') });
@@ -273,11 +274,11 @@ describe('R3 item 4: a manually issued cycle invoice stores its due date', () =>
         drafted.invoice.id,
       ])
     ).rows[0]!;
-    expect(adopted).toMatchObject({ due_on: '2027-02-24' });
+    expect(adopted).toMatchObject({ due_on: '2027-03-03' });
     expect(adopted.subscription_epoch).not.toBeNull();
     // Due day: full plan cap; the day after, while unpaid: half.
-    expect(await loadAllowance(sql, orgId, STUDIO, new Date('2027-02-24T03:00:00Z'))).toMatchObject({ baseCapKrw: 270_000 });
-    expect(await loadAllowance(sql, orgId, STUDIO, new Date('2027-02-25T03:00:00Z'))).toMatchObject({ baseCapKrw: 135_000, planCapHalvedUnpaid: true });
+    expect(await loadAllowance(sql, orgId, STUDIO, new Date('2027-03-03T03:00:00Z'))).toMatchObject({ baseCapKrw: 270_000 });
+    expect(await loadAllowance(sql, orgId, STUDIO, new Date('2027-03-04T03:00:00Z'))).toMatchObject({ baseCapKrw: 135_000, planCapHalvedUnpaid: true });
     expect(await loadBrandSubscription(sql, orgId)).not.toBeNull();
   });
 });
