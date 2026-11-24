@@ -17,7 +17,8 @@ import { refreshReduced, screenTimer } from './screen-refresh';
  * in lib/brand-studio/editor-v2/fps.ts. The length is the view's exact one when given, else the video's.
  * It waits until the page is visible; its time limit counts screen time (./screen-refresh.ts), and frames
  * reported while the screen refreshes slowly are not used (one a second would read as 1 fps). A failed
- * try is followed by one longer try (`measureWithRetry`, review round 1, item 3). Each piece of footage
+ * try is followed by one longer try (`measureWithRetry`, review round 1, item 3). A file that answered it
+ * is not there (404 / 410) is not played at all (audit A4). Each piece of footage
  * is measured once per visit; a failure answers `null` and the editor stores nothing frame-based for it,
  * so the next visit measures it again. Frames that are not evenly spaced are reported (`variable`). The
  * number of pictures is never rounded up (spec E addendum C3): after the window, the first and the last
@@ -37,14 +38,16 @@ export function measureSource(src: string, durationSec: number | null): Promise<
   const run =
     typeof document === 'undefined' || !src
       ? Promise.resolve(null)
-      : readFootage(src).then(
-          (read) =>
-            measuredFromTiming(read.answer) ??
-            measureWithRetry<MeasuredSource>({
-              visible: () => document.visibilityState === 'visible',
-              untilVisible,
-              attempt: (limitMs) => measureOnce(src, durationSec, limitMs),
-            }),
+      : readFootage(src).then((read) =>
+          // A file that is not there (404 / 410, audit A4) is not played either: there is nothing to play.
+          !read.answer.ok && read.answer.reason === 'gone'
+            ? null
+            : (measuredFromTiming(read.answer) ??
+              measureWithRetry<MeasuredSource>({
+                visible: () => document.visibilityState === 'visible',
+                untilVisible,
+                attempt: (limitMs) => measureOnce(src, durationSec, limitMs),
+              })),
         );
   cache.set(src, run);
   return run;

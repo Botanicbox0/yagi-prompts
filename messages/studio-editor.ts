@@ -275,6 +275,8 @@ export const studioEditorEn = {
     zoomFrames: 'Frame by frame',
     zoomFrame: 'One frame is {px} px',
     zoomFar: 'Whole film',
+    /** On a cut whose footage file is not there (audit A4); the panel says what to do. */
+    missing: 'File missing',
   },
   assist: {
     heading: 'Edit by words',
@@ -405,6 +407,7 @@ export const studioEditorEn = {
     empty: 'Add at least one cut to export.',
     unsupported: 'This browser cannot export the video. Open it in Chrome or Edge on a computer.',
     rateUnknown: 'Cannot export yet: the frame rate of "{clip}" has not been read. Open the film again.',
+    sourceMissing: 'Cannot export: the file of "{clip}" cannot be found. Delete that cut, or put another clip in its place.',
     warnSound: 'The sound of "{clip}" could not be read, so it is not in this file.',
     warnLastFrame: 'The last {count} frame(s) of "{clip}" go past the end of its footage, so they repeat its last picture.',
     warnLastFrameMany: 'The last {count} frames of "{clip}" could not be read from its footage, so they repeat its last picture. Check that part of the exported file.',
@@ -461,6 +464,7 @@ export const studioEditorEn = {
     adding: 'Reading the clip…',
     sourceRate: 'Shot at {rate} fps, shown at the film’s {fps} fps.',
     rateUnknown: 'The clip’s own frame rate has not been read yet, so it follows the film’s {fps} fps for now. It is read again the next time the film opens.',
+    sourceMissing: 'The file of this cut cannot be found. It may have been deleted. Delete this cut, or put another clip in its place.',
     rateVariable: 'This clip’s frames are not evenly spaced (variable frame rate), so it cannot be cut exactly on its frames.',
     rateTentative: 'The frame rate has not been read yet, so the film shows at {fps} fps for now. Your edits are saved. Exact frame positions are set once the rate is read, the next time the film opens.',
     rateTentativeShort: 'for now',
@@ -759,6 +763,8 @@ export const studioEditorKo: typeof studioEditorEn = {
     zoomFrames: '프레임 단위 보기',
     zoomFrame: '한 프레임 {px}px',
     zoomFar: '영상 전체',
+    // 대표 확인 대기 (Gemma 미실행)
+    missing: '원본 없음',
   },
   assist: {
     heading: '말로 편집',
@@ -888,6 +894,8 @@ export const studioEditorKo: typeof studioEditorEn = {
     empty: '컷을 하나 이상 넣은 뒤 내보내 주세요.',
     unsupported: '이 브라우저에서는 영상을 내보낼 수 없습니다. PC의 Chrome이나 Edge에서 열어 주세요.',
     rateUnknown: '"{clip}" 클립의 초당 프레임 수를 아직 읽지 못해 내보낼 수 없습니다. 영상을 다시 열어 주세요.',
+    // 대표 확인 대기 (Gemma 미실행)
+    sourceMissing: '"{clip}" 클립의 원본 파일을 찾을 수 없어 내보낼 수 없습니다. 이 컷을 지우거나 그 자리에 다른 클립을 넣어 주세요.',
     warnSound: '"{clip}" 클립의 소리를 읽지 못해 이 파일에서 빠졌습니다.',
     warnLastFrame: '"{clip}" 클립 끝의 {count}프레임은 원본 영상이 끝난 뒤라 마지막 장면으로 채웠습니다.',
     warnLastFrameMany: '"{clip}" 클립 끝의 {count}프레임을 원본에서 읽지 못해 마지막 장면으로 채웠습니다. 내보낸 파일에서 그 부분을 확인해 주세요.',
@@ -945,6 +953,8 @@ export const studioEditorKo: typeof studioEditorEn = {
     adding: '클립을 읽는 중입니다…',
     sourceRate: '원본은 {rate}fps이고, 영상의 {fps}fps에 맞춰 보여 줍니다.',
     rateUnknown: '클립의 초당 프레임 수를 아직 읽지 못해 임시로 영상의 {fps}fps에 맞춥니다. 다음에 영상을 열 때 다시 읽습니다.',
+    // 대표 확인 대기 (Gemma 미실행)
+    sourceMissing: '이 컷의 원본 파일을 찾을 수 없습니다. 지워졌을 수 있습니다. 이 컷을 지우거나 그 자리에 다른 클립을 넣어 주세요.',
     rateVariable: '이 클립은 프레임 간격이 일정하지 않아 프레임 단위로 정확히 자를 수 없습니다.',
     rateTentative: '초당 프레임 수를 아직 읽지 못해 임시로 {fps}fps로 보여 줍니다. 고친 내용은 저장됩니다. 프레임 단위 위치는 다음에 영상을 열어 값을 읽은 뒤에 정해집니다.',
     rateTentativeShort: '임시',

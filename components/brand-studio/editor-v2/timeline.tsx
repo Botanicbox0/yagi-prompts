@@ -406,6 +406,7 @@ export function Timeline({ api }: { api: EditorApi }) {
               const selected = api.selection.includes(span.clip.id);
               const inScope = workspace !== 'cut' && !api.locked && api.targetIds.includes(span.clip.id);
               const tiles = strips?.[span.index] ?? null;
+              const missing = api.real && !!api.missingSources[span.clip.srcUrl];
               return (
                 <div
                   key={span.clip.id}
@@ -423,7 +424,7 @@ export function Timeline({ api }: { api: EditorApi }) {
                   role="button"
                   tabIndex={0}
                   aria-pressed={selected}
-                  aria-label={fill(copy.timeline.cut, { number: span.index + 1 })}
+                  aria-label={`${fill(copy.timeline.cut, { number: span.index + 1 })}${missing ? ` · ${copy.timeline.missing}` : ''}`}
                   onKeyDown={(event) => {
                     if (event.key === 'Enter') {
                       event.preventDefault();
@@ -440,6 +441,7 @@ export function Timeline({ api }: { api: EditorApi }) {
                   data-source-fps={span.clip.sourceFps}
                   data-source-frames={span.clip.sourceFrames}
                   data-clip-id={span.clip.id}
+                  data-editor-clip-missing={missing ? '' : undefined}
                 >
                   {tiles?.map((tile) => (
                     <i
@@ -457,7 +459,10 @@ export function Timeline({ api }: { api: EditorApi }) {
                   <span className={styles.clipHandle} data-edge="start" onPointerDown={(event) => startTrim(event, span.index, 'start')} title={copy.timeline.trimStart} />
                   <span className={styles.clipBadge}>{span.index + 1}</span>
                   {look && <span className={styles.clipLook} data-source={look.source} />}
-                  {span.clip.speedCurve ? (
+                  {missing ? (
+                    // The file is not there (audit A4): the speed badge's place says so; the panel says what to do.
+                    <span className={styles.clipRate}>{copy.timeline.missing}</span>
+                  ) : span.clip.speedCurve ? (
                     <span className={styles.clipRate}>{copy.cut.clip.speedCurveBadge}</span>
                   ) : (
                     span.clip.speedNum !== span.clip.speedDen && (

@@ -100,7 +100,7 @@ import {
 } from '@/lib/brand-studio/editor-v2/shortcuts';
 import type { StudioEditorCopy } from '@/messages/studio-editor';
 import { readFilmText, watchFilmText, writeFilmText } from './film-store';
-import { readFootage } from './footage-facts';
+import { footageGone, readFootage } from './footage-facts';
 import { measureSource } from './measure-fps';
 import { loadShortcutPrefs, saveShortcutPrefs } from './shortcut-store';
 
@@ -242,6 +242,11 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
   const [unknownRates, setUnknownRates] = useState<Record<string, true>>({});
   /** Footage whose frames are not evenly spaced (variable frame rate): shown, not supported (review round 1, item 10). */
   const [variableRates, setVariableRates] = useState<Record<string, true>>({});
+  /**
+   * Footage whose file answered that it is not there (404 / 410) the last time it was read (audit A4): its
+   * cuts say the file cannot be found, and the export is blocked for that reason, not for an unread rate.
+   */
+  const [missingSources, setMissingSources] = useState<Record<string, true>>({});
   /**
    * No cut's rate is measured: the film runs at a stand-in rate and nothing frame-based is stored until a
    * later visit measures one (review round 1, item 3).
@@ -437,6 +442,22 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
     setVariableRates((current) => ({ ...without(current, read.filter((src) => !variable.includes(src))), ...Object.fromEntries(variable.map((src) => [src, true as const])) }));
   }, []);
 
+  /** Which of the footage just read answered that its file is not there; the rest are no longer marked. */
+  const noteMissing = useCallback((srcs: readonly string[]) => {
+    setMissingSources((current) => {
+      const next = { ...current };
+      let changed = false;
+      for (const src of srcs) {
+        const gone = footageGone(src);
+        if (gone === !!next[src]) continue;
+        changed = true;
+        if (gone) next[src] = true;
+        else delete next[src];
+      }
+      return changed ? next : current;
+    });
+  }, []);
+
   /**
    * Opens a stored film for the session: measures the footage that has no frame data yet, puts it on
    * frames, and replaces the film (and clears undo) only if the session still wants it: an edit made
@@ -463,6 +484,7 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
       for (const clip of film.sequence.clips) if (!unknown.includes(clip.srcUrl)) known[clip.srcUrl] = clip.sourceFps;
       const variable = Object.entries(measured).filter(([, seen]) => seen?.variable).map(([src]) => src);
       noteRates(known, unknown, variable);
+      noteMissing([...toMeasure, ...toCheck]);
       // The captions stay with the stored film; the document holds the cuts only.
       const cuts = { ...film.sequence, captions: [] };
       if (!session.opened(ticket, cuts)) return;
@@ -472,7 +494,7 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
       setStored({ doc: realDoc(cuts), history: { past: [], future: [] } });
       setStatus('ready');
     },
-    [secondsOfSrc, noteRates],
+    [secondsOfSrc, noteRates, noteMissing],
   );
   const openFilmRef = useRef(openFilm);
   openFilmRef.current = openFilm;
@@ -668,6 +690,7 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
       const sourceFrames = measured?.frames ?? sourceFramesOf(seconds ?? 5, sourceFps);
       if (measured) noteRates({ [source.srcUrl]: measured.fps }, [], measured.variable ? [source.srcUrl] : []);
       else noteRates({}, [source.srcUrl]);
+      noteMissing([source.srcUrl]);
       // The first cut of an empty film sets its rate: a stand-in when that cut's rate could not be read.
       if (fresh) setTentative(!measured);
       const id = newId('cut');
@@ -692,7 +715,7 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
         return insertClips(base, base.clips.length, [{ ...clip, frames: clipMaxFrames(clip, base.fps) }]);
       });
     },
-    [edit, say, copy, noteRates],
+    [edit, say, copy, noteRates, noteMissing],
   );
 
   // A `clip=` link (asset hub, video studio): read once, the clip goes on the end, the link is tidied away.
@@ -1148,6 +1171,8 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
     rates,
     unknownRates,
     variableRates,
+    /** Footage whose file is not there (404 / 410): its cuts say so, and the export is blocked for it (audit A4). */
+    missingSources,
     /** No cut's rate is measured yet: the film's rate is a stand-in and nothing frame-based is stored. */
     tentative,
     sampleHref: (target: EditorWorkspace) => sampleHrefFor(real?.sampleBase ?? '', target),

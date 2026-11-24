@@ -554,6 +554,8 @@ function CutPanel({ api }: { api: EditorApi }) {
       const dims = COMPOSE_DIMENSIONS[sequence.aspect];
       const outFrame = clipFrameAt(clip, clip.frames - 1, fps).mediaFrame + 1;
       const canSlide = !!material && material.ratio > dims.width / dims.height + 0.01 && reframe.fit === 'fill';
+      // A file that is not there says so, before (and instead of) "the rate has not been read yet" (audit A4).
+      const missing = api.real && !!api.missingSources[clip.srcUrl];
       const rateUnknown = api.real && !!api.unknownRates[clip.srcUrl];
       return (
         <>
@@ -567,12 +569,14 @@ function CutPanel({ api }: { api: EditorApi }) {
             <p className={styles.note}>
               {fill(c.clip.frames, { count: span.frames, fps })} {c.clip.lengthHint}
             </p>
-            {rateUnknown ? (
+            {missing ? (
+              <p className={styles.note} data-editor-source-missing>{copy.real.sourceMissing}</p>
+            ) : rateUnknown ? (
               <p className={styles.note} data-editor-rate-unknown>{fill(copy.real.rateUnknown, { fps })}</p>
             ) : api.real && clip.sourceFps !== fps ? (
               <p className={styles.note} data-editor-source-rate>{fill(copy.real.sourceRate, { rate: clip.sourceFps, fps })}</p>
             ) : null}
-            {api.real && api.variableRates[clip.srcUrl] && (
+            {!missing && api.real && api.variableRates[clip.srcUrl] && (
               <p className={styles.note} data-editor-rate-variable>{copy.real.rateVariable}</p>
             )}
           </Section>

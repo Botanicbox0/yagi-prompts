@@ -2,7 +2,7 @@
 
 import { corsMediaUrl } from '@/lib/brand-studio/cors-media-url';
 import { ByteLimit, ReadLimit, gatherBoxes, readTiming, type TimingAnswer } from '@/lib/brand-studio/editor-v2/container';
-import { rangedSource } from '@/lib/brand-studio/editor-v2/ranged-source';
+import { rangedSource, readFailureOf } from '@/lib/brand-studio/editor-v2/ranged-source';
 import { gatherIndexBoxes, readSampleIndex, type IndexAnswer } from '@/lib/brand-studio/editor-v2/sample-index';
 
 export { FRAGMENTED_INDEX_REQUESTS } from '@/lib/brand-studio/editor-v2/sample-index';
@@ -29,6 +29,16 @@ export interface FootageRead {
 }
 
 const cache = new Map<string, Promise<FootageRead>>();
+/** Files whose last read answered that they are not there (404 / 410, audit A4). */
+const gone = new Set<string>();
+
+/**
+ * Whether the clip's file answered, the last time it was read, that it is not there (404 / 410): its cut
+ * gets "the file cannot be found" instead of "the frame rate has not been read yet" (audit A4).
+ */
+export function footageGone(srcUrl: string): boolean {
+  return gone.has(srcUrl);
+}
 
 /**
  * Asks the clip's own file for bytes `start` to `end` (inclusive). The one request this file makes. `signal`
@@ -45,14 +55,17 @@ export function readFootage(srcUrl: string): Promise<FootageRead> {
   const source = rangedSource(footageBytes(srcUrl));
   const run = gatherBoxes(source)
     .then((found): TimingAnswer => ('failure' in found ? { ok: false, reason: found.failure } : readTiming(found)))
-    .catch((): TimingAnswer => ({ ok: false, reason: 'broken' }))
+    .catch((error: unknown): TimingAnswer => ({ ok: false, reason: readFailureOf(error) }))
     .then((answer) => {
       source.close();
       const { requests, received, mode } = source.stats();
       // Only a failure that may pass is asked again (`broken`: a refused request, a network error, a file
-      // cut off); the file's own answers (not an MP4, an edit list the export cannot follow, too large …)
-      // are remembered for the visit and not fetched again (review round 2 of part E).
-      if (!answer.ok && answer.reason === 'broken') cache.delete(srcUrl);
+      // cut off; `gone`: an asset that may come back); the file's own answers (not an MP4, an edit list the
+      // export cannot follow, too large …) are remembered for the visit and not fetched again (review
+      // round 2 of part E).
+      if (!answer.ok && (answer.reason === 'broken' || answer.reason === 'gone')) cache.delete(srcUrl);
+      if (!answer.ok && answer.reason === 'gone') gone.add(srcUrl);
+      else gone.delete(srcUrl);
       return { answer, requests, received, mode, ms: Math.round(performance.now() - started) };
     });
   cache.set(srcUrl, run);

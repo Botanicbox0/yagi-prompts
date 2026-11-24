@@ -58,6 +58,15 @@ export class RangeRefused extends Error {
   }
 }
 
+/**
+ * What a failed read of a file means (audit A4): `gone` when the server says the file is not there (404 or
+ * 410: a deleted asset, a result that no longer exists), `broken` for everything that may pass on another
+ * try (a refused request, a server error, no network, a file cut off). Pure.
+ */
+export function readFailureOf(error: unknown): 'gone' | 'broken' {
+  return error instanceof RangeRefused && (error.status === 404 || error.status === 410) ? 'gone' : 'broken';
+}
+
 export function rangedSource(request: RangeRequest, chunk = RANGE_CHUNK, wholeLimit = MAX_WHOLE_BYTES): RangedSource {
   let budget = MAX_RANGE_REQUESTS;
   const pieces: Array<{ start: number; bytes: Uint8Array }> = [];
