@@ -340,6 +340,7 @@ const NON_WRITER_OPS: readonly string[] = [
   'prompt.archive',
   'prompt.create',
   'prompt.createSet',
+  'prompt.declareStyling',
   'prompt.feature',
   'prompt.marks',
   'prompt.reject',

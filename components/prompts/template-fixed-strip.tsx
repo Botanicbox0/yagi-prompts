@@ -13,7 +13,9 @@ import type { TemplatePartView } from '@/lib/template-director/parts-view';
  *
  * One quiet row on the white surface, three techniques: the wash panel the keyframe strip uses, tabular numerals for
  * the ranges, an ink ring for the pressed part (pink stays on the pay button). No words of the template's prompt
- * reach this component: it gets names from the public lock projection and the admin's descriptions only.
+ * reach this component: it gets names from the public lock and styling projections and the admin's descriptions only.
+ * Each part says its state (§3.4.9): "can't be changed", "template style" (the make card lets the buyer keep their own
+ * hair or makeup instead) or "from your photo".
  */
 
 export interface TemplateFixedCopy {
@@ -21,6 +23,9 @@ export interface TemplateFixedCopy {
   hint: string;
   wholeVideo: string;
   locked: string;
+  /** docs/PERSONAL-STUDIO.md §3.4.9 (S2): a part the template styles (the buyer may keep their own) and one from the photo. */
+  styled?: string;
+  photo?: string;
   /** A lock block that did not parse fixes everything: one line instead of the parts. */
   lockedAll: string;
 }
@@ -116,7 +121,7 @@ export function TemplateFixedStrip({ parts, all = false, copy, videoSrc = null, 
             const range = fixedRangeText(part, copy);
             const frame = frames[part.id] ?? null;
             const pressed = activeId === part.id;
-            const state = part.state === 'locked' ? copy.locked : null;
+            const state = part.state === 'locked' ? copy.locked : part.state === 'styled' ? copy.styled ?? null : copy.photo ?? null;
             const body = (
               <>
                 {frame && (
@@ -128,7 +133,7 @@ export function TemplateFixedStrip({ parts, all = false, copy, videoSrc = null, 
                 <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                   <span className="flex flex-wrap items-baseline gap-x-1.5">
                     <span className="text-[13px] font-semibold tracking-[-0.01em] text-[#09090B]">{part.label}</span>
-                    {state && <span className="text-xs text-[#71717A]">{state}</span>}
+                    {state && <span data-fixed-state={part.state} className="text-xs text-[#71717A]">{state}</span>}
                   </span>
                   {part.desc && <span className="text-xs leading-[1.45] break-keep text-[#52525B]">{part.desc}</span>}
                   {range && <span className="text-xs font-medium text-[#71717A] tabular-nums">{range}</span>}

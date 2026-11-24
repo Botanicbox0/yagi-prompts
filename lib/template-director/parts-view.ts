@@ -1,7 +1,8 @@
 import { interpolate } from '@/lib/i18n/format';
 import { MARKS_PER_PART_MAX, isMark, type VideoKeyframe, type VideoMark } from '@/lib/prompts/keyframes';
 import { parseTemplateLocks, publicLocks, type PublicTemplateLocks, type TemplateLockName } from './locks';
-import type { DirectorEditableSlot } from './schema';
+import { OWN_STYLE_PARTS, parseTemplateStyling, publicStyling, type OwnStylePart } from './styling';
+import type { DirectorEditableSlot, PersonalDirectorSpec } from './schema';
 
 /**
  * docs/PERSONAL-STUDIO.md §3.4.4 (T1a) — the parts a template declares, and the view the template page shows for
@@ -9,9 +10,9 @@ import type { DirectorEditableSlot } from './schema';
  * description and the range of the example video where it shows.
  *
  * The RULE (which parts are declared) lives in `declaredPartKeys` alone; the page (drop a mark on read) and the admin
- * save (`prompt.marks`, refuse a mark) both call it. Today a declaration is the `Template locks:` block, read through
- * its public projection (names only — never a lock line's tail or the block text). The `Template styling:` block
- * (slice S1) adds its parts through the `styling` input.
+ * save (`prompt.marks`, refuse a mark) both call it. A declaration is the `Template locks:` block and the
+ * `Template styling:` block (§3.4.9), each read through its public projection (names only — never a line's tail or the
+ * block text). A part both locked and styled is locked (the lock wins).
  *
  * Part keys are the lock keys (locks.ts `lockKey`, and `LockedPart.key` on the make card): 'product' | 'logo' |
  * 'sound' | a director slot ('outfit', 'makeup', 'hair', 'prop', 'shot_action', 'lighting_mood') | 'shots-<from>-<to>'.
@@ -49,9 +50,16 @@ export function declaredPartKeys(input: DeclaredPartsInput): string[] {
   return keys.filter((key, i) => keys.indexOf(key) === i);
 }
 
-/** The declared parts of a stored prompt (the admin save reads the prompt it is about to attach marks to). */
-export function declaredPartKeysOfPrompt(promptText: string): string[] {
-  return declaredPartKeys({ locks: publicLocks(parseTemplateLocks(promptText)), styling: null });
+/**
+ * The declared parts of a stored template (the admin save reads the template it is about to attach marks to): the lock
+ * block of its prompt and its styling. `styling` is what the template's card shows (the server reads it from the
+ * prompts the compile reads, lib/template-director/compile-prompts.ts `templateCardStyling`); absent, the prompt's own
+ * `Template styling:` block is read — the same thing for every template without a recipe.
+ */
+export function declaredPartKeysOfPrompt(promptText: string, styling?: DeclaredStyling | null): string[] {
+  const locks = parseTemplateLocks(promptText);
+  const own = styling === undefined ? publicStyling(parseTemplateStyling(promptText), locks) : styling;
+  return declaredPartKeys({ locks: publicLocks(locks), styling: own });
 }
 
 /** The words a part is named with: the make card's (`editSheet`). */
@@ -85,7 +93,10 @@ export interface TemplatePartView {
   from: number | null;
   /** null = no end (a mark without a valid end time). */
   to: number | null;
-  /** The buyer chooses this part at make time (slice S2); always false here. */
+  /**
+   * The buyer chooses this part at make time (§3.4.9, S2): a hair or makeup part the template styles and does not lock
+   * ("템플릿 스타일" or "내 사진 그대로"). The wardrobe has no such choice: a buyer's own outfit is the outfit photo.
+   */
   choice: boolean;
 }
 
@@ -120,9 +131,10 @@ export function templatePartsView(input: TemplatePartsViewInput): TemplatePartVi
     const label = partLabel(key, input.copy);
     if (label === null) continue;
     const state: PartState = locked.has(key) ? 'locked' : styled.has(key) ? 'styled' : 'photo';
+    const choice = state === 'styled' && (OWN_STYLE_PARTS as readonly string[]).includes(key);
     const marks = byPart.get(key) ?? [];
     if (marks.length === 0) {
-      rows.push({ id: key, key, state, label, desc: null, from: null, to: null, choice: false });
+      rows.push({ id: key, key, state, label, desc: null, from: null, to: null, choice });
       continue;
     }
     marks.forEach((mark, i) => {
@@ -135,9 +147,89 @@ export function templatePartsView(input: TemplatePartsViewInput): TemplatePartVi
         desc: text(input.locale === 'en' ? mark.labelEn : mark.labelKo),
         from: mark.timeSeconds,
         to: typeof end === 'number' && end > mark.timeSeconds ? end : null,
-        choice: false,
+        choice,
       });
     });
   }
   return rows;
+}
+
+// --- The make card (§3.4.9, S2) --------------------------------------------------------------------------------------
+
+/** The buyer's pick for a styled hair or makeup part: the template's style (the default) or their own. */
+export type StyleChoice = 'template' | 'mine';
+export type StyleChoices = Partial<Record<OwnStylePart, StyleChoice>>;
+
+/** The make card's words for the parts (templates.fixed and editSheet.style…, composed by the template page). */
+export interface TemplatePartsCopy {
+  heading: string;
+  lockedAll: string;
+  /** State words (templates.fixed). */
+  locked: string;
+  styled: string;
+  photo: string;
+  /** The choice (editSheet.style…). */
+  choiceLabel: string;
+  template: string;
+  mine: string;
+  templateNote: string;
+  mineHair: string;
+  mineMakeup: string;
+  overridden: string;
+  outfitPhoto: string;
+  outfitPhotoCta: string;
+  outfitAttached: string;
+}
+
+/** One row of the make card's parts card: a part, its state, the admin's descriptions, and whether the buyer chooses it. */
+export interface TemplatePartRow {
+  key: string;
+  state: PartState;
+  label: string;
+  desc: string | null;
+  choice: boolean;
+}
+
+/** Folds the page's view (one row per mark) to one row per part, the descriptions joined. */
+export function partRows(view: readonly TemplatePartView[]): TemplatePartRow[] {
+  const rows: TemplatePartRow[] = [];
+  for (const part of view) {
+    const row = rows.find((r) => r.key === part.key);
+    if (!row) {
+      rows.push({ key: part.key, state: part.state, label: part.label, desc: part.desc, choice: part.choice });
+      continue;
+    }
+    if (part.desc && !(row.desc ?? '').split(' · ').includes(part.desc)) row.desc = row.desc ? `${row.desc} · ${part.desc}` : part.desc;
+  }
+  return rows;
+}
+
+/** The parts the order keeps as the buyer's own: chosen, offered as a choice, and not changed by an explicit edit. */
+export function ownForOrder(rows: readonly TemplatePartRow[], choices: StyleChoices, overridden: readonly string[]): OwnStylePart[] {
+  return OWN_STYLE_PARTS.filter(
+    (part) => choices[part] === 'mine' && rows.some((row) => row.key === part && row.choice) && !overridden.includes(part),
+  );
+}
+
+/**
+ * The spec the order posts: exactly `spec` (the same value) with nothing own; otherwise `spec` (or the panel's
+ * no-change defaults) with `own`.
+ */
+export function withOwnChoice(spec: PersonalDirectorSpec | null, own: readonly OwnStylePart[]): PersonalDirectorSpec | null {
+  if (own.length === 0) return spec;
+  return { ...(spec ?? { audioMode: 'ambient' }), own: [...own] };
+}
+
+/**
+ * The `directorSpec` value an order posts (null = no field at all): with nothing own, exactly what was posted before
+ * this choice existed (`JSON.stringify` of the panel's spec, or nothing); otherwise that spec with `own`.
+ */
+export function orderSpecField(
+  spec: PersonalDirectorSpec | null,
+  rows: readonly TemplatePartRow[],
+  choices: StyleChoices,
+  overridden: readonly string[],
+): string | null {
+  const next = withOwnChoice(spec, ownForOrder(rows, choices, overridden));
+  return next ? JSON.stringify(next) : null;
 }

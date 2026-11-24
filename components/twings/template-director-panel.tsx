@@ -20,6 +20,7 @@ import {
   locksFromPublic,
   type PublicTemplateLocks
 } from '@/lib/template-director/locks';
+import type { PublicTemplateStyling } from '@/lib/template-director/styling';
 import {
   chipsFromSheet,
   dropRef,
@@ -395,6 +396,15 @@ export interface TemplateDirectorPanelProps {
   locks?: PublicTemplateLocks | null;
   /** The words for the locked parts (the `editSheet` dictionary section); `editSheet` is used when absent. */
   lockCopy?: EditSheetCopy | null;
+  /**
+   * docs/PERSONAL-STUDIO.md §3.4.9 (S2) — the template's styling (the public projection), handed in whenever the
+   * template declares one. A template that declares anything (locks or styling) shows no guess: the baseline cards and
+   * the preset pills chosen by the template's address are gone, and the declared parts are listed once, on the make
+   * card's parts card. Absent with no locks, the panel is exactly as before.
+   */
+  styling?: PublicTemplateStyling | null;
+  /** Bumped by the make card's "add an outfit photo": opens the panel and the outfit photo picker. */
+  outfitPhotoRequest?: number;
 }
 
 const FOCUS_RING =
@@ -444,7 +454,9 @@ export function TemplateDirectorPanel({
   onChipsChange,
   editSheet = null,
   locks = null,
-  lockCopy = null
+  lockCopy = null,
+  styling = null,
+  outfitPhotoRequest = 0
 }: TemplateDirectorPanelProps) {
   const baseId = useId();
   const drawerId = `${baseId}-drawer`;
@@ -459,6 +471,9 @@ export function TemplateDirectorPanel({
   // these is skipped and the panel is exactly as before. The server enforces the same locks on every turn and order.
   const lockWords = lockCopy ?? editSheet;
   const activeLocks = locks && lockWords ? locks : null;
+  // docs/PERSONAL-STUDIO.md §3.4.9 (S2) — a template that declares its parts (locks or styling) gets no guesses by
+  // address; its parts are on the make card. Undeclared: false, and everything below is as before.
+  const declared = lockWords !== null && (activeLocks !== null || styling !== null);
   const lockState = locksFromPublic(activeLocks);
   const slotOpen = (slot: DirectorEditableSlot): boolean => !lockState.slots.includes(slot);
   const pickerOpen = (picker: ReferencePicker): boolean => !lockState.refs.includes(REF_OF_PICKER[picker]);
@@ -589,6 +604,14 @@ export function TemplateDirectorPanel({
   const propInputRef = useRef<HTMLInputElement>(null);
   const sceneInputRef = useRef<HTMLInputElement>(null);
   const textInputRef = useRef<HTMLTextAreaElement>(null);
+  // The make card's "add an outfit photo" (§3.4.9): open the panel and the outfit picker. The first value is no request.
+  const lastOutfitRequestRef = useRef(outfitPhotoRequest);
+  useEffect(() => {
+    if (outfitPhotoRequest === lastOutfitRequestRef.current) return;
+    lastOutfitRequestRef.current = outfitPhotoRequest;
+    setExpanded(true);
+    outfitInputRef.current?.click();
+  }, [outfitPhotoRequest]);
   const onDraftChangeRef = useRef(onDraftChange);
   onDraftChangeRef.current = onDraftChange;
   const onChipsChangeRef = useRef(onChipsChange);
@@ -1890,6 +1913,31 @@ export function TemplateDirectorPanel({
         <p className="text-xs leading-[1.6] text-[#71717A]">{copy.subtitle}</p>
 
         {/* Template Baseline Disclosure Card: Shows what is fixed vs what defaults are baked into this template */}
+        {declared && lockWords ? (
+          /* docs/PERSONAL-STUDIO.md §3.4.9 (S2) — a declared template: no guess by address. The skeleton every template
+             keeps (or "everything is fixed"); the declared parts themselves are listed once, on the make card. */
+          <section
+            data-template-baseline-card="declared"
+            aria-label={lockWords.lockedHeading}
+            className="mt-3 rounded-[16px] border border-[#E4E4E7] bg-[#F4F4F5] p-3.5"
+          >
+            <div data-template-locked-elements {...(activeLocks ? { 'data-template-locks': activeLocks.all ? 'all' : 'parts' } : {})}>
+              <p className="flex items-center gap-1.5 text-[0.72rem] font-semibold text-[#52525B]">
+                <TemplateLockGlyph />
+                {lockWords.lockedHeading}
+              </p>
+              {activeLocks?.all ? (
+                <p data-template-lock-all className="mt-1 text-xs leading-[1.5] text-[#09090B]">
+                  {lockWords.lockedAll}
+                </p>
+              ) : (
+                <p data-template-lock-skeleton className="mt-1 text-xs leading-[1.5] text-[#52525B]">
+                  {lockWords.skeleton}
+                </p>
+              )}
+            </div>
+          </section>
+        ) : (
         <section
           data-template-baseline-card={resolvedBaseline.templateArchetypeId}
           aria-label={locale === 'en' ? resolvedBaseline.titleEn : resolvedBaseline.titleKo}
@@ -2079,9 +2127,11 @@ export function TemplateDirectorPanel({
           </div>
           )}
         </section>
+        )}
 
-        {/* Predictive 1-Tap Revision Presets (Grounded in Real Campaign Revision Data) */}
-        {(!activeLocks || visiblePredictivePresets.length > 0) && (
+        {/* Predictive 1-Tap Revision Presets (Grounded in Real Campaign Revision Data); chosen by address, so never on a
+            declared template (§3.4.9). */}
+        {!declared && (!activeLocks || visiblePredictivePresets.length > 0) && (
         <div data-director-predictive-presets className="mt-3.5">
           <p className="text-[0.72rem] font-semibold text-[#52525B]">
             {copy.predictivePresetsLabel}

@@ -162,6 +162,19 @@ describe('the style picker card', () => {
     expect(html).toContain('Portrait · Editorial');
   });
 
+  it('says no length for a style without one, never "0 s"', () => {
+    const option = (markup: string, id: string) => {
+      const start = markup.indexOf(`data-style-option="${id}"`);
+      return markup.slice(start, markup.indexOf('</button>', start));
+    };
+    expect(option(html, 'window-portrait')).not.toContain('opacity-45');
+    expect(option(html, styles[0]!.id)).toContain(labels.runtimeLabel.replace('{seconds}', '15'));
+    const unknown = renderToStaticMarkup(
+      <TwingsStudio styles={[{ ...styles[0]!, runtime: '' }, image]} labels={labels} live={live} initialAccess={{ open: true, live: true, signedIn: true }} />,
+    );
+    expect(option(unknown, styles[0]!.id)).not.toContain('opacity-45');
+  });
+
   it('tells the two apart by the example film or the length', () => {
     expect(isVideoStyle({ videoSrc: '/v.mp4', runtime: '0' })).toBe(true);
     expect(isVideoStyle({ videoSrc: null, runtime: '10' })).toBe(true);
@@ -297,5 +310,44 @@ describe('the studio for pet and couple templates (live, signed in)', () => {
     const html = render(undefined);
     expect(html).not.toContain('data-cast-photo');
     expect(html).toContain('data-selfie-panel');
+  });
+});
+
+/** docs/PERSONAL-STUDIO.md §3.4.9 (S2): the parts card sits on the make card, outside the folding panel, above the button. */
+describe('the make card on a template that declares its parts', () => {
+  const e = dict.editSheet;
+  const parts: NonNullable<StudioLive['parts']> = {
+    rows: [
+      { key: 'prop', state: 'locked', label: e.slots.prop, desc: null, choice: false },
+      { key: 'hair', state: 'styled', label: e.slots.hair, desc: null, choice: true },
+    ],
+    all: false,
+    copy: {
+      heading: dict.templates.fixed.heading, lockedAll: e.lockedAll, locked: dict.templates.fixed.locked, styled: dict.templates.fixed.styled,
+      photo: dict.templates.fixed.photo, choiceLabel: e.styleChoiceLabel, template: e.styleTemplate, mine: e.styleMine,
+      templateNote: e.styleTemplateNote, mineHair: e.styleMineHair, mineMakeup: e.styleMineMakeup, overridden: e.styleOverridden,
+      outfitPhoto: e.styleOutfitPhoto, outfitPhotoCta: e.styleOutfitPhotoCta, outfitAttached: e.styleOutfitAttached,
+    },
+  };
+
+  it('shows the parts with the choice between the edit panel and the pay button', () => {
+    const html = renderToStaticMarkup(
+      <TwingsStudio styles={[styles[0]!]} initialStyleId={styles[0]!.id} labels={labels} live={{ ...live, styling: { styled: ['hair'], photo: [] }, lockCopy: e, parts }} initialAccess={{ open: true, live: true, signedIn: true }} />,
+    );
+    const card = html.indexOf('data-template-parts');
+    expect(card).toBeGreaterThan(-1);
+    const panel = html.indexOf('data-template-director-panel');
+    expect(panel).toBeGreaterThan(-1);
+    // Outside the folding panel: after its whole island, not inside it.
+    expect(html.lastIndexOf('data-director-island')).toBeLessThan(card);
+    expect(panel).toBeLessThan(card);
+    expect(card).toBeLessThan(html.indexOf('data-pay-cta'));
+    expect(html).toContain('data-style-option="hair:mine"');
+  });
+
+  it('a template without them: no parts card', () => {
+    const html = renderToStaticMarkup(<TwingsStudio styles={[styles[0]!]} initialStyleId={styles[0]!.id} labels={labels} live={live} initialAccess={{ open: true, live: true, signedIn: true }} />);
+    expect(html).not.toContain('data-template-parts');
+    expect(html).not.toContain('data-style-option="hair');
   });
 });

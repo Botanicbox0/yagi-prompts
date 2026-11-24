@@ -46,6 +46,8 @@ import { buildImageTemplateSet, writeImageTemplateSet } from '@/lib/prompts/imag
 import { aspectsForMedium, enginesForMedium, imageFitsAspect, isImageAspect, isImageEngine, type ImageAspect, type ImageEngineId } from '@/lib/images/engines';
 import { checkLockBlock, lockBlockRefusalDetail } from '@/lib/template-director/locks';
 import { checkStylingBlock, stylingBlockRefusalDetail } from '@/lib/template-director/styling';
+import { planStylingDeclaration, templateCardStyling } from '@/lib/template-director/compile-prompts';
+import { recipeSchemaReady } from '@/lib/recipes/repo';
 import { fail, ok, type AdminContext, type AdminOutcome } from './context';
 import * as f from './form';
 import type { AdminOperation, ParseResult } from './operations';
@@ -629,7 +631,9 @@ const marks: AdminOperation<z.infer<typeof Marks>> = {
     const row = await loadPromptById(ctx.sql, input.id);
     if (row === null || row.audience === 'brand') return fail('notFound', NOT_FOUND_DETAIL);
     if (row.medium !== 'video') return fail('invalid', 'marks: only a film has ranges');
-    const declared = declaredPartKeysOfPrompt(row.promptText);
+    // The parts the template page shows (§3.4.9 S2: the styling the compile honours, read like the catalogue card's).
+    const source = await loadStylingSource(ctx.sql, row.id);
+    const declared = declaredPartKeysOfPrompt(row.promptText, templateCardStyling({ promptText: row.promptText, ...source, cast: row.cast }));
     const undeclared = [...new Set(input.marks.map((m) => m.part).filter((part) => !declared.includes(part)))];
     if (undeclared.length > 0) {
       return fail('invalid', `marks: not declared by the template's prompt: ${undeclared.join(', ')}${declared.length ? ` (declared: ${declared.join(', ')})` : ' (it declares none)'}`);
@@ -671,6 +675,73 @@ const marks: AdminOperation<z.infer<typeof Marks>> = {
 };
 
 // ---------------------------------------------------------------------------
+// template styling: one declaration everywhere the compile reads (docs/PERSONAL-STUDIO.md §3.4.9, S2)
+// ---------------------------------------------------------------------------
+
+/** The row's raw recipe and whether the render pass takes the recipe path at all (lib/template-director/compile-prompts.ts). */
+async function loadStylingSource(sql: AdminContext['sql'], id: string): Promise<{ recipe: unknown; recipeReady: boolean }> {
+  const { rows } = await sql.query<{ recipe: unknown }>("select to_jsonb(p.*)->'recipe' as recipe from prompt_items p where id = $1", [id]);
+  return { recipe: rows[0]?.recipe ?? null, recipeReady: await recipeSchemaReady(sql) };
+}
+
+const DeclareStyling = z.object({ id: Uuid, block: z.string().max(2000) });
+
+/**
+ * `prompt.declareStyling` — writes one `Template styling:` block into the template's main prompt AND every prompt the
+ * personal compile reads for it (a recipe's result steps; `prompt.update` edits the main text only), replacing a block
+ * that is there or appending it as its own paragraph; an empty block removes it everywhere. Everything is checked
+ * first (`planStylingDeclaration`: one valid block, every touched text reads it back with no part its own lock block
+ * names, the lock blocks read as before, the recipe still passes, the card ends up showing it), then the row is
+ * written in one transaction, audited (`platform_audit`) and the template pages re-read (tag `prompts`). Refused,
+ * nothing is written. A creative's own format keeps its recipe (0059's contract): refused when the recipe would change.
+ */
+const declareStyling: AdminOperation<z.infer<typeof DeclareStyling>> = {
+  parse: (form) => parsed(DeclareStyling, { id: f.str(form, 'id'), block: f.text(form, 'block') }),
+  async run(ctx, input) {
+    const outcome = await ctx.sql.transaction(async (tx): Promise<AdminOutcome | { slug: string; parts: { styled: string[]; photo: string[] } | null; texts: number; recipeChanged: boolean }> => {
+      const { rows } = await tx.query<{ slug: string; audience: string; prompt_text: string; cast: string | null; recipe: unknown }>(
+        "select slug, audience::text as audience, prompt_text, to_jsonb(p.*)->>'cast' as cast, to_jsonb(p.*)->'recipe' as recipe from prompt_items p where id = $1 for update",
+        [input.id],
+      );
+      const row = rows[0];
+      if (!row || row.audience === 'brand') return fail('notFound', NOT_FOUND_DETAIL);
+      const cast = row.cast === 'pet' || row.cast === 'couple' ? row.cast : 'solo';
+      const plan = planStylingDeclaration(
+        { promptText: row.prompt_text, recipe: row.recipe, recipeReady: await recipeSchemaReady(tx), cast },
+        input.block,
+      );
+      if (!plan.ok) return fail('invalid', `declareStyling: ${plan.detail}`);
+      if (plan.recipeChanged) {
+        const { rows: formats } = await tx.query<{ ready: boolean }>("select to_regclass('public.platform_formats') is not null as ready");
+        if (formats[0]?.ready === true) {
+          const { rows: owned } = await tx.query<{ id: string }>('select template_id as id from platform_formats where template_id = $1 limit 1', [input.id]);
+          if (owned.length > 0) return fail('invalid', "declareStyling: a creative's format keeps its own recipe; ask them to declare it");
+        }
+      }
+      const unchanged = plan.promptText === row.prompt_text && !plan.recipeChanged;
+      if (!unchanged) {
+        if (plan.recipeChanged) {
+          await tx.query('update prompt_items set prompt_text = $2, recipe = $3::jsonb where id = $1', [input.id, plan.promptText, JSON.stringify(plan.recipe)]);
+        } else {
+          await tx.query('update prompt_items set prompt_text = $2 where id = $1', [input.id, plan.promptText]);
+        }
+      }
+      const result = { slug: row.slug, parts: plan.styling ? { styled: [...plan.styling.styled], photo: [...plan.styling.photo] } : null, texts: plan.texts, recipeChanged: plan.recipeChanged };
+      if (ctx.viewer.userId && !unchanged) {
+        await tx.query(
+          'insert into platform_audit (actor_id, entity_id, action, reason, details) values ($1, $2, $3, $4, $5::jsonb)',
+          [ctx.viewer.userId, input.id, 'prompt.declareStyling', 'admin_template_styling', JSON.stringify({ ...result, removed: input.block.trim() === '' })],
+        );
+      }
+      return result;
+    });
+    if ('ok' in outcome) return outcome;
+    ctx.revalidatePrompts?.();
+    return ok('saved', { detail: outcome.slug });
+  },
+};
+
+// ---------------------------------------------------------------------------
 // registry fragment
 // ---------------------------------------------------------------------------
 
@@ -685,4 +756,5 @@ export const PROMPT_OPERATIONS = {
   'prompt.visibility': visibility,
   'prompt.archive': archive,
   'prompt.marks': marks,
+  'prompt.declareStyling': declareStyling,
 };

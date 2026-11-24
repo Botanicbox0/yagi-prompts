@@ -79,6 +79,8 @@ export function PromptRail({
                   data-length={facets.length ?? ''}
                   data-new={facets.new ? 'true' : 'false'}
                   data-cast={facets.cast}
+                  // docs/PERSONAL-STUDIO.md §3.4.9 (S2): only a card that declares its styling carries it.
+                  {...(facets.style ? { 'data-style': facets.style } : {})}
                   style={{ '--r': cardRatio(card) } as CSSProperties}
                 >
                   <PromptCardView

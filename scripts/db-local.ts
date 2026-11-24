@@ -8,7 +8,7 @@ import { createLocalStorageDriver } from '@/lib/storage/local-driver';
 import { RUNTIME_MODE_ENV } from '@/lib/runtime-mode';
 import { seed, seedContests, seedEdgeFixtures, seedPrompts } from './seed';
 import { CAST_PROMPT_FIXTURES } from './cast-fixtures';
-import { FIXED_PARTS_MARKS, FIXED_PARTS_PROMPT_FIXTURES, FIXED_PARTS_SLUG } from './fixed-parts-fixtures';
+import { FIXED_PARTS_MARKS, FIXED_PARTS_PROMPT_FIXTURES, FIXED_PARTS_SLUG, STYLED_PARTS_MARKS, STYLED_PARTS_PROMPT_FIXTURES, STYLED_PARTS_SLUG } from './fixed-parts-fixtures';
 import { seedBrandWorkspaceFixtures } from './brand-workspace-fixtures';
 import { seedMakerFixtures } from './maker-fixtures';
 
@@ -92,6 +92,9 @@ async function main(): Promise<void> {
   // docs/PERSONAL-STUDIO.md §3.4.4 (T1a): one film that declares fixed parts, with marks, local only.
   await seedPrompts(options, FIXED_PARTS_PROMPT_FIXTURES);
   await sql.query('update prompt_items set keyframes = $2::jsonb where slug = $1', [FIXED_PARTS_SLUG, JSON.stringify(FIXED_PARTS_MARKS)]);
+  // docs/PERSONAL-STUDIO.md §3.4.9 (S2): one film that styles the hair and makeup (and locks a prop), with marks.
+  await seedPrompts(options, STYLED_PARTS_PROMPT_FIXTURES);
+  await sql.query('update prompt_items set keyframes = $2::jsonb where slug = $1', [STYLED_PARTS_SLUG, JSON.stringify(STYLED_PARTS_MARKS)]);
 
   const inventory =
     `${result.playbooks.length} core playbooks, ${edges.length} edge fixtures, ` +

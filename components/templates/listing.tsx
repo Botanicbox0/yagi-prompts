@@ -70,10 +70,11 @@ export function TemplatesListing({
   const useCaseLabels = Object.fromEntries(USE_CASES.map((value) => [value, useCaseLabel(dict, value)]));
   const other: TemplateMedium = medium === 'video' ? 'image' : 'video';
   const p = dict.prompts;
-  const groupLabel: Record<FacetGroup, string> = { new: p.filterNew, length: p.filterLength, useCase: p.filterHeading };
+  const groupLabel: Record<FacetGroup, string> = { new: p.filterNew, length: p.filterLength, style: p.filterStyle, useCase: p.filterHeading };
   const optionLabel = (group: FacetGroup, value: string): string => {
     if (group === 'new') return p.filterNew;
     if (group === 'length') return value === 'short' ? p.filterLengthShort : value === 'mid' ? p.filterLengthMid : p.filterLengthLong;
+    if (group === 'style') return value === 'mine' ? p.filterStyleMine : p.filterStyleStyled;
     return useCaseLabels[value] ?? value;
   };
   const facets: FilterFacetView[] = listFacets(cards, medium, now).map((facet) => ({
