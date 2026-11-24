@@ -597,6 +597,9 @@ export function formatBillingOutcomeDetail(detail: string | undefined, locale: '
           subscription_job_issues:
             '구독 중인 조직의 정기 청구서는 구독이 직접 발행합니다. 지금 발행하려면 "재계산"을 누르세요. 이번 주기 청구서를 취소했다면 "다시 발행"을 쓰세요. 금액을 바꾸려면 발행 전에 할인을 주거나 끝내세요(발행일에 반영)',
           paid_at_in_future: '입금일은 오늘(KST)보다 늦을 수 없습니다',
+          paid_at_before_start: '첫 청구서의 입금일은 구독을 시작한 날보다 앞설 수 없습니다. 입금일을 확인하세요',
+          paid_at_overlaps_cycle: '이 입금일로 시작하는 결제 주기가 다른 청구서의 기간과 겹칩니다. 입금일이나 겹치는 청구서를 확인하세요',
+          started_on_must_be_today: '구독은 오늘(KST) 시작합니다',
           period_ended: '이미 지난 달의 정기 청구서 초안은 발행할 수 없습니다',
           reconcile_failed: '다시 정산했지만 일부 단계가 실패했습니다. 상태와 이용 기간은 반영했고, 오류 코드는 구독 카드에 있습니다',
           issuedOn: '세금계산서 작성일(YYYY-MM-DD)을 확인하세요',
@@ -651,6 +654,9 @@ export function formatBillingOutcomeDetail(detail: string | undefined, locale: '
           subscription_job_issues:
             'The subscription issues its own invoices. To issue now, use "Reconcile now"; for a voided current cycle use "Reissue". To change the amount, grant or end a discount before issue (applied on issue day)',
           paid_at_in_future: 'The paid date cannot be later than today (KST)',
+          paid_at_before_start: "The first invoice's paid date cannot be before the day the subscription started. Check the paid date",
+          paid_at_overlaps_cycle: 'The billing cycle starting on this paid date would overlap another invoice. Check the paid date or the overlapping invoice',
+          started_on_must_be_today: 'A subscription starts today (KST)',
           period_ended: 'A subscription draft of a month that has already ended cannot be issued',
           reconcile_failed:
             'The reconcile ran but some steps failed. Status and access end were written; the error code is on the subscription card',
@@ -702,6 +708,9 @@ const SUBSCRIPTION_DETAIL_TOKENS = [
   'reconcile_failed',
   'subscription_job_issues',
   'paid_at_in_future',
+  'paid_at_before_start',
+  'paid_at_overlaps_cycle',
+  'started_on_must_be_today',
 ] as const;
 
 export const OVERDUE_DAYS_LABEL = BRAND_INVOICE_OVERDUE_DAYS;

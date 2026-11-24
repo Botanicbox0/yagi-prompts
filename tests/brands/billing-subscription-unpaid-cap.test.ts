@@ -12,9 +12,9 @@ import { startConfirmed } from '@/tests/brands/helpers/subscription-confirm';
 import { runner } from '@/tests/helpers/pglite';
 
 /**
- * B1c-2 brief, "Unpaid 50% credit cap": for a plan organization with a non-ended subscription (flag on, schema ready),
- * while the CURRENT cycle's subscription invoice of the current epoch is issued and unpaid, the PLAN part of the cap is
- * floor10(plan cap × 50 / 100); paid → the full cap at once. Grants are never halved. The check is folded into the plan
+ * B1c-2 brief, "Unpaid 50% credit cap", as changed by the founder on 2026-11-24 (fix round 1, A): for a plan organization
+ * with a non-ended subscription (flag on, schema ready), while an issued invoice of the current epoch is past its due date
+ * and unpaid, the PLAN part of the cap is floor10(plan cap × 50 / 100); before the due date, and once paid, the full cap. Grants are never halved. The check is folded into the plan
  * organization's one allowance statement: no extra statement for anyone, and with the flag off the SQL is unchanged.
  */
 
@@ -140,7 +140,7 @@ describe('B1c-2: the unpaid 50% cap before 0186', () => {
 });
 
 describe('B1c-2: the unpaid 50% cap on the current cycle', () => {
-  it('early access: the unpaid cycle-0 invoice halves the plan part, a grant stays whole, payment restores the full cap at once', async () => {
+  it('early access: full until the due date, then half the plan part with a grant still whole; payment restores the full cap at once', async () => {
     const orgId = await makeOrg('Unpaid Half Early Fixture');
     const s = await start(orgId, '2026-11-10', true);
     const granted = await grantExtraAllowance({ sql, now: at('2026-11-11T01:00:00Z') }, ADMIN_VIEWER, {
@@ -150,17 +150,19 @@ describe('B1c-2: the unpaid 50% cap on the current cycle', () => {
       reason: 'fixture',
     });
     expect(granted.ok).toBe(true);
-    const unpaid = await loadAllowance(sql, orgId, STUDIO, new Date('2026-11-12T01:00:00Z'));
+    // Fix round 1, A: issued and not yet due → full.
+    expect(await loadAllowance(sql, orgId, STUDIO, new Date('2026-11-12T01:00:00Z'))).toMatchObject({ source: 'plan', baseCapKrw: PLAN_69, extraKrw: 50_000 });
+    const unpaid = await loadAllowance(sql, orgId, STUDIO, new Date('2026-11-25T01:00:00Z'));
     expect(unpaid).toMatchObject({ source: 'plan', baseCapKrw: HALF_69, extraKrw: 50_000, capKrw: HALF_69 + 50_000, planCapHalvedUnpaid: true });
     expect(unpaid.cycle).toMatchObject({ start: '2026-11-10', end: '2026-12-10' });
 
-    expect(await pay(s.firstInvoiceId, '2026-11-13T01:00:00Z')).toMatchObject({ ok: true });
-    const paid = await loadAllowance(sql, orgId, STUDIO, new Date('2026-11-13T02:00:00Z'));
+    expect(await pay(s.firstInvoiceId, '2026-11-26T01:00:00Z')).toMatchObject({ ok: true });
+    const paid = await loadAllowance(sql, orgId, STUDIO, new Date('2026-11-26T02:00:00Z'));
     expect(paid).toMatchObject({ source: 'plan', baseCapKrw: PLAN_69, extraKrw: 50_000, capKrw: PLAN_69 + 50_000 });
     expect(paid).not.toHaveProperty('planCapHalvedUnpaid');
   });
 
-  it('the next cycle: full while only drafted, half once issued and unpaid (reserveAllowance agrees to the won), full again on payment', async () => {
+  it('the next cycle: full while drafted and while issued but not yet due, half once overdue (reserveAllowance agrees to the won), full again on payment', async () => {
     const orgId = await makeOrg('Unpaid Half Next Fixture');
     const s = await start(orgId, '2026-11-10', false);
     expect(await pay(s.firstInvoiceId, '2026-11-10T03:00:00Z', '2026-11-10')).toMatchObject({ ok: true });
@@ -168,17 +170,19 @@ describe('B1c-2: the unpaid 50% cap on the current cycle', () => {
     // Dec 10 01:00 KST: the Dec 10 cycle has started, its invoice is still a draft (the job has not run yet).
     expect(await loadAllowance(sql, orgId, STUDIO, new Date('2026-12-09T16:00:00Z'))).toMatchObject({ baseCapKrw: PLAN_69, capKrw: PLAN_69 });
     await runBrandSubscriptionTick({ sql, now: at('2026-12-10T01:00:00Z') });
-    const issued = await loadAllowance(sql, orgId, STUDIO, new Date('2026-12-10T02:00:00Z'));
+    expect(await loadAllowance(sql, orgId, STUDIO, new Date('2026-12-10T02:00:00Z'))).toMatchObject({ baseCapKrw: PLAN_69, capKrw: PLAN_69 });
+    // Due Dec 24; from Dec 25 (KST) it is overdue.
+    const issued = await loadAllowance(sql, orgId, STUDIO, new Date('2026-12-25T02:00:00Z'));
     expect(issued).toMatchObject({ baseCapKrw: HALF_69, capKrw: HALF_69, planCapHalvedUnpaid: true, cycle: { start: '2026-12-10', end: '2027-01-10' } });
 
     await use(orgId, 300_000, '2026-12-10T03:00:00Z');
-    const reserve = (krw: number) => sql.transaction((tx) => reserveAllowance(tx, orgId, krw, STUDIO, new Date('2026-12-10T04:00:00Z')));
+    const reserve = (krw: number) => sql.transaction((tx) => reserveAllowance(tx, orgId, krw, STUDIO, new Date('2026-12-25T04:00:00Z')));
     expect(await reserve(25_010)).toEqual({ ok: false, code: 'allowance_exhausted' });
     expect(await reserve(25_000)).toMatchObject({ ok: true });
 
     const dec = (await sql.query<{ id: string }>("select id::text as id from brand_invoices where organization_id = $1 and cycle_start = '2026-12-10' and status = 'issued'", [orgId])).rows[0]!;
-    expect(await pay(dec.id, '2026-12-11T01:00:00Z')).toMatchObject({ ok: true });
-    expect(await loadAllowance(sql, orgId, STUDIO, new Date('2026-12-11T02:00:00Z'))).toMatchObject({ baseCapKrw: PLAN_69, capKrw: PLAN_69 });
+    expect(await pay(dec.id, '2026-12-26T01:00:00Z')).toMatchObject({ ok: true });
+    expect(await loadAllowance(sql, orgId, STUDIO, new Date('2026-12-26T02:00:00Z'))).toMatchObject({ baseCapKrw: PLAN_69, capKrw: PLAN_69 });
   });
 
   it('a first invoice without early access gives no plan at all before payment, so nothing is halved', async () => {
@@ -215,7 +219,7 @@ describe('B1c-2: the unpaid 50% cap on the current cycle', () => {
       [plain],
     );
     const plainDefault = await makeOrg('Unpaid Half SQL Default');
-    const nowIso = '2026-11-12T01:00:00Z';
+    const nowIso = '2026-11-25T01:00:00Z'; // the early-access invoice (due Nov 24) is overdue
     // Warm the cached schema probes once with the flag on (a probe runs once per database root, not per load).
     const cold = await recordLoad(subscribed, nowIso);
     expect(cold.result).toMatchObject({ planCapHalvedUnpaid: true });

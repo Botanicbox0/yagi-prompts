@@ -318,7 +318,7 @@ describe('B1a review round 1 — integration gaps', () => {
     const nov10 = at('2026-11-10T01:00:00Z');
     expect(
       await startSubscriptionCompat({ sql: f.sql, now: nov10 }, admin(), { organizationId: f.orgId, planId: 'b2b_29', startedOn: '2026-11-20' }),
-    ).toEqual({ ok: false, code: 'invalid', field: 'startedOn', detail: 'started_on_in_future' });
+    ).toEqual({ ok: false, code: 'invalid', field: 'startedOn', detail: 'started_on_must_be_today' }); // B1c-2 fix round 1, B2: always today
 
     // A manual (null-epoch) invoice drafted for next month before the subscription would collide with the
     // engine's own December draft (the unique index spans every epoch).
@@ -337,6 +337,9 @@ describe('B1a review round 1 — integration gaps', () => {
       ['conflict:manual_plan_active', '유효한 수동 플랜'],
       ['conflict:period_already_invoiced', '그 이후 달에'],
       ['startedOn:started_on_in_future', '오늘(KST) 또는 그 이전'],
+      ['startedOn:started_on_must_be_today', '오늘(KST) 시작'],
+      ['paidAt:paid_at_before_start', '구독을 시작한 날보다 앞설 수 없습니다'],
+      ['paidAt:paid_at_overlaps_cycle', '다른 청구서의 기간과 겹칩니다'],
       ['invalid:preview_required', '미리보기를 확인한 뒤 다시 실행하세요.'],
     ] as const) {
       const text = formatBillingOutcomeDetail(detail, 'ko') ?? '';

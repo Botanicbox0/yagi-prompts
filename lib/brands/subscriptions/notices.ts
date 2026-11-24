@@ -154,13 +154,16 @@ export async function subscriptionAttentionCounts(sql: SqlRunner): Promise<{ sus
   return { suspended: Number(row?.suspended ?? 0), pendingReissue: Number(row?.pending_reissue ?? 0) };
 }
 
-/** Once per KST day, when anything is suspended or waiting for a reissue. */
-export async function enqueueAttentionNotice(sql: SqlRunner, kstDay: string): Promise<boolean> {
+/**
+ * Once per KST day, when anything is suspended or waiting for a reissue — or (fix round 1, B4) when the job held
+ * invoices it could not adopt into a cycle (`held`, counted by this run; counts only).
+ */
+export async function enqueueAttentionNotice(sql: SqlRunner, kstDay: string, held = 0): Promise<boolean> {
   const { suspended, pendingReissue } = await subscriptionAttentionCounts(sql);
-  if (suspended === 0 && pendingReissue === 0) return false;
+  if (suspended === 0 && pendingReissue === 0 && held === 0) return false;
   return enqueueSubscriptionNotice(sql, {
-    keyParts: ['attention', kstDay],
-    preview: `[B2B 정기구독 확인 필요] ${kstDay} 이용 정지 ${suspended}곳 · 다시 발행이 필요한 대기 ${pendingReissue}곳. 조직 구독 카드에서 확인해 주세요.`,
+    keyParts: ['attention', kstDay, ...(held > 0 ? [`held:${held}`] : [])],
+    preview: `[B2B 정기구독 확인 필요] ${kstDay} 이용 정지 ${suspended}곳 · 다시 발행이 필요한 대기 ${pendingReissue}곳${held > 0 ? ` · 편입 보류 ${held}건` : ''}. 조직 구독 카드에서 확인해 주세요.`,
     period: kstDay.slice(0, 7),
     surface: 'brand_billing:subscription_attention',
   });

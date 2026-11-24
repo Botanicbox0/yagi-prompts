@@ -236,9 +236,9 @@ describe('B1a brand subscriptions integration & route (§8.2–§8.11)', () => {
     expect(started2).toMatchObject({ ok: true, applied: true });
     expect(await loadBrandSubscription(f.sql, org2Res.id)).toMatchObject({ status: 'pending', activatedBeforePayment: true });
     expect(await loadPlanAssignment(f.sql, org2Res.id)).toMatchObject({ planId: 'b2b_49', endsOn: '2026-11-24' });
-    // B1c: full cycle, no first-month proration (was 322,000 under B1b). B1c-2, unpaid 50% cap: early access with the
-    // cycle-0 invoice issued and unpaid → half the plan part (460,000 → 230,000) until it is paid.
-    expect((await loadAllowance(f.sql, org2Res.id, studioEnv(), t0)).capKrw).toBe(230_000);
+    // B1c: full cycle, no first-month proration (was 322,000 under B1b). The unpaid 50% cap applies only after the due
+    // date (founder 2026-11-24), so early access on its start day is full.
+    expect((await loadAllowance(f.sql, org2Res.id, studioEnv(), t0)).capKrw).toBe(460_000);
   });
 
   it('§8.5 Unpaid flow: ends_on = oldest due_on, past_due, suspended after grace, no new invoice while suspended, resume prorated on pay', async () => {
@@ -260,8 +260,8 @@ describe('B1a brand subscriptions integration & route (§8.2–§8.11)', () => {
     expect(await loadPlanAssignment(f.sql, f.orgId)).toMatchObject({ endsOn: '2026-12-15' });
     const decInv = (await listBrandInvoices(f.sql, { organizationId: f.orgId, now: dec01 })).find((i) => i.period === '2026-12')!;
 
-    // Dec 16 -> past_due, allowance STILL active within 14-day grace — B1c-2, unpaid 50% cap: the current cycle's
-    // invoice is issued and unpaid, so the plan part is half (270,000 → 135,000).
+    // Dec 16 -> past_due, allowance STILL active within 14-day grace — B1c-2, unpaid 50% cap: an invoice is past its
+    // due date (Dec 15) and unpaid, so the plan part is half (270,000 → 135,000).
     const dec16 = new Date('2026-12-16T01:00:00Z');
     await runBrandSubscriptionTick({ sql: f.sql, now: () => dec16 });
     expect(await loadBrandSubscription(f.sql, f.orgId)).toMatchObject({ status: 'past_due' });
@@ -295,10 +295,11 @@ describe('B1a brand subscriptions integration & route (§8.2–§8.11)', () => {
       cycleEnd: '2027-02-05',
     });
     expect(await loadPlanAssignment(f.sql, f.orgId)).toMatchObject({ endsOn: '2027-01-19' });
-    // B1c-2, unpaid 50% cap: the restart cycle's invoice is issued and unpaid → half until it is paid.
-    expect((await loadAllowance(f.sql, f.orgId, studioEnv(), jan05)).capKrw).toBe(135_000);
-    await markBrandInvoicePaid({ sql: f.sql, now: () => jan05 }, admin(), { invoiceId: (janInv as { id: string }).id, paidMethod: 'transfer' });
+    // The restart cycle's invoice is issued but not yet due → full (the 50% cap applies only after the due date).
     expect((await loadAllowance(f.sql, f.orgId, studioEnv(), jan05)).capKrw).toBe(270_000);
+    expect((await loadAllowance(f.sql, f.orgId, studioEnv(), new Date('2027-01-20T01:00:00Z'))).capKrw).toBe(135_000);
+    await markBrandInvoicePaid({ sql: f.sql, now: () => new Date('2027-01-20T02:00:00Z') }, admin(), { invoiceId: (janInv as { id: string }).id, paidMethod: 'transfer' });
+    expect((await loadAllowance(f.sql, f.orgId, studioEnv(), new Date('2027-01-20T03:00:00Z'))).capKrw).toBe(270_000);
   });
 
   it('§8.6 Cancel, undoCancel, cancel with nothing paid, downgrade on 1st, and upgrade rejected', async () => {

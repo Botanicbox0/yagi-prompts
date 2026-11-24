@@ -128,7 +128,12 @@ describe('BRAND_WORKSPACE_APPROVAL off: exact origin/main parity', () => {
             .rows.length > 0;
         expect(has0186).toBe(label !== 'before 0184');
         if (has0186) {
-          expect(actual[1]).toEqual({ ...recorded, log: [...recordedLog.slice(0, gi), guard, ...recordedLog.slice(gi + 1)] });
+          // Fix round 1, B4: the job's answer also counts the invoices it held (0 here; no extra statement).
+          expect(actual[1]).toEqual({
+            ...recorded,
+            body: { ...(recorded.body as Record<string, unknown>), held: 0 },
+            log: [...recordedLog.slice(0, gi), guard, ...recordedLog.slice(gi + 1)],
+          });
         } else {
           expect(actual[1]).toEqual({
             op: 'routeSubscriptionOn',

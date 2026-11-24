@@ -42,6 +42,7 @@ import {
   type BrandPlanId,
 } from '../plans';
 import { cycleContaining, cycleStartAt } from '../billing/cycle';
+import { firstPaymentCycleRefusal } from '../billing/cycle-invoices';
 import {
   addMonthsToPeriod,
   currentRun,
@@ -443,9 +444,11 @@ export async function loadSubscriptionPanelFacts(
     olderEpochCycles: await loadOlderEpochCycles(sql, subscription),
   });
   const current = evaluation.cycle.currentCycle;
+  // A waiting early-access subscription whose current cycle was never billed reissues from today (this month).
+  const reissueFromToday = evaluation.needsReissue && current !== null && !invoices.some((i) => i.kind === 'subscription' && i.cycleStart === current.start);
   return {
     // B1c-2: a subscription reissues its CURRENT cycle (or a new first invoice while waiting for the first payment).
-    currentPeriod: current ? periodOfDay(current.start) : currentPeriod,
+    currentPeriod: current && !reissueFromToday ? periodOfDay(current.start) : currentPeriod,
     currentCycle: current,
     nextCycle: evaluation.cycle.nextCycle,
     nextDraftDay: evaluation.cycle.nextDraftDay,
@@ -460,6 +463,7 @@ export async function loadSubscriptionPanelFacts(
     needsReissue: evaluation.needsReissue,
     nothingPaid,
     blockedByOlderEpoch: evaluation.blockedByOlderEpoch,
+    heldInvoices: await loadHeldSubscriptionInvoices(sql, subscription),
     graceDays,
   };
 }
@@ -477,6 +481,8 @@ export interface ReconcileSummary {
   adoptedInvoiceIds: string[];
   /** Periods an older epoch occupies (never drafted). */
   blockedByOlderEpoch: string[];
+  /** Fix round 1, B4: null-epoch issued/paid invoices that could not be placed into a cycle (held, not adopted). */
+  heldInvoiceIds: string[];
   /** Short codes of actions that failed and were rolled back to their savepoint. */
   failures: string[];
   /** `reconcile_failures` after this run (0 on a clean run). */
@@ -608,14 +614,10 @@ function isBillingAction(action: SubscriptionAction): action is BillingAction {
   );
 }
 
-function suppressBillingAction(
-  action: SubscriptionAction,
-  evaluation: { cycle: { nextCycle: Cycle | null } },
-  suppressBilling: Set<string>,
-  suppressVoid: Set<string>,
-): void {
+function suppressBillingAction(action: SubscriptionAction, suppressBilling: Set<string>, suppressVoid: Set<string>): void {
   if (action.type === 'void' || action.type === 'setInvoiceCycle') suppressVoid.add(action.invoiceId);
-  else if (action.type === 'applyPendingPlan') suppressBilling.add(evaluation.cycle.nextCycle?.start ?? '');
+  // Fix round 1, B6: a failed plan change holds the cycle it belongs to (the one being billed), not the one after it.
+  else if (action.type === 'applyPendingPlan') suppressBilling.add(action.cycleStart);
   else if (action.type === 'draft' || action.type === 'issue') suppressBilling.add(action.cycleStart);
 }
 
@@ -637,6 +639,62 @@ async function withSavepoint<T>(
   }
 }
 
+/** Why a null-epoch issued/paid invoice cannot be adopted into the current epoch (fix round 1, B4). */
+export type HeldReason = 'no_assignment' | 'no_free_cycle';
+
+/**
+ * B1c-2, rule 11: where a null-epoch issued or paid invoice goes. It keeps its own cycle; without one it gets the cycle
+ * of the anchor (plan `started_on`) that starts in its month — held when there is no anchor, its month is before the
+ * anchor, or that cycle is already taken by an invoice of the epoch. Read-only (the panel uses it too).
+ */
+async function placeNullEpochInvoice(
+  sql: SqlRunner,
+  sub: BrandSubscription,
+  row: { period: string; cycle_start: string | null; cycle_end: string | null },
+): Promise<{ cycle: Cycle } | { held: HeldReason }> {
+  if (row.cycle_start && row.cycle_end) {
+    return { cycle: { start: String(row.cycle_start).slice(0, 10), end: String(row.cycle_end).slice(0, 10) } };
+  }
+  const anchor = (await loadPlanAssignment(sql, sub.organizationId))?.startedOn ?? null;
+  if (!anchor) return { held: 'no_assignment' };
+  const index =
+    (Number(String(row.period).slice(0, 4)) - Number(anchor.slice(0, 4))) * 12 + (Number(String(row.period).slice(5, 7)) - Number(anchor.slice(5, 7)));
+  if (index < 0) return { held: 'no_free_cycle' };
+  const cycle = { start: cycleStartAt(anchor, index), end: cycleStartAt(anchor, index + 1) };
+  const taken = (
+    await sql.query(
+      `select 1 from brand_invoices
+        where organization_id = $1 and subscription_epoch = $2 and kind = 'subscription' and status <> 'void'
+          and cycle_start < $4::date and cycle_end > $3::date
+        limit 1`,
+      [sub.organizationId, sub.epoch, cycle.start, cycle.end],
+    )
+  ).rows[0];
+  return taken ? { held: 'no_free_cycle' } : { cycle };
+}
+
+/** The null-epoch invoices the job cannot adopt, with the reason (fix round 1, B4: shown on the subscription card). */
+export async function loadHeldSubscriptionInvoices(
+  sql: SqlRunner,
+  sub: BrandSubscription,
+): Promise<Array<{ invoiceId: string; period: string; status: BrandInvoiceStatus; reason: HeldReason }>> {
+  if (sub.status === 'ended') return [];
+  const { rows } = await sql.query<{ id: string; status: BrandInvoiceStatus; period: string; cycle_start: string | null; cycle_end: string | null }>(
+    `select id::text as id, status, period, cycle_start::text as cycle_start, cycle_end::text as cycle_end
+       from brand_invoices
+      where organization_id = $1 and subscription_epoch is null and kind = 'subscription'
+        and status in ('issued', 'paid') and period >= $2
+      order by period asc, created_at asc`,
+    [sub.organizationId, periodOfDay(sub.startedOn)],
+  );
+  const out: Array<{ invoiceId: string; period: string; status: BrandInvoiceStatus; reason: HeldReason }> = [];
+  for (const row of rows) {
+    const placed = await placeNullEpochInvoice(sql, sub, row);
+    if ('held' in placed) out.push({ invoiceId: String(row.id), period: String(row.period), status: row.status, reason: placed.held });
+  }
+  return out;
+}
+
 /**
  * Review round 4, A4: null-epoch subscription invoices from the epoch's start period onward (left behind while
  * the flag was off). A DRAFT was never sent: the system voids it (`null_epoch_draft`) and the job drafts its
@@ -648,7 +706,7 @@ async function settleNullEpochInvoices(
   sql: SqlRunner,
   sub: BrandSubscription,
   now: Date,
-): Promise<{ adopted: string[]; voided: string[]; failures: string[] }> {
+): Promise<{ adopted: string[]; voided: string[]; held: string[]; failures: string[] }> {
   const nowIso = now.toISOString();
   const out = { adopted: [] as string[], voided: [] as string[], held: [] as string[], failures: [] as string[] };
   const { rows } = await sql.query<{
@@ -697,26 +755,10 @@ async function settleNullEpochInvoices(
       }
       const issueDay = stampKstDay(row.issued_at) ?? kstDayOf(now);
       // B1c-2, rule 11: an adopted invoice keeps its cycle; without one it gets the cycle of the anchor that starts
-      // in its month, and is held (left unadopted, counted) when there is no anchor or that cycle is taken.
-      let cycle: Cycle | null = row.cycle_start && row.cycle_end ? { start: String(row.cycle_start).slice(0, 10), end: String(row.cycle_end).slice(0, 10) } : null;
-      if (!cycle) {
-        const anchor = (await loadPlanAssignment(sql, sub.organizationId))?.startedOn ?? null;
-        const index = anchor
-          ? (Number(String(row.period).slice(0, 4)) - Number(anchor.slice(0, 4))) * 12 + (Number(String(row.period).slice(5, 7)) - Number(anchor.slice(5, 7)))
-          : -1;
-        if (!anchor || index < 0) return 'held' as const;
-        cycle = { start: cycleStartAt(anchor, index), end: cycleStartAt(anchor, index + 1) };
-        const taken = (
-          await sql.query(
-            `select 1 from brand_invoices
-              where organization_id = $1 and subscription_epoch = $2 and kind = 'subscription' and status <> 'void'
-                and cycle_start < $4::date and cycle_end > $3::date
-              limit 1`,
-            [sub.organizationId, sub.epoch, cycle.start, cycle.end],
-          )
-        ).rows[0];
-        if (taken) return 'held' as const;
-      }
+      // in its month, and is held (left unadopted, counted, shown on the card) when it cannot be placed.
+      const placed = await placeNullEpochInvoice(sql, sub, row);
+      if ('held' in placed) return 'held' as const;
+      const cycle = placed.cycle;
       void epochPaid;
       const dueOn = row.due_on ?? dueOnForInvoice({ issueDay, cycleStart: cycle.start, method: sub.collectionMethod });
       const updated = (
@@ -872,6 +914,7 @@ export async function reconcileSubscriptionInTx(
     voidedInvoiceIds: [],
     adoptedInvoiceIds: [],
     blockedByOlderEpoch: [],
+    heldInvoiceIds: [],
     failures: [],
     reconcileFailures: 0,
     planChanged: false,
@@ -904,6 +947,7 @@ export async function reconcileSubscriptionInTx(
 
   const settled = await settleNullEpochInvoices(sql, sub, now);
   summary.adoptedInvoiceIds = settled.adopted;
+  summary.heldInvoiceIds = settled.held;
   summary.voidedInvoiceIds.push(...settled.voided);
   summary.failures.push(...settled.failures);
   summary.failures.push(...(await normaliseNullDueDates(sql, sub, now)));
@@ -933,7 +977,7 @@ export async function reconcileSubscriptionInTx(
     if (pass >= MAX_BILLING_PASSES) {
       const leftover = evaluation.actions.filter(isBillingAction);
       if (leftover.length > 0) {
-        for (const action of leftover) suppressBillingAction(action, evaluation, suppressBilling, suppressVoid);
+        for (const action of leftover) suppressBillingAction(action, suppressBilling, suppressVoid);
         continue;
       }
     }
@@ -950,14 +994,24 @@ export async function reconcileSubscriptionInTx(
         stepNo += 1;
         const result = await withSavepoint(sql, `subscription_step_${stepNo}`, async () => {
           if (action.type === 'setInvoiceCycle') {
-            // Rule 4: the first payment starts cycle 0 on its paid day.
+            // Rule 4: the first payment starts cycle 0 on its paid day — within bounds (fix round 1, B1): not before the
+            // subscription started, not overlapping another subscription invoice. Out of bounds → this step fails
+            // (reported; the invoice keeps no cycle and the subscription waits) — never guessed.
+            const refusal = await firstPaymentCycleRefusal(sql, {
+              organizationId,
+              invoiceId: action.invoiceId,
+              subscriptionStartedOn: sub.startedOn,
+              paidDay: action.cycleStart,
+            });
+            if (refusal) throw new BrandBillingDenied('conflict', refusal);
+            // Fix round 1, B7: only the cycle; `period` stays the month the invoice was issued for (a tax invoice may name it).
             const set = (
               await sql.query(
                 `update brand_invoices
-                    set cycle_start = $2::date, cycle_end = $3::date, period = $4
+                    set cycle_start = $2::date, cycle_end = $3::date
                   where id = $1 and cycle_start is null and status = 'paid'
                   returning id`,
-                [action.invoiceId, action.cycleStart, action.cycleEnd, periodOfDay(action.cycleStart)],
+                [action.invoiceId, action.cycleStart, action.cycleEnd],
               )
             ).rows[0];
             if (!set) throw new BrandBillingDenied('conflict', 'cycle_already_set');
@@ -1090,7 +1144,7 @@ export async function reconcileSubscriptionInTx(
           ).rows[0];
           if (fresh) sub = mapSubscription(fresh);
           summary.failures.push(`${action.type}:${reconcileErrorCode(result.error)}`.slice(0, RECONCILE_ERROR_MAX));
-          suppressBillingAction(action, evaluation, suppressBilling, suppressVoid);
+          suppressBillingAction(action, suppressBilling, suppressVoid);
           failedThisPass = true;
           break;
         }
@@ -1397,12 +1451,10 @@ export async function startSubscription(
     };
   }
   const paidPlanId: PaidBrandPlanId = v.planId;
-  if (periodOfDay(startedOn) !== currentMonth) {
-    return { ok: false, code: 'invalid', field: 'startedOn', detail: 'started_on_must_be_current_month' };
-  }
-  // A start in the future would issue the first invoice (due today + 14) before access could begin.
-  if (startedOn > todayKst) {
-    return { ok: false, code: 'invalid', field: 'startedOn', detail: 'started_on_in_future' };
+  // Fix round 1, B2: a subscription always starts today (KST). A back-dated start issued an invoice already past its due
+  // date; a future one would bill before access. The admin form has no date; an explicit other day is refused.
+  if (startedOn !== todayKst) {
+    return { ok: false, code: 'invalid', field: 'startedOn', detail: 'started_on_must_be_today' };
   }
 
   try {
@@ -1697,8 +1749,10 @@ export async function cancelSubscription(
                 set cancel_at_period_end = true,
                     canceled_at = $2::timestamptz,
                     plan_id = coalesce($5, plan_id),
-                    pending_plan_id = null,
-                    pending_plan_effective_period = null,
+                    -- Fix round 1, B5: a scheduled downgrade survives the cancel (an undo bills it); a downgrade an
+                    -- issued/paid invoice already carries is applied here; ending the subscription clears it.
+                    pending_plan_id = case when $5::text is null then pending_plan_id else null end,
+                    pending_plan_effective_period = case when $5::text is null then pending_plan_effective_period else null end,
                     revision = $3,
                     updated_at = $2::timestamptz
               where organization_id = $1 and revision = $4
@@ -2053,7 +2107,18 @@ export async function reissueSubscriptionPeriod(
       const freshFirstInvoice = needsReissue && firstInvoiceRuleApplies(engineSub, engineInvoices);
       const run = currentRun(engineInvoices, todayKst);
       const current = run ? cycleContaining(run.anchor, todayKst) : null;
-      const targetCycle: Cycle | null = freshFirstInvoice ? null : current ? cycleStartingOn(run!.anchor, current.start) : null;
+      // Fix round 1 (found by the property test): with early access and nothing paid, a voided cycle-0 invoice is reissued
+      // with its own dates and due date only while that cycle runs; once it has ended (the current cycle was never billed)
+      // the reissue starts a new cycle on today, like a resume — the days in between are never billed.
+      const restartToday =
+        needsReissue && !freshFirstInvoice && current !== null && !engineInvoices.some((i) => i.kind === 'subscription' && i.cycleStart === current.start);
+      const targetCycle: Cycle | null = freshFirstInvoice
+        ? null
+        : restartToday
+          ? cycleStartingOn(todayKst, todayKst)
+          : current
+            ? cycleStartingOn(run!.anchor, current.start)
+            : null;
       const targetPeriod = targetCycle ? periodOfDay(targetCycle.start) : currentMonth;
       if (v.period !== targetPeriod) {
         return { ok: false as const, code: 'invalid' as const, field: 'period', detail: 'reissue_current_period_only' };

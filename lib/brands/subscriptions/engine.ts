@@ -99,7 +99,8 @@ export interface SubscriptionCycleInfo {
 
 export type SubscriptionAction =
   | { type: 'setInvoiceCycle'; invoiceId: string; cycleStart: string; cycleEnd: string }
-  | { type: 'applyPendingPlan'; fromPlanId: BrandPlanId; toPlanId: BrandPlanId }
+  /** `cycleStart`: the cycle whose invoice carries the new plan (fix round 1, B6: a failure holds that cycle). */
+  | { type: 'applyPendingPlan'; fromPlanId: BrandPlanId; toPlanId: BrandPlanId; cycleStart: string }
   | { type: 'draft'; cycleStart: string; cycleEnd: string; period: string; planId: PaidBrandPlanId }
   | { type: 'issue'; cycleStart: string; period: string; dueOn: string }
   | {
@@ -371,7 +372,10 @@ function ledgerOf(epochInvoices: readonly EngineInvoice[], todayKst: string, old
     const inv = latestOfCycle(epochInvoices, start);
     if (inv && hasCycle(inv)) extend(inv.cycleEnd);
   }
-  return { hasPaid: paid.length > 0, hasIssuedUnpaid, oldestUnpaid, blocked, waived, coverageEnd };
+  // Fix round 1, B1: a paid subscription invoice that could not be placed into a cycle (its paid day out of bounds) covers
+  // no days and opens nothing; the subscription waits as it was.
+  const covering = paid.filter((inv) => inv.kind !== 'subscription' || hasCycle(inv));
+  return { hasPaid: covering.length > 0, hasIssuedUnpaid, oldestUnpaid, blocked, waived, coverageEnd };
 }
 
 function unpaidDueOf(inv: EngineInvoice): string {
@@ -574,10 +578,19 @@ export function pendingPlanCarriedByInvoice(
   invoices: readonly EngineInvoice[],
   todayKst: string,
 ): PaidBrandPlanId | null {
+  return pendingPlanCarrier(sub, invoices, todayKst)?.planId ?? null;
+}
+
+/** The started cycle whose issued or paid invoice carries the scheduled plan, if any. */
+function pendingPlanCarrier(
+  sub: Pick<EngineSubscription, 'planId' | 'pendingPlanId' | 'pendingPlanEffectivePeriod' | 'startedOn' | 'epoch'>,
+  invoices: readonly EngineInvoice[],
+  todayKst: string,
+): { planId: PaidBrandPlanId; cycleStart: string } | null {
   const pending = sub.pendingPlanId;
   if (pending === null || !isPaidPlanId(pending) || pending === sub.planId) return null;
   const from = pendingPlanEffectiveFrom(sub);
-  const carried = invoicesForEpoch(sub, invoices).some(
+  const carrier = invoicesForEpoch(sub, invoices).find(
     (inv) =>
       inv.kind === 'subscription' &&
       (inv.status === 'issued' || inv.status === 'paid') &&
@@ -586,7 +599,7 @@ export function pendingPlanCarriedByInvoice(
       inv.cycleStart <= todayKst &&
       inv.planId === pending,
   );
-  return carried ? pending : null;
+  return carrier && hasCycle(carrier) ? { planId: pending, cycleStart: carrier.cycleStart } : null;
 }
 
 function endReason(standing: Standing): string {
@@ -650,7 +663,8 @@ export function evaluateSubscription(params: {
     const start = stampKstDay(inv.paidAt) ?? todayKst;
     const c = oneCycleFrom(start);
     actions.push({ type: 'setInvoiceCycle', invoiceId: inv.id, cycleStart: c.start, cycleEnd: c.end });
-    working = working.map((x) => (x === inv ? { ...x, cycleStart: c.start, cycleEnd: c.end, period: periodOfDay(c.start) } : x));
+    // Fix round 1, B7: the cycle only; `period` stays the month the invoice was issued for.
+    working = working.map((x) => (x === inv ? { ...x, cycleStart: c.start, cycleEnd: c.end } : x));
   }
 
   // 0b. System voids: an expired first invoice (no early access, nothing paid, `today > due + 14`); a draft without
@@ -678,21 +692,25 @@ export function evaluateSubscription(params: {
 
   // 0c. A downgrade follows the invoice that carries it, whoever issued it.
   let pendingApplied = false;
-  const carried = pendingPlanCarriedByInvoice(sub, working, todayKst);
-  if (carried !== null) {
-    actions.push({ type: 'applyPendingPlan', fromPlanId: sub.planId, toPlanId: carried });
-    planId = carried;
+  const carrier = pendingPlanCarrier(sub, working, todayKst);
+  if (carrier !== null && !suppressBilling.has(carrier.cycleStart)) {
+    actions.push({ type: 'applyPendingPlan', fromPlanId: sub.planId, toPlanId: carrier.planId, cycleStart: carrier.cycleStart });
+    planId = carrier.planId;
     pendingApplied = true;
   }
   const subNow = (): EngineSubscription => (pendingApplied ? { ...sub, planId, pendingPlanId: null, pendingPlanEffectivePeriod: null } : sub);
 
-  // 1. The next cycle: draft from D-7, issue on the boundary while billable; a resume restarts the cycle.
-  const run = currentRun(working, todayKst);
+  // 1. The next cycle: draft from D-7, issue on the boundary while billable; a resume restarts the cycle. A second round
+  //    runs only after an issue in the first (fix round 1: a late issue or a restart can leave the FOLLOWING cycle's D-7
+  //    window already open — drafted in the same evaluation, so one run leaves nothing for the next evaluation).
   const blockedByOlder: string[] = [];
-  if (run && !sub.cancelAtPeriodEnd) {
+  for (let round = 0; round < 2; round += 1) {
+    const run = currentRun(working, todayKst);
+    if (!run || sub.cancelAtPeriodEnd) break;
+    const actionsBefore = actions.length;
     const next = cycleStartingOn(run.anchor, run.lastEnd);
     const heldByOlder = olderEpoch.some((c) => overlaps(c, next));
-    if (heldByOlder) blockedByOlder.push(next.start);
+    if (heldByOlder && !blockedByOlder.includes(next.start)) blockedByOlder.push(next.start);
     const blocked = findAdminVoidedCycles(working).includes(next.start) || suppressBilling.has(next.start) || heldByOlder;
     const nextDraftDay = addCalendarDays(next.start, -SUBSCRIPTION_DRAFT_LEAD_DAYS);
     if (!blocked && todayKst >= nextDraftDay) {
@@ -713,15 +731,21 @@ export function evaluateSubscription(params: {
         const asOfBoundary = invoicesAsOfDay(working, next.start);
         const contiguous = billableOnDayFromFacts(s, asOfBoundary, next.start, graceDays, next, olderEpoch);
         let target: Cycle = next;
-        if (!contiguous) {
+        // Fix round 1, B3: a cycle that already ended (no job run for a whole cycle) is never billed; the subscription
+        // restarts on today, like a resume. The skipped time is not billed.
+        if (!contiguous || next.end <= todayKst) {
           let restartDay = todayKst;
-          for (let d = addCalendarDays(next.start, 1); d < todayKst; d = addCalendarDays(d, 1)) {
-            if (billableOnDayFromFacts(s, invoicesAsOfDay(working, d), d, graceDays, oneCycleFrom(d), olderEpoch)) {
-              restartDay = d;
-              break;
+          if (!contiguous) {
+            for (let d = addCalendarDays(next.start, 1); d < todayKst; d = addCalendarDays(d, 1)) {
+              if (billableOnDayFromFacts(s, invoicesAsOfDay(working, d), d, graceDays, oneCycleFrom(d), olderEpoch)) {
+                restartDay = d;
+                break;
+              }
             }
           }
           target = oneCycleFrom(restartDay);
+          // A resume whose restart cycle has itself already ended restarts on today as well.
+          if (target.end <= todayKst) target = oneCycleFrom(todayKst);
           // The old anchor's drafts that the new cycle replaces are voided by the system.
           for (const inv of [...working]) {
             if (inv.kind === 'subscription' && inv.status === 'draft' && hasCycle(inv) && inv.cycleStart >= next.start && !suppressVoid.has(inv.id)) {
@@ -733,7 +757,7 @@ export function evaluateSubscription(params: {
         if (!suppressBilling.has(target.start)) {
           const cyclePlan = planForCycle(s, target.start);
           if (cyclePlan !== planId && !pendingApplied) {
-            actions.push({ type: 'applyPendingPlan', fromPlanId: planId, toPlanId: cyclePlan });
+            actions.push({ type: 'applyPendingPlan', fromPlanId: planId, toPlanId: cyclePlan, cycleStart: target.start });
             planId = cyclePlan;
             pendingApplied = true;
           }
@@ -747,6 +771,7 @@ export function evaluateSubscription(params: {
         }
       }
     }
+    if (!actions.slice(actionsBefore).some((a) => a.type === 'issue')) break;
   }
 
   // 2. Status and the plan assignment, from the invoices after the actions above.

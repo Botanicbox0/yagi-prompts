@@ -304,8 +304,9 @@ describe('§7 plan-default admin display bug fixes & §6 flag-gated SSR', () => 
     vi.setSystemTime(new Date('2026-11-10T01:00:00Z'));
     const todayKst = '2026-11-10';
     const currentMonth = todayKst.slice(0, 7);
-    // The 1st is never in the future (a start date may not lie after today).
-    const startDay = `${currentMonth}-01`;
+    // B1c-2 fix round 1, B2: a subscription always starts today; a posted date is ignored and the form shows today read-only.
+    void currentMonth;
+    const startDay = todayKst;
 
     // Step 1 preview for b2b_49 + early open
     const step1 = await h.run('brandSubscription.start', {
@@ -335,7 +336,9 @@ describe('§7 plan-default admin display bug fixes & §6 flag-gated SSR', () => 
     expect(startForm).toContain(`name="previewDigest" value="${step1Digest}"`);
     expect(startForm).toContain('data-subscription-start-note');
     expect(startForm).toContain('value="b2b_49" selected');
-    expect(startForm).toContain(`value="${startDay}"`);
+    expect(startForm).toContain('data-subscription-start-today');
+    expect(startForm).toContain(startDay);
+    expect(startForm).not.toContain('name="startedOn"');
     expect(startForm).toMatch(/name="activateBeforePayment"[^>]*checked/);
     expect(startForm).toContain('data-confirm-check');
     expect(startForm).toContain('name="_confirm"');
