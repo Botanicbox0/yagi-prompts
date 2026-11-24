@@ -13,6 +13,7 @@
  * Client-safe: plain functions over the types in `./schema` and `lib/revision/sheet-core`; no node-only imports.
  */
 import { normSheetText, sheetTextKey, uniqueSheetTexts } from '@/lib/revision/sheet-core';
+import { NO_LOCKS, lockPhrases, lockSheet, lockTextHit, lockVerdict, type TemplateLocks } from './locks';
 import {
   CUSTOM_DIRECTOR_REF_SLOTS,
   DIRECTOR_EDITABLE_SLOTS,
@@ -177,8 +178,18 @@ export function cleanPersonalSheet(raw: unknown): PersonalEditSheet {
   }
 }
 
-/** Drops every text that fails `guardSheetText`, in every block and in `was`; `dropped` counts them. */
-export function guardPersonalSheet(sheet: PersonalEditSheet): { sheet: PersonalEditSheet; dropped: number } {
+/**
+ * Drops every text that fails `guardSheetText`, in every block and in `was`; `dropped` counts them. With template
+ * locks (docs/PERSONAL-STUDIO.md §3.3) it also drops locked change lines and exclusions that name a locked part.
+ */
+export function guardPersonalSheet(sheet: PersonalEditSheet, locks: TemplateLocks = NO_LOCKS): { sheet: PersonalEditSheet; dropped: number } {
+  const guarded = guardSheetTexts(sheet);
+  if (!locks.any) return guarded;
+  const locked = lockSheet(guarded.sheet, locks);
+  return { sheet: locked.sheet, dropped: guarded.dropped + locked.dropped };
+}
+
+function guardSheetTexts(sheet: PersonalEditSheet): { sheet: PersonalEditSheet; dropped: number } {
   let dropped = 0;
   const keepIt = (text: string): boolean => {
     if (passes(text)) return true;
@@ -356,16 +367,23 @@ const indexIn = (value: unknown, length: number): number | null =>
  * order, then keep and exclude items. Lines with a slot outside `editableSlots` are dropped and references that are
  * not attached are unbound, on the earlier lines too. Texts that fail the guard never land. A question is kept only
  * when none was asked yet in this conversation. `turns` is returned as given (the caller appends the turn).
+ *
+ * Template locks (docs/PERSONAL-STUDIO.md §3.3): a locked line or an exclusion that names a locked part never lands
+ * (earlier ones are dropped too), and a closed reference photo is unbound. `locked` counts what THIS reading lost
+ * to a lock: new lines and exclusions dropped, and new lines whose photo was unbound.
  */
 export function settleSheetTurn(input: {
   prior: PersonalSheetState;
   reading: PersonalSheetDelta;
   attachedRefs: readonly CustomDirectorRefSlot[];
   editableSlots: readonly DirectorEditableSlot[];
-}): PersonalSheetState & { changed: boolean } {
+  locks?: TemplateLocks;
+}): PersonalSheetState & { changed: boolean; locked: number } {
   const { prior, reading } = input;
+  const locks = input.locks ?? NO_LOCKS;
   const allowed = new Set<string>(input.editableSlots);
-  const attached = new Set<string>(input.attachedRefs);
+  const attached = new Set<string>(locks.any ? input.attachedRefs.filter((r) => !locks.refs.includes(r)) : input.attachedRefs);
+  let locked = 0;
 
   const removed: Record<PersonalSheetBlock, Set<number>> = { change: new Set(), keep: new Set(), exclude: new Set() };
   for (const item of asList(reading.remove).slice(0, L.removeMax)) {
@@ -387,7 +405,7 @@ export function settleSheetTurn(input: {
     return kept ? [{ id, line: kept }] : [];
   });
   entries = entries
-    .filter((e) => allowed.has(e.line.slot))
+    .filter((e) => allowed.has(e.line.slot) && lockVerdict(e.line, locks) === 'ok')
     .map((e) => (e.line.ref && !attached.has(e.line.ref) ? { id: e.id, line: withoutRef(e.line) } : e));
 
   let nextId = prior.sheet.change.length;
@@ -395,10 +413,16 @@ export function settleSheetTurn(input: {
     if (!raw || typeof raw !== 'object') continue;
     const r = raw as Record<string, unknown>;
     const text = clip(r.text, L.itemMax);
-    if (!text || !passes(text) || !isSlot(r.slot) || !allowed.has(r.slot)) continue;
+    if (!text || !passes(text) || !isSlot(r.slot)) continue;
     const shots = cleanShots(r.shots);
     if (shots === null) continue;
+    if (lockVerdict({ slot: r.slot, text, ...(shots ? { shots } : {}) }, locks) !== 'ok') {
+      locked += 1;
+      continue;
+    }
+    if (!allowed.has(r.slot)) continue;
     const ref = isRef(r.ref) && attached.has(r.ref) ? r.ref : undefined;
+    if (locks.any && isRef(r.ref) && !ref && input.attachedRefs.includes(r.ref)) locked += 1;
     const replaces = typeof r.replaces === 'number' && Number.isInteger(r.replaces) ? r.replaces : null;
     entries = applyToEntries(entries, line(text, r.slot, ref, shots), replaces, nextId);
     nextId += 1;
@@ -406,10 +430,13 @@ export function settleSheetTurn(input: {
 
   const added = (list: unknown, max: number) => asList(list).slice(0, max).filter(passes);
   const keep = uniqueSheetTexts([...prior.sheet.keep.filter((_, i) => !removed.keep.has(i)), ...added(reading.keep, L.keepAddMax)], L.keepMax);
-  const exclude = uniqueSheetTexts(
-    [...prior.sheet.exclude.filter((_, i) => !removed.exclude.has(i)), ...added(reading.exclude, L.excludeAddMax)],
-    L.excludeMax,
-  );
+  const priorExclude = prior.sheet.exclude.filter((t, i) => !removed.exclude.has(i) && !lockTextHit(t, locks));
+  const newExclude = added(reading.exclude, L.excludeAddMax).filter((t) => {
+    if (!lockTextHit(t, locks)) return true;
+    locked += 1;
+    return false;
+  });
+  const exclude = uniqueSheetTexts([...priorExclude, ...newExclude], L.excludeMax);
   const sheet: PersonalEditSheet = { change: entries.map((e) => e.line), keep, exclude };
 
   const question = prior.asked ? null : cleanQuestion(reading.question);
@@ -419,6 +446,7 @@ export function settleSheetTurn(input: {
     question,
     asked: prior.asked || question !== null,
     changed: !sameSheet(prior.sheet, sheet),
+    locked,
   };
 }
 
@@ -488,12 +516,19 @@ export function foldPendingNote(sheet: PersonalEditSheet, note: string): Persona
 /**
  * Sorts a (guarded) sheet by where each line goes in the prompt. A line's photo counts only when that photo is on
  * the job; attached photos no line names are listed so each still gets its default role. `was` never travels.
+ * With template locks (docs/PERSONAL-STUDIO.md §3.3) locked lines and exclusions are skipped again, closed photos
+ * count as absent, and the plan names the locked parts in `locks` (absent without locks).
  */
-export function planSheetCompile(sheet: PersonalEditSheet, refs: { look: boolean; prop: boolean; scene: boolean }): SheetCompilePlan {
+export function planSheetCompile(
+  sheet: PersonalEditSheet,
+  refs: { look: boolean; prop: boolean; scene: boolean },
+  locks: TemplateLocks = NO_LOCKS,
+): SheetCompilePlan {
+  const open = (ref: CustomDirectorRefSlot): boolean => !locks.refs.includes(ref);
   const present = new Set<CustomDirectorRefSlot>([
-    ...(refs.look ? (['look_ref'] as const) : []),
-    ...(refs.prop ? (['prop_ref'] as const) : []),
-    ...(refs.scene ? (['scene_ref'] as const) : []),
+    ...(refs.look && open('look_ref') ? (['look_ref'] as const) : []),
+    ...(refs.prop && open('prop_ref') ? (['prop_ref'] as const) : []),
+    ...(refs.scene && open('scene_ref') ? (['scene_ref'] as const) : []),
   ]);
   const plan: SheetCompilePlan = {
     elements: [],
@@ -503,10 +538,11 @@ export function planSheetCompile(sheet: PersonalEditSheet, refs: { look: boolean
     unboundRefs: [],
     replaced: [],
     keep: [...sheet.keep],
-    exclude: [...sheet.exclude],
+    exclude: locks.any ? sheet.exclude.filter((t) => !lockTextHit(t, locks)) : [...sheet.exclude],
   };
   const bound = new Set<CustomDirectorRefSlot>();
   for (const l of sheet.change) {
+    if (lockVerdict(l, locks) !== 'ok') continue;
     const ref = l.ref && present.has(l.ref) ? l.ref : null;
     if (ref) bound.add(ref);
     const entry: SheetCompileLine = { slot: l.slot, text: l.text, ref };
@@ -522,5 +558,6 @@ export function planSheetCompile(sheet: PersonalEditSheet, refs: { look: boolean
     }
   }
   plan.unboundRefs = CUSTOM_DIRECTOR_REF_SLOTS.filter((r) => present.has(r) && !bound.has(r));
+  if (locks.any) plan.locks = lockPhrases(locks);
   return plan;
 }

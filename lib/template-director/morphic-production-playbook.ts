@@ -301,6 +301,11 @@ export function enforcePersonalMorphicGuardrails(
     preserveExistingLipSyncAudio?: boolean;
     audioMode?: PersonalAudioMode;
     bgmMood?: PersonalBgmMood | null;
+    /**
+     * docs/PERSONAL-STUDIO.md §3.3 — the template locks its sound: its own audio wording stays exactly as written
+     * (no phrase replacement) and no personal audio contract is appended.
+     */
+    lockTemplateAudio?: boolean;
   }
 ): string {
   let out = rawPrompt.trim();
@@ -311,7 +316,9 @@ export function enforcePersonalMorphicGuardrails(
     .replace(/\bporcelain\s+skin\b/gi, 'matte-satin living skin finish')
     .replace(/\bdewy\s+glass[- ]skin\b/gi, 'clean natural skin finish');
 
-  if (options.audioMode === 'bgm') {
+  if (options.lockTemplateAudio) {
+    // The template's sound is locked: its audio wording is left as written.
+  } else if (options.audioMode === 'bgm') {
     out = out
       .replace(/Strict\s+No-BGM(?:\s+Personal)?\s+Audio\s+Rule:[^\n]*/gi, '')
       .replace(/,?\s*no background music\b/gi, '')
@@ -347,7 +354,7 @@ export function enforcePersonalMorphicGuardrails(
 
   // 4. Enforce Personal Audio Rule unless the template uses immutable master lip-sync audio (@audio1)
   const hasImmutableAudioRef = /@audio\s*1/i.test(out);
-  if (!options.preserveExistingLipSyncAudio && !hasImmutableAudioRef) {
+  if (!options.lockTemplateAudio && !options.preserveExistingLipSyncAudio && !hasImmutableAudioRef) {
     if (options.audioMode === 'bgm') {
       if (!out.toLowerCase().includes('cohesive scene bgm audio rule')) {
         out = `${out}\n\n${personalSceneBgmAudioContractEn(options.bgmMood)}`;

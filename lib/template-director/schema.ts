@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { RecipeSlotRole } from '@/lib/recipes/schema';
 import { SHEET_BLOCK_LIMITS, SheetTextItemSchema } from '@/lib/revision/sheet-core';
+import type { TemplateLocks } from './locks';
 
 export const GEMINI_DIRECTOR_DEFAULT_MODEL = 'gemini-4-hydrogen' as const;
 export const GEMINI_DIRECTOR_DEFAULT_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta' as const;
@@ -392,6 +393,8 @@ export interface SheetCompilePlan {
   keep: string[];
   /** `[Exclusions]`. */
   exclude: string[];
+  /** docs/PERSONAL-STUDIO.md §3.3 — the template's locked parts ("the product", "shots 2–3"); only when it has locks. */
+  locks?: string[];
 }
 
 export type DirectorCast = 'solo' | 'couple' | 'pet';
@@ -413,6 +416,11 @@ export interface DirectorChatTurnInput {
    * `replyKo` included, stay as they are). A chips turn ignores it and answers as before. Absent = 'ko'.
    */
   locale?: 'ko' | 'en';
+  /**
+   * docs/PERSONAL-STUDIO.md §3.3 — the template's locks (`parseTemplateLocks` of its prompt). Sheet turns only: a
+   * locked line never lands on the sheet. Absent or `NO_LOCKS` = the turn is exactly as before.
+   */
+  locks?: TemplateLocks;
 }
 
 export type DirectorRefusalCode = 'none' | 'identity' | 'unsafe' | 'unsupported' | 'too_large';
@@ -434,6 +442,8 @@ export interface DirectorChatTurnResult {
   asked?: boolean;
   /** Sheet turns only: the sheet differs from the one sent. */
   changed?: boolean;
+  /** Present only when the turn asked to change a locked part of the template (docs/PERSONAL-STUDIO.md §3.3). */
+  lockedHit?: true;
 }
 
 /** Client-safe projection returned to the browser. Never contains English prompt fragments or `structuredIntent`. */
@@ -448,6 +458,7 @@ export interface ClientDirectorTurnResponse {
   question?: PersonalSheetQuestion | null;
   asked?: boolean;
   changed?: boolean;
+  lockedHit?: true;
 }
 
 export interface DirectorReferenceSlotMeta {
@@ -476,6 +487,11 @@ export interface DirectorRewriteInput {
   sheet?: SheetCompilePlan;
   /** Who the template features; set on the sheet path only (absent = derived from `referenceSlots`). */
   cast?: DirectorCast;
+  /**
+   * docs/PERSONAL-STUDIO.md §3.3 — the lines of the base prompt's `Template locks:` block, as the template wrote them.
+   * Present only when the base has one: then the payload carries `templateLocks` and the doctrine one more line.
+   */
+  locks?: string[];
 }
 
 /**
