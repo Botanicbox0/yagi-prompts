@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ExportSheet, exportBlockOf, exportBlockSentence } from '@/components/brand-studio/editor-v2/export-sheet';
 import { ActionPanel } from '@/components/brand-studio/editor-v2/panels';
+import { Preview } from '@/components/brand-studio/editor-v2/preview';
 import { Timeline } from '@/components/brand-studio/editor-v2/timeline';
 import { useEditor, type RealFilmOptions } from '@/components/brand-studio/editor-v2/use-editor';
 import { spansOf, type FrameClip, type FrameSequence } from '@/lib/brand-studio/editor-v2/frames';
@@ -106,7 +107,7 @@ const clip = (id: string, srcUrl: string, extra: Partial<FrameClip> = {}): Frame
 const film = (clips: FrameClip[]): FrameSequence => ({ fps: 24, aspect: '9:16', captions: [], clips });
 
 /** The editor on the organization's film, with these cuts and these read results (what opening the film found). */
-function editor(copy: StudioEditorCopy, sequence: FrameSequence, found: { missing?: string[]; unknown?: string[] }, selected?: string) {
+function editor(copy: StudioEditorCopy, sequence: FrameSequence, found: { missing?: string[]; unknown?: string[]; tentative?: boolean }, selected?: string) {
   let api: ReturnType<typeof useEditor> | null = null;
   function Probe() {
     api = useEditor(copy, { real, initialWorkspace: 'cut' });
@@ -125,6 +126,7 @@ function editor(copy: StudioEditorCopy, sequence: FrameSequence, found: { missin
     missingSources: flags(found.missing),
     unknownRates: flags([...(found.missing ?? []), ...(found.unknown ?? [])]),
     selection: selected ? [selected] : [],
+    tentative: found.tentative ?? false,
   };
 }
 
@@ -209,4 +211,37 @@ describe('the cut panel and the timeline show the missing file', () => {
       expect(copy.export.sourceMissing).toContain('{clip}');
     }
   });
+});
+
+describe('a film never measured whose cuts are all missing does not promise a reading next time', () => {
+  const allGone = film([clip('gone', GONE), clip('again', GONE)]);
+  const someLeft = film([clip('gone', GONE), clip('unread', UNREAD)]);
+
+  for (const [lang, copy] of COPIES) {
+    const missingLine = esc(copy.export.sourceMissing.replace('{clip}', 'gone clip'));
+    const promise = esc(copy.real.rateTentative.replace('{fps}', '24'));
+
+    it(`${lang}: the film panel says the clip’s file cannot be found, not that the rate is read next time`, () => {
+      const html = renderToStaticMarkup(h(ActionPanel, { api: editor(copy, allGone, { missing: [GONE], tentative: true }) }));
+      expect(html).toContain('data-editor-film-missing');
+      expect(html).toContain(missingLine);
+      expect(html).not.toContain('data-editor-rate-tentative');
+      expect(html).not.toContain(promise);
+    });
+
+    it(`${lang}: the preview’s “for now” mark keeps its word but not the promise`, () => {
+      const html = renderToStaticMarkup(h(Preview, { api: editor(copy, allGone, { missing: [GONE], tentative: true }) }));
+      expect(html).toContain('data-editor-fps-tentative');
+      expect(html).toContain(`title="${missingLine}"`);
+      expect(html).not.toContain(promise);
+    });
+
+    it(`${lang}: one cut that may still be read keeps today’s line in both places`, () => {
+      const panel = renderToStaticMarkup(h(ActionPanel, { api: editor(copy, someLeft, { missing: [GONE], unknown: [UNREAD], tentative: true }) }));
+      expect(panel).toContain('data-editor-rate-tentative');
+      expect(panel).not.toContain('data-editor-film-missing');
+      const preview = renderToStaticMarkup(h(Preview, { api: editor(copy, someLeft, { missing: [GONE], unknown: [UNREAD], tentative: true }) }));
+      expect(preview).toContain(`title="${promise}"`);
+    });
+  }
 });

@@ -11,6 +11,7 @@ import { formatTimecode, frameStateAt, spansOf, totalFrames } from '@/lib/brand-
 import { curveSpeedAt, curveStartMedia, curveTimeAt, curveTotalSpanMedia } from '@/lib/brand-studio/editor-v2/speed-curve';
 import { DEFAULT_REFRAME, gradeMatrix, isNeutral } from '@/lib/brand-studio/editor-v2/model';
 import { formatBinding } from '@/lib/brand-studio/editor-v2/shortcuts';
+import { everyCutMissing } from '@/lib/brand-studio/editor-v2/sources';
 import { EditorIcon } from './icons';
 import type { EditorApi } from './use-editor';
 import styles from './editor-v2.module.css';
@@ -38,6 +39,9 @@ const SAFE_ZONES = {
 
 export function Preview({ api }: { api: EditorApi }) {
   const { copy, doc, sequence, frame, activeClip, rate, workspace, fps, playhead } = api;
+  // A film never measured whose cuts are all confirmed missing reads no rate next time: it says why instead (review item 6).
+  const filmGone = api.real ? everyCutMissing(sequence.clips, api.missingSources) : null;
+  const tentativeTitle = filmGone ? fill(copy.export.sourceMissing, { clip: filmGone.label }) : fill(copy.real.rateTentative, { fps });
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const frameRef = useRef<HTMLDivElement | null>(null);
@@ -438,7 +442,7 @@ export function Preview({ api }: { api: EditorApi }) {
           <span>/ {formatTimecode(api.total, fps)}</span>
           {/* An empty real film has no rate yet: its first clip sets it. */}
           {(!api.real || sequence.clips.length > 0) && (
-            <em title={api.tentative ? fill(copy.real.rateTentative, { fps }) : undefined} data-editor-fps-tentative={api.tentative ? '' : undefined}>
+            <em title={api.tentative ? tentativeTitle : undefined} data-editor-fps-tentative={api.tentative ? '' : undefined}>
               {fps} fps{api.tentative ? ` · ${copy.real.rateTentativeShort}` : ''}
             </em>
           )}

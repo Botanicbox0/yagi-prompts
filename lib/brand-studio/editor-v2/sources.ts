@@ -134,6 +134,14 @@ export function missingAfterRead(
   return changed ? next : current;
 }
 
+/**
+ * The first cut when every cut of the film is confirmed missing, else `null`. A film never measured whose
+ * cuts are all missing will not read a rate next time either, so it does not promise that (review item 6).
+ */
+export function everyCutMissing<T extends { srcUrl: string }>(clips: readonly T[], missing: Readonly<Record<string, true>>): T | null {
+  return clips.length > 0 && clips.every((clip) => missing[clip.srcUrl]) ? clips[0]! : null;
+}
+
 /** The footage's length in seconds: exact when known. */
 export function sourceSeconds(source: Pick<EditorSource, 'seconds' | 'durationMs'>): number | null {
   if (typeof source.durationMs === 'number' && source.durationMs > 0) return source.durationMs / 1000;

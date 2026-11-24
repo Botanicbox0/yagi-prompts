@@ -15,6 +15,7 @@ import {
 import { filmContents } from '@/lib/brand-studio/editor-v2/film-contents';
 import { clipFrameAt, formatTimecode, type FrameCaption } from '@/lib/brand-studio/editor-v2/frames';
 import { sourceSeconds } from '@/lib/brand-studio/editor-v2/sources';
+import { everyCutMissing } from '@/lib/brand-studio/editor-v2/sources';
 import { filmHasSpeedTheOldEditorChanges } from '@/lib/brand-studio/editor-v2/stored';
 import { formatBinding, type ShortcutAction } from '@/lib/brand-studio/editor-v2/shortcuts';
 import {
@@ -647,12 +648,16 @@ function CutPanel({ api }: { api: EditorApi }) {
     );
   }
   const cannotCut = api.readOnly || sequence.clips.length === 0;
+  const filmGone = api.real ? everyCutMissing(sequence.clips, api.missingSources) : null;
   return (
     <>
       <PanelHead title={copy.panel.film} meta={fill(copy.panel.filmSummary, { count: sequence.clips.length, duration: formatTimecode(api.total, fps) })} />
-      {api.real && api.tentative && (
+      {api.real && api.tentative && (filmGone ? (
+        // Every cut's file is confirmed missing: no rate will be read next time, so the film says why instead.
+        <p className={styles.note} data-editor-film-missing>{fill(copy.export.sourceMissing, { clip: filmGone.label })}</p>
+      ) : (
         <p className={styles.note} data-editor-rate-tentative>{fill(copy.real.rateTentative, { fps })}</p>
-      )}
+      ))}
       {api.real && <StoredContents api={api} />}
       <Section title={c.film.shape}>
         <div className={styles.shapeGrid} role="group" aria-label={c.film.shape}>
