@@ -8,6 +8,7 @@ import { filmHasSpeedTheOldEditorChanges } from '@/lib/brand-studio/editor-v2/st
 import { actionFor, bindingFromEvent, formatBinding, typingTarget } from '@/lib/brand-studio/editor-v2/shortcuts';
 import type { StudioEditorCopy } from '@/messages/studio-editor';
 import { Assistant } from './assistant';
+import { ExportShareHost, shareWindowOpen, type ExportKeepCopy } from './export-keep';
 import { ExportSheet } from './export-sheet';
 import { EditorIcon } from './icons';
 import { ActionPanel, Materials } from './panels';
@@ -27,6 +28,11 @@ export interface EditorV2Props {
   autoDownload?: boolean;
   /** The organization's own film (V1). `null` runs the sample film (`?sample=1`), as the prototype did. */
   real: (RealFilmOptions & { organizationName: string }) | null;
+  /**
+   * The current editor's words for "에셋에 저장" and "검수 · 공유" on the finished export, and the review share
+   * window's language (export-keep.tsx). The page passes them for the organization's own film only.
+   */
+  keep?: { copy: ExportKeepCopy; locale: 'ko' | 'en' } | null;
 }
 
 /**
@@ -40,8 +46,11 @@ export interface EditorV2Props {
  * the cuts back (V1). Only cutting is real there; colour, sound and captions are locked and say so.
  * Without it, it runs the sample film and keeps everything in memory.
  */
-export function EditorV2({ copy, currentEditorHref, initialWorkspace, exportPath = null, autoDownload = true, real }: EditorV2Props) {
+export function EditorV2({ copy, currentEditorHref, initialWorkspace, exportPath = null, autoDownload = true, real, keep = null }: EditorV2Props) {
   const api = useEditor(copy, { real, initialWorkspace });
+  // "에셋에 저장" and "검수 · 공유" are for people who may change the organization's own film; the review share
+  // window is titled by the film's name, as the header shows it. Anyone else gets neither, nor the window's host.
+  const exportKeep = real && keep && real.canEdit ? { copy: keep.copy, title: fill(copy.real.filmName, { name: real.organizationName }) } : null;
   const latest = useRef<EditorApi>(api);
   latest.current = api;
 
@@ -52,6 +61,9 @@ export function EditorV2({ copy, currentEditorHref, initialWorkspace, exportPath
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
       if (typingTarget(target as { tagName?: string; isContentEditable?: boolean; type?: string } | null, event.isComposing, event.keyCode)) return;
+      // The review share window ("검수 · 공유", export-keep.tsx) is modal: while it is open, keys are its own and
+      // never edit the film behind it (it closes itself on Escape).
+      if (shareWindowOpen()) return;
       const editor = latest.current;
       if (editor.shortcutsOpen) {
         if (event.code === 'Escape') editor.setShortcutsOpen(false);
@@ -169,7 +181,8 @@ export function EditorV2({ copy, currentEditorHref, initialWorkspace, exportPath
           </button>
         </div>
       )}
-      {api.exportOpen && <ExportSheet api={api} exportPath={exportPath} autoDownload={autoDownload} />}
+      {api.exportOpen && <ExportSheet api={api} exportPath={exportPath} autoDownload={autoDownload} keep={exportKeep} />}
+      {real && keep && exportKeep && <ExportShareHost organizationId={real.organizationId} locale={keep.locale} />}
       {api.shortcutsOpen && <ShortcutsPanel api={api} />}
       {api.toast && <p className={styles.toast} role="status" data-editor-toast>{api.toast}</p>}
     </div>
