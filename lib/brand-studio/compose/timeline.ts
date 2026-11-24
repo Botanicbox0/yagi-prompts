@@ -290,6 +290,18 @@ export const MAX_COMPOSE_CAPTIONS = 32;
 export const MAX_COMPOSE_OVERLAYS = 12;
 export const MAX_COMPOSE_SFX = 24;
 
+/** Longest footage the library records for one video (`AssetCompleteSchema.seconds`). */
+export const COMPOSE_SOURCE_MAX_SEC = 600;
+/** Slowest speed either editor plays a cut at: the new editor's 0.1× (this one stops at 0.25×). */
+export const COMPOSE_SLOWEST_SPEED = 0.1;
+/**
+ * The longest film the export record (`render.reserve`) writes as it is, shared by both editors: every cut of
+ * the longest library footage at the slowest speed, 144,000 s. Export is free and the row is only a record, so a
+ * longer film (only device files over 10 minutes can make one) is recorded at this length, never refused.
+ * (The 300 s it replaces came from the per-second export price, gone since docs/BRAND-EDITING-STUDIO.md §8-3.)
+ */
+export const COMPOSE_FILM_MAX_SEC = (MAX_COMPOSE_CLIPS * COMPOSE_SOURCE_MAX_SEC) / COMPOSE_SLOWEST_SPEED;
+
 export const DEFAULT_COLOR_REGION: ComposeColorRegion = {
   x: 0.15,
   y: 0.15,
