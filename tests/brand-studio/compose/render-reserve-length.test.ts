@@ -2,12 +2,12 @@
  * A7: the export record (`render.reserve`) refused every film over 300 s, and the old editor turned that refusal
  * into "check your clips". The 300 s came from the per-second export price (capped at 300 s), which went away
  * when export became free (docs/BRAND-EDITING-STUDIO.md §8-3); nothing else (export code, catalogue) has a
- * length limit. The record now takes any film either editor can build, and a longer one is recorded at the
+ * length limit. The record now takes any film a timeline built from library footage can be, and a longer one is recorded at the
  * bound instead of being refused, so no export is ever stopped by its length.
  */
 import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { AssetCompleteSchema } from '@/lib/brand-studio/contracts';
+import { AssetCompleteSchema, STUDIO_LIMITS } from '@/lib/brand-studio/contracts';
 import { runComposeOperation } from '@/lib/brand-studio/compose/service';
 import {
   COMPOSE_FILM_MAX_SEC,
@@ -20,11 +20,10 @@ import { MIN_SPEED } from '@/lib/brand-studio/editor-v2/speed-curve';
 import { studioDeps, studioFixture, viewerOf, type StudioFixture } from '../server/helpers';
 
 describe('the longest film the export record takes', () => {
-  it('is every cut at the longest library footage, played at the slowest speed either editor allows', () => {
+  it('is every cut at the longest library footage, played at the slowest speed of any screen that edits it', () => {
     expect(COMPOSE_FILM_MAX_SEC).toBe((MAX_COMPOSE_CLIPS * COMPOSE_SOURCE_MAX_SEC) / COMPOSE_SLOWEST_SPEED);
     expect(COMPOSE_FILM_MAX_SEC).toBe(144_000);
-    // The new editor's slowest speed and this editor's (0.25×) are both at or above the one used.
-    expect(COMPOSE_SLOWEST_SPEED).toBeLessThanOrEqual(MIN_SPEED);
+    // This editor and the video studio share the timeline's clamp (0.25×); the new editor goes to MIN_SPEED.
     const slowest = normalizeClipBounds({
       id: 'c',
       label: 'c',
@@ -37,8 +36,11 @@ describe('the longest film the export record takes', () => {
       muted: false,
       playbackRate: 0.01,
     }).playbackRate!;
-    expect(slowest).toBeGreaterThanOrEqual(COMPOSE_SLOWEST_SPEED);
-    // The library records a video's length up to this many seconds.
+    expect(slowest).toBe(0.25);
+    expect(MIN_SPEED).toBe(0.1);
+    expect(COMPOSE_SLOWEST_SPEED).toBe(Math.min(slowest, MIN_SPEED));
+    // The library takes a video up to this many seconds: the same constant the upload checks.
+    expect(COMPOSE_SOURCE_MAX_SEC).toBe(STUDIO_LIMITS.mediaSecondsMax);
     const complete = (seconds: number) =>
       AssetCompleteSchema.safeParse({ organizationId: randomUUID(), assetId: randomUUID(), seconds }).success;
     expect(complete(COMPOSE_SOURCE_MAX_SEC)).toBe(true);

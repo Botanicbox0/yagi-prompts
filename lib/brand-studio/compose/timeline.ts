@@ -290,15 +290,25 @@ export const MAX_COMPOSE_CAPTIONS = 32;
 export const MAX_COMPOSE_OVERLAYS = 12;
 export const MAX_COMPOSE_SFX = 24;
 
-/** Longest footage the library records for one video (`AssetCompleteSchema.seconds`). */
+/**
+ * Longest video the library takes: `STUDIO_LIMITS.mediaSecondsMax`, checked when an upload completes (kept as a
+ * number here so this file stays dependency-free; tests/brand-studio/compose/render-reserve-length.test.ts pins
+ * the two together).
+ */
 export const COMPOSE_SOURCE_MAX_SEC = 600;
-/** Slowest speed either editor plays a cut at: the new editor's 0.1× (this one stops at 0.25×). */
+/**
+ * The slowest speed of any screen that edits this timeline. This editor and the video studio clamp a cut to
+ * 0.25×; the new editor goes down to 0.1× (`MIN_SPEED`, lib/brand-studio/editor-v2/speed-curve.ts), so the
+ * bound below holds whichever of them sends the export record.
+ */
 export const COMPOSE_SLOWEST_SPEED = 0.1;
 /**
- * The longest film the export record (`render.reserve`) writes as it is, shared by both editors: every cut of
- * the longest library footage at the slowest speed, 144,000 s. Export is free and the row is only a record, so a
- * longer film (only device files over 10 minutes can make one) is recorded at this length, never refused.
- * (The 300 s it replaces came from the per-second export price, gone since docs/BRAND-EDITING-STUDIO.md §8-3.)
+ * The longest film the export record (`render.reserve`) writes as it is: every cut of the longest library
+ * footage at the slowest speed, 144,000 s. Export is free and the row is only a record, so a longer film (only
+ * device files over 10 minutes can make one) is recorded at this length, never refused. The same rule applies
+ * to every screen that sends the record (today this editor and the video studio; the new editor's export once
+ * it sends one too). The 300 s it replaces came from the per-second export price, gone since
+ * docs/BRAND-EDITING-STUDIO.md §8-3.
  */
 export const COMPOSE_FILM_MAX_SEC = (MAX_COMPOSE_CLIPS * COMPOSE_SOURCE_MAX_SEC) / COMPOSE_SLOWEST_SPEED;
 

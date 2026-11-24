@@ -131,6 +131,8 @@ export const STUDIO_LIMITS = {
   imageBytesMax: 15_000_000,
   videoBytesMax: 50_000_000,
   audioBytesMax: 15_000_000,
+  /** Longest length, in seconds, an upload may record for a video or audio file; checked when the upload completes. */
+  mediaSecondsMax: 600,
   /** Open (not finished) jobs one organization may have at once. */
   openJobsPerOrganization: 6,
   tagsMax: 8,
@@ -556,7 +558,7 @@ export const AssetCompleteSchema = z.object({
   assetId: Id,
   width: z.number().int().positive().max(12_000).optional(),
   height: z.number().int().positive().max(12_000).optional(),
-  seconds: z.number().positive().max(600).optional(),
+  seconds: z.number().positive().max(STUDIO_LIMITS.mediaSecondsMax).optional(),
   /**
    * A picture made for one run and deleted when its runs settle ("빈 곳 채우기"'s whole-canvas source): it is
    * hidden from the library, so its role is not recognised (asset-role.ts). Skipping is all it does.
