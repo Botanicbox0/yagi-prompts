@@ -1,7 +1,7 @@
 'use client';
 
 import { frameStateAt, spansOf, totalFrames, type FrameSequence } from '@/lib/brand-studio/editor-v2/frames';
-import { cutRemainingSec, nearCutChange, previewSound, soundRunsOn, type PreviewSound } from '@/lib/brand-studio/editor-v2/preview-sound';
+import { frameGaps, previewSound, soundLeftSec, soundMarginSec, type PreviewSound } from '@/lib/brand-studio/editor-v2/preview-sound';
 import { curveSpeedAt, curveStartMedia, curveTimeAt, curveTotalSpanMedia } from '@/lib/brand-studio/editor-v2/speed-curve';
 
 export function disablePitchPreservation(video: HTMLVideoElement): void {
@@ -23,7 +23,20 @@ export interface PlayState {
   setRate: (rate: number) => void;
   /** Whether a cut's file has a sound track; `null` when not known. */
   soundTrack: (srcUrl: string) => boolean | null;
+  /** A cut's stored sound offset in seconds, as the export moves it (`soundShiftSec`); 0 when none. */
+  soundShift: (cutId: string) => number;
 }
+
+export interface PlayForwardOptions {
+  /**
+   * The film was already playing forward at another speed (the shuttle's speed changed): the loop starts
+   * from the playhead, which lags the element, so it may step back over sound just heard.
+   */
+  resumed?: boolean;
+}
+
+/** How far back a resumed loop's first seek may go and still be kept silent until it is past what was heard. */
+const REPLAY_HOLD_SEC = 0.5;
 
 /** Whether the person has used this page; where the browser cannot say, the refusal path covers it. */
 function personUsedPage(): boolean {
@@ -51,13 +64,18 @@ export function setElementSound(video: HTMLMediaElement, sound: PreviewSound): v
  * before the element is told to seek or play, from what the element and the cut say; the sound never moves
  * the picture. The element starts muted (preview.tsx) and is muted again before it stops.
  */
-export function playForward(video: HTMLVideoElement, latest: { readonly current: PlayState }, rate: number): () => void {
+export function playForward(video: HTMLVideoElement, latest: { readonly current: PlayState }, rate: number, options: PlayForwardOptions = {}): () => void {
   let raf = 0;
   let lastPush = 0;
   let expectedId: string | null = null;
   let seekTo: number | null = null;
+  // Sound only (audit A1): the gaps between frames, a gap the page was hidden for, the browser's refusal,
+  // and where the sound stopped when a running film changed speed.
+  const gaps = frameGaps();
   let lastFrameAt: number | null = null;
+  let wasHidden = false;
   let refused = false;
+  let hold: { src: string; until: number } | null = options.resumed ? { src: video.dataset.src ?? '', until: video.currentTime } : null;
   const startTotal = totalFrames(latest.current.sequence);
   let cursor = latest.current.playhead >= startTotal - 1 ? 0 : latest.current.playhead;
   const play = () => {
@@ -69,8 +87,10 @@ export function playForward(video: HTMLVideoElement, latest: { readonly current:
     });
   };
   const tick = (now: number) => {
-    const frameSec = lastFrameAt === null ? 1 / 60 : Math.max(0, now - lastFrameAt) / 1000;
+    // A gap the page spent hidden is not a long frame: the margin does not grow from it.
+    if (lastFrameAt !== null && !wasHidden) gaps.add(now, Math.max(0, now - lastFrameAt));
     lastFrameAt = now;
+    wasHidden = false;
     const current = latest.current.sequence;
     const end = totalFrames(current);
     const active = cursor < end ? frameStateAt(current, cursor).active : null;
@@ -81,7 +101,10 @@ export function playForward(video: HTMLVideoElement, latest: { readonly current:
     }
     const { clip: playing } = active;
     const span = spansOf(current)[active.index]!;
-    const hear = (remainingSec: number) =>
+    const hear = () => {
+      const shift = latest.current.soundShift;
+      // Silent until the element is past where the sound stopped (another file, or far back: not a replay).
+      if (hold && (video.dataset.src !== hold.src || video.currentTime > hold.until + 1e-4 || video.currentTime < hold.until - REPLAY_HOLD_SEC)) hold = null;
       setElementSound(
         video,
         previewSound({
@@ -90,13 +113,16 @@ export function playForward(video: HTMLVideoElement, latest: { readonly current:
           refused,
           hidden: pageHidden(),
           seeking: seekTo !== null || video.seeking,
-          cutChange: nearCutChange(remainingSec, frameSec, soundRunsOn(playing, current.clips[active.index + 1])),
+          replay: hold !== null,
+          cutChange: soundLeftSec(current.clips, active.index, video.currentTime * current.fps + 1e-6, current.fps, rate, shift) < soundMarginSec(gaps.longestSec()),
           volume: playing.volume,
           muted: playing.muted,
+          shifted: Math.abs(shift(playing.id)) > 1e-9,
           rate: video.playbackRate,
           soundTrack: latest.current.soundTrack(playing.srcUrl),
         }),
       );
+    };
     if (video.dataset.src !== playing.srcUrl) {
       video.dataset.src = playing.srcUrl;
       video.src = playing.srcUrl;
@@ -106,7 +132,7 @@ export function playForward(video: HTMLVideoElement, latest: { readonly current:
     }
     expectedId = playing.id;
     if (seekTo !== null) {
-      hear(0);
+      hear();
       if (video.readyState >= 1) {
         video.currentTime = seekTo;
         seekTo = null;
@@ -117,14 +143,14 @@ export function playForward(video: HTMLVideoElement, latest: { readonly current:
       const totalSpan = curveTotalSpanMedia(playing.speedCurve);
       const u = (mediaPos - startMedia) / Math.max(1e-6, totalSpan);
       if (u >= 1 || video.ended) {
-        hear(0);
+        hear();
         cursor = span.end;
       } else {
         const clampedU = Math.max(0, u);
         const instSpeed = curveSpeedAt(playing.speedCurve, clampedU);
         disablePitchPreservation(video);
         video.playbackRate = Math.max(0.0625, Math.min(16, instSpeed * rate));
-        hear(cutRemainingSec(playing, curveTimeAt(playing.speedCurve, clampedU), current.fps, rate));
+        hear();
         if (video.paused) play();
         const offset = Math.floor(curveTimeAt(playing.speedCurve, clampedU));
         if (offset >= playing.frames) cursor = span.end;
@@ -133,8 +159,7 @@ export function playForward(video: HTMLVideoElement, latest: { readonly current:
     } else {
       disablePitchPreservation(video);
       video.playbackRate = Math.max(0.0625, Math.min(16, (playing.speedNum / playing.speedDen) * rate));
-      const mediaPos = video.currentTime * current.fps + 1e-6;
-      hear(video.ended ? 0 : cutRemainingSec(playing, ((mediaPos - playing.inFrame) * playing.speedDen - playing.phase) / playing.speedNum, current.fps, rate));
+      hear();
       if (video.paused) play();
       // The film-grid frame the video is on, then back through the cut's speed to a timeline frame.
       const mediaFrame = Math.floor(video.currentTime * current.fps + 1e-6);
@@ -150,7 +175,9 @@ export function playForward(video: HTMLVideoElement, latest: { readonly current:
   };
   // A hidden page runs no animation frames while the element plays on: silent at once.
   const onVisibility = () => {
-    if (pageHidden()) video.muted = true;
+    if (!pageHidden()) return;
+    video.muted = true;
+    wasHidden = true;
   };
   document.addEventListener('visibilitychange', onVisibility);
   raf = requestAnimationFrame(tick);

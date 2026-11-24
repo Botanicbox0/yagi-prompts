@@ -6,9 +6,12 @@ import { soundTrackOf } from '@/lib/brand-studio/editor-v2/media-probe';
 import { setClipAudio, setClipConstantSpeed, setClipSpeedCurve, splitAtFrame, trimClipEdge, type FrameClip, type FrameSequence } from '@/lib/brand-studio/editor-v2/frames';
 import {
   PREVIEW_RATE_RANGE,
-  cutRemainingSec,
-  nearCutChange,
+  SOUND_MARGIN_FLOOR_SEC,
+  cutOffsetAt,
+  frameGaps,
   previewSound,
+  soundLeftSec,
+  soundMarginSec,
   soundRunsOn,
   type PreviewSoundInput,
 } from '@/lib/brand-studio/editor-v2/preview-sound';
@@ -27,9 +30,11 @@ const heard: PreviewSoundInput = {
   refused: false,
   hidden: false,
   seeking: false,
+  replay: false,
   cutChange: false,
   volume: 0.6,
   muted: false,
+  shifted: false,
   rate: 1,
   soundTrack: null,
 };
@@ -85,6 +90,14 @@ describe('previewSound: when the cut on screen is heard', () => {
   it('not during the seeks the preview makes to stay in step, nor across a cut change it cannot follow in time', () => {
     expect(previewSound({ ...heard, seeking: true })).toMatchObject({ muted: true, why: 'seeking' });
     expect(previewSound({ ...heard, cutChange: true })).toMatchObject({ muted: true, why: 'cut-change' });
+  });
+
+  it('not while the element replays what was just heard (the shuttle speed changed and the loop stepped back to the playhead)', () => {
+    expect(previewSound({ ...heard, replay: true })).toMatchObject({ muted: true, why: 'replay' });
+  });
+
+  it('a cut whose sound the stored film moves (the current editor’s sound offset): the file has it elsewhere, so the preview stays silent', () => {
+    expect(previewSound({ ...heard, shifted: true })).toEqual({ muted: true, volume: 0.6, why: 'shifted' });
   });
 
   it('a file with no sound track: muted (nothing to hear, and the file has none either); unknown is treated as maybe', () => {
@@ -152,24 +165,68 @@ describe('the sample film (?sample=1)', () => {
   });
 });
 
-describe('nearCutChange and cutRemainingSec: silence before a cut change the loop would otherwise miss', () => {
-  it('the time left in a cut runs at the film’s rate and the shuttle’s', () => {
-    const cut = clip({ frames: 48 });
-    expect(cutRemainingSec(cut, 24, 24, 1)).toBeCloseTo(1, 9);
-    expect(cutRemainingSec(cut, 24, 24, 2)).toBeCloseTo(0.5, 9);
-    expect(cutRemainingSec(cut, 48, 24, 1)).toBe(0);
-    expect(cutRemainingSec(cut, 50, 24, 1)).toBeLessThan(0);
+describe('soundLeftSec: how long the sound heard now may go on, through the cuts it runs on into', () => {
+  it('the time left in a cut runs at the film’s rate and the shuttle’s; past its end it is negative', () => {
+    const film = seq([clip({ frames: 48 })]);
+    // Media position = film-grid frame of the element (currentTime × fps).
+    expect(soundLeftSec(film.clips, 0, 24, 24, 1)).toBeCloseTo(1, 9);
+    expect(soundLeftSec(film.clips, 0, 24, 24, 2)).toBeCloseTo(0.5, 9);
+    expect(soundLeftSec(film.clips, 0, 48, 24, 1)).toBeCloseTo(0, 9);
+    expect(soundLeftSec(film.clips, 0, 50, 24, 1)).toBeLessThan(0);
   });
 
-  it('within one and a half animation frames of the end, unless the sound runs on', () => {
-    const tick = 1 / 60;
-    expect(nearCutChange(0.5, tick, false)).toBe(false);
-    expect(nearCutChange(0.02, tick, false)).toBe(true);
-    expect(nearCutChange(0, tick, false)).toBe(true);
-    expect(nearCutChange(-0.1, tick, false)).toBe(true);
-    expect(nearCutChange(0.02, tick, true)).toBe(false);
-    expect(nearCutChange(-0.1, tick, true)).toBe(false);
-    // A covered window draws about once a second: the guard grows with the gap between frames.
-    expect(nearCutChange(1.2, 1, false)).toBe(true);
+  it('a cut at a speed: its own mapping (0.5× plays 24 media frames in 48 film frames)', () => {
+    const half = setClipConstantSpeed(seq([clip({ frames: 48 })]), 0, 0.5);
+    expect(half.clips[0]!.frames).toBe(96);
+    expect(cutOffsetAt(half.clips[0]!, 12)).toBeCloseTo(24, 9);
+    expect(soundLeftSec(half.clips, 0, 12, 24, 1)).toBeCloseTo(3, 9);
+  });
+
+  it('a split cut runs on: the time left reaches to the end of the second piece, and stays right once the element is in it', () => {
+    const split = splitAtFrame(seq([clip({ frames: 96 })]), 40, 'cut-2');
+    expect(soundLeftSec(split.clips, 0, 30, 24, 1)).toBeCloseTo(66 / 24, 9);
+    // The loop still on the first piece while the element is already 2 frames into the second.
+    expect(soundLeftSec(split.clips, 0, 42, 24, 1)).toBeCloseTo(54 / 24, 9);
+    // Past both pieces (back from a hidden tab): negative, not the second piece's length.
+    expect(soundLeftSec(split.clips, 0, 120, 24, 1)).toBeLessThan(0);
+  });
+
+  it('another file after the cut, or another loudness: the time left ends with the cut', () => {
+    const split = splitAtFrame(seq([clip({ frames: 96 })]), 40, 'cut-2');
+    const louder = setClipAudio(split, 1, 0.3, false);
+    expect(soundLeftSec(louder.clips, 0, 30, 24, 1)).toBeCloseTo(10 / 24, 9);
+    expect(soundLeftSec(louder.clips, 0, 42, 24, 1)).toBeLessThan(0);
+  });
+
+  it('a speed curve: the offset is the curve’s own time at the element’s position', () => {
+    const curved = setClipSpeedCurve(seq([clip({ frames: 72 })]), 0, SPEED_PRESETS[0]!.points);
+    const cut = curved.clips[0]!;
+    expect(cutOffsetAt(cut, 0)).toBeCloseTo(0, 6);
+    expect(Math.abs(cutOffsetAt(cut, 72 - 1e-6) - cut.frames)).toBeLessThan(1);
+    expect(soundLeftSec(curved.clips, 0, 72 + 3, 24, 1)).toBeLessThan(0);
+  });
+});
+
+describe('soundMarginSec and frameGaps: quiet before the sound must change, by a margin one long frame cannot defeat', () => {
+  it('at least the floor; one and a half times the longest gap between animation frames of the last 2 s when that is more', () => {
+    expect(SOUND_MARGIN_FLOOR_SEC).toBeGreaterThanOrEqual(0.1);
+    expect(soundMarginSec(1 / 60)).toBe(SOUND_MARGIN_FLOOR_SEC);
+    expect(soundMarginSec(0.05)).toBe(SOUND_MARGIN_FLOOR_SEC);
+    expect(soundMarginSec(0.2)).toBeCloseTo(0.3, 9);
+    // A covered window that draws about once a second goes quiet a second and a half ahead.
+    expect(soundMarginSec(1)).toBeCloseTo(1.5, 9);
+  });
+
+  it('frameGaps keeps the longest gap of the last 2 s', () => {
+    const gaps = frameGaps();
+    expect(gaps.longestSec()).toBe(0);
+    gaps.add(1000, 17);
+    gaps.add(1200, 200);
+    gaps.add(1217, 17);
+    expect(gaps.longestSec()).toBeCloseTo(0.2, 9);
+    gaps.add(3100, 17);
+    expect(gaps.longestSec()).toBeCloseTo(0.2, 9);
+    gaps.add(3300, 17);
+    expect(gaps.longestSec()).toBeCloseTo(0.017, 9);
   });
 });

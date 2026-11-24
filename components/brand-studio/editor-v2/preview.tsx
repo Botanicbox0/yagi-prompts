@@ -5,7 +5,7 @@ import { fill } from '@/components/brand-studio/copy';
 import { materialBySrc } from '@/lib/brand-studio/editor-v2/fixture';
 import { cssFilterForColorGrade } from '@/lib/brand-studio/compose/color-grade';
 import { COMPOSE_DIMENSIONS, activeColorGradeForFrame, toColorGradeSpec } from '@/lib/brand-studio/compose/timeline';
-import { imageOverlaysAt, storedCutFor } from '@/lib/brand-studio/editor-v2/export-plan';
+import { imageOverlaysAt, soundShiftSec, storedCutFor } from '@/lib/brand-studio/editor-v2/export-plan';
 import { CURRENT_EXPORT_BACKGROUND, currentExportFrame } from '@/lib/brand-studio/editor-v2/framing';
 import { formatTimecode } from '@/lib/brand-studio/editor-v2/frames';
 import { DEFAULT_REFRAME, gradeMatrix, isNeutral } from '@/lib/brand-studio/editor-v2/model';
@@ -43,8 +43,14 @@ export function Preview({ api }: { api: EditorApi }) {
   const [natural, setNatural] = useState<{ src: string; width: number; height: number } | null>(null);
 
   const soundTrack = api.real ? unknownTrack : sampleTrack;
-  const latest = useRef({ sequence, playhead, seek: api.seek, setRate: api.setRate, soundTrack });
-  latest.current = { sequence, playhead, seek: api.seek, setRate: api.setRate, soundTrack };
+  // A cut's stored sound offset, as the export moves it: the film as the next save writes it (split pieces
+  // carry their parent's). The preview cannot move the element's sound, so such a cut stays silent here.
+  const storedNow = api.real ? (api.filmView?.film ?? null) : null;
+  const soundShift = (cutId: string) => soundShiftSec(storedNow, cutId);
+  const latest = useRef({ sequence, playhead, seek: api.seek, setRate: api.setRate, soundTrack, soundShift });
+  latest.current = { sequence, playhead, seek: api.seek, setRate: api.setRate, soundTrack, soundShift };
+  /** The rate the film last played at: a change from one forward speed to another resumes, it does not start over. */
+  const lastRate = useRef(0);
 
   const clip = activeClip?.clip ?? null;
   const look = clip ? doc.looks[clip.id] : undefined;
@@ -105,10 +111,12 @@ export function Preview({ api }: { api: EditorApi }) {
   // Playing forward (1×, or 2× and 4× on the shuttle): the video element is the clock and the playhead
   // follows it, one whole frame at a time, cut by cut; the cut on screen is heard (play-forward.ts).
   useEffect(() => {
+    const resumed = lastRate.current > 0;
+    lastRate.current = rate;
     if (rate <= 0) return;
     const video = videoRef.current;
     if (!video) return;
-    return playForward(video, latest, rate);
+    return playForward(video, latest, rate, { resumed });
   }, [rate]);
 
   // Shuttling backwards: a browser cannot play a video in reverse, so the playhead steps back at the
