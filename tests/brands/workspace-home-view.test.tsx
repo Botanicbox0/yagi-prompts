@@ -240,7 +240,7 @@ describe('the team line', () => {
       expect(markup).not.toContain('data-home-team-facts');
       expect(markup).toContain(html(d.brandHome.lines.commission));
       expect(markup).toContain(html(d.roomsShell.nav.groupTeam));
-      expect(markup).toMatch(new RegExp(`<a href="/brand/projects/new\\?organizationId=${ORG}"[^>]*data-home-action="commission"[^>]*>${re(html(d.roomsShell.nav.commission))}</a>`));
+      expect(markup).toMatch(new RegExp(`<a href="/brand/projects/new\\?organizationId=${ORG}"[^>]*data-home-action="commission"[^>]*>${re(html(d.roomsShell.nav.commission))}<svg[^>]*aria-hidden="true"[^>]*>.*?</svg></a>`));
       expect(actions(markup)).toEqual(['commission']);
     }
   });

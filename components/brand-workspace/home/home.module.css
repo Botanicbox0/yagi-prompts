@@ -283,6 +283,10 @@ a.lineMore {
   display: inline-block;
   padding: 7px 0;
 }
+/* Inline, so the padding widens what can be pressed (24px) without moving the line. */
+a.textLink {
+  padding-block: 2px;
+}
 a.lineMore:hover,
 a.textLink:hover {
   color: var(--ys-ink);
@@ -301,6 +305,26 @@ a.textLink:hover {
 .teamRow > a.textLink {
   flex: none;
   margin-left: auto;
+}
+/* The team line's way out ends on the same chevron as the lines above it: one right edge, one sign. */
+a.rowAction {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding-block: 8px;
+  text-decoration: none;
+}
+a.rowAction .lineArrow {
+  margin-left: 0;
+}
+a.rowAction:hover {
+  text-decoration: underline;
+  text-decoration-color: var(--ys-line-strong);
+  text-underline-offset: 4px;
+}
+a.rowAction:hover .lineArrow {
+  stroke: var(--ys-ink);
+  transform: translateX(2px);
 }
 .teamSay {
   min-width: 0;
@@ -647,6 +671,8 @@ a.starter:focus-visible {
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   line-clamp: 2;
+  /* Two lines kept even for a short sentence, so the three starters end on one line. */
+  min-height: 3em;
 }
 /* What pressing the starter does, in the prompt bar's own words. */
 .starterAction {
@@ -937,6 +963,7 @@ a.teamProject {
   a.starter:hover .starterPicture img,
   a.starter:active .starterPicture,
   a.starter:hover .starterAction :global(.bs-icon),
+  a.rowAction:hover .lineArrow,
   a.line:hover .lineArrow,
   a.row:hover .rowArrow,
   a.teamProject:hover .rowArrow {

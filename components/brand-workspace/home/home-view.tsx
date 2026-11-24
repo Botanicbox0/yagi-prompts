@@ -169,8 +169,9 @@ export function WorkspaceHome(props: WorkspaceHomeProps) {
             ) : (
               <p className={s.teamSay}>{teamLine}</p>
             )}
-            <a href={scope(layout.team.path)} className={s.textLink} data-home-action={layout.team.key}>
+            <a href={scope(layout.team.path)} className={`${s.textLink} ${s.rowAction}`} data-home-action={layout.team.key}>
               {teamName}
+              <Chevron className={s.lineArrow} />
             </a>
           </div>
         </div>
