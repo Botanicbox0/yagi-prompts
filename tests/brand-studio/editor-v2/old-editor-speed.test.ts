@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   clipPlaybackRate,
   emptyComposerProject,
+  frameStateAtTime,
   parseStoredProject,
   serializeProjectForStorage,
   timelineSpans,
@@ -75,9 +76,10 @@ describe('a film the new editor retimed, read by the old editor (measured, B5)',
     const curve = sequence.clips[2]!;
     const oldSpan = spans[2]!;
     const oldRate = clipPlaybackRate(saved.clips[2]!);
-    // A quarter of the way into the cut, as the old editor shows it (constant average speed) and as the new one does.
+    // A quarter of the way into the cut, as the old editor's own reader shows it (constant average speed) and as the new one does.
     const offsetSec = oldSpan.durationSec / 4;
-    const oldPicture = Math.floor((saved.clips[2]!.trimStartSec + offsetSec * oldRate) * FPS);
+    expect(oldRate).toBe(0.45);
+    const oldPicture = Math.floor(frameStateAtTime(saved, oldSpan.timelineStartSec + offsetSec).activeClip!.mediaTimeSec * FPS);
     const newPicture = clipFrameAt(curve, Math.round(offsetSec * FPS), FPS).mediaFrame;
     // 5.55 s in: the old editor shows source frame 59, the new editor 72.
     expect([oldPicture, newPicture]).toEqual([59, 72]);
@@ -93,7 +95,7 @@ describe('a film the new editor retimed, read by the old editor (measured, B5)',
     const slowAt = spans[0]!.timelineStartSec + 30;
     const newFrame = storedSecToFrame(anchor, slowAt);
     const shownNew = clipFrameAt(sequence.clips[0]!, newFrame - span[0]!.start, FPS).mediaFrame;
-    const shownOld = Math.floor(30 * clipPlaybackRate(saved.clips[0]!) * FPS);
+    const shownOld = Math.floor(frameStateAtTime(saved, slowAt).activeClip!.mediaTimeSec * FPS);
     expect(shownOld).toBe(180);
     expect(shownNew).toBe(72);
   });
