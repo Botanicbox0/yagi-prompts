@@ -15,9 +15,11 @@ Needs Python Playwright with Chromium (`pip install playwright && playwright ins
 launches its own browser with a fresh profile (so the key starts empty) and talks only to the address
 below; it never attaches to another browser. Not part of the vitest suite. Run against a local server
 started with BRAND_STUDIO_V2=on BRAND_STUDIO_EDITOR_V2=on, BRAND_STUDIO_EDITOR_V2_ORGS=<the organization
-id> (v2 opens an organization's own film only when it is listed; review round 1, item 2) and at least
-three uploaded video assets. It opens the current editor with `?classic=1`. The id comes from the
-environment at run time and is never written into a file:
+id> (v2 opens an organization's own film only when it is listed; review round 1, item 2),
+BRAND_WORKSPACE_PROTOTYPE_LAYER=on (the check "colour is locked with a way to the sample film" looks for the
+locked workspace's sample-film link, which the own film shows only then) and at least three uploaded video
+assets. It opens the current editor with `?classic=1`. The id comes from the environment at run time and is
+never written into a file:
 
   EDITOR_BASE_URL=http://localhost:3611 EDITOR_ORG_ID=<organization id> python scripts/editor-v2-roundtrip-check.py [capture-dir]
 

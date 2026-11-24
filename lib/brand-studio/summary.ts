@@ -23,7 +23,8 @@ import { studioSeat } from './access';
 import type { StudioEnv } from './env';
 import { guarded } from './outcome';
 import { NOT_FILL } from './repo';
-import { allowanceView, loadAllowance } from './usage';
+import { allowanceViewWithRefill } from './allowance-refill';
+import { loadAllowance } from './usage';
 
 /** How long a finished job stays in `settled` (long enough for a 20-second poll to see it twice). */
 export const STUDIO_SETTLED_WINDOW_MS = 10 * 60_000;
@@ -76,7 +77,7 @@ export async function loadStudioSummary(deps: StudioSummaryDeps, viewer: Viewer,
       ).rows;
       return {
         ok: true as const,
-        allowance: allowanceView(allowance),
+        allowance: await allowanceViewWithRefill(sql, organizationId, allowance, { now }),
         open: open.filter((j) => isKind(String(j.kind))).map((j) => ({ id: String(j.id), kind: j.kind as StudioJobKind })),
         settled: settled
           .filter((j) => isKind(String(j.kind)))

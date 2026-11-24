@@ -126,6 +126,8 @@ describe('closed studio state & prefilled SupportDrawer request (Item 3)', () =>
       expect(imageHtml).toContain(copy.dock.closedTitle);
       expect(imageHtml).toContain(copy.dock.closedBody);
       expect(imageHtml).toContain(copy.dock.closedAction);
+      // The explanation is said once: by the banner, not again as the empty gallery's text (seen doubled on 2026-11-24).
+      expect(imageHtml.split(copy.dock.closedBody).length - 1).toBe(1);
 
       const videoHtml = renderToStaticMarkup(
         <VideoStudioWorkspace
@@ -142,6 +144,7 @@ describe('closed studio state & prefilled SupportDrawer request (Item 3)', () =>
       expect(videoHtml).toContain(copy.dock.closedTitle);
       expect(videoHtml).toContain(copy.dock.closedBody);
       expect(videoHtml).toContain(copy.dock.closedAction);
+      expect(videoHtml.split(copy.dock.closedBody).length - 1).toBe(1);
     }
 
     const videoSource = readFileSync(

@@ -1,5 +1,6 @@
 import type { Viewer } from '@/lib/auth/identity';
 import type { SqlRunner } from '@/lib/db/sql-runner';
+import { loadAllowanceRefill } from '@/lib/brand-studio/allowance-refill';
 import { allowanceWindowView } from '@/lib/brand-studio/allowance-window';
 import { creditsLeft, creditsOf } from '@/lib/brand-studio/credits';
 import type { StudioEnv } from '@/lib/brand-studio/env';
@@ -44,6 +45,8 @@ export async function loadCustomerBrandBilling(
       const today = kstDayOf(now);
       const graceDays = deps.env.planGraceDays ?? 7;
       const planStatus = planActiveWithGrace(assignment, today, graceDays);
+      // R4: no statement unless the base cap is 0 and the cap above 0 (then nothing resets on a date).
+      const refill = await loadAllowanceRefill(sql, seat.organizationId, allowance, { now });
 
       const plan = assignment
         ? {
@@ -115,6 +118,7 @@ export async function loadCustomerBrandBilling(
             resetsOn: kstDayOf(new Date(allowance.resetsAt)),
             resetsAt: allowance.resetsAt,
             window: allowanceWindowView(allowance),
+            ...(refill ? { refill } : {}),
           },
           activeDiscount: activeDiscount
             ? {

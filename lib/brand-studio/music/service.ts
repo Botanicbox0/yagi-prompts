@@ -32,7 +32,8 @@ import { COMPOSE_FINAL_RENDER_MODEL } from '@/lib/brand-studio/compose/credits';
 import { creditsOf } from '@/lib/brand-studio/credits';
 import { readyAsset } from '@/lib/brand-studio/repo';
 import type { StudioDeps } from '@/lib/brand-studio/types';
-import { allowanceView, loadAllowance, reserveAllowance } from '@/lib/brand-studio/usage';
+import { loadAllowanceViewWithRefill } from '@/lib/brand-studio/allowance-refill';
+import { allowanceView, reserveAllowance } from '@/lib/brand-studio/usage';
 import {
   COMMERCIAL_MUSIC_NOTICE_EN,
   COMMERCIAL_MUSIC_NOTICE_KO,
@@ -184,7 +185,7 @@ async function refundMusicJob(
         where id = $1 and organization_id = $2 and status <> 'failed'`,
       [jobId, organizationId, errorCode, now.toISOString()],
     );
-    return allowanceView(await loadAllowance(tx, organizationId, deps.env, now));
+    return await loadAllowanceViewWithRefill(tx, organizationId, deps.env, now);
   });
 }
 
@@ -330,7 +331,7 @@ export async function generateReferenceMusic(
       ).rows[0];
 
       if (existing) {
-        const allowance = allowanceView(await loadAllowance(tx, v.organizationId, deps.env, now));
+        const allowance = await loadAllowanceViewWithRefill(tx, v.organizationId, deps.env, now);
         if (existing.status === 'succeeded' && existing.params?.source === 'music') {
           const p = existing.params;
           const notices = noticesFor(p.commercialAllowed);
@@ -432,7 +433,7 @@ export async function generateReferenceMusic(
         ],
       );
 
-      const allowance = allowanceView(await loadAllowance(tx, v.organizationId, deps.env, now));
+      const allowance = await loadAllowanceViewWithRefill(tx, v.organizationId, deps.env, now);
       return {
         kind: 'created' as const,
         jobId: inserted.rows[0]!.id,
@@ -688,7 +689,7 @@ export async function getMusicJobStatus(
       if (!row || row.params?.source !== 'music') {
         throw new StudioDenied('not_found');
       }
-      const allowance = allowanceView(await loadAllowance(tx, v.organizationId, deps.env, now));
+      const allowance = await loadAllowanceViewWithRefill(tx, v.organizationId, deps.env, now);
       return {
         userId: seat.userId,
         status: row.status,

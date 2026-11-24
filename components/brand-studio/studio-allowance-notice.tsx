@@ -4,7 +4,14 @@ import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { BillingRequestDialog } from '@/components/brand-billing/billing-request-form';
 import s from '@/components/brand-billing/brand-billing.module.css';
-import { isCycleWindow, windowText, type AllowanceWindowView } from '@/lib/brand-studio/allowance-window';
+import {
+  isCycleWindow,
+  refillWording,
+  windowText,
+  withoutLastSentence,
+  type AllowanceRefillView,
+  type AllowanceWindowView,
+} from '@/lib/brand-studio/allowance-window';
 import { formatKstDateLabel, type BillingPlanCatalogueItem } from '@/lib/brands/billing-ui';
 import { formatCredits } from '@/lib/brand-studio/credits';
 import type { BrandBillingCopy } from '@/messages/brand-billing';
@@ -32,6 +39,9 @@ function minimalFallbackStudioStates(locale: 'ko' | 'en'): BrandBillingCopy['cus
           'Not enough credits for this usage period ({needed} needed · {left} left). Resets on {resetDate}.',
         exhaustedGenericCycle: 'This usage period’s credits are used up. Resets on {resetDate}.',
         exhaustedCta: 'Request extra credits',
+        // R4 trial siblings: the same text as `studioStates` in messages/brand-billing.ts.
+        exhaustedWithQuoteTrial: 'Not enough trial credits ({needed} needed · {left} left). Please start a plan to continue.',
+        exhaustedGenericTrial: "You've used all your trial credits. Please start a plan to continue.",
       }
     : {
         closedOneLine: '이 작업 공간의 제작 기능은 아직 열려 있지 않습니다. 플랜을 신청해 시작해 보세요.',
@@ -42,6 +52,9 @@ function minimalFallbackStudioStates(locale: 'ko' | 'en'): BrandBillingCopy['cus
         exhaustedWithQuoteCycle: '이번 이용 기간 크레딧이 부족합니다 (필요 {needed} · 남음 {left}). 다음 초기화일은 {resetDate}입니다.',
         exhaustedGenericCycle: '이번 이용 기간 크레딧을 모두 사용했습니다. 다음 초기화일은 {resetDate}입니다.',
         exhaustedCta: '추가 크레딧 요청',
+        // R4 trial siblings: the same text as `studioStates` in messages/brand-billing.ts.
+        exhaustedWithQuoteTrial: '체험 크레딧이 부족합니다 (필요 {needed} · 남음 {left}). 계속 제작하려면 플랜을 시작해 주세요.',
+        exhaustedGenericTrial: '체험 크레딧을 모두 사용했습니다. 계속 제작하려면 플랜을 시작해 주세요.',
       };
 }
 
@@ -62,6 +75,11 @@ export interface StudioAllowanceNoticeProps {
    * cycle's end day; without it, or for the calendar month, the words are today's.
    */
   allowanceWindow?: AllowanceWindowView | null;
+  /**
+   * R4: the refill fact (`StudioAllowanceView.refill`). A trial-only organization reads the trial words (no reset day);
+   * extra credits without a trial lose the reset sentence; without it the words are today's.
+   */
+  allowanceRefill?: AllowanceRefillView | null;
   surface: string;
   solidCta?: boolean;
   className?: string;
@@ -79,6 +97,7 @@ export function StudioAllowanceNotice({
   resetsOn,
   resetsAt,
   allowanceWindow,
+  allowanceRefill,
   surface,
   solidCta = false,
   className,
@@ -103,13 +122,24 @@ export function StudioAllowanceNotice({
   } else {
     intent = 'allowance_request';
     ctaLabel = statesCopy.exhaustedCta;
+    // R4: the trial's words for a trial-only organization; no reset sentence when nothing refills; else today's.
+    const refill = refillWording(allowanceRefill);
+    const words = (month: string, cycleWords: string, trial: string) =>
+      refill.kind === 'trial'
+        ? trial
+        : refill.kind === 'hidden'
+          ? withoutLastSentence(windowText(allowanceWindow, month, cycleWords))
+          : windowText(allowanceWindow, month, cycleWords);
     if (typeof neededCredits === 'number' && typeof remainingCredits === 'number') {
-      message = windowText(allowanceWindow, statesCopy.exhaustedWithQuote, statesCopy.exhaustedWithQuoteCycle)
+      message = words(statesCopy.exhaustedWithQuote, statesCopy.exhaustedWithQuoteCycle, statesCopy.exhaustedWithQuoteTrial)
         .replace('{needed}', formatCredits(neededCredits, locale))
         .replace('{left}', formatCredits(remainingCredits, locale))
         .replace('{resetDate}', resetDate);
     } else {
-      message = windowText(allowanceWindow, statesCopy.exhaustedGeneric, statesCopy.exhaustedGenericCycle).replace('{resetDate}', resetDate);
+      message = words(statesCopy.exhaustedGeneric, statesCopy.exhaustedGenericCycle, statesCopy.exhaustedGenericTrial).replace(
+        '{resetDate}',
+        resetDate,
+      );
     }
   }
 

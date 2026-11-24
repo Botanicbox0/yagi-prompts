@@ -11,12 +11,15 @@ import { getDictionary } from '@/lib/i18n/dictionaries';
  * The truth since V1: the studio guard runs first, then the flag; with the flag off the route is 404 and
  * the current editor's markup does not change (compose-entry.test.ts). With it on, the page loads the
  * same clips the current editor offers and the editor reads and writes the film the current editor
- * keeps in this browser. `?sample=1` opens the sample film and loads nothing.
+ * keeps in this browser. `?sample=1` opens the sample film and loads nothing, for a listed organization only
+ * while `BRAND_WORKSPACE_PROTOTYPE_LAYER=on` (off, it opens the organization's own film as without it, and
+ * the film's locked workspaces offer no sample film).
  *
  * Where the editor may reach anything, in one place: network access only in the frame-exact export
- * (`export-film.ts`; what it may request is pinned in export-film-network.test.ts), browser storage
- * only in the shortcut store and the film store (always inside try/catch), and nothing anywhere keeps
- * session storage, a database or a cache.
+ * (`export-film.ts`; what it may request is pinned in export-film-network.test.ts), the footage reader
+ * and the export record (`export-record.ts`, the current editor's 0-credit `render.reserve`; pinned in
+ * export-record.test.tsx), browser storage only in the shortcut store and the film store (always inside
+ * try/catch), and nothing anywhere keeps session storage, a database or a cache.
  */
 const ROOT = process.cwd();
 const ORG = '00000000-0000-4000-8000-0000000000aa';
@@ -88,7 +91,7 @@ interface RealProps {
   organizationName: string;
   canEdit: boolean;
   sources: Array<{ key: string; kind: string; srcUrl: string; thumbUrl: string | null; label: string }>;
-  sampleBase: string;
+  sampleBase: string | null;
 }
 type Element = ReactElement<{ copy: unknown; currentEditorHref: string; initialWorkspace: string; real: RealProps | null }>;
 
@@ -155,10 +158,12 @@ describe('/brand/studio/editor page gate', () => {
     expect(mocks.assetsOf).not.toHaveBeenCalled();
   });
 
-  it('an organization not on the list gets the sample film whatever the address says, and nothing of its own is loaded', async () => {
+  it('an organization not on the list gets the sample film whatever the address or the prototype layer says, and nothing of its own is loaded', async () => {
     vi.stubEnv('BRAND_STUDIO_EDITOR_V2', 'on');
     const Page = await loadPage();
-    for (const list of [undefined, '', OTHER, `${OTHER},${ORG.slice(0, 20)}`]) {
+    for (const [layer, list] of [undefined, 'on'].flatMap((layer) => [undefined, '', OTHER, `${OTHER},${ORG.slice(0, 20)}`].map((list) => [layer, list] as const))) {
+      if (layer === undefined) vi.stubEnv('BRAND_WORKSPACE_PROTOTYPE_LAYER', undefined as unknown as string);
+      else vi.stubEnv('BRAND_WORKSPACE_PROTOTYPE_LAYER', layer);
       if (list === undefined) vi.stubEnv('BRAND_STUDIO_EDITOR_V2_ORGS', undefined as unknown as string);
       else vi.stubEnv('BRAND_STUDIO_EDITOR_V2_ORGS', list);
       for (const query of [
@@ -182,19 +187,51 @@ describe('/brand/studio/editor page gate', () => {
   it('a listed organization gets its own film; the list is consulted after the guard and the flag', async () => {
     vi.stubEnv('BRAND_STUDIO_EDITOR_V2', 'on');
     vi.stubEnv('BRAND_STUDIO_EDITOR_V2_ORGS', ` ${OTHER} , ${ORG} `);
+    vi.stubEnv('BRAND_WORKSPACE_PROTOTYPE_LAYER', 'on');
     const Page = await loadPage();
     const element = (await Page({ searchParams: Promise.resolve({ organizationId: ORG, clip: `a:${ASSET}` }) })) as Element;
     expect(element.props.real).not.toBeNull();
     expect(mocks.assetsOf).toHaveBeenCalledTimes(1);
-    // `sample=1` still opens the sample film for a listed organization.
+    // With the prototype layer on, `sample=1` still opens the sample film for a listed organization.
     const sample = (await Page({ searchParams: Promise.resolve({ organizationId: ORG, sample: '1' }) })) as Element;
     expect(sample.props.real).toBeNull();
     expect(mocks.assetsOf).toHaveBeenCalledTimes(1);
   });
 
+  it('BRAND_WORKSPACE_PROTOTYPE_LAYER off (the default): a listed organization’s `sample=1` opens its own film, and the film offers no sample film', async () => {
+    vi.stubEnv('BRAND_STUDIO_EDITOR_V2', 'on');
+    vi.stubEnv('BRAND_STUDIO_EDITOR_V2_ORGS', ORG);
+    const Page = await loadPage();
+    let loads = 0;
+    for (const value of [undefined, '', 'off', 'ON', 'true']) {
+      if (value === undefined) vi.stubEnv('BRAND_WORKSPACE_PROTOTYPE_LAYER', undefined as unknown as string);
+      else vi.stubEnv('BRAND_WORKSPACE_PROTOTYPE_LAYER', value);
+      for (const query of [{ organizationId: ORG }, { organizationId: ORG, sample: '1' }, { organizationId: ORG, sample: '1', ws: 'color' }, { organizationId: ORG, sample: ['1', '0'] }]) {
+        const element = (await Page({ searchParams: Promise.resolve(query) })) as Element;
+        loads += 1;
+        const real = element.props.real;
+        expect(real, `${value} ${JSON.stringify(query)}`).not.toBeNull();
+        expect(real!.organizationId).toBe(ORG);
+        expect(real!.sampleBase, `${value} ${JSON.stringify(query)}`).toBeNull();
+        expect(element.props.initialWorkspace).toBe('ws' in query ? 'color' : 'cut');
+        expect(mocks.assetsOf).toHaveBeenCalledTimes(loads);
+      }
+    }
+  });
+
+  it('BRAND_WORKSPACE_PROTOTYPE_LAYER=on: the own film’s locked workspaces offer the sample film', async () => {
+    vi.stubEnv('BRAND_STUDIO_EDITOR_V2', 'on');
+    vi.stubEnv('BRAND_STUDIO_EDITOR_V2_ORGS', ORG);
+    vi.stubEnv('BRAND_WORKSPACE_PROTOTYPE_LAYER', 'on');
+    const Page = await loadPage();
+    const element = (await Page({ searchParams: Promise.resolve({ organizationId: ORG }) })) as Element;
+    expect(element.props.real!.sampleBase).toBe(`/brand/studio/editor?sample=1&organizationId=${ORG}`);
+  });
+
   it('opens the organization’s film with the clips the current editor offers: video only, same addresses', async () => {
     vi.stubEnv('BRAND_STUDIO_EDITOR_V2', 'on');
     vi.stubEnv('BRAND_STUDIO_EDITOR_V2_ORGS', ORG);
+    vi.stubEnv('BRAND_WORKSPACE_PROTOTYPE_LAYER', 'off');
     const Page = await loadPage();
     const element = (await Page({ searchParams: Promise.resolve({ organizationId: ORG }) })) as Element;
     expect((element.type as { name?: string }).name).toBe('EditorV2Stub');
@@ -205,7 +242,8 @@ describe('/brand/studio/editor page gate', () => {
     expect(mocks.jobsOf).toHaveBeenCalledWith(expect.anything(), ORG, 60);
     const real = element.props.real!;
     expect(real).toMatchObject({ organizationId: ORG, organizationName: 'Sample Brand', canEdit: true });
-    expect(real.sampleBase).toBe(`/brand/studio/editor?sample=1&organizationId=${ORG}`);
+    // No sample film while the prototype layer is off (stubbed off above; it is the default, see the next tests).
+    expect(real.sampleBase).toBeNull();
     expect(real.sources.map((s) => [s.key, s.kind, s.srcUrl, s.thumbUrl, s.label])).toEqual([
       [`o:${OUTPUT}`, 'output', `/api/brand-studio/compose?organizationId=${ORG}&source=output&id=${OUTPUT}`, '/media/o.jpg', 'A slow walk through the morning market'.slice(0, 36)],
       [`a:${ASSET}`, 'asset', `/api/brand-studio/compose?organizationId=${ORG}&source=asset&id=${ASSET}`, '/media/a.jpg', 'runway.mp4'],
@@ -226,9 +264,10 @@ describe('/brand/studio/editor page gate', () => {
     expect(await canEdit('owner', true)).toBe(false);
   });
 
-  it('?sample=1 opens the sample film, reads nothing of the organization’s, and keeps the workspace asked for', async () => {
+  it('?sample=1 with the prototype layer on opens the sample film, reads nothing of the organization’s, and keeps the workspace asked for', async () => {
     vi.stubEnv('BRAND_STUDIO_EDITOR_V2', 'on');
     vi.stubEnv('BRAND_STUDIO_EDITOR_V2_ORGS', ORG);
+    vi.stubEnv('BRAND_WORKSPACE_PROTOTYPE_LAYER', 'on');
     const Page = await loadPage();
     const element = (await Page({ searchParams: Promise.resolve({ organizationId: ORG, sample: '1', ws: 'sound' }) })) as Element;
     expect(element.props.real).toBeNull();
@@ -256,6 +295,10 @@ describe('the page source', () => {
     expect(flag).toBeLessThan(list);
     expect(list).toBeLessThan(sample);
     expect(sample).toBeLessThan(load);
+    // The same switch as the current editor's link to the sample film (compose/page.tsx, compose-switch.test.ts).
+    const layer = pageSource.indexOf('brandWorkspacePrototypeLayerOpen()');
+    expect(layer).toBeGreaterThan(flag);
+    expect(layer).toBeLessThan(sample);
   });
 
   it('loads clips with the current editor’s own loaders and limits', () => {
@@ -274,20 +317,31 @@ describe('where the editor keeps anything', () => {
   const files = readdirSync(dir).filter((name) => /\.(tsx?|ts)$/.test(name));
   const STORES = ['shortcut-store.ts', 'film-store.ts'];
   /**
-   * The files that may make a request, each only for the film's own media: the export reads it to decode
-   * its sound; footage-facts reads a clip's timing boxes with Range requests (spec E addendum, C1; pinned
-   * in footage-facts.test.ts).
+   * The files that may make a request, and the one way each may make it. The export and the footage reader
+   * read the film's own media: the export to decode its sound; footage-facts a clip's timing boxes with
+   * Range requests (spec E addendum, C1; pinned in footage-facts.test.ts). The export record asks the
+   * compose route for the current editor's 0-credit export record, through the current editor's own
+   * request helper and nothing else (pinned in export-record.test.tsx).
    */
-  const NETWORK_FILES = ['export-film.ts', 'footage-facts.ts'];
-  const NETWORK = ['fetch(', 'XMLHttpRequest', 'sendBeacon', 'WebSocket', 'EventSource'];
+  const NETWORK_FILES: Record<string, string[]> = {
+    'export-film.ts': ['fetch('],
+    'footage-facts.ts': ['fetch('],
+    'export-record.ts': ['postComposeOperation', 'compose-request'],
+  };
+  const NETWORK = ['fetch(', 'XMLHttpRequest', 'sendBeacon', 'WebSocket', 'EventSource', 'postComposeOperation', 'compose-request', '/api/'];
 
-  it('only the export and the footage reader make a request', () => {
-    for (const name of NETWORK_FILES) expect(files).toContain(name);
+  it('only the export, the footage reader and the export record make a request, each its own way', () => {
+    for (const name of Object.keys(NETWORK_FILES)) expect(files).toContain(name);
     for (const name of files) {
-      if (NETWORK_FILES.includes(name)) continue;
+      const allowed = NETWORK_FILES[name] ?? [];
       const source = readFileSync(join(dir, name), 'utf8');
-      for (const banned of NETWORK) expect(source.includes(banned), `${name} contains ${banned}`).toBe(false);
+      for (const banned of NETWORK) {
+        if (allowed.includes(banned)) continue;
+        expect(source.includes(banned), `${name} contains ${banned}`).toBe(false);
+      }
     }
+    const record = readFileSync(join(dir, 'export-record.ts'), 'utf8');
+    expect(record.match(/postComposeOperation\(/g), 'export-record.ts makes one request').toHaveLength(1);
   });
 
   it('no component keeps session storage, a database or a cache', () => {

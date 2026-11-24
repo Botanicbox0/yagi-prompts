@@ -25,6 +25,8 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
     expect(rows.map((r) => r.table_name)).toEqual([
       // docs/RUNBOOK-deletion.md (2026-11-11) — self-serve account deletion: the request, its queue and its 7-day record.
       'account_deletion_requests',
+      // docs/PERSONAL-STUDIO.md §6.1 (0188) — one birth-year / 19+ answer per account, server only.
+      'adult_confirmations',
       'billing_payments',
       'blocks',
       'brand_allowance_grants',
@@ -220,6 +222,8 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
       'render_job_outputs',
       'render_job_recipes',
       'render_jobs',
+      // docs/PERSONAL-STUDIO.md §5.1 (0188) — the Sunra circuit in one row (the router's memory does not survive serverless).
+      'render_provider_state',
       // docs/CAST-CATEGORIES.md §3 (2026-11-11) — a render's pet or partner photo, deleted once the render is finished.
       'render_slot_inputs',
       // docs/PLATFORM-2.0.md §17.1 (2026-10-23) — linked SNS accounts, their write ledger, the local worker's heartbeat.
@@ -299,6 +303,68 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
       { proname: 'publish_revision', owner: 'publisher', secdef: true },
     ]);
     await db.close();
+  });
+
+  it('0188/0189 — the personal Sunra lane schema: provider sunra, the two server-only tables, the photo check pair', async () => {
+    const db = await freshDb();
+    const user = '00000000-0000-4000-8000-000000000188';
+    await db.query('insert into auth.users (id) values ($1)', [user]);
+    // render_jobs.provider: the old four and 'sunra' are accepted, anything else is not.
+    const { rows: def } = await db.query<{ def: string; valid: boolean }>(
+      `select pg_get_constraintdef(oid) as def, convalidated as valid from pg_constraint
+        where conname = 'render_jobs_provider_check' and conrelid = 'public.render_jobs'::regclass`,
+    );
+    expect(def).toHaveLength(1);
+    expect(def[0]!.valid).toBe(true);
+    for (const provider of ['openai', 'modelark', 'kling', 'google', 'sunra']) expect(def[0]!.def).toContain(`'${provider}'`);
+    expect(def[0]!.def).not.toContain("'junk'");
+
+    // adult_confirmations: one row per account, a sane birth year, a false answer kept like a true one.
+    await db.query('insert into adult_confirmations (user_id, birth_year, attested) values ($1, 2001, false)', [user]);
+    await expect(db.query('insert into adult_confirmations (user_id, birth_year, attested) values ($1, 1990, true)', [user])).rejects.toThrow();
+    await expect(db.query("insert into adult_confirmations (user_id, birth_year, attested) values ('00000000-0000-4000-8000-000000000999', 1890, true)")).rejects.toThrow();
+
+    // render_slot_inputs: the verdict and its time come together, and the verdict is an object.
+    const { rows: columns } = await db.query<{ column_name: string; data_type: string; is_nullable: string }>(
+      `select column_name, data_type, is_nullable from information_schema.columns
+        where table_schema = 'public' and table_name = 'render_slot_inputs' and column_name in ('photo_check', 'photo_checked_at')
+        order by column_name`,
+    );
+    expect(columns).toEqual([
+      { column_name: 'photo_check', data_type: 'jsonb', is_nullable: 'YES' },
+      { column_name: 'photo_checked_at', data_type: 'timestamp with time zone', is_nullable: 'YES' },
+    ]);
+    const slot = (check: string | null, checkedAt: Date | null) => db.query(
+      `insert into render_slot_inputs (render_id, slot, user_id, template_id, storage_key, mime, partner_consent_at, expires_at, photo_check, photo_checked_at)
+       values (gen_random_uuid(), 'partner', $1, gen_random_uuid(), 'k', 'image/jpeg', now(), now() + interval '7 days', $2::jsonb, $3::timestamptz)`,
+      [user, check, checkedAt?.toISOString() ?? null],
+    );
+    const at = new Date('2026-11-24T06:00:00.000Z');
+    await expect(slot(null, null)).resolves.toBeDefined();
+    await expect(slot('{"ok":true}', at)).resolves.toBeDefined();
+    await expect(slot('{"ok":true}', null)).rejects.toThrow();
+    await expect(slot(null, at)).rejects.toThrow();
+    await expect(slot('[1]', at)).rejects.toThrow();
+
+    // render_provider_state: one row for 'sunra', the router's four states, an open state carries its time.
+    await db.query(`insert into render_provider_state (provider) values ('sunra')`);
+    await expect(db.query(`insert into render_provider_state (provider) values ('modelark')`)).rejects.toThrow();
+    await expect(db.query(`update render_provider_state set circuit_state = 'half_open'`)).rejects.toThrow();
+    await expect(db.query(`update render_provider_state set circuit_state = 'open_price_drift'`)).rejects.toThrow();
+    await db.query(`update render_provider_state set circuit_state = 'open_price_drift', opened_at = now()`);
+    // Safe to apply twice: nothing is dropped or rewritten the second time.
+    await db.exec(readFileSync(join(MIGRATIONS_DIR, '0188_core_personal_sunra_lane.sql'), 'utf8'));
+    expect((await db.query<{ n: number }>('select count(*)::int as n from adult_confirmations')).rows[0]!.n).toBe(1);
+    expect((await db.query<{ n: number }>(`select count(*)::int as n from pg_constraint where conname in ('render_jobs_provider_check', 'render_slot_inputs_photo_check_shape') and convalidated`)).rows[0]!.n).toBe(2);
+    await db.close();
+
+    // 0189 names both new tables in the 0153 deny-all shape; no policy anywhere.
+    const glue = readFileSync(join(MIGRATIONS_DIR, '0189_glue_personal_sunra_lane.sql'), 'utf8');
+    for (const table of ['adult_confirmations', 'render_provider_state']) expect(glue, `0189 covers ${table}`).toContain(`'${table}'`);
+    expect(glue).toContain('enable row level security');
+    expect(glue).toContain('force row level security');
+    expect(glue).toContain('revoke all on public.%I from public,anon,authenticated');
+    expect(glue).not.toMatch(/create\s+policy/i);
   });
 
   it('forces deny-all RLS on EVERY table in the glue migration (§6 security posture)', async () => {

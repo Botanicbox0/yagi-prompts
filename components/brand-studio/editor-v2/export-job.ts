@@ -8,6 +8,7 @@ import { slowNotice, type ExportPath, type ExportPathOverride } from '@/lib/bran
 import { totalFrames, type FrameSequence } from '@/lib/brand-studio/editor-v2/frames';
 import type { Reframe } from '@/lib/brand-studio/editor-v2/model';
 import { ExportStop, exportFilm, type ExportProgress, type ExportStopReason, type ExportWarning, type SourcePath } from './export-film';
+import { recordExport } from './export-record';
 import { watchRefresh } from './screen-refresh';
 
 export type ExportJob =
@@ -60,6 +61,12 @@ export interface ExportRequest {
   path?: ExportPathOverride;
   /** `false` (`?exportDownload=off`, checks only): the finished file is not downloaded by itself. */
   download?: boolean;
+  /**
+   * The organization whose own film this is: the export leaves the current editor's 0-credit record for it
+   * (export-record.ts), once, when it starts making pictures (its first progress report of the picture phase).
+   * `null` or absent on the sample film, which records nothing.
+   */
+  recordFor?: string | null;
 }
 
 const IDLE: ExportJob = { status: 'idle' };
@@ -126,6 +133,8 @@ export function startExport(request: ExportRequest): void {
   let restarts = 0;
   let restartedPhase: 'video' | 'audio' | null = null;
   set({ status: 'running', progress: progressNow, frames, fps, slow, restarts, restartedPhase });
+  /** Whether this export has asked for its record (at most once). */
+  let recorded = false;
   const update = (force: boolean) => {
     const next = slowNotice(reduced, path);
     if (!force && next === slow) return;
@@ -141,6 +150,15 @@ export function startExport(request: ExportRequest): void {
   });
 
   const onProgress = (progress: ExportProgress) => {
+    // The record, once per export that really makes pictures: `exportFilm` reports the picture phase only after
+    // its own checks before the first frame (empty film, no encoder for that size and rate, no sound encoder,
+    // sound sources over the limit, footage or overlays that do not load). An export refused there, or cancelled
+    // before it, leaves no record. A restart after the browser took the encoder back is the same export, and a
+    // cancel or failure after this point keeps the record. Never waited for: it never stops the export.
+    if (!recorded && request.recordFor && progress.phase === 'video' && !own.signal.aborted) {
+      recorded = true;
+      recordExport(request.recordFor, frames, fps);
+    }
     const now = performance.now();
     const finished = progress.done >= progress.total;
     const pathChanged = progress.path !== undefined && progress.path !== path;

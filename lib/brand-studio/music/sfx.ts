@@ -18,7 +18,8 @@ import { COMPOSE_FINAL_RENDER_MODEL } from '@/lib/brand-studio/compose/credits';
 import type { StudioAllowanceView, StudioErrorCode } from '@/lib/brand-studio/contracts';
 import { creditsOf } from '@/lib/brand-studio/credits';
 import type { StudioDeps } from '@/lib/brand-studio/types';
-import { allowanceView, loadAllowance, reserveAllowance } from '@/lib/brand-studio/usage';
+import { loadAllowanceViewWithRefill } from '@/lib/brand-studio/allowance-refill';
+import { reserveAllowance } from '@/lib/brand-studio/usage';
 import { createSunraClient, SunraError } from '@/lib/sunra/client';
 import {
   COMMERCIAL_MUSIC_NOTICE_EN,
@@ -187,7 +188,7 @@ async function refundSfxJob(
         where id = $1 and organization_id = $2 and status <> 'failed'`,
       [jobId, organizationId, errorCode, now.toISOString()],
     );
-    return allowanceView(await loadAllowance(tx, organizationId, deps.env, now));
+    return await loadAllowanceViewWithRefill(tx, organizationId, deps.env, now);
   });
 }
 
@@ -232,7 +233,7 @@ export async function generateSoundEffect(
       ).rows[0];
 
       if (existing) {
-        const allowance = allowanceView(await loadAllowance(tx, v.organizationId, deps.env, now));
+        const allowance = await loadAllowanceViewWithRefill(tx, v.organizationId, deps.env, now);
         if (existing.status === 'succeeded' && existing.params?.source === 'sfx') {
           const p = existing.params;
           return {
@@ -296,7 +297,7 @@ export async function generateSoundEffect(
           ts,
         ],
       );
-      const allowance = allowanceView(await loadAllowance(tx, v.organizationId, deps.env, now));
+      const allowance = await loadAllowanceViewWithRefill(tx, v.organizationId, deps.env, now);
       return {
         kind: 'created' as const,
         jobId: inserted.rows[0]!.id,
@@ -449,7 +450,7 @@ export async function getSfxJobStatus(
       )
     ).rows[0];
     if (!row || row.params?.source !== 'sfx') return null;
-    const allowance = allowanceView(await loadAllowance(tx, v.organizationId, deps.env, now));
+    const allowance = await loadAllowanceViewWithRefill(tx, v.organizationId, deps.env, now);
     return { row, allowance };
   });
 

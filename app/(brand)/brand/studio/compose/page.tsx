@@ -10,7 +10,8 @@ import { loadFolderItems, loadLibrary } from '@/lib/brand-studio/library';
 import type { LibraryItemWire } from '@/lib/brand-studio/library-contracts';
 import { createStudioMediaStore } from '@/lib/brand-studio/media-store';
 import { assetView, assetsOf, jobsOf, viewsOf } from '@/lib/brand-studio/repo';
-import { allowanceView, loadAllowance } from '@/lib/brand-studio/usage';
+import { allowanceViewWithRefill } from '@/lib/brand-studio/allowance-refill';
+import { loadAllowance } from '@/lib/brand-studio/usage';
 import { studioShowroomVisible, studioV2Visible } from '@/lib/brand-studio/visibility';
 import { billingPlanCatalogue } from '@/lib/brands/billing-page-data';
 import { scopedHref } from '@/lib/brands/workspace/selection';
@@ -95,6 +96,8 @@ export default async function StudioComposePage({
     .filter((a) => a.kind === 'video' || a.kind === 'audio' || a.kind === 'image')
     .map((a) => assetView(a, media));
   const jobs = await viewsOf(deps.sql, rawJobs, media);
+  // R4: the refill fact beside the window (no statement unless the base cap is 0).
+  const initialAllowance = await allowanceViewWithRefill(deps.sql, choice.id, allowance);
   const videoOutputs = jobs.flatMap((job) =>
     job.outputs
       .filter((out) => out.kind === 'video')
@@ -155,7 +158,7 @@ export default async function StudioComposePage({
       planCatalogue={billingPlanCatalogue()}
       videoStudioHref={scopedHref('/brand/studio/video', choice)}
       editorV2Href={opensEditorV2 ? scopedHref('/brand/studio/editor', choice) : brandStudioEditorV2Open() && brandWorkspacePrototypeLayerOpen() ? scopedHref('/brand/studio/editor?sample=1', choice) : null}
-      initialAllowance={allowanceView(allowance)}
+      initialAllowance={initialAllowance}
       initialAssets={assets}
       initialVideoOutputs={videoOutputs}
       initialImageOutputs={imageOutputs}

@@ -606,6 +606,7 @@ export function SoundStudio(props: SoundStudioProps) {
           remainingCredits={left}
           resetsAt={allowance.resetsAt}
           allowanceWindow={allowance.window}
+          allowanceRefill={allowance.refill}
           surface="studio_sound"
           solidCta={false}
         />
