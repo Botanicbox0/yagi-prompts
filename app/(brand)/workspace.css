@@ -1088,21 +1088,27 @@ html[data-workspace-admin] {
 .bw-featured-copy h2 { font-size:25px;font-weight:600;line-height:1.25;letter-spacing:-.03em;margin:0 0 12px; }
 .bw-featured-copy p:not(.bw-kicker) { color:var(--ys-ink-secondary);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden; }
 .bw-featured-copy footer { display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap; }
-.bw-support-launch { position:fixed;right:24px;bottom:24px;height:48px;padding:0 18px 0 14px;display:inline-flex;align-items:center;gap:10px;border:0;border-radius:999px;background:var(--ys-glass);-webkit-backdrop-filter:blur(20px) saturate(180%);backdrop-filter:blur(20px) saturate(180%);color:var(--ys-ink);font-size:13px;font-weight:600;letter-spacing:-0.01em;box-shadow:var(--ys-float);z-index:60;cursor:pointer;transition:transform var(--ys-dur-spring) var(--ys-spring),translate var(--ys-dur-spring) var(--ys-spring),box-shadow var(--ys-dur) var(--ys-ease); }
+/* The support launcher: the house mark on a round ink face (the inverse of the page in either theme), no words.
+   A soft offset shadow lifts it off the page; it grows a little under the pointer. */
+.bw-support-launch { --launch-face:var(--ys-ink);--launch-mark:var(--ys-bg);--launch-dot:var(--ys-accent);position:fixed;right:24px;bottom:24px;width:52px;height:52px;padding:0;display:grid;place-items:center;border:0;border-radius:999px;background:var(--launch-face);color:var(--launch-mark);box-shadow:0 1px 2px rgba(0,0,0,0.24),0 8px 24px rgba(0,0,0,0.28);z-index:60;cursor:pointer;transition:transform var(--ys-dur-spring) var(--ys-spring),translate var(--ys-dur-spring) var(--ys-spring),box-shadow var(--ys-dur) var(--ys-ease); }
 /* A floating island at the bottom (compare tray, bulk actions) lifts the launcher out of its way. */
 body:has(.bw-triage-bulk) .bw-support-launch { translate:0 -76px; }
-@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))) { .bw-support-launch { background:var(--ys-surface); } }
-.bw-support-launch:hover { transform:translateY(-2px) scale(1.02);box-shadow:var(--ys-ring),var(--ys-rim),0 2px 4px rgba(16,18,24,0.05),0 14px 32px rgba(16,18,24,0.07),0 36px 72px rgba(16,18,24,0.06); }
-.bw-support-launch svg { width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;flex-shrink:0; }
-/* Rendered only for a team reply not seen yet; a status mark, so ink, not the accent (TASTE 19). */
-.bw-support-launch-dot { width:8px;height:8px;border-radius:999px;background:var(--ys-ink);box-shadow:var(--ys-dot-glow);flex-shrink:0; }
-.bw-support-launch-label { white-space:nowrap; }
+.bw-support-launch:hover { transform:scale(1.06);box-shadow:0 2px 4px rgba(0,0,0,0.26),0 12px 32px rgba(0,0,0,0.32); }
+.bw-support-launch:active { transform:scale(0.97); }
+.bw-support-launch:focus-visible { outline:2px solid var(--ys-focus);outline-offset:3px; }
+.bw-support-launch-mark { height:24px; }
+/* Rendered only for a team reply not seen yet. On an ink face an ink dot cannot be seen, so this one status mark
+   takes the accent (the launcher's exception to TASTE 19, written there); it sits on the face's shoulder inside a
+   ring of the page's colour. */
+.bw-support-launch-dot { position:absolute;top:0;right:0;width:12px;height:12px;border-radius:999px;background:var(--launch-dot);box-shadow:0 0 0 3px var(--ys-bg); }
 .bw-support-dialog { position:fixed;inset:auto 24px 88px auto;margin:0;width:min(396px,calc(100vw - 32px));height:min(580px,calc(100svh - 116px));max-height:calc(100svh - 110px);padding:0;border:1px solid color-mix(in srgb, var(--ys-ink) 12%, transparent);border-radius:22px;box-shadow:0 28px 80px rgba(15, 15, 20, 0.17),0 0 0 1px color-mix(in srgb, var(--ys-ink) 4%, transparent);color:var(--ys-ink);background:var(--ys-surface);z-index:65;overflow:hidden; }
 .bw-support-dialog[open] { display:flex;flex-direction:column; }
 .bw-support-dialog::backdrop { background:transparent; }
 .bw-concierge-header { display:flex;gap:12px;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--ys-line);background:linear-gradient(180deg,var(--ys-subtle-bg) 0%,var(--ys-surface) 100%); }
 .bw-concierge-brand { display:flex;align-items:center;gap:12px;min-width:0; }
-.bw-concierge-avatar { position:relative;width:38px;height:38px;border-radius:12px;background:var(--ys-strong, var(--ys-accent, var(--ys-accent)));color:white;font-weight:700;font-size:15px;display:grid;place-items:center;flex-shrink:0;box-shadow:0 4px 14px color-mix(in srgb, var(--ys-ink-glow, var(--ys-accent)) 35%, transparent); }
+/* The window's head carries the launcher's own face, smaller: the same mark on the same ink round. */
+.bw-concierge-avatar { position:relative;width:36px;height:36px;border-radius:999px;background:var(--ys-ink);color:var(--ys-bg);display:grid;place-items:center;flex-shrink:0; }
+.bw-concierge-avatar-mark { height:15px; }
 .bw-concierge-online { position:absolute;right:-2px;bottom:-2px;width:11px;height:11px;border-radius:999px;background:var(--ys-accent);border:2px solid var(--ys-surface); }
 .bw-concierge-title-row { display:flex;align-items:center;gap:8px;flex-wrap:wrap; }
 .bw-support-dialog header strong { font-size:15px;font-weight:600;letter-spacing:-0.01em; }
@@ -1119,7 +1125,9 @@ body:has(.bw-triage-bulk) .bw-support-launch { translate:0 -76px; }
 .bw-concierge-welcome-top { display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px; }
 .bw-concierge-tag { font-family:var(--font-mono,monospace);font-size:10px;font-weight:600;letter-spacing:0.08em;color:var(--ys-kicker, var(--ys-gold)); }
 .bw-concierge-org-badge { font-size:11px;font-weight:600;color:var(--ys-ink);background:color-mix(in srgb, var(--ys-ink) 8%, transparent);padding:2px 8px;border-radius:999px; }
-.bw-support-bubble { background:var(--ys-bubble, linear-gradient(135deg,var(--ys-accent) 0%,#2E5F9F 100%));color:white;border-radius:16px 16px 4px 16px;padding:11px 14px;max-width:86%;align-self:flex-end;overflow-wrap:anywhere;box-shadow:var(--ys-bubble-shadow, 0 4px 14px color-mix(in srgb, var(--ys-accent) 22%, transparent)); }
+/* The brand's own message sits on the ink (--ys-bubble), so its words take the page's colour: white words on
+   the dark theme's near-white ink could not be read. */
+.bw-support-bubble { background:var(--ys-bubble, linear-gradient(135deg,var(--ys-accent) 0%,#2E5F9F 100%));color:var(--ys-bg);border-radius:16px 16px 4px 16px;padding:11px 14px;max-width:86%;align-self:flex-end;overflow-wrap:anywhere;box-shadow:var(--ys-bubble-shadow, 0 4px 14px color-mix(in srgb, var(--ys-accent) 22%, transparent)); }
 .bw-support-bubble[data-author='studio'] { background:var(--ys-raised);color:var(--ys-ink);border:1px solid color-mix(in srgb, var(--ys-ink) 12%, transparent);border-radius:16px 16px 16px 4px;align-self:flex-start;box-shadow:0 4px 14px rgba(15, 15, 20, 0.07); }
 .bw-support-bubble-meta { display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:4px; }
 .bw-support-bubble strong { font-size:11px;font-weight:600;opacity:0.9; }
@@ -1139,9 +1147,8 @@ body:has(.bw-triage-bulk) .bw-support-launch { translate:0 -76px; }
  .bw-featured-art,.bw-featured-art>*,.bw-featured-art img { min-height:190px;height:210px; }
  .bw-featured-copy { padding:22px; }
  .bw-brand-list { grid-template-columns:1fr; }
- .bw-support-launch { right:14px;bottom:18px;width:44px;height:44px;padding:0;justify-content:center;gap:0; }
- .bw-support-launch-label { display:none; }
- .bw-support-launch-dot { position:absolute;top:6px;right:6px; }
+ .bw-support-launch { right:14px;bottom:18px;width:44px;height:44px; }
+ .bw-support-launch-mark { height:18px; }
  .bw-contract-row .bw-button { font-size:12px; }
  .bw-contract-row .bw-form { flex-basis:100%; }
 }
@@ -3778,7 +3785,6 @@ html[data-brand-workspace]::view-transition-group(bw-tab-indicator) { animation-
 }
 :where([data-brand-workspace]) .bw-support-dialog[open] { animation: ys-rise-in var(--ys-dur-spring) var(--ys-spring) both; transform-origin: bottom right; }
 :where([data-brand-workspace]) :is(.bw-concierge-header, .bw-support-tools, .bw-support-messages, .bw-concierge-quick-chips, .bw-support-dialog form) { background: transparent; border-color: var(--ys-hairline); }
-:where([data-brand-workspace]) .bw-concierge-avatar { border-radius: 12px; box-shadow: var(--ys-shadow-1); }
 :where([data-brand-workspace]) .bw-support-bubble[data-author='studio'] { background: var(--ys-surface); border: 0; box-shadow: var(--ys-card); }
 :where([data-brand-workspace]) :is(.bw-studio-inquiry, .bw-invite-dialog) { border: 0; border-radius: 24px; box-shadow: var(--ys-float); }
 :where([data-brand-workspace]) :is(.bw-studio-inquiry, .bw-invite-dialog)[open] { animation: ys-rise-in var(--ys-dur-spring) var(--ys-spring) both; }

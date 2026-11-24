@@ -86,9 +86,16 @@ describe("the section as the page renders it", () => {
     const narrow = [...css.matchAll(/@media \(max-width: 899px\) \{([\s\S]*?)\n\}/g)].map((m) => m[1]!).join("\n");
     const pad = /\.brc-inbox-list \{\s*padding-bottom: calc\((\d+)px \+ env\(safe-area-inset-bottom, 0px\)\);/.exec(narrow);
     expect(pad).not.toBeNull();
-    // The button is at most 48px tall and sits at most 24px above the list's end (browser check at 390×844:
-    // list ends at 772, button 720–764). The clearance covers both, with room to spare.
-    expect(Number(pad![1])).toBeGreaterThanOrEqual(48 + 24 + 8);
+    // The clearance covers the button's height and its distance from the screen's edge, with room to spare.
+    // Both are read from the button's own rule (since 2026-11-25 a 52px round face, 24px off the edge; on a
+    // phone 44px, 18px off), so a bigger button cannot slip past this check.
+    const launch = /^\.bw-support-launch \{([^}]*)\}/m.exec(readFileSync(join(process.cwd(), "app", "(brand)", "workspace.css"), "utf8"));
+    expect(launch).not.toBeNull();
+    const height = Number(/(?:^|;)height:(\d+)px/.exec(launch![1]!)?.[1]);
+    const bottom = Number(/(?:^|;)bottom:(\d+)px/.exec(launch![1]!)?.[1]);
+    expect(height).toBeGreaterThanOrEqual(44);
+    expect(bottom).toBeGreaterThan(0);
+    expect(Number(pad![1])).toBeGreaterThanOrEqual(height + bottom + 8);
     // The button itself is not moved or restyled here (its only rule in this file hides it beside a conversation).
     const rules = css.replace(/\/\*[\s\S]*?\*\//g, "");
     expect(rules).not.toContain("bw-support-launch");

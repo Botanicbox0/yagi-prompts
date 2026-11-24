@@ -881,19 +881,17 @@
     width: 44px;
     height: 44px;
     border-radius: 22px;
-    background: transparent;
+    --launch-face: transparent;
+    --launch-mark: var(--ys-ink-secondary);
     box-shadow: none;
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
-    color: var(--ys-ink-secondary);
     translate: none;
     transform: none;
   }
   .bw-shell:has([data-brand-layout-mode="rail"]) ~ * .bw-support-launch:hover,
   .bw-shell:has([data-brand-layout-mode="rail"]) ~ .bw-support-launch:hover {
-    background: var(--ys-hover);
+    --launch-face: var(--ys-hover);
+    --launch-mark: var(--ys-ink);
     box-shadow: none;
-    color: var(--ys-ink);
     transform: none;
   }
   .bw-shell:has([data-brand-layout-mode="rail"]) ~ * .bw-support-launch:focus-visible,

@@ -96,17 +96,6 @@ export function homeLayout(input: HomeLayoutInput): HomeLayout | null {
   };
 }
 
-/**
- * When a brand has made nothing yet, the doors show one of the house's own frames, marked as an example.
- * Only files the brand host already serves to customers (lib/routing/surfaces.ts STUDIO_DEMO_FILES): the
- * landing's perfume cut and the poster of the editorial film the workspace showcase plays. No frame with
- * a real third-party name in it.
- */
-export const HOME_DOOR_EXAMPLES: Readonly<Record<HomeDoorKey, string>> = {
-  image: '/reel/landing/cut-pump.webp',
-  video: '/reel/brands/studio-editorial-blue-1080p.jpg',
-};
-
 export type HomeStarterKey = 'product' | 'look' | 'film';
 /**
  * "이렇게 시작해 보세요" for a brand that has made nothing yet: a house frame and a sentence that describes
@@ -123,8 +112,10 @@ export interface HomeResult {
   kind: 'image' | 'video';
   /** The picture the tile shows: the poster of a clip, the image itself otherwise; null for a clip without a poster. */
   src: string | null;
-  /** A clip without a poster: the tile shows its first frame (never autoplays). */
+  /** A clip without a poster: the tile shows a still frame of it (never autoplays). */
   clip: string | null;
+  /** A clip's file, with or without a poster: what the tile plays, muted, while the pointer is on it. */
+  play: string | null;
   width: number | null;
   height: number | null;
   /** Seconds in tenths, for a clip. */
@@ -138,9 +129,9 @@ const screenOf = (kind: StudioJobView['kind']): string => (kind === 'image' || k
 
 /**
  * The newest finished results of this brand, newest first, at most `limit`. A clip without a poster shows
- * its first frame; every internal "빈 곳 채우기" strip is left out.
+ * a still frame of itself; every internal "빈 곳 채우기" strip is left out.
  */
-export function homeResults(jobs: readonly StudioJobView[], organizationId: string, limit = 8): HomeResult[] {
+export function homeResults(jobs: readonly StudioJobView[], organizationId: string, limit = HOME_WALL_LIMIT): HomeResult[] {
   const out: HomeResult[] = [];
   for (const job of jobs) {
     if (job.status !== 'succeeded' || job.purpose === 'fill') continue;
@@ -157,6 +148,7 @@ export function homeResults(jobs: readonly StudioJobView[], organizationId: stri
         kind: output.kind,
         src,
         clip,
+        play: output.kind === 'video' ? output.url : null,
         width: output.width,
         height: output.height,
         seconds: output.kind === 'video' ? output.seconds : null,
@@ -167,13 +159,44 @@ export function homeResults(jobs: readonly StudioJobView[], organizationId: stri
   return out;
 }
 
-/** The newest result of each kind, for the two doors (null when the brand has none of that kind yet). */
-export function homeDoorPictures(jobs: readonly StudioJobView[], organizationId: string): Record<HomeDoorKey, HomeResult | null> {
-  const all = homeResults(jobs, organizationId, Number.POSITIVE_INFINITY);
-  return {
-    image: all.find((r) => r.kind === 'image') ?? null,
-    video: all.find((r) => r.kind === 'video') ?? null,
-  };
+/** How many results the home's wall shows (the page reads the newest 24 runs; the wall never asks for more). */
+export const HOME_WALL_LIMIT = 12;
+
+/** A tile's width over its height, from the result's own size. Kept between a tall phone frame and a wide strip. */
+export function homeTileRatio(result: Pick<HomeResult, 'kind' | 'width' | 'height'>): number {
+  const ratio = result.width && result.height ? result.width / result.height : result.kind === 'video' ? 16 / 9 : 4 / 5;
+  return Math.min(2.4, Math.max(0.5625, Math.round(ratio * 1000) / 1000));
+}
+
+export interface HomeWallRow<T> {
+  items: ReadonlyArray<{ item: T; ratio: number }>;
+  /** What is left of the row's width, in the same unit as the ratios: 0 for a full row, more for a short last row. */
+  rest: number;
+}
+
+/**
+ * The wall as rows of one height each: every tile keeps its own proportions, and a row is closed when its
+ * tiles' ratios add up to about `target` (a row's height is its width over that sum, so rows come out
+ * close to one another). A short last row keeps the height of a full one and leaves its end open: its
+ * tiles are never blown up to fill the line. Pure: the same results always give the same wall.
+ */
+export function homeWallRows<T>(items: readonly T[], ratioOf: (item: T) => number, target = 4.6): HomeWallRow<T>[] {
+  const rows: HomeWallRow<T>[] = [];
+  let row: Array<{ item: T; ratio: number }> = [];
+  let sum = 0;
+  for (const item of items) {
+    const ratio = ratioOf(item);
+    // Closing before this tile leaves the row nearer the target than taking it would.
+    if (row.length > 0 && Math.abs(sum - target) <= Math.abs(sum + ratio - target)) {
+      rows.push({ items: row, rest: 0 });
+      row = [];
+      sum = 0;
+    }
+    row.push({ item, ratio });
+    sum += ratio;
+  }
+  if (row.length > 0) rows.push({ items: row, rest: Math.max(0, Math.round((target - sum) * 1000) / 1000) });
+  return rows;
 }
 
 /* ------------------------------------------------------------------ the home on 야기 팀과 */

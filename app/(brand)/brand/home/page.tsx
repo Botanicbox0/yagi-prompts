@@ -18,7 +18,7 @@ import { allowanceViewWithRefill } from '@/lib/brand-studio/allowance-refill';
 import { allowanceView, loadAllowance } from '@/lib/brand-studio/usage';
 import { billingPlanCatalogue } from '@/lib/brands/billing-page-data';
 import { featureDenied, isSandboxedClientOrganization } from '@/lib/brands/features';
-import { brandHomeVisible, homeDoorPictures, homeLayout, homeResults, teamHomeProjects } from '@/lib/brands/workspace/home';
+import { brandHomeVisible, homeLayout, homeResults, teamHomeProjects } from '@/lib/brands/workspace/home';
 import { loadFirstRunChecklistState } from '@/lib/brands/workspace/home-checklist';
 import { homeChecklistDismissCookieName, readChecklistDismissedFromCookie } from '@/lib/brands/workspace/home-checklist-cookie';
 import { loadBrandWorkspace } from '@/lib/brands/workspace/service';
@@ -185,7 +185,6 @@ export default async function BrandWorkspaceHome({
       locale={studioLocale}
       layout={layout}
       allowance={allowanceForScreen}
-      doors={homeDoorPictures(jobs, choice.id)}
       reviews={reviews}
       results={homeResults(jobs, choice.id)}
       activeProjects={activeProjects}
@@ -200,11 +199,10 @@ export default async function BrandWorkspaceHome({
         home: dict.brandHome,
         shell: dict.studioShell,
         roomsNav: dict.roomsShell.nav,
-        roomTabCounts: dict.roomsShell.room.tabCounts,
-        roomStages: dict.roomsShell.overview.stages,
         inbox: dict.roomsChat.inbox,
         prompt: { label: dock.label, placeholder: { image: dock.placeholder, video: dock.placeholderVideo } },
         activeStatus: b.status.active,
+        allAssets: dict.studioLibrary.allAssets,
         closedRequestDraft: dock.closedRequestDraft,
         closedRequestOrgFallback: dock.closedRequestOrgFallback,
         billingCustomer: dict.brandBilling.customer,

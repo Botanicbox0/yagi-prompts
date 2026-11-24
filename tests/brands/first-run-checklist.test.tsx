@@ -151,7 +151,6 @@ describe('first run workspace creation & home checklist (Item 2)', () => {
           locale={locale}
           layout={layout}
           allowance={{ capKrw: 0, usedKrw: 0, resetsAt: '2026-12-01T00:00:00Z' }}
-          doors={{ image: null, video: null }}
           reviews={[]}
           results={[]}
           activeProjects={0}
@@ -168,11 +167,10 @@ describe('first run workspace creation & home checklist (Item 2)', () => {
             home: dict.brandHome,
             shell: dict.studioShell,
             roomsNav: dict.roomsShell.nav,
-            roomTabCounts: dict.roomsShell.room.tabCounts,
-            roomStages: dict.roomsShell.overview.stages,
             inbox: dict.roomsChat.inbox,
             prompt: { label: dict.brandStudio.dock.label, placeholder: { image: dict.brandStudio.dock.placeholder, video: dict.brandStudio.dock.placeholderVideo } },
             activeStatus: dict.brandWorkspace.status.active,
+            allAssets: dict.studioLibrary.allAssets,
             closedRequestDraft: dict.brandStudio.dock.closedRequestDraft,
             closedRequestOrgFallback: dict.brandStudio.dock.closedRequestOrgFallback,
           }}
@@ -207,7 +205,6 @@ describe('first run workspace creation & home checklist (Item 2)', () => {
           locale={locale}
           layout={layout}
           allowance={{ capKrw: 0, usedKrw: 0, resetsAt: '2026-12-01T00:00:00Z' }}
-          doors={{ image: null, video: null }}
           reviews={[]}
           results={[]}
           activeProjects={0}
@@ -217,11 +214,10 @@ describe('first run workspace creation & home checklist (Item 2)', () => {
             home: dict.brandHome,
             shell: dict.studioShell,
             roomsNav: dict.roomsShell.nav,
-            roomTabCounts: dict.roomsShell.room.tabCounts,
-            roomStages: dict.roomsShell.overview.stages,
             inbox: dict.roomsChat.inbox,
             prompt: { label: dict.brandStudio.dock.label, placeholder: { image: dict.brandStudio.dock.placeholder, video: dict.brandStudio.dock.placeholderVideo } },
             activeStatus: dict.brandWorkspace.status.active,
+            allAssets: dict.studioLibrary.allAssets,
             closedRequestDraft: dict.brandStudio.dock.closedRequestDraft,
             closedRequestOrgFallback: dict.brandStudio.dock.closedRequestOrgFallback,
           }}
@@ -237,7 +233,6 @@ describe('first run workspace creation & home checklist (Item 2)', () => {
           locale={locale}
           layout={layout}
           allowance={{ capKrw: 0, usedKrw: 0, resetsAt: '2026-12-01T00:00:00Z' }}
-          doors={{ image: null, video: null }}
           reviews={[]}
           results={[]}
           activeProjects={0}
@@ -254,11 +249,10 @@ describe('first run workspace creation & home checklist (Item 2)', () => {
             home: dict.brandHome,
             shell: dict.studioShell,
             roomsNav: dict.roomsShell.nav,
-            roomTabCounts: dict.roomsShell.room.tabCounts,
-            roomStages: dict.roomsShell.overview.stages,
             inbox: dict.roomsChat.inbox,
             prompt: { label: dict.brandStudio.dock.label, placeholder: { image: dict.brandStudio.dock.placeholder, video: dict.brandStudio.dock.placeholderVideo } },
             activeStatus: dict.brandWorkspace.status.active,
+            allAssets: dict.studioLibrary.allAssets,
             closedRequestDraft: dict.brandStudio.dock.closedRequestDraft,
             closedRequestOrgFallback: dict.brandStudio.dock.closedRequestOrgFallback,
           }}
@@ -278,14 +272,13 @@ describe('first run workspace creation & home checklist (Item 2)', () => {
       home: dict.brandHome,
       shell: dict.studioShell,
       roomsNav: dict.roomsShell.nav,
-      roomTabCounts: dict.roomsShell.room.tabCounts,
-      roomStages: dict.roomsShell.overview.stages,
       inbox: dict.roomsChat.inbox,
       prompt: {
         label: dict.brandStudio.dock.label,
         placeholder: { image: dict.brandStudio.dock.placeholder, video: dict.brandStudio.dock.placeholderVideo },
       },
       activeStatus: dict.brandWorkspace.status.active,
+      allAssets: dict.studioLibrary.allAssets,
       closedRequestDraft: dict.brandStudio.dock.closedRequestDraft,
       closedRequestOrgFallback: dict.brandStudio.dock.closedRequestOrgFallback,
       billingCustomer: dict.brandBilling.customer,
@@ -320,7 +313,6 @@ describe('first run workspace creation & home checklist (Item 2)', () => {
         locale="ko"
         layout={layout}
         allowance={{ capKrw: 0, usedKrw: 0, resetsAt: '2026-12-01T00:00:00Z' }}
-        doors={{ image: null, video: null }}
         reviews={[]}
         results={[]}
         activeProjects={0}
@@ -347,7 +339,6 @@ describe('first run workspace creation & home checklist (Item 2)', () => {
         locale="ko"
         layout={layout}
         allowance={{ capKrw: 100_000, usedKrw: 0, resetsAt: '2026-12-01T00:00:00Z' }}
-        doors={{ image: null, video: null }}
         reviews={[]}
         results={[]}
         activeProjects={0}
@@ -369,14 +360,13 @@ describe('first run workspace creation & home checklist (Item 2)', () => {
       home: dict.brandHome,
       shell: dict.studioShell,
       roomsNav: dict.roomsShell.nav,
-      roomTabCounts: dict.roomsShell.room.tabCounts,
-      roomStages: dict.roomsShell.overview.stages,
       inbox: dict.roomsChat.inbox,
       prompt: {
         label: dict.brandStudio.dock.label,
         placeholder: { image: dict.brandStudio.dock.placeholder, video: dict.brandStudio.dock.placeholderVideo },
       },
       activeStatus: dict.brandWorkspace.status.active,
+      allAssets: dict.studioLibrary.allAssets,
       closedRequestDraft: dict.brandStudio.dock.closedRequestDraft,
       closedRequestOrgFallback: dict.brandStudio.dock.closedRequestOrgFallback,
       billingCustomer: dict.brandBilling.customer,
