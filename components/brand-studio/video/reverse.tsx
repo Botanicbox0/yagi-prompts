@@ -52,6 +52,7 @@ import {
   setShotEnd,
   tableOf,
   type ChangeSlot,
+  type ClipNotice,
   type ReadState,
   type ReverseDraft,
   type ReverseProblem,
@@ -258,6 +259,7 @@ export function ReversePanel({ organizationId, locale, copy, video: t, initialOp
           table={table}
           allowed={allowed}
           uploading={uploading}
+          loaded={state !== null}
           canCreate={canCreate}
           runOpen={open4Run}
           allowanceWindow={state?.allowance.window ?? null}
@@ -289,6 +291,37 @@ export function reverseRunLine(
   return input.runOpen ? null : windowText(input.window, run.closed, run.closedCycle);
 }
 
+/**
+ * The clip's note and the reading's note, or null each. Neither promises a way the method cards mark
+ * unavailable: a clip too short to edit whose reading failed has only "참고 영상 붙여 만들기" left, and a
+ * failed reading only offers attach-or-edit when both are open. Existing sentences only.
+ */
+export function reverseNoteLines(
+  t: StudioVideoCopy,
+  copy: Pick<StudioCopy, "remix">,
+  notice: ClipNotice,
+  limits: { min: number; editMin: number; max: number },
+  read: { failed: boolean; allowed: Record<ReverseDraft["method"], boolean> },
+): { clip: string | null; read: string | null } {
+  const r = t.reverse;
+  const clip =
+    notice === "tooShort"
+      ? fillText(r.pick.tooShort, { min: limits.min })
+      : notice === "tooLong"
+        ? fillText(r.pick.tooLong, { max: limits.max })
+        : notice === "small"
+          ? r.pick.small
+          : notice === "large"
+            ? r.pick.large
+            : notice === "editShort"
+              ? read.failed
+                ? fillText(copy.remix.limitEdit, { n: limits.editMin, method: r.method.reference.title })
+                : fillText(r.pick.editShort, { n: limits.editMin })
+              : null;
+  const readLine = !read.failed ? null : read.allowed.reference && read.allowed.edit ? r.read.failed : t.remix.unreadable;
+  return { clip, read: readLine };
+}
+
 interface DrawerProps {
   t: StudioVideoCopy;
   copy: StudioCopy;
@@ -304,6 +337,8 @@ interface DrawerProps {
   table: FilmShot[];
   allowed: Record<ReverseDraft["method"], boolean>;
   uploading: "video" | ChangeSlot | null;
+  /** False until the studio state arrived: "no videos" and "view-only" are not known yet. */
+  loaded: boolean;
   canCreate: boolean;
   runOpen: boolean;
   /** R1: the allowance window; a billing cycle drops "this month" from the closed line. */
@@ -329,23 +364,15 @@ function ReverseDrawer(props: DrawerProps) {
   const disabled = !props.canCreate || props.busy;
   const notice = clip ? clipNotice(model, clip) : null;
   const limits = model.referenceVideoSeconds;
-  const noticeLine =
-    notice === "tooShort"
-      ? fillText(r.pick.tooShort, { min: limits.min })
-      : notice === "tooLong"
-        ? fillText(r.pick.tooLong, { max: limits.max })
-        : notice === "small"
-          ? r.pick.small
-          : notice === "large"
-            ? r.pick.large
-            : notice === "editShort"
-              ? fillText(r.pick.editShort, { n: limits.editMin })
-              : null;
   const sheet = read.status === "done" ? read.sheet : null;
+  const notes = reverseNoteLines(t, props.copy, notice, limits, { failed: read.status === "done" && !sheet, allowed });
+  const noticeLine = notes.clip;
   const remake = draft.method !== "edit";
   const numbers = imageNumbers(draft.images);
   const total = sheet?.seconds && sheet.seconds > 0 ? sheet.seconds : (clip?.seconds ?? table[table.length - 1]?.end ?? 0);
   const setTable = (next: FilmShot[]) => setDraft((current) => ({ ...current, shots: next }));
+  // Before the state arrives (or when it never does) nothing is known about rights or credits: the footer
+  // shows no line at all (`props.loaded` below), only the loading line or the load error above.
   const runLine = reverseRunLine(r.run, { canCreate: props.canCreate, runOpen: props.runOpen, window: props.allowanceWindow });
 
   return (
@@ -368,7 +395,7 @@ function ReverseDrawer(props: DrawerProps) {
         </header>
 
         <div className={s.drawerBody}>
-          {props.phase === "loading" && (
+          {(props.phase === "loading" || props.phase === "idle") && (
             <p className={s.quiet} role="status">
               {r.loading}
             </p>
@@ -415,7 +442,7 @@ function ReverseDrawer(props: DrawerProps) {
                 </div>
               </div>
             ) : (
-              <ClipPicker t={t} videos={props.videos} uploading={props.uploading === "video"} disabled={!props.canCreate} onChoose={props.onChoose} onUpload={(file) => props.onUpload(file, "video")} />
+              <ClipPicker t={t} videos={props.videos} loaded={props.loaded} uploading={props.uploading === "video"} disabled={!props.canCreate} onChoose={props.onChoose} onUpload={(file) => props.onUpload(file, "video")} />
             )}
           </section>
 
@@ -442,9 +469,9 @@ function ReverseDrawer(props: DrawerProps) {
                   {r.read.reading}
                 </p>
               )}
-              {read.status === "done" && !sheet && (
+              {notes.read && (
                 <p className={s.quiet} role="status">
-                  {r.read.failed}
+                  {notes.read}
                 </p>
               )}
               {sheet && (
@@ -658,15 +685,16 @@ function ReverseDrawer(props: DrawerProps) {
                 {props.notice}
               </p>
             )}
-            {runLine ? (
-              <p className={s.quiet}>{runLine}</p>
-            ) : (
-              <p className={s.quiet}>
-                <span className="bs-num">{fillText(r.run.left, { n: formatCredits(props.left, locale) })}</span>
-                {" · "}
-                {r.run.finalNote}
-              </p>
-            )}
+            {props.loaded &&
+              (runLine ? (
+                <p className={s.quiet}>{runLine}</p>
+              ) : (
+                <p className={s.quiet}>
+                  <span className="bs-num">{fillText(r.run.left, { n: formatCredits(props.left, locale) })}</span>
+                  {" · "}
+                  {r.run.finalNote}
+                </p>
+              ))}
           </div>
           <button
             type="button"
@@ -689,6 +717,7 @@ function ReverseDrawer(props: DrawerProps) {
 function ClipPicker({
   t,
   videos,
+  loaded,
   uploading,
   disabled,
   onChoose,
@@ -696,6 +725,8 @@ function ClipPicker({
 }: {
   t: StudioVideoCopy;
   videos: StudioAssetView[];
+  /** The library arrived: only then does an empty list mean "no videos yet". */
+  loaded: boolean;
   uploading: boolean;
   disabled: boolean;
   onChoose(asset: StudioAssetView): void;
@@ -728,7 +759,7 @@ function ClipPicker({
       </div>
       <p className={s.fieldLabel}>{r.pick.library}</p>
       {videos.length === 0 ? (
-        <p className={s.quiet}>{r.pick.empty}</p>
+        loaded ? <p className={s.quiet}>{r.pick.empty}</p> : null
       ) : (
         <ul className={s.clipGrid}>
           {videos.map((asset) => (
