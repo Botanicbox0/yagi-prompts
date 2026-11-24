@@ -13,7 +13,6 @@ import {
 import { createStudioApi, isFailure, measureInBrowser } from '@/components/brand-studio/api';
 import { fill as interpolate } from '@/components/brand-studio/copy';
 import {
-  openShareReview,
   ShareReviewDialog,
   useShareReviewEvent,
   type ShareReviewTarget,
@@ -84,6 +83,7 @@ import type { StudioComposeCopy } from '@/messages/studio-compose';
 import { AssistPanel, AssistPreviewBar } from './assist/assist-panel';
 import { useEditAssist } from './assist/use-edit-assist';
 import { makeComposeRequestId, postComposeOperation } from './compose-request';
+import { exportSaveFailureLine, openExportReview, saveExportedFilm } from './export-asset';
 import { startDeviceUploads, type ComposeUploadCopy, type DevicePick, type DeviceFileState } from './device-uploads';
 import { commitHistory, initHistory, mapHistory, redoHistory, replaceHistory, undoHistory, type History } from './history';
 import s from './video-composer.module.css';
@@ -1756,32 +1756,20 @@ export function VideoComposer({
     }
   };
 
+  // Saving and sharing the export go through ./export-asset.ts, which the editing studio v2 uses too.
   const uploadLastExportToAssets = async (): Promise<string | null> => {
     if (!canCreate || !lastExport || lastExport.mime !== 'video/mp4') return null;
     setSavingAsset(true);
     try {
-      const file = Object.assign(lastExport.blob, { name: lastExport.filename });
-      const res = await api.upload(file, {
-        measure: async () => ({
-          width: lastExport.width,
-          height: lastExport.height,
-          seconds: lastExport.durationSec,
-        }),
-      });
-      if (isFailure(res)) {
-        setStatusMessage(
-          res.code === 'asset_limit' || res.code === 'storage_quota_exceeded'
-            ? copy.status.saveQuotaExceeded
-            : copy.status.saveFailed,
-        );
+      const saved = await saveExportedFilm(api, lastExport);
+      if (!saved.ok) {
+        setStatusMessage(exportSaveFailureLine(copy.status, saved.code));
         return null;
       }
-      setSavedAssetId(res.asset.id);
-      setAssets((prev) => (prev.some((a) => a.id === res.asset.id) ? prev : [res.asset, ...prev]));
-      return res.asset.id;
-    } catch {
-      setStatusMessage(copy.status.saveFailed);
-      return null;
+      const asset = saved.asset;
+      setSavedAssetId(asset.id);
+      setAssets((prev) => (prev.some((a) => a.id === asset.id) ? prev : [asset, ...prev]));
+      return asset.id;
     } finally {
       setSavingAsset(false);
     }
@@ -1803,18 +1791,17 @@ export function VideoComposer({
       if (uploadedId) targetAssetId = uploadedId;
     }
 
-    openShareReview({
-      organizationId,
-      assetId: targetAssetId,
-      outputId: targetOutputId,
-      title,
-    });
-
-    if (targetAssetId || targetOutputId) {
-      setStatusMessage(copy.status.reviewOpened);
-    } else {
-      setStatusMessage(copy.status.reviewNeedsSave);
-    }
+    setStatusMessage(
+      openExportReview(
+        {
+          organizationId,
+          assetId: targetAssetId,
+          outputId: targetOutputId,
+          title,
+        },
+        copy.status,
+      ),
+    );
   };
 
   const handleExportNle = async () => {
