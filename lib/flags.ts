@@ -198,7 +198,9 @@ export function brandStudioEditAssistOpen(env: Record<string, string | undefined
  * organization ids (spaces around ids and empty entries ignored, ids compared exactly). For a listed
  * organization, and only while this flag is on, `/brand/studio/compose` sends the person to the new
  * editor after the studio guard (`brandStudioEditorV2DefaultFor`); `?classic=1` keeps the current editor.
- * The ids live only in the deployment's environment, never in the repository. Unset or empty: nobody.
+ * An entry `all` (any case) or `*`, anywhere in the list, counts every organization as listed; the studio
+ * guard still runs first. The ids live only in the deployment's environment, never in the repository.
+ * Unset or empty: nobody.
  */
 export function brandStudioEditorV2Open(env: Record<string, string | undefined> = process.env): boolean {
   return env.BRAND_STUDIO_EDITOR_V2 === 'on';

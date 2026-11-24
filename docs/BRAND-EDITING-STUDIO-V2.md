@@ -489,7 +489,7 @@
 **예시 필름**은 `/brand/studio/editor?sample=1`에 그대로 있다(구조 시안, 네 작업 공간 전부, 저장 없음). 예시 필름도 이제 내보낼 수 있다. 목록에 있는 조직에게 `?sample=1`은 `BRAND_WORKSPACE_PROTOTYPE_LAYER=on`일 때만 예시 필름을 연다(2026-11-24, 예전 편집기의 시안 링크와 같은 스위치). 꺼져 있으면(기본) 그 주소도 자기 영상을 연다. 목록에 없는 조직은 전과 같이 어떤 주소로도 예시 필름이다. 그래서 목록에 있는 조직으로 예시 필름을 쓰는 증명 스크립트(`scripts/editor-v2-export-check.py`, `editor-v2-frame-check.py`)는 서버에 `BRAND_WORKSPACE_PROTOTYPE_LAYER=on`이 있어야 한다.
 
 **조직별 스위치** (대표 결정 2026-11-21)
-- 환경변수 `BRAND_STUDIO_EDITOR_V2_ORGS`: 쉼표로 나눈 조직 id. 값은 배포 환경에만 있고 저장소에는 없다. `BRAND_STUDIO_EDITOR_V2=on`이고 목록에 있는 조직만 해당한다. 기본값은 지금과 같다(모든 조직이 예전 편집기).
+- 환경변수 `BRAND_STUDIO_EDITOR_V2_ORGS`: 쉼표로 나눈 조직 id. 값은 배포 환경에만 있고 저장소에는 없다. `BRAND_STUDIO_EDITOR_V2=on`이고 목록에 있는 조직만 해당한다. 목록 안 어디에든 `all`(대소문자 무관)이나 `*`가 있으면 모든 조직이 목록에 있는 것으로 친다(2026-11-23 커밋 `348cfe58`부터, `lib/flags.ts` `brandStudioEditorV2DefaultFor`). 스튜디오 가드는 그때도 먼저 돈다. 기본값은 지금과 같다(모든 조직이 예전 편집기).
 - **목록은 넘김만이 아니라 실제 영상을 여는 것 자체를 정한다**(리뷰 1차, "우리 조직부터"): 목록에 없는 조직은 `/brand/studio/editor`를 직접 열어도, `clip=`이 붙어 있어도 서버가 예시 필름만 준다. 그 조직의 에셋·결과물을 읽지 않고 저장된 영상에 쓰지 않는다. 운영이 지금 하는 것과 같다.
 - 목록에 있는 조직이 `/brand/studio/compose`를 열면 **서버가** 스튜디오 가드를 지난 뒤, 예전 편집기의 어떤 것도 읽거나 보내기 전에 `/brand/studio/editor`로 넘긴다(`organizationId`와 `clip=`만 가져간다). 레일, "+ 만들기", 홈, `clip=` 링크는 주소를 바꾸지 않았고 전부 이 넘김으로 새 편집기에 닿는다. 레일 코드는 고치지 않았다.
 - 예전 편집기로 돌아가기: 새 편집기의 "예전 편집기 열기"(왼쪽 위 화살표와 잠긴 작업 공간의 링크)는 `/brand/studio/compose?classic=1`을 연다. 이 표시가 붙어 있으면 넘기지 않고, 새로 고쳐도 그대로다.
