@@ -393,7 +393,7 @@ export function ClipTrimModal({
           className="bs-btn bs-icon-btn"
           data-variant="ghost"
           data-size="sm"
-          aria-label="Close"
+          aria-label={copy.close}
           disabled={processing}
           onClick={onClose}
         >
@@ -512,21 +512,21 @@ export function ClipTrimModal({
               type="button"
               className={w.trimHandle}
               data-side="start"
-              aria-label={`${copy.rangeLabel} start`}
+              aria-label={copy.rangeStart}
               onPointerDown={onTrimPointerDown("start")}
             />
             <button
               type="button"
               className={w.trimHandle}
               data-side="end"
-              aria-label={`${copy.rangeLabel} end`}
+              aria-label={copy.rangeEnd}
               onPointerDown={onTrimPointerDown("end")}
             />
           </div>
         </div>
 
         <div className={w.srSliders}>
-          <label htmlFor={`${id}-range-start`}>{copy.rangeLabel} start</label>
+          <label htmlFor={`${id}-range-start`}>{copy.rangeStart}</label>
           <input
             id={`${id}-range-start`}
             type="range"
@@ -538,7 +538,7 @@ export function ClipTrimModal({
               setRange((cur) => clampTrimRange(Number(ev.target.value), cur.end, total, minSeconds, maxSeconds, "start"))
             }
           />
-          <label htmlFor={`${id}-range-end`}>{copy.rangeLabel} end</label>
+          <label htmlFor={`${id}-range-end`}>{copy.rangeEnd}</label>
           <input
             id={`${id}-range-end`}
             type="range"

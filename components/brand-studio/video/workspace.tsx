@@ -280,6 +280,17 @@ export function VideoStudioWorkspace({
     revisionRef.current = projectRevision;
   }, [projectRevision]);
 
+  // The timeline as it is now, for work that resumes after a request (a run is sent before its project is made).
+  const timelineRef = useRef<ComposerProject>(timeline);
+  useEffect(() => {
+    timelineRef.current = timeline;
+  }, [timeline]);
+  // Bumped when the customer opens another project, starts a new one or deletes this one: what a press of
+  // 만들기 recorded belongs to the project that was open when it was pressed.
+  const projectContextRef = useRef(0);
+  // An accepted run's bookkeeping, done once the timeline holding its references is committed.
+  const [afterRun, setAfterRun] = useState<{ firstPrompt: string; context: number; refsChanged: boolean } | null>(null);
+
   useEffect(
     () => () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
@@ -310,6 +321,7 @@ export function VideoStudioWorkspace({
   /* --------------------------------------------- Video Projects API & Lazy Persistence */
 
   const applyLoadedProject = useCallback((detail: VideoProjectDetail) => {
+    projectContextRef.current += 1;
     setProjectId(detail.id);
     projectIdRef.current = detail.id;
     setProjectTitle(detail.title);
@@ -471,6 +483,17 @@ export function VideoStudioWorkspace({
     [canCreate, ensureLazyProjectCreated, organizationId],
   );
 
+  // After an accepted run (Lazy Create): make the project, or save the references onto the open one, from the
+  // committed timeline, so a clip that joined the sequence while the run was on its way is kept.
+  useEffect(() => {
+    if (!afterRun) return;
+    setAfterRun(null);
+    if (projectContextRef.current !== afterRun.context) return;
+    void ensureLazyProjectCreated({ nextTimeline: timeline, firstPrompt: afterRun.firstPrompt }).then((pid) => {
+      if (pid && afterRun.refsChanged) scheduleProjectSave(timelineRef.current);
+    });
+  }, [afterRun, timeline, ensureLazyProjectCreated, scheduleProjectSave]);
+
   const commitTimeline = useCallback(
     (next: ComposerProject) => {
       setTimeline(next);
@@ -481,6 +504,7 @@ export function VideoStudioWorkspace({
 
   const handleStartNewProject = useCallback(() => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    projectContextRef.current += 1;
     lazyRequestIdRef.current = makeProjectReqId("vp");
     setProjectId(null);
     projectIdRef.current = null;
@@ -1644,23 +1668,24 @@ export function VideoStudioWorkspace({
                     const trayAssetIds = dock.tray
                       .map((t) => t.assetId)
                       .filter((id): id is string => typeof id === "string" && id.length > 0);
-                    const nextTimeline = addProjectReferenceAssetIds(timeline, trayAssetIds);
-                    if (nextTimeline !== timeline) setTimeline(nextTimeline);
                     const submittedPrompt = dock.draft.prompt || dock.draft.change || "";
-                    void ensureLazyProjectCreated({
-                      nextTimeline,
-                      firstPrompt: submittedPrompt,
-                    }).then((pid) => {
-                      if (pid && nextTimeline !== timeline) {
-                        scheduleProjectSave(nextTimeline);
-                      }
-                    });
+                    const context = projectContextRef.current;
 
+                    // Lazy Create ("첫 생성 제출 또는 첫 클립 추가 시"): the project is made, and the references
+                    // recorded on it, only once a run was accepted. A press the bar refuses (empty prompt, unknown
+                    // mention, two reference videos …) or the server refuses leaves no project and no `?project=`.
+                    // Runs carry no video-project id, so making it right after the accepted run changes nothing
+                    // for the run; its clip joins the sequence when it lands, as before. If another project was
+                    // opened (or a new one started) meanwhile, nothing is recorded for this press.
                     void dock.submit().then((started) => {
-                      if (started) {
-                        setStageTab("history");
-                        setStatus(copy.state.started);
-                      }
+                      if (!started) return;
+                      setStageTab("history");
+                      setStatus(copy.state.started);
+                      if (projectContextRef.current !== context) return;
+                      const known = timelineRef.current;
+                      const refsChanged = addProjectReferenceAssetIds(known, trayAssetIds) !== known;
+                      setTimeline((prev) => addProjectReferenceAssetIds(prev, trayAssetIds));
+                      setAfterRun({ firstPrompt: submittedPrompt, context, refsChanged });
                     });
                   }}
                   onDropSource={attachSource}
@@ -1786,7 +1811,9 @@ export function VideoStudioWorkspace({
         locale={locale}
         copy={copy}
         video={videoCopy}
-        initialOpen={false}
+        // `?start=reverse` (the rail's "+" menu, with or without `&asset=`): open once on arrival. The panel
+        // reads this only as its first state, so a state refresh never reopens it after it was closed.
+        initialOpen={initialCreateMode === "blueprint"}
         initialAssetId={remixVideo?.assetId ?? initialAssetId}
         api={clientApi}
       />

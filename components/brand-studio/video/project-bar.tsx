@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type FocusEvent } from "react";
 import { fill as interpolate } from "@/components/brand-studio/copy";
 import type { VideoProjectStatus, VideoProjectSummary } from "@/lib/brand-studio/video-projects";
 import type { StudioVideoCopy } from "@/messages/studio-video";
@@ -63,6 +63,11 @@ export function VideoProjectBar({
   const [editingTitle, setEditingTitle] = useState(false);
   const [draftTitle, setDraftTitle] = useState(projectTitle);
   const wrapRef = useRef<HTMLDivElement>(null);
+  // Each menu with the button that opens it: a press anywhere else, the rest of this bar included, closes it.
+  const menuAnchorRef = useRef<HTMLDivElement>(null);
+  const sendAnchorRef = useRef<HTMLDivElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const sendButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     setDraftTitle(projectTitle);
@@ -70,15 +75,36 @@ export function VideoProjectBar({
 
   useEffect(() => {
     if (!menuOpen && !sendMenuOpen) return;
+    const anchor = menuOpen ? menuAnchorRef : sendAnchorRef;
+    const button = menuOpen ? menuButtonRef : sendButtonRef;
+    const close = () => {
+      setMenuOpen(false);
+      setSendMenuOpen(false);
+    };
     const onPointerDown = (event: MouseEvent) => {
-      if (wrapRef.current && !wrapRef.current.contains(event.target as Node)) {
-        setMenuOpen(false);
-        setSendMenuOpen(false);
-      }
+      if (anchor.current && !anchor.current.contains(event.target as Node)) close();
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      close();
+      button.current?.focus();
     };
     window.addEventListener("mousedown", onPointerDown);
-    return () => window.removeEventListener("mousedown", onPointerDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("mousedown", onPointerDown);
+      window.removeEventListener("keydown", onKey);
+    };
   }, [menuOpen, sendMenuOpen]);
+
+  /** Keyboard focus left a menu and its button (Tab to another control): fold it. */
+  const foldOnFocusOut = (event: FocusEvent<HTMLDivElement>) => {
+    const next = event.relatedTarget as Node | null;
+    if (next && !event.currentTarget.contains(next)) {
+      setMenuOpen(false);
+      setSendMenuOpen(false);
+    }
+  };
 
   const commitTitle = () => {
     setEditingTitle(false);
@@ -96,8 +122,9 @@ export function VideoProjectBar({
   return (
     <div ref={wrapRef} className={w.projectBar} data-video-project-bar>
       <div className={w.projectBarStart}>
-        <div className={w.projectDropdownAnchor}>
+        <div ref={menuAnchorRef} className={w.projectDropdownAnchor} onBlur={foldOnFocusOut}>
           <button
+            ref={menuButtonRef}
             type="button"
             className={w.projectDropdownBtn}
             aria-expanded={menuOpen}
@@ -236,8 +263,9 @@ export function VideoProjectBar({
         )}
 
         {canEdit && canSendClipToOtherProject && otherActiveProjects.length > 0 && (
-          <div className={w.projectDropdownAnchor}>
+          <div ref={sendAnchorRef} className={w.projectDropdownAnchor} onBlur={foldOnFocusOut}>
             <button
+              ref={sendButtonRef}
               type="button"
               className={w.projectStatusBtn}
               aria-expanded={sendMenuOpen}
