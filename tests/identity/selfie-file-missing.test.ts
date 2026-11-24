@@ -73,6 +73,31 @@ describe('a saved photo whose file is missing', () => {
     await expect(savedSelfiePhoto(h.sql, store(), USER.buyer, id)).rejects.toThrow('status 403');
   });
 
+  it('saving the same photo again brings a lost file back, so "choose a photo again" works with the photo the person still has', async () => {
+    const id = await save('#d6d6d6');
+    const key = await inputKey(id);
+    const original = objects.get(key)!;
+    objects.delete(key);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    // The studio's uploader sends the unreadable photo as `replaceId`; the same bytes are still that photo.
+    const again = await saveSelfie({ sql: h.sql, store: store(), limit: 1 }, USER.buyer, { bytes: await picture('#d6d6d6'), mime: 'image/png', consent: true, replaceId: id });
+    expect(again).toEqual({ ok: true, id, replaced: false, unchanged: true });
+    expect(objects.get(key)).toEqual(original);
+    expect(warn).toHaveBeenCalledWith('[identity] selfie_file_restored', { selfieId: id });
+    expect((await readSavedSelfie(h.sql, store(), USER.buyer, id)).ok).toBe(true);
+  });
+
+  it('a repeat save leaves a file that is there alone, and still lets a storage failure through', async () => {
+    const id = await save('#d6d6d6');
+    const writes: string[] = [];
+    const watched: RenderStore = { ...store(), put: async (key, bytes) => { writes.push(key); objects.set(key, bytes); } };
+    expect(await saveSelfie({ sql: h.sql, store: watched, limit: 1 }, USER.buyer, { bytes: await picture('#d6d6d6'), mime: 'image/png', consent: true })).toEqual({ ok: true, id, replaced: false, unchanged: true });
+    expect(writes).toEqual([]);
+    failure = new Error('render download failed: status 403');
+    await expect(saveSelfie({ sql: h.sql, store: watched, limit: 1 }, USER.buyer, { bytes: await picture('#d6d6d6'), mime: 'image/png', consent: true })).rejects.toThrow('status 403');
+    expect(writes).toEqual([]);
+  });
+
   it('the studio review skips an admin photo whose file is missing and fills the set with the guide portraits', async () => {
     const lost = await save('#d6d6d6', USER.buyer, 2);
     const kept = await save('#a0a0a0', USER.buyer, 2);

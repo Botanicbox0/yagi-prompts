@@ -112,8 +112,23 @@ async function lockOwner(sql: SqlRunner, userId: string): Promise<boolean> {
 }
 
 /**
+ * The same bytes as a photo whose file is gone (two were lost in the 2026-11-12 move to R2) put the
+ * file back, so "choose a photo again" also works with the very photo the person still has. A file
+ * that is there is left alone; any storage failure other than a missing object still throws.
+ */
+async function restoreSelfieFile(store: RenderStore, row: SelfieRow, bytes: Uint8Array): Promise<void> {
+  try {
+    await store.read(row.input_key);
+  } catch (error) {
+    if (!(error instanceof RenderObjectNotFound)) throw error;
+    await store.put(row.input_key, bytes, 'image/png');
+    console.warn('[identity] selfie_file_restored', { selfieId: row.id });
+  }
+}
+
+/**
  * Store a photo. The same bytes as ANY active photo (a double submit, a reload, the same file again)
- * are a no-op that returns that photo. `replaceId` swaps one active photo for the new one — the only
+ * are a no-op that returns that photo (restoring its file if it went missing). `replaceId` swaps one active photo for the new one — the only
  * way in once the library is full — and the new photo inherits its default; otherwise a new photo
  * needs a free slot, and the account's first one becomes the default. The object is written before
  * the row so a crash leaves an orphan file, never a row without bytes.
@@ -133,7 +148,10 @@ export async function saveSelfie(d: SelfieDeps, userId: string | null, input: { 
     if (!await lockOwner(sql, userId)) return { ok: false, code: 'sign_in_required' };
     const active = await listSelfies(sql, userId);
     const same = active.find(row => row.sha256 === sha256);
-    if (same) return { ok: true, id: same.id, replaced: false, unchanged: true };
+    if (same) {
+      await restoreSelfieFile(d.store, same, clean.bytes);
+      return { ok: true, id: same.id, replaced: false, unchanged: true };
+    }
     const target = input.replaceId === undefined ? null : active.find(row => row.id === input.replaceId) ?? null;
     if (input.replaceId !== undefined && !target) return { ok: false, code: 'not_found' };
     const recent = (await sql.query<{ n: number }>('select count(*)::int n from identity_selfies where user_id=$1 and created_at>$2', [userId, new Date(now.getTime() - 86400000)])).rows[0]?.n ?? 0;
