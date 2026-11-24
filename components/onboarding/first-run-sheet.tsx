@@ -1,10 +1,13 @@
 'use client';
 
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { Dictionary } from '@/messages/en';
 import { interpolate } from '@/lib/i18n/format';
 import { sheetKeyAction, trapFocusIndex } from '@/components/identity/selfie-sheet';
+import type { TemplateLook } from '@/lib/template-look/look';
+import { setFirstRunPending, snoozeLookQuestion } from '@/lib/template-look/store';
+import { LookChoice, postTemplateLook, type TemplateLookCopy } from '@/components/template-look/look-island';
 
 /**
  * The first-run sheet (docs/PLATFORM-2.0.md §3.2-1, founder 2026-10-22): the first time a new account
@@ -36,6 +39,11 @@ export function shouldShowFirstRun(answer: unknown): boolean {
   return typeof answer === 'object' && answer !== null && (answer as { show?: unknown }).show === true;
 }
 
+/** docs/PERSONAL-STUDIO.md §3.4.10 — the same answer says whether the template style is still to be chosen (switch on). */
+export function firstRunAsksLook(answer: unknown): boolean {
+  return shouldShowFirstRun(answer) && (answer as { lookUnset?: unknown }).lookUnset === true;
+}
+
 /**
  * One POST however many ways the sheet is closed. `keepalive` lets the record outlive a navigation
  * ("내 사진 미리 올려두기" leaves the page at once). A failure is swallowed: the sheet still closes,
@@ -54,23 +62,43 @@ export function createOnboardingRecorder(endpoint: string = ENDPOINT, fetchImpl:
   };
 }
 
-export function FirstRunSheet({ copy, locale, endpoint = ENDPOINT, initialOpen = false, initialStep = 0 }: {
+export function FirstRunSheet({ copy, locale, endpoint = ENDPOINT, initialOpen = false, initialStep = 0, look, initialAskLook = false }: {
   copy: Copy;
   locale: string;
   endpoint?: string;
   /** Server-markup seams for tests: render open, on this card (0-based). */
   initialOpen?: boolean;
   initialStep?: number;
+  /**
+   * docs/PERSONAL-STUDIO.md §3.4.10 — the template style words, handed in only with `TWINGS_TEMPLATE_LOOK=on`. Then the
+   * first card also asks the style when the account has none (the answer's `lookUnset`), and the standalone question
+   * waits while this sheet decides. Absent, the sheet is exactly as before.
+   */
+  look?: TemplateLookCopy;
+  /** Test seam: render the style question on the first card. */
+  initialAskLook?: boolean;
 }) {
   const [open, setOpen] = useState(initialOpen);
   const [step, setStep] = useState(Math.min(Math.max(initialStep, 0), STEPS - 1));
   const [entered, setEntered] = useState(false);
   const [portal, setPortal] = useState<HTMLElement | null>(null);
+  const [askLook, setAskLook] = useState(Boolean(look) && initialAskLook);
+  const [chosenLook, setChosenLook] = useState<TemplateLook | null>(null);
+  const [lookBusy, setLookBusy] = useState(false);
   const recorder = useRef(createOnboardingRecorder(endpoint));
   const dialogRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
   const titleId = useId();
   const bodyId = useId();
+  const lookLineId = useId();
+  const lookOn = Boolean(look);
+
+  // §3.4.10: while this sheet is deciding (and while it asks), the standalone style question waits.
+  useLayoutEffect(() => {
+    if (!lookOn || initialOpen) return;
+    setFirstRunPending(true);
+    return () => setFirstRunPending(false);
+  }, [lookOn, initialOpen]);
 
   // Ask once. A static page cannot know who is reading it; the session can.
   useEffect(() => {
@@ -79,14 +107,32 @@ export function FirstRunSheet({ copy, locale, endpoint = ENDPOINT, initialOpen =
     let cancelled = false;
     fetch(endpoint, { cache: 'no-store', credentials: 'same-origin' })
       .then((response) => (response.ok ? response.json() : null))
-      .then((answer: unknown) => { if (!cancelled && shouldShowFirstRun(answer)) setOpen(true); })
-      .catch(() => { /* no answer, no sheet */ });
+      .then((answer: unknown) => {
+        if (cancelled) return;
+        if (shouldShowFirstRun(answer)) {
+          if (lookOn) setAskLook(firstRunAsksLook(answer));
+          setOpen(true);
+        } else if (lookOn) setFirstRunPending(false);
+      })
+      .catch(() => { if (!cancelled && lookOn) setFirstRunPending(false); });
     return () => { cancelled = true; };
-  }, [endpoint, initialOpen]);
+  }, [endpoint, initialOpen, lookOn]);
 
   const dismiss = () => {
     setOpen(false);
     void recorder.current.record();
+    if (lookOn) {
+      // Closed without a style: it stays unset (everything visible) and is not asked again today.
+      if (askLook && chosenLook === null) snoozeLookQuestion();
+      setFirstRunPending(false);
+    }
+  };
+
+  const chooseLook = async (next: TemplateLook) => {
+    setLookBusy(true);
+    const stored = await postTemplateLook(next);
+    setLookBusy(false);
+    if (stored) setChosenLook(next);
   };
 
   // While open: the page under it does not scroll, and Escape closes it from anywhere.
@@ -175,6 +221,12 @@ export function FirstRunSheet({ copy, locale, endpoint = ENDPOINT, initialOpen =
               <span className="text-accent">{step + 1}.</span> {card.title}
             </h2>
             <p id={bodyId} className="mt-2 text-[0.95rem] leading-relaxed text-black/75">{card.body}</p>
+            {/* §3.4.10: the style, asked here once instead of on the list, on the card about picking a format. */}
+            {look && askLook && step === 0 && (
+              <div className="mt-4">
+                <LookChoice copy={look} chosen={chosenLook} busy={lookBusy} onChoose={(next) => void chooseLook(next)} lineId={lookLineId} />
+              </div>
+            )}
           </div>
           <ol aria-hidden="true" className="flex justify-center gap-2">
             {cards.map((_, index) => (

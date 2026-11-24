@@ -18,6 +18,8 @@ import { PromptDetailMedia } from './detail-media';
 import { PromptCardView } from './prompt-card';
 import { TypographicPoster, posterRatio } from './poster';
 import type { PromptLabels } from './labels';
+import { templateLookOpen } from '@/lib/flags';
+import { toTemplateAudience } from '@/lib/template-look/look';
 
 /**
  * PLAN §13.2 — the prompt detail page's sections.
@@ -461,6 +463,9 @@ export function RelatedPrompts({
   signinHref: string;
 }) {
   if (cards.length === 0) return null;
+  // docs/PERSONAL-STUDIO.md §3.4.10 — with the switch on, each card says who it is written for; the style island hides
+  // the other style's cards (and the section when none is left). Off, the markup is exactly as before.
+  const look = templateLookOpen();
 
   return (
     <section className="mt-16 border-t border-hairline pt-10">
@@ -471,7 +476,7 @@ export function RelatedPrompts({
           No three-column step — the related list is four cards, and 3 + 1 leaves an orphan. */}
       <ul data-related-grid className="mt-8 film-rows">
         {cards.map((card) => (
-          <li key={card.slug} data-related-item style={{ '--r': cardRatio(card) } as CSSProperties}>
+          <li key={card.slug} data-related-item {...(look ? { 'data-look': toTemplateAudience(card.look) } : {})} style={{ '--r': cardRatio(card) } as CSSProperties}>
             <PromptCardView
               card={card}
               locale={locale}

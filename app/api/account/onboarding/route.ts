@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { getViewer } from '@/lib/auth/viewer';
 import { getSqlRunner } from '@/lib/db/connect';
 import { resolveRequestUrl } from '@/lib/routing/surfaces';
+import { templateLookOpen } from '@/lib/flags';
+import { loadViewerLook, templateLookSchemaReady } from '@/lib/template-look/repo';
 
 /**
  * `GET /api/account/onboarding` — should this session see the first-run sheet? `{ show }`, true
@@ -43,7 +45,13 @@ export async function GET(_request?: Request): Promise<NextResponse> {
   if (sql === null) return json({ show: false });
   try {
     const { rows } = await sql.query<{ onboarded_at: Date | string | null }>('select onboarded_at from profiles where id = $1', [viewer.userId]);
-    return json({ show: rows.length === 1 && rows[0]!.onboarded_at === null });
+    const show = rows.length === 1 && rows[0]!.onboarded_at === null;
+    // docs/PERSONAL-STUDIO.md §3.4.10 — with the switch on (and 0190 applied), the sheet also asks the template style
+    // when the account has none. Off, the answer is exactly as before.
+    if (show && templateLookOpen() && (await templateLookSchemaReady(sql))) {
+      return json({ show, lookUnset: (await loadViewerLook(sql, viewer.userId)) === null });
+    }
+    return json({ show });
   } catch {
     // Before 0054 is applied the column is missing: the sheet waits rather than erroring the page.
     return json({ show: false });

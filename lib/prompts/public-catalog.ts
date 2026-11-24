@@ -5,7 +5,7 @@ import { resolveRuntimeMode } from '@/lib/runtime-mode';
 import { CATALOG_TTL_SECONDS, PROMPTS_TAG } from '@/lib/cache';
 import { getSqlRunner } from '@/lib/db/connect';
 import { readPublicProjection } from '@/lib/db/read-policy';
-import { coupleTemplatesOpen, petTemplatesOpen } from '@/lib/flags';
+import { coupleTemplatesOpen, petTemplatesOpen, templateLookOpen } from '@/lib/flags';
 import { EMPTY_PROMPT_CATALOG, loadPromptCatalog, type PromptCatalog } from './catalog';
 
 /**
@@ -62,9 +62,25 @@ async function readPromptCatalog(): Promise<PromptCatalog> {
 /** 2026-11-11 (`v14-cast`): `PromptCard.cast`; couple and pet templates leave the projection while their flag is off (both part of the key). */
 /** 2026-11-15 (`v15-rule-prices`): five creative templates moved to their rule price in the database (founder: no raise on company templates), `lens-portal-tutu` runtime 17 → 15 s. */
 /** 2026-11-24 (`v16-template-styling`): `PromptCard.styling` (docs/PERSONAL-STUDIO.md §3.4.9, S2), read from the prompts the compile reads. */
+/** 2026-11-25 (`v17-template-look`): `PromptCard.look` (docs/PERSONAL-STUDIO.md §3.4.10), only while `TWINGS_TEMPLATE_LOOK=on` (part of the key). */
+export const PROMPT_CATALOG_CACHE_VERSION = 'v17-template-look';
+
+/** The cache key: every input that changes the projection's shape, so a flag flip never serves the other shape. */
+export function promptCatalogCacheKey(): string[] {
+  return [
+    'prompt-catalog',
+    PROMPT_CATALOG_CACHE_VERSION,
+    resolveRuntimeMode(),
+    publicMediaCacheKey(),
+    coupleTemplatesOpen() ? 'couple-on' : 'couple-off',
+    petTemplatesOpen() ? 'pet-on' : 'pet-off',
+    templateLookOpen() ? 'look-on' : 'look-off',
+  ];
+}
+
 export const getPromptCatalog = unstable_cache(
   readPromptCatalog,
-  ['prompt-catalog', 'v16-template-styling', resolveRuntimeMode(), publicMediaCacheKey(), coupleTemplatesOpen() ? 'couple-on' : 'couple-off', petTemplatesOpen() ? 'pet-on' : 'pet-off'],
+  promptCatalogCacheKey(),
   {
     tags: [PROMPTS_TAG],
     revalidate: CATALOG_TTL_SECONDS,

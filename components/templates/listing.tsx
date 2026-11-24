@@ -10,6 +10,8 @@ import { PromptRail } from '@/components/prompts/rails';
 import { ListFilter, type FilterFacetView } from '@/components/prompts/filter-chips';
 import { promptLabels, useCaseLabel } from '@/components/prompts/labels';
 import { pillClassName } from '@/components/prompts/pill';
+import { templateLookOpen } from '@/lib/flags';
+import { TemplateLookIsland } from '@/components/template-look/look-island';
 
 /**
  * docs/TEMPLATES-IA.md §2 — one listing, two tabs. `/video` and `/image` render this with their
@@ -82,6 +84,9 @@ export function TemplatesListing({
     label: groupLabel[facet.group],
     options: facet.options.map((option) => ({ value: option.value, label: optionLabel(facet.group, option.value) })),
   }));
+  // docs/PERSONAL-STUDIO.md §3.4.10 — the template style, only with the switch on: the chip filter folds it into its own
+  // pass for the grid, the style island takes the cast shelves under it. Off, neither prop nor island exists.
+  const look = templateLookOpen();
 
   return (
     <div data-template-catalog={medium} className="audience-shell pt-24 pb-20 lg:pt-28">
@@ -90,7 +95,7 @@ export function TemplatesListing({
       <div className="mt-5 space-y-4">
         <MediumTabs locale={locale} dict={dict} active={medium} />
         {cards.length > 0 && (
-          <ListFilter rail={medium} facets={facets} total={cards.length} labels={{ heading: p.filterRowLabel, all: p.filterAll, count: p.filterCount, reset: p.filterReset }} />
+          <ListFilter rail={medium} facets={facets} total={cards.length} labels={{ heading: p.filterRowLabel, all: p.filterAll, count: p.filterCount, reset: p.filterReset }} {...(look ? { look: { few: dict.templateLook.few } } : {})} />
         )}
       </div>
 
@@ -124,6 +129,7 @@ export function TemplatesListing({
       {/* §15.3-5: the GEO definition ("TWINGS는 …") stays in the HTML for search and llms.txt
           readers, but under the grid — the first screen is the formats themselves. */}
       <p data-service-definition className="mt-16 max-w-2xl border-t border-hairline pt-6 text-sm leading-relaxed text-black/60">{dict.seo.definition}</p>
+      {look && <TemplateLookIsland copy={dict.templateLook} scope={{ exclude: cards.length > 0 ? [medium] : [] }} />}
     </div>
   );
 }

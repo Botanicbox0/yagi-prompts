@@ -19,6 +19,7 @@ import { LockRefusalNotice } from '@/components/admin/prompt-create-feedback';
 import { visibilityLabel, visibilityOptions } from '@/components/admin/labels';
 import type { Dictionary } from '@/lib/i18n/dictionaries';
 import type { PromptRow } from '@/lib/prompts/repo';
+import { TEMPLATE_AUDIENCES, type TemplateAudience } from '@/lib/template-look/look';
 import { adminMediaPath, promptAdminRef } from '@/lib/media/admin-authorize';
 import {
   AUDIO_MAX_BYTES,
@@ -279,7 +280,16 @@ export function LockBlockRefusalNote({ detail, dict }: { detail: string | undefi
   return <LockRefusalNotice lines={lines} className="mt-3 rounded-[10px] border border-accent px-3.5 py-2.5 text-[13px] text-accent" />;
 }
 
-export function PromptFields({ row, dict }: { row: PromptRow | null; dict: Dict }) {
+export function PromptFields({ row, dict, look }: {
+  row: PromptRow | null;
+  dict: Dict;
+  /**
+   * docs/PERSONAL-STUDIO.md §3.4.10 — the template's current style ('any' for a new one), handed in only once 0190 is
+   * applied (`promptLookSchemaReady`), whatever `TWINGS_TEMPLATE_LOOK` says: templates are labelled BEFORE the switch
+   * is turned on. Absent, the form has no select and the save leaves the style alone.
+   */
+  look?: TemplateAudience;
+}) {
   const a = dict.admin;
   const existing = row === null ? {} : parsePromptMedia(row.media);
   const creating = row === null;
@@ -428,6 +438,17 @@ export function PromptFields({ row, dict }: { row: PromptRow | null; dict: Dict 
             ))}
           </select>
         </Field>
+        {look !== undefined && (
+          <Field label={dict.templateLook.adminLabel}>
+            <select name="look" defaultValue={look} data-admin-look className={INPUT}>
+              {TEMPLATE_AUDIENCES.map((value) => (
+                <option key={value} value={value}>
+                  {value === 'any' ? dict.templateLook.adminAny : dict.templateLook[value]}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
         <Field label={a.fieldTemplatePrice} hint={a.templatePriceHint}>
           <input type="number" name="priceCents" min={0} step={1} defaultValue={row?.priceCents ?? 0} className={INPUT} />
         </Field>

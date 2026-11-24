@@ -11,6 +11,8 @@ import { recipeSchemaReady } from '@/lib/recipes/repo';
 import { parseTemplateLocks, publicLocks, type PublicTemplateLocks } from '@/lib/template-director/locks';
 import type { PublicTemplateStyling } from '@/lib/template-director/styling';
 import { templateCardStyling } from '@/lib/template-director/compile-prompts';
+import { templateLookOpen } from '@/lib/flags';
+import type { TemplateLook } from '@/lib/template-look/look';
 
 /**
  * PLAN §13.2 — the public card projection: "cards carry NO prompt text".
@@ -106,6 +108,12 @@ export interface PromptCard {
    * styling, so every other card is exactly as before. Names only: never the block or a line's words.
    */
   styling?: PublicTemplateStyling;
+  /**
+   * docs/PERSONAL-STUDIO.md §3.4.10 — the style the template is written for (0190), present ONLY when it is one style
+   * ('female' / 'male') and `TWINGS_TEMPLATE_LOOK=on`; absent = for anyone, so every card is exactly as before while
+   * the switch is off. Never in structured data.
+   */
+  look?: TemplateLook;
 }
 
 export interface PromptTotals {
@@ -279,6 +287,9 @@ export function toPromptCard(
     recipeOpen: openRecipes.has(row.id),
     ...(locks ? { locks } : {}),
     ...(styling ? { styling } : {}),
+    // The row carries `look` only while the switch is on (lib/prompts/repo.ts `columns()`); re-checked here so a card
+    // built from a stale row never shows a style the switch hides.
+    ...(row.look && templateLookOpen() ? { look: row.look } : {}),
   };
 }
 

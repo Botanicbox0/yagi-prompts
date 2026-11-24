@@ -9,6 +9,7 @@ import { HIDDEN_PROMPT_SLUGS, PROMPT_SENTINELS } from './prompt-fixtures';
 import { LOCAL_MAKER, LOCAL_RECIPE_CANARY, LOCAL_RECIPE_SLUG } from './maker-fixtures';
 import { CAST_SENTINELS } from './cast-fixtures';
 import { FIXED_PARTS_PROMPT_FIXTURES, FIXED_PARTS_SLUG, STYLED_PARTS_PROMPT_FIXTURES, STYLED_PARTS_SLUG } from './fixed-parts-fixtures';
+import { LOOK_FEMALE_SLUG, LOOK_MALE_SLUG, TEMPLATE_LOOK_PROMPT_FIXTURES } from './template-look-fixtures';
 import { RUNTIME_MODE_ENV } from '@/lib/runtime-mode';
 import { KO_TERMS } from '@/messages/ko';
 import { EN_TERMS } from '@/messages/en';
@@ -1079,6 +1080,24 @@ async function sweepTemplates(): Promise<void> {
       if (styled === 1) ok('…and on no card that declares none', 'one card carries data-style');
       else fail('…style on undeclared cards', `expected exactly 1 data-style, got ${styled}`);
     }
+    // docs/PERSONAL-STUDIO.md §3.4.10: the template style. The two labelled local samples are listed like any card;
+    // an anonymous visitor is never asked and never filtered, and nothing in the cached HTML is hidden. With the switch
+    // off (the default for this run) no card carries a style label at all; with TWINGS_TEMPLATE_LOOK=on set for the
+    // server AND this sweep, every card carries one and the two samples carry theirs.
+    expectPresent('the women’s-style sample is listed', page.body, `data-prompt-card="${LOOK_FEMALE_SLUG}"`);
+    expectPresent('…and the men’s-style sample', page.body, `data-prompt-card="${LOOK_MALE_SLUG}"`);
+    if (/data-prompt-item="true"[^>]*\shidden(=|\s|>)/.test(page.body)) fail('every card is visible in the HTML', 'a data-prompt-item carries hidden');
+    else ok('every card is visible in the HTML', 'no hidden card');
+    expectAbsent('…no style question for a visitor', page.body, 'data-look-question');
+    expectAbsent('…no "few so far" line in the HTML', page.body, 'data-look-few');
+    if (process.env.TWINGS_TEMPLATE_LOOK === 'on') {
+      expectPresent('…the women’s-style label (switch on)', page.body, 'data-look="female"');
+      expectPresent('…the men’s-style label (switch on)', page.body, 'data-look="male"');
+      expectPresent('…the rail’s "show other styles too" (hidden)', page.body, 'data-look-reveal');
+    } else {
+      expectAbsent('…no style label on any card (switch off)', page.body, 'data-look=');
+      expectAbsent('…no "show other styles too" (switch off)', page.body, 'data-look-reveal');
+    }
     // §15.3-5: the GEO definition is still in the HTML, under the grid rather than above it.
     {
       const definition = page.body.indexOf('data-service-definition');
@@ -1204,6 +1223,19 @@ async function sweepTemplates(): Promise<void> {
       expectAbsent(`${locale}: …no word of the template's prompt (${word})`, styledPage.body, word);
     }
     expectAbsent(`${locale}: …and no genre chips on the video`, styledPage.body, 'data-template-use-case');
+  }
+
+  // §3.4.10: a one-style template is always viewable directly; its style fact is there only with the switch on, and
+  // the mismatch line (viewer-specific) never reaches the cached HTML.
+  for (const locale of ['ko', 'en'] as const) {
+    const lookPage = await get(`/${locale}/t/${LOOK_MALE_SLUG}`);
+    expectEqual(`${locale}: the men's-style sample renders 200`, lookPage.status, 200);
+    expectPresent(`${locale}: …with its make button`, lookPage.body, 'data-make-cta');
+    expectAbsent(`${locale}: …no mismatch line in the HTML`, lookPage.body, 'data-look-mismatch');
+    const fact = locale === 'ko' ? '남성 스타일' : 'Men&#x27;s styles';
+    if (process.env.TWINGS_TEMPLATE_LOOK === 'on') expectPresent(`${locale}: …the style fact (switch on)`, lookPage.body, fact);
+    else expectAbsent(`${locale}: …no style fact (switch off)`, lookPage.body, fact);
+    expectAbsent(`${locale}: …no word of its prompt`, lookPage.body, TEMPLATE_LOOK_PROMPT_FIXTURES[1]!.sentinel);
   }
 
   const closed = await get(`/en/t/${CLOSED_TEMPLATE}`);

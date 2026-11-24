@@ -3,6 +3,10 @@ import { getSqlRunner } from '@/lib/db/connect';
 import { getLocaleFromHeaders } from '@/lib/i18n/server';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { LocaleToggle } from '@/components/locale-toggle';
+import { templateLookOpen } from '@/lib/flags';
+import type { TemplateLook } from '@/lib/template-look/look';
+import { loadViewerLook, templateLookSchemaReady } from '@/lib/template-look/repo';
+import { LookSetting } from '@/components/template-look/look-setting';
 import { AppHeader } from '@/components/app/app-header';
 import { selfieLibrary, selfieLimit, type SelfieLibrary } from '@/lib/identity/selfie-service';
 import { IDENTITY_SELFIE_PATH } from '@/lib/identity/links';
@@ -111,6 +115,9 @@ export default async function AccountPage({
   let deletionRequest: DeletionRequest | null = null;
   const socialOpen = influencersOpen();
   let social: { influencer: boolean; items: SocialAccountView[] } | null = null;
+  // docs/PERSONAL-STUDIO.md §3.4.10 — the template style row: only with the switch on AND 0190 applied (else no row).
+  const lookOpen = templateLookOpen();
+  let lookSetting: { value: TemplateLook | null } | null = null;
   try {
     viewer = await getViewer();
     if (viewer.userId !== null) {
@@ -130,6 +137,7 @@ export default async function AccountPage({
         if (monthly.status === 'fulfilled') { subscription = monthly.value; subscriptionLoaded = true; }
         if (face.status === 'fulfilled') selfies = face.value;
         if (deletion.status === 'fulfilled') deletionRequest = deletion.value;
+        if (lookOpen && (await templateLookSchemaReady(sql))) lookSetting = { value: await loadViewerLook(sql, userId) };
         // docs/PLATFORM-2.0.md §17.1 — the SNS card, only while TWINGS_INFLUENCERS is on.
         if (socialOpen) {
           social = await Promise.all([listSocialAccounts(sql, userId), isInfluencer(sql, userId)])
@@ -222,6 +230,11 @@ export default async function AccountPage({
             <Row term={copy.languageHeading}>
               <LocaleToggle current={locale} rest="/account" prefixed={false} />
             </Row>
+            {viewer?.userId && lookSetting && (
+              <Row term={dict.templateLook.settingsLabel}>
+                <LookSetting initial={lookSetting.value} copy={dict.templateLook} />
+              </Row>
+            )}
           </dl>
         </div>
 

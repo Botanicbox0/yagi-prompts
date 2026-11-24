@@ -1,7 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useLayoutEffect, useState } from 'react';
 import type { PromptCard } from '@/lib/prompts/catalog';
+import { cardVisible, facetsFromDataset, hiddenByLook } from '@/lib/prompts/facets';
+import { useViewerLook } from '@/components/template-look/use-viewer-look';
 import { templateHref, templatesHref } from '@/lib/prompts/links';
 import type { Locale } from '@/lib/i18n/config';
 import { getDictionary, type Dictionary } from '@/lib/i18n/dictionaries';
@@ -41,6 +43,12 @@ export interface SequenceDispatchProps {
   cardAuthorAnonymous: string;
   initialPlanTier?: ViewerPlanTier;
   copy?: Dictionary['creatorJourney']['sequenceDispatch'];
+  /**
+   * docs/PERSONAL-STUDIO.md §3.4.10 — true only with `TWINGS_TEMPLATE_LOOK=on`. This curation already sets `hidden` on
+   * every card of the home page, so the viewer's template style joins ITS pass (through `cardVisible`) instead of a
+   * second island fighting over the attribute, and the three films and the photo series above skip the other style.
+   */
+  look?: boolean;
 }
 
 /**
@@ -57,9 +65,13 @@ export function SequenceDispatchSection({
   cardAuthorPattern,
   cardAuthorAnonymous,
   initialPlanTier = 'standard',
-  copy: copyProp
+  copy: copyProp,
+  look = false,
 }: SequenceDispatchProps) {
   const copy = copyProp ?? getDictionary(locale).creatorJourney.sequenceDispatch;
+  const viewer = useViewerLook(look);
+  const viewerStyle = viewer?.look ?? null;
+  const viewerShowAll = viewer?.showAll ?? false;
   const [planTier, setPlanTier] = useState<ViewerPlanTier>(initialPlanTier);
   const [activeMedium, setActiveMedium] = useState<GalleryMediumTab>(() =>
     resolveDefaultMediumForPlan(initialPlanTier)
@@ -87,7 +99,8 @@ export function SequenceDispatchSection({
     }
   };
 
-  useEffect(() => {
+  // A layout effect so a chosen template style is applied before the hydrated page paints (§3.4.10).
+  useLayoutEffect(() => {
     const videoRail = document.querySelector<HTMLElement>('[data-rail="video"]');
     const imageRail = document.querySelector<HTMLElement>('[data-rail="image"]');
     const allVideoLink = document.querySelector<HTMLElement>('[data-all-video]')?.parentElement ?? document.querySelector<HTMLElement>('[data-all-video]');
@@ -95,6 +108,9 @@ export function SequenceDispatchSection({
 
     const effectiveImageOnly = activeMedium === 'image' || activeMood === 'photo-series';
     const effectiveVideoOnly = activeMedium === 'video';
+    // §3.4.10: per rail, what the style alone took away (drives each rail's "다른 스타일도 보기").
+    const styleState = look ? { look: viewerStyle, showAll: viewerShowAll } : null;
+    const perRail = new Map<HTMLElement, { visible: number; lookHidden: number }>();
 
     let matched = 0;
     for (const item of items) {
@@ -113,9 +129,32 @@ export function SequenceDispatchSection({
         activeMood === 'photo-series' ||
         moods.includes(activeMood);
 
-      const show = mediumMatch && moodMatch;
+      const curated = mediumMatch && moodMatch;
+      // The one visibility rule (lib/prompts/facets.ts): no chips here, the viewer's style only. Without the switch the
+      // style state is null and this is `curated` exactly as before.
+      const show = curated && cardVisible(facetsFromDataset(item.dataset), {}, styleState);
       item.hidden = !show;
       if (show) matched += 1;
+      if (styleState) {
+        const rail = item.closest<HTMLElement>('[data-rail]');
+        if (rail) {
+          const counts = perRail.get(rail) ?? { visible: 0, lookHidden: 0 };
+          if (show) counts.visible += 1;
+          else if (curated) counts.lookHidden += 1;
+          perRail.set(rail, counts);
+        }
+      }
+    }
+    if (styleState) {
+      for (const [rail, counts] of perRail) {
+        const reveal = rail.querySelector<HTMLElement>('[data-look-reveal]');
+        if (reveal) reveal.hidden = !(counts.visible === 0 && counts.lookHidden > 0);
+        // The video and image rails' own lines are handled below; the cast shelves' here.
+        if (rail !== videoRail && rail !== imageRail) {
+          const emptyLine = rail.querySelector<HTMLElement>('[data-rail-filtered-empty]');
+          if (emptyLine) emptyLine.hidden = counts.visible > 0 || counts.lookHidden === 0;
+        }
+      }
     }
 
     if (videoRail) {
@@ -148,14 +187,23 @@ export function SequenceDispatchSection({
 
     return () => {
       for (const item of items) item.hidden = false;
+      for (const rail of perRail.keys()) {
+        const reveal = rail.querySelector<HTMLElement>('[data-look-reveal]');
+        if (reveal) reveal.hidden = true;
+        const emptyLine = rail.querySelector<HTMLElement>('[data-rail-filtered-empty]');
+        if (emptyLine) emptyLine.hidden = true;
+      }
       if (videoRail) videoRail.style.display = '';
       if (imageRail) imageRail.style.display = '';
       if (allVideoLink) allVideoLink.style.display = '';
     };
-  }, [activeMood, activeMedium]);
+  }, [activeMood, activeMedium, look, viewerStyle, viewerShowAll]);
 
-  const topVideos = hotVideos.slice(0, 3);
-  const sortedImageSeries = [...imageSeries].sort((a, b) => Number(isForSale(b)) - Number(isForSale(a)));
+  // §3.4.10: the three films and the photo series above the rails skip the other style too (the server markup, which
+  // is the same for everyone, still lists them all; the switch off changes nothing here).
+  const styled = (card: PromptCard) => !look || !hiddenByLook(card, { look: viewerStyle, showAll: viewerShowAll });
+  const topVideos = hotVideos.filter(styled).slice(0, 3);
+  const sortedImageSeries = [...imageSeries].filter(styled).sort((a, b) => Number(isForSale(b)) - Number(isForSale(a)));
   const featuredImageSet = sortedImageSeries[0] ?? null;
   const secondarySeries = sortedImageSeries.filter((s) => s.slug !== featuredImageSet?.slug);
   const activeMoodObj =

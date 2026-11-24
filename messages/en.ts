@@ -6204,6 +6204,25 @@ export const en = {
     styleOutfitPhotoCta: 'Add an outfit photo',
     styleOutfitAttached: 'Made with the outfit photo you added.',
   },
+  // docs/PERSONAL-STUDIO.md §3.4.10 — the template style preference (TWINGS_TEMPLATE_LOOK). Provisional wording until
+  // the founder confirms. A style, never a gender; the women's style is listed first everywhere.
+  templateLook: {
+    female: "Women's styles",
+    male: "Men's styles",
+    question: "We'll show templates in the style you pick. You can change it any time in settings.",
+    later: 'Not now',
+    reveal: 'Show other styles too',
+    few: "There are only a few men's-style templates so far. New ones will appear here.",
+    mismatch: 'This template is outside the style you picked. You can still make it.',
+    factLabel: 'Style',
+    settingsLabel: 'Template style',
+    settingsHint: 'Lists show templates in this style and ones for everyone. Not set shows them all.',
+    unset: 'Not set',
+    saved: 'Saved.',
+    error: "Couldn't save. Please try again in a moment.",
+    adminLabel: 'For',
+    adminAny: 'Anyone',
+  },
 } as const;
 
 /**
