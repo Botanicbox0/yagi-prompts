@@ -29,6 +29,7 @@ import { RENDER_OPERATIONS } from './render-operations';
 import { PAYOUT_OPERATIONS } from './payout-operations';
 import { BILLING_PAYMENT_OPERATIONS } from './billing-payment-operations';
 import { SUPPORT_OPERATIONS } from './support-operations';
+import { ADULT_CONFIRMATION_OPERATIONS } from './adult-confirmation-operations';
 
 export type { BlockDraftInput };
 
@@ -100,6 +101,8 @@ export const ADMIN_OPERATIONS = {
   ...SUPPORT_OPERATIONS,
   // docs/RUNBOOK-deletion.md — the account deletion queue: delete now, mark done by hand, close.
   ...ACCOUNT_DELETION_OPERATIONS,
+  // docs/PERSONAL-STUDIO.md §6.1 — correct a stored 19+ answer's birth year (audited).
+  ...ADULT_CONFIRMATION_OPERATIONS,
 };
 
 export type AdminOperationName = keyof typeof ADMIN_OPERATIONS;

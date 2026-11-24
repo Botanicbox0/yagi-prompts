@@ -79,6 +79,9 @@ import {
 } from './cast-inputs';
 import { PARTNER_SLOT, PET_SLOT } from '@/lib/recipes/schema';
 import { checkPetPhoto, petRefusal, type PetPhotoVerdict } from './pet-photo-check';
+import { personalSunraFacesOpen } from '@/lib/flags';
+import type { PartnerCheckStamp } from './cast-inputs';
+import { partnerAtFulfilment, partnerIntake, type PartnerPhotoCheck, type PartnerRuleRefusal } from './partner-rules';
 
 /**
  * The render queue (docs/TEMPLATES-IA.md §8): enqueue, run, tell, show.
@@ -131,6 +134,8 @@ export interface RenderServiceDeps {
   pipelineMode?: RenderPipelineMode;
   /** docs/CAST-CATEGORIES.md §3 — the "is this really a pet" check; tests inject it, production calls Gemini. */
   petCheck?: (photo: SlotPhoto) => Promise<PetPhotoVerdict>;
+  /** docs/PERSONAL-STUDIO.md §6.2 — the partner photo check (switch on only); tests inject it, production calls Gemini. */
+  partnerCheck?: PartnerPhotoCheck;
 }
 
 export interface CreateCampaignRenderInput {
@@ -138,7 +143,7 @@ export interface CreateCampaignRenderInput {
   selfieId?: string; photo?: { bytes: Uint8Array; mime: string } | null; locale: string | null;
 }
 /** Selected campaign participation pays for production; no consumer plan or admin impersonation. */
-export async function createCampaignRenderJob(deps: RenderServiceDeps & { referenceStorage?: Pick<StorageDriver, 'read'> }, viewer: Viewer, input: CreateCampaignRenderInput): Promise<CreateRenderOutcome | { ok: false; code: CampaignProductionCode | 'consent_required' }> {
+export async function createCampaignRenderJob(deps: RenderServiceDeps & { referenceStorage?: Pick<StorageDriver, 'read'> }, viewer: Viewer, input: CreateCampaignRenderInput): Promise<Extract<CreateRenderOutcome, { ok: true }> | { ok: false; code: CreateRenderFailure | CampaignProductionCode | 'consent_required' }> {
   if (!viewer.userId) return { ok: false, code: 'sign_in_required' };
   if (input.ownFaceConsent !== true) return { ok: false, code: 'consent_required' };
   if (Object.keys(input).some(key => !['applicationId', 'requestId', 'ownFaceConsent', 'selfieId', 'photo', 'locale'].includes(key))) return { ok: false, code: 'invalid' };
@@ -201,7 +206,9 @@ export type CreateRenderFailure =
   /** The pet photo shows a person, or no animal (lib/renders/pet-photo-check.ts). */
   | 'not_a_pet'
   /** The pet check could not run; fail-closed, so the photo is refused. */
-  | 'pet_check_unavailable';
+  | 'pet_check_unavailable'
+  /** docs/PERSONAL-STUDIO.md §6.1–6.2, Sunra face switch on only: 19+ and the partner photo check (lib/renders/partner-rules.ts). */
+  | PartnerRuleRefusal;
 
 /** `held`: stored and waiting for the person's face check — the studio sends them there and the job starts itself afterwards. */
 export type CreateRenderOutcome = { ok: true; id: string; held: boolean } | { ok: false; code: CreateRenderFailure };
@@ -429,6 +436,7 @@ async function createAuthorizedRender(deps: RenderServiceDeps, viewer: Viewer, i
     }
   }
   const needed = extraSlots(makeInputs);
+  let partnerCheck: PartnerCheckStamp | undefined;
   if (needed.length > 0) {
     // A paid render's photos were bound to its render id when the order was made.
     const bound = await liveSlotRows(deps.sql, id);
@@ -445,6 +453,19 @@ async function createAuthorizedRender(deps: RenderServiceDeps, viewer: Viewer, i
     if (needed.includes(PARTNER_SLOT)) {
       const consented = slotPhotos.partner ? input.partnerConsent === true : Boolean(bound.find((row) => row.slot === PARTNER_SLOT)?.partner_consent_at);
       if (!consented) return { ok: false, code: 'partner_consent_required' };
+      // docs/PERSONAL-STUDIO.md §6.1–6.2, Sunra face switch on only, before anything is stored: a photo handed
+      // over now is checked now (19+ first; the entry route stored the answer); a paid order's bound photo
+      // was checked when the order was made and must carry that pass.
+      if (personalSunraFacesOpen()) {
+        if (slotPhotos.partner) {
+          const gate = await partnerIntake(deps.sql, { userId: viewer.userId, photo: slotPhotos.partner, answer: null, now }, deps.partnerCheck);
+          if (!gate.ok) return { ok: false, code: gate.code };
+          partnerCheck = gate.stamp;
+        } else {
+          const refused = await partnerAtFulfilment(deps.sql, { userId: viewer.userId, renderId: id, now });
+          if (refused) return { ok: false, code: refused };
+        }
+      }
     }
   }
 
@@ -466,7 +487,7 @@ async function createAuthorizedRender(deps: RenderServiceDeps, viewer: Viewer, i
   await deps.store.put(inputKey, primary.bytes, primary.mime);
   // Slot photos go in before the job does, so no pass can claim a job whose photos are not there yet.
   if (Object.keys(slotPhotos).length > 0) {
-    await storeSlotPhotos(deps.sql, deps.store, { renderId: id, userId: viewer.userId, templateId: template.id, photos: slotPhotos, partnerConsentAt: input.partnerConsent === true ? now : null, now });
+    await storeSlotPhotos(deps.sql, deps.store, { renderId: id, userId: viewer.userId, templateId: template.id, photos: slotPhotos, partnerConsentAt: input.partnerConsent === true ? now : null, now, ...(partnerCheck ? { partnerCheck } : {}) });
   }
   if (petIsPrimary(makeInputs)) {
     await recordPrimaryPetPhoto(deps.sql, { renderId: id, userId: viewer.userId, templateId: template.id, key: inputKey, mime: primary.mime, now });

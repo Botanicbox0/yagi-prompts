@@ -269,6 +269,8 @@ export interface StudioAccessSnapshot {
   open: boolean;
   live: boolean;
   signedIn: boolean;
+  /** Present only while the Sunra face switch is on (docs/PERSONAL-STUDIO.md §6.1); see /api/renders/access. */
+  adultConfirmed?: boolean;
 }
 
 /** Where the phone's sticky CTA hands the focus: the first thing to press in the make card, in page order. */
@@ -375,7 +377,10 @@ export function TwingsStudio({
   const needs = chosen?.castInputs ?? { selfie: true, pet: false, partner: false };
   const needsCast = needs.pet || needs.partner;
   const [castPhotos, setCastPhotos] = useState<CastPhotoState>(EMPTY_CAST_PHOTOS);
-  const castReady = castPhotosReady(needs, castPhotos);
+  // docs/PERSONAL-STUDIO.md §6.1: null = the access call carries no age field (switch off), so nothing is asked.
+  const [adultConfirmed, setAdultConfirmed] = useState<boolean | null>(initialAccess?.adultConfirmed ?? null);
+  const askAdult = needs.partner && adultConfirmed === false;
+  const castReady = castPhotosReady(needs, castPhotos, askAdult);
   const selfieReady = !needs.selfie || chosenSelfie !== null;
   // The price the button names: the chosen resolution's, else a selective frame override, else the style's base price.
   const chosenResolution = chosen?.resolutions?.find((option) => option.id === resolution) ?? chosen?.resolutions?.[0] ?? null;
@@ -421,9 +426,10 @@ export function TwingsStudio({
       const request = ++latest;
       return fetch(accessUrl, { cache: 'no-store', credentials: 'same-origin' })
       .then((response) => (response.ok ? response.json() : { live: false }))
-      .then((json: { open?: boolean; live?: boolean; charge?: boolean; identityRequired?: boolean; identity?: string; signedIn?: boolean; interest?: boolean; selfie?: SelfieView | null; subscription?: typeof subscription; subscriptionEligible?: boolean; editing?: boolean; subscriptionUsePercent?: number | null; subscriptionUseByResolution?: Record<string, number> | null; editFields?: string[]; premiumEditBudget?: unknown; recipe?: PublicRecipe | null }) => {
+      .then((json: { open?: boolean; live?: boolean; charge?: boolean; identityRequired?: boolean; identity?: string; signedIn?: boolean; interest?: boolean; selfie?: SelfieView | null; subscription?: typeof subscription; subscriptionEligible?: boolean; editing?: boolean; subscriptionUsePercent?: number | null; subscriptionUseByResolution?: Record<string, number> | null; editFields?: string[]; premiumEditBudget?: unknown; recipe?: PublicRecipe | null; adultConfirmed?: boolean }) => {
         if (cancelled || request !== latest) return;
         setAccessKnown(true);
+        setAdultConfirmed(typeof json.adultConfirmed === 'boolean' ? json.adultConfirmed : null);
         setLiveMode(json.live === true);
         setShopOpen(json.open === true);
         setCharge(json.charge !== false);
@@ -577,6 +583,8 @@ export function TwingsStudio({
         if (needs.partner && castPhotos.partner) {
           form.set('slot_partner', await shrinkPhoto(castPhotos.partner, 1_400_000));
           if (castPhotos.partnerConsent) form.set('partnerConsent', 'yes');
+          if (askAdult && castPhotos.birthYear) form.set('birthYear', castPhotos.birthYear);
+          if (askAdult && castPhotos.adultAttested) form.set('adultAttested', 'yes');
         }
       }
       // Behind the face check: hold the job with its photo and go verify — the callback starts it.
@@ -842,10 +850,11 @@ export function TwingsStudio({
             onChange={(next) => {
               setCastPhotos(next);
               setLiveError(null);
-              if (castPhotosReady(needs, next) && selfieReady) setPhase((current) => (current === 'photo' ? (single ? 'pay' : 'style') : current));
+              if (castPhotosReady(needs, next, askAdult) && selfieReady) setPhase((current) => (current === 'photo' ? (single ? 'pay' : 'style') : current));
             }}
             copy={live.cast}
             disabled={submitting}
+            adult={askAdult}
           />
         )}
         <div className="flex flex-col">
@@ -1081,9 +1090,9 @@ export function TwingsStudio({
                     {selfie ? live.selfie?.needChoice ?? labels.needPhoto : live.selfie?.needSelfie ?? labels.needPhoto}
                   </p>
                 )}
-                {selfieReady && live.cast && castPhotoHint(needs, castPhotos, live.cast) && (
+                {selfieReady && live.cast && castPhotoHint(needs, castPhotos, live.cast, askAdult) && (
                   <p id="studio-cta-hint" data-studio-hint data-cast-hint className="mt-2 text-sm text-accent">
-                    {castPhotoHint(needs, castPhotos, live.cast)}
+                    {castPhotoHint(needs, castPhotos, live.cast, askAdult)}
                   </p>
                 )}
                 {subscriptionAvailable && photo && !ownFaceConsent && subscriptionCopy && <p className="mt-2 text-xs text-accent">{subscriptionCopy.studioConsentHint}</p>}

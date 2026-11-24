@@ -132,6 +132,41 @@ export interface StoreSlotPhotosInput {
   /** When the uploader confirmed the partner agreed; required with a partner photo. */
   partnerConsentAt: Date | null;
   now: Date;
+  /**
+   * docs/PERSONAL-STUDIO.md §6.2 — the partner photo check this photo passed (lib/renders/partner-rules.ts),
+   * given only while the Sunra face switch is on. Left out, nothing about the check is written (as before);
+   * given, the partner row records it (null clears it), and a database without 0188's columns throws.
+   */
+  partnerCheck?: PartnerCheckStamp | null;
+}
+
+/** When a partner photo passed the check. The stored verdict is always `PARTNER_CHECK_PASS`: a refused photo is never stored. */
+export interface PartnerCheckStamp { checkedAt: Date }
+export const PARTNER_CHECK_PASS = { verdict: 'pass', check: 'partner-photo-v1' } as const;
+
+/** True when `render_slot_inputs` has 0188's `photo_check` and `photo_checked_at`. Quietly false otherwise. */
+export async function photoCheckColumnsReady(sql: SqlRunner): Promise<boolean> {
+  try {
+    const { rows } = await sql.query<{ n: number }>(
+      `select count(*)::int as n from information_schema.columns
+        where table_schema = 'public' and table_name = 'render_slot_inputs' and column_name in ('photo_check', 'photo_checked_at')`,
+    );
+    return Number(rows[0]?.n) === 2;
+  } catch {
+    return false;
+  }
+}
+
+/** The live partner photo bound to this render id passed the check, or null (no pass, no columns, no photo). */
+export async function partnerCheckStamp(sql: SqlRunner, renderId: string): Promise<PartnerCheckStamp | null> {
+  if (!(await photoCheckColumnsReady(sql))) return null;
+  const { rows } = await sql.query<{ photo_checked_at: Date | string }>(
+    `select photo_checked_at from render_slot_inputs
+      where render_id = $1 and slot = 'partner' and deleted_at is null
+        and photo_check->>'verdict' = $2 and photo_checked_at is not null`,
+    [renderId, PARTNER_CHECK_PASS.verdict],
+  );
+  return rows[0] ? { checkedAt: new Date(rows[0].photo_checked_at) } : null;
 }
 
 /** Write the files, then the rows. A partner photo without the confirmation is refused before anything is written. */
@@ -150,6 +185,13 @@ export async function storeSlotPhotos(sql: SqlRunner, store: RenderStore, input:
          partner_consent_at = excluded.partner_consent_at, created_at = excluded.created_at, expires_at = excluded.expires_at, deleted_at = null`,
       [input.renderId, slot, input.userId, input.templateId, key, photo.mime, slot === PARTNER_SLOT ? input.partnerConsentAt : null, input.now, expires],
     );
+    if (slot === PARTNER_SLOT && input.partnerCheck !== undefined) {
+      const stamp = input.partnerCheck;
+      await sql.query(
+        `update render_slot_inputs set photo_check = $3::jsonb, photo_checked_at = $4 where render_id = $1 and slot = $2`,
+        [input.renderId, slot, stamp ? JSON.stringify(PARTNER_CHECK_PASS) : null, stamp ? stamp.checkedAt : null],
+      );
+    }
   }
 }
 

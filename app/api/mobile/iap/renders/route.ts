@@ -6,6 +6,7 @@ import { savedSelfiePhoto } from '@/lib/identity/selfie-service';
 import { identityVerifyHref } from '@/lib/identity/links';
 import { detectStorePlatformFromRequest, isNativeStoreApp } from '@/lib/mobile/store-bridge';
 import { castFormPhotos } from '@/lib/renders/cast-form';
+import { recordAdultAnswerFromForm } from '@/lib/account/adult-confirmation';
 import { runLiveRenderPass } from '@/lib/renders/runtime';
 import {
   createStoreIapRenderJob,
@@ -41,6 +42,15 @@ const STATUS: Record<CreateStoreIapRenderFailure, number> = {
   partner_consent_required: 400,
   not_a_pet: 400,
   pet_check_unavailable: 503,
+  // docs/PERSONAL-STUDIO.md §6.1–6.2 — only while the Sunra face switch is on; refused before any credit is spent.
+  adult_confirmation_required: 400,
+  adult_only: 403,
+  adult_check_unavailable: 503,
+  partner_not_one_person: 400,
+  partner_unclear: 400,
+  partner_minor: 400,
+  partner_screen: 400,
+  partner_check_unavailable: 503,
   insufficient_credits: 402,
 };
 
@@ -91,6 +101,9 @@ export async function POST(request: Request): Promise<NextResponse> {
       ? { bytes: new Uint8Array(await photo.arrayBuffer()), mime: photo.type }
       : null) ??
     (selfieId ? null : (cast.slots.pet ?? null));
+  // docs/PERSONAL-STUDIO.md §6.1 — switch on only: the 19+ answer is stored once, outside the credit
+  // transaction (a first failing answer is kept even though that transaction rolls back on the refusal).
+  await recordAdultAnswerFromForm(sql, viewer.userId, form);
 
   const outcome = await createStoreIapRenderJob({ sql, store }, viewer, {
     storePlatform: platform,
