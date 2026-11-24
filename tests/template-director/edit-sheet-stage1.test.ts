@@ -17,6 +17,7 @@ import { POST as directorPOST } from '@/app/api/template-director/route';
 import {
   DIRECTOR_EDITABLE_SLOTS,
   GEMINI_DIRECTOR_DEFAULT_MODEL,
+  STAGE1_CHIPS_OUTPUT_CONTRACT_LINE,
   createFlashTemplateDirector,
   runHeuristicDirectorTurn,
   toClientDirectorTurnResponse,
@@ -216,7 +217,7 @@ describe('heuristic Stage 1 with a sheet', () => {
 });
 
 describe('flag-off parity of Stage 1', () => {
-  it('sends today\'s system text and payload when no sheet is given', async () => {
+  it('sends today\'s system text (plus the output contract, live fix 2026-11-24) and payload when no sheet is given', async () => {
     const fetchMock = vi.fn(async () =>
       geminiJson({ approved: true, refusal: 'none', replyKo: '반영했어요.', guardrailAdjustmentKo: null, readyToRender: true, summaryChips: [], structuredIntent: null }),
     );
@@ -229,6 +230,7 @@ describe('flag-off parity of Stage 1', () => {
         'You ONLY see the public Korean shot summary (templateSummaryKo), editableSlots, and user references.',
         'Translate the user request into Korean summaryChips and a sanitized English structuredIntent for the allowed slots.',
         'If the user asks for extreme facial distortion (shouting, wide-open mouth, acrobatics, staring stiffly into the lens), soften it into calm, candid off-axis micro-acting and explain the adjustment in guardrailAdjustmentKo.',
+        STAGE1_CHIPS_OUTPUT_CONTRACT_LINE,
       ].join('\n'),
     );
     expect(Object.keys(payload)).toEqual(['templateId', 'templateSummaryKo', 'editableSlots', 'userMessage', 'attachedReferences']);
