@@ -17,7 +17,7 @@ import type { Dictionary } from "@/lib/i18n/dictionaries";
 import { isFailure, uploadProblem, type StudioApi } from "./api";
 import { ClosedAllowanceBanner } from "./closed-allowance-banner";
 import { EXAMPLES, jobsFor } from "./board";
-import { errorLine, newRequestId, studioUploadErrorLine, type StudioCopy, type StudioLocale } from "./copy";
+import { errorLine, loadFailedLine, newRequestId, studioUploadErrorLine, type StudioCopy, type StudioLocale } from "./copy";
 import { AllowanceLine, Dock } from "./dock";
 import { DRAFT_RESOLUTION, dockCredits, regionEditInput, regionEditModel, regionEditModels, remixActive, remixFit, withMedium, type EnhancePreviewInput } from "./dock-model";
 import { Explainer } from "./explainer";
@@ -31,7 +31,7 @@ import { trayItemFromAsset, trayItemFromOutput, trayLabels, withRecognisedRoles,
 import { ShareReviewDialog, useShareReviewEvent, type ShareReviewTarget } from "./share-review-dialog";
 import { libraryKey, type LayerEditorProps, type LayerEditorRegionPreset } from "./seams";
 import { fillSourcesToDelete, findOutput, listedJobs } from "./store";
-import { useDock } from "./use-dock";
+import { designedSentence, useDock } from "./use-dock";
 import { useStudio } from "./use-studio";
 import { ImageProjectBar } from "./video/project-bar";
 import { sourceOf, useViewer } from "./use-viewer";
@@ -839,7 +839,7 @@ export function StudioApp({ organizationId, organizationName, locale, copy, bill
         {studio.store.phase === "failed" && (
           <div className="bs-banner" role="alert" data-studio-load-failed>
             <p>
-              {copy.state.loadFailed} {errorLine(copy, studio.store.code)}
+              {loadFailedLine(copy, studio.store.code)}
             </p>
             <button type="button" className="bs-btn" data-variant="soft" data-size="sm" onClick={() => void studio.load()}>
               {copy.state.retry}
@@ -1132,7 +1132,8 @@ export function StudioApp({ organizationId, organizationName, locale, copy, bill
                     }
                     const { requestId: _dropped, ...previewInput } = built;
                     const result = await studio.enhancePrompt(previewInput as EnhancePreviewInput);
-                    if (isFailure(result) || !result.prompt.trim()) {
+                    // The server's fallback is not a design: the same failure line as the prompt bar (use-dock `designedSentence`).
+                    if (isFailure(result) || !designedSentence(result)) {
                       return { ok: false, message: copy.dock.enhanceFailed };
                     }
                     return { ok: true, finalPrompt: result.prompt.trim() };

@@ -8,6 +8,7 @@ import type { z } from "zod";
 import type { FilmSheet, ReviseMarkReadSchema, StudioAssetView, StudioFailure, StudioJobCreate, StudioJobGroupCreate, StudioJobView, StudioProjectRef, StudioReviseMarkRead, StudioState } from "@/lib/brand-studio/contracts";
 import { createStudioApi, isFailure, measureInBrowser, type ApiResult, type StudioApi, type StudioOps } from "./api";
 import { newRequestId } from "./copy";
+import type { RefSource } from "./refs";
 import { createPollLoop, type PollLoop } from "./poller";
 import { STUDIO_JOB_SETTLED, STUDIO_JOB_STARTED, announce } from "./seams";
 import { initialStore, isOpen, studioReducer } from "./store";
@@ -183,16 +184,32 @@ export function useStudio({
     });
   }, [api]);
 
+  /**
+   * Who to tell when this member deletes an asset or a result and the server said yes: the prompt bar drops
+   * it (use-dock.ts). Only these explicit deletes count; a reload that no longer lists something never does.
+   */
+  const deletedListeners = useRef(new Set<(source: RefSource) => void>());
+  const onSourceDeleted = useCallback((listener: (source: RefSource) => void) => {
+    deletedListeners.current.add(listener);
+    return () => {
+      deletedListeners.current.delete(listener);
+    };
+  }, []);
+  const notifyDeleted = useCallback((source: RefSource) => {
+    for (const listener of deletedListeners.current) listener(source);
+  }, []);
+
   const deleteAsset = useCallback(
     async (assetId: string) => {
       const result = await api.call("asset.delete", { organizationId, assetId });
       if (!isFailure(result)) {
         dispatch({ type: "assetRemoved", id: assetId });
+        notifyDeleted({ assetId });
         refreshSilently();
       }
       return result;
     },
-    [api, organizationId, refreshSilently],
+    [api, organizationId, refreshSilently, notifyDeleted],
   );
 
   const handoff = useCallback((input: StudioOps["handoff.campaign"][0]) => api.call("handoff.campaign", input), [api]);
@@ -226,11 +243,12 @@ export function useStudio({
       const result = await api.call("output.delete", { organizationId, outputId });
       if (!isFailure(result)) {
         dispatch({ type: "outputRemoved", outputId });
+        notifyDeleted({ outputId });
         refreshSilently();
       }
       return result;
     },
-    [api, organizationId, refreshSilently],
+    [api, organizationId, refreshSilently, notifyDeleted],
   );
 
   /** Takes a run that ended with no result off the wall (the server keeps the row). */
@@ -297,7 +315,7 @@ export function useStudio({
     [api, refreshSilently],
   );
 
-  return { store, load, createJob, createGroup, assignProject, createProject, cancelJob, saveOutput, deleteOutput, deleteJob, updateAsset, deleteAsset, handoff, enhancePrompt, planRevision, talkRevision, readMark, films, analyzeFilm, uploads, upload };
+  return { store, load, createJob, createGroup, assignProject, createProject, cancelJob, saveOutput, deleteOutput, deleteJob, updateAsset, deleteAsset, onSourceDeleted, handoff, enhancePrompt, planRevision, talkRevision, readMark, films, analyzeFilm, uploads, upload };
 }
 
 /**

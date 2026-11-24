@@ -1835,6 +1835,8 @@ export const ko: Dictionary = {
       editBadge: '부분 수정',
       finalBadge: '1080p 완성본',
       noPrompt: '입력한 문장 없음',
+      failedImage: '이미지를 생성하지 못했어요. 다시 시도해 주세요.',
+      failedVideo: '영상을 생성하지 못했어요. 다시 시도해 주세요.',
     },
     dock: {
       label: '만들 내용',
@@ -2213,7 +2215,7 @@ export const ko: Dictionary = {
       provider_unavailable: '지금은 잠시 만들 수 없어요. 조금 뒤에 다시 해 주세요.',
       region_misaligned: '영역이 정확히 일치하지 않아요. 수정할 부위만 조금 더 작게 선택해 주세요.',
       model_unavailable: '고른 모델 중 지금 쓸 수 없는 모델이 있어요. 모델을 다시 골라 주세요.',
-      failed: '이미지를 생성하지 못했어요. 다시 시도해 주세요.',
+      failed: '처리하지 못했어요. 다시 시도해 주세요.',
     },
     // 대표 확인 대기 (2026-11-24): 로컬 Gemma 초안, 용어 "이번 이용 기간"
     errorsCycle: {

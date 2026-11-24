@@ -113,6 +113,8 @@ describe('dictionary completeness (§3.9)', () => {
       'brandStudio.explainer.steps.enhance.title',
       // The same feature in the sound studio (docs/BRAND-SOUND-STUDIO.md §12.2).
       'studioSound.architect.name',
+      // And in the partial-edit form (walk finding I-D11, 2026-11-24): the same name as the prompt bar.
+      'studioLayers.region.enhanceLabel',
       // PLATFORM-2.0 §14.1 (2026-10-24): the credit is "by @handle" in Korean too — the local idiom.
       'prompts.byAuthor',
       'prompts.cardAuthor',

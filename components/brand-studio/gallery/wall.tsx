@@ -20,7 +20,7 @@ import type { StudioJobView, StudioOutputView } from "@/lib/brand-studio/contrac
 import { creditsOf } from "@/lib/brand-studio/credits";
 import { studioModelOrLegacy, type StudioMedium } from "@/lib/brand-studio/models";
 import { canCancel, outputRatio, ratioNumber, slotRatio } from "../board";
-import { credits, errorLine, fill, type StudioCopy, type StudioLocale } from "../copy";
+import { credits, fill, runFailedLine, type StudioCopy, type StudioLocale } from "../copy";
 import { copyText, promptToCopy, useCopied } from "../copy-prompt";
 import { StudioIcon } from "../icons";
 import { startRefDrag } from "../refs";
@@ -408,6 +408,21 @@ function SelectionBar({
   const [panel, setPanel] = useState<"folders" | "confirm" | null>(null);
   const [saving, setSaving] = useState(false);
   const folderButton = useRef<HTMLButtonElement>(null);
+  // The delete question opens with focus on 취소 (never on the destructive button); leaving it puts focus
+  // back on the bar's 삭제, not on the page.
+  const bar = useRef<HTMLDivElement>(null);
+  const cancelButton = useRef<HTMLButtonElement>(null);
+  const backToDelete = useRef(false);
+  const leaveConfirm = () => {
+    backToDelete.current = true;
+    setPanel(null);
+  };
+  useEffect(() => {
+    if (panel === "confirm") cancelButton.current?.focus({ preventScroll: true });
+    if (panel !== null || !backToDelete.current) return;
+    backToDelete.current = false;
+    bar.current?.querySelector<HTMLElement>('[data-bulk="delete"]')?.focus({ preventScroll: true });
+  }, [panel]);
   const count = targets.items.length + targets.failed.length;
   const refs = targets.items.map((item) => ({ outputId: item.output.id }));
   const file = async (folder: { id: string; name: string } | null) => {
@@ -428,7 +443,20 @@ function SelectionBar({
     delete: { label: g.menu.delete, icon: "trash", run: () => setPanel("confirm"), tone: "danger" },
   };
   return (
-    <div className="bs-selection" role="toolbar" aria-label={g.selectionBar} data-studio-selection-bar>
+    <div
+      ref={bar}
+      className="bs-selection"
+      role="toolbar"
+      aria-label={g.selectionBar}
+      data-studio-selection-bar
+      onKeyDown={(event) => {
+        // Escape takes back the delete question and returns to the bar's own buttons.
+        if (panel !== "confirm" || event.key !== "Escape") return;
+        event.preventDefault();
+        event.stopPropagation();
+        leaveConfirm();
+      }}
+    >
       {panel === "confirm" ? (
         <>
           <p className="bs-selection-line" role="alert">
@@ -441,7 +469,6 @@ function SelectionBar({
             data-size="sm"
             data-tone="danger"
             data-bulk-confirm
-            autoFocus
             onClick={() => {
               setPanel(null);
               onDelete();
@@ -449,7 +476,7 @@ function SelectionBar({
           >
             {g.menu.delete}
           </button>
-          <button type="button" className="bs-btn" data-variant="ghost" data-size="sm" onClick={() => setPanel(null)}>
+          <button ref={cancelButton} type="button" className="bs-btn" data-variant="ghost" data-size="sm" onClick={leaveConfirm}>
             {copy.viewer.cancel}
           </button>
         </>
@@ -609,7 +636,7 @@ function FailedTile({ entry, copy, canGenerate, onRetry, onRemove, canRemove, se
   const key = failedKey(job.id);
   const selected = select.has(key);
   // A block with attachments usually comes from the attachment, so say where to look.
-  const reason = job.errorCode === "provider_rejected" && job.references.length > 0 ? copy.board.rejectedWithReferences : errorLine(copy, job.errorCode);
+  const reason = job.errorCode === "provider_rejected" && job.references.length > 0 ? copy.board.rejectedWithReferences : runFailedLine(copy, job.kind, job.errorCode);
   // The select box only where it fits beside the remove button (a narrow tile keeps remove).
   const tile = useRef<HTMLDivElement>(null);
   const size = useElementSize(tile);
@@ -779,7 +806,15 @@ function ResultTile(props: WallProps & Badges & Picking & { entry: Extract<Entry
           <VersionBadge
             n={badges.get(job.id)}
             copy={copy}
-            extra={output.draft ? copy.board.draftBadge : job.kind === "region_edit" ? copy.board.editBadge : null}
+            extra={
+              output.draft
+                ? copy.board.draftBadge
+                : job.kind === "video_final"
+                  ? copy.revise.stage.final
+                  : job.kind === "region_edit"
+                    ? copy.board.editBadge
+                    : null
+            }
           />
         )}
         {job.group && model && (

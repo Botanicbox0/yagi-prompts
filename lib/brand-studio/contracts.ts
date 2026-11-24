@@ -943,7 +943,12 @@ export interface StudioJobsPoll {
 export type StudioJobCreated = { ok: true; job: StudioJobView };
 /** `job.create_group`: one run per model, in the order the models were sent. */
 export type StudioJobGroupCreated = { ok: true; groupId: string; jobs: StudioJobView[] };
-export type StudioPromptPreview = { ok: true; prompt: string; notes: string };
+/**
+ * `prompt.enhance`: the sentence and where it came from. `fallback` is the deterministic sentence used when the
+ * writer failed (the typed words with the reference words bound), not a design; `passthrough` is the director
+ * keeping a structured prompt as written on purpose.
+ */
+export type StudioPromptPreview = { ok: true; prompt: string; notes: string; source: 'model' | 'fallback' | 'passthrough' };
 export type StudioFilmAnalysis = { ok: true; sheet: FilmSheet | null };
 /**
  * `revise.mark` answer: what the spot is on. `label` is a short name in the customer's language for the
