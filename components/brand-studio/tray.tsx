@@ -72,6 +72,8 @@ export function Tray({
   const [dragging, setDragging] = useState<number | null>(null);
   const [over, setOver] = useState<number | null>(null);
   const [said, setSaid] = useState("");
+  // Closing a popover with Escape or 완료 puts focus back on the thumbnail that opened it.
+  const thumbs = useRef(new Map<string, HTMLButtonElement>());
   const base = useId();
   const numbers = trayNumbers(items);
   const empty = !items.length && !uploading.length;
@@ -119,6 +121,10 @@ export function Tray({
               onDrop={(event) => dropAt(event, i)}
             >
               <button
+                ref={(element) => {
+                  if (element) thumbs.current.set(item.key, element);
+                  else thumbs.current.delete(item.key);
+                }}
                 type="button"
                 className="bs-thumb"
                 data-mentioned={mentioned ? "" : undefined}
@@ -160,7 +166,7 @@ export function Tray({
                   </span>
                 )}
               </button>
-              <span className="bs-thumb-n bs-num" aria-hidden="true">
+              <span className="bs-thumb-n bs-num" aria-hidden="true" data-text={virtualTag}>
                 {virtualTag}
               </span>
               {medium === "video" && item.kind === "video" && onTrimVideo && (
@@ -199,6 +205,10 @@ export function Tray({
                     onRemove(item.key);
                   }}
                   onClose={() => setOpen(null)}
+                  onDismiss={() => {
+                    setOpen(null);
+                    thumbs.current.get(item.key)?.focus({ preventScroll: true });
+                  }}
                 />
               )}
             </li>
@@ -241,6 +251,7 @@ function RefPopover({
   onUpdate,
   onRemove,
   onClose,
+  onDismiss,
 }: {
   id: string;
   item: TrayItem;
@@ -252,7 +263,10 @@ function RefPopover({
   onTrim?(): void;
   onUpdate(patch: Partial<Pick<TrayItem, "role" | "use" | "avoid" | "frame">>): void;
   onRemove(): void;
+  /** A press outside: focus stays where the press put it. */
   onClose(): void;
+  /** Escape or 완료: focus goes back to the thumbnail. */
+  onDismiss(): void;
 }) {
   const t = copy.tray;
   const box = useRef<HTMLDivElement>(null);
@@ -262,6 +276,8 @@ function RefPopover({
   const fields = useId();
   const close = useRef(onClose);
   close.current = onClose;
+  const dismiss = useRef(onDismiss);
+  dismiss.current = onDismiss;
 
   useEffect(() => first.current?.focus(), []);
   // Opens upward over the wall; when that would run under the top of the screen, it opens downward
@@ -277,7 +293,7 @@ function RefPopover({
       if (owner && event.target instanceof Node && !owner.contains(event.target)) close.current();
     };
     const key = (event: KeyboardEvent) => {
-      if (event.key === "Escape") close.current();
+      if (event.key === "Escape") dismiss.current();
     };
     document.addEventListener("pointerdown", down);
     document.addEventListener("keydown", key);
@@ -298,7 +314,7 @@ function RefPopover({
       onKeyDown={(event) => {
         if (event.key === "Escape") {
           event.stopPropagation();
-          onClose();
+          onDismiss();
         }
       }}
     >
@@ -361,7 +377,7 @@ function RefPopover({
           {t.remove}
         </button>
         <span className="bs-spacer" />
-        <button type="button" className="bs-btn" data-variant="soft" data-size="sm" onClick={onClose}>
+        <button type="button" className="bs-btn" data-variant="soft" data-size="sm" onClick={onDismiss}>
           {t.done}
         </button>
       </div>

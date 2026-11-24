@@ -14,6 +14,17 @@ import { kstDayOf, planActiveWithGrace } from './math';
 import type { BrandBillingOutcome, CustomerBrandBillingView } from './types';
 
 /**
+ * Which invoices a customer sees: never a draft, and never a voided one that was never issued (R3 item 5 — a draft the
+ * system or an admin cancelled, such as the next-cycle draft a plan upgrade voids, was never sent). A voided invoice that
+ * had been issued stays visible as cancelled.
+ */
+export function customerSeesInvoice(inv: { status: string; issuedAt: string | null }): boolean {
+  if (inv.status === 'draft') return false;
+  if (inv.status === 'void' && !inv.issuedAt) return false;
+  return true;
+}
+
+/**
  * Customer-facing billing overview JSON for an organization owner/admin (`GET /api/brand-billing`).
  * Strictly scoped to the authenticated seat's organization; never returns draft invoices, admin memos,
  * or any data from another organization.
@@ -63,7 +74,7 @@ export async function loadCustomerBrandBilling(
         : null;
 
       const invoices = allInvoices
-        .filter((inv) => inv.status !== 'draft')
+        .filter(customerSeesInvoice)
         .map((inv) => ({
           id: inv.id,
           period: inv.period,

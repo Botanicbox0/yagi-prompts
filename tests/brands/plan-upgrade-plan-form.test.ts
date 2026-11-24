@@ -13,7 +13,8 @@ import { runner } from '@/tests/helpers/pglite';
 /**
  * B1c-3 fix round 1, item 3: the ordinary plan forms (`brandEngine.plan`, `brandBilling.planAndAllowance.set`) must not
  * raise a plan mid-cycle without a charge. While a non-void subscription invoice covers today a HIGHER plan id is refused
- * and the admin is pointed to "플랜 올림"; a lower plan and an organization with no invoice covering today are unchanged.
+ * and the admin is pointed to "플랜 올림"; an organization with no invoice covering today is unchanged. R3 item 7: a lower
+ * plan waits for the next cycle while an issued or paid invoice covers today.
  */
 
 let h: AdminHarness;
@@ -126,11 +127,14 @@ describe('plan forms mid-cycle (fix round 1, item 3)', () => {
     expect(await enginePlan(draftOnly, 'b2b_49')).toMatchObject({ ok: false, field: 'plan_upgrade_required' });
   });
 
-  it('a lower plan through the form mid-cycle is unchanged (the lower cap applies at once; no invoice, no new cycle)', async () => {
+  // R3 item 7 (replaces, on purpose, the B1c-3 test that pinned "a lower plan applies at once"): founder rule — a downgrade
+  // takes effect from the next cycle's start day. While the paid cycle covers today both forms refuse the lower plan.
+  it('a lower plan through the forms mid-cycle is refused until the next cycle starts; the plan and its cap stay', async () => {
     const orgId = await manualOrg('Plan Form Lower Fixture', 'b2b_49', 'paid');
-    expect(await enginePlan(orgId, 'b2b_29')).toMatchObject({ ok: true });
-    expect(await loadPlanAssignment(sql, orgId)).toMatchObject({ planId: 'b2b_29', startedOn: '2026-11-17' });
-    expect(await loadAllowance(sql, orgId, STUDIO, new Date('2026-11-25T02:00:00Z'))).toMatchObject({ capKrw: 270_000 });
+    expect(await enginePlan(orgId, 'b2b_29')).toMatchObject({ ok: false, code: 'conflict', field: 'plan_downgrade_next_cycle', detail: '2026-12-17' });
+    expect(await planForm(orgId, 'b2b_29')).toMatchObject({ ok: false, detail: 'conflict:plan_downgrade_next_cycle:2026-12-17' });
+    expect(await loadPlanAssignment(sql, orgId)).toMatchObject({ planId: 'b2b_49', startedOn: '2026-11-17', revision: 1 });
+    expect(await loadAllowance(sql, orgId, STUDIO, new Date('2026-11-25T02:00:00Z'))).toMatchObject({ capKrw: 460_000 });
   });
 
   it('with no invoice covering today the form raises the plan as before', async () => {

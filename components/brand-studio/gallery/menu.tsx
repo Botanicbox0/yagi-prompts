@@ -83,6 +83,28 @@ export function useDismiss(onClose: () => void, active = true) {
   return box;
 }
 
+/**
+ * Focuses an option of a menu that just opened without scrolling the page (the bar floats over the wall, so a
+ * plain focus would scroll the wall); the menu's own list scrolls just enough to show the option.
+ */
+export function focusOption(box: HTMLElement | null, option: HTMLElement | null | undefined) {
+  if (!box || !option) return;
+  option.focus({ preventScroll: true });
+  for (let scroller = option.parentElement; scroller; scroller = scroller.parentElement) {
+    if (scroller.scrollHeight > scroller.clientHeight + 1 && /(auto|scroll)/.test(getComputedStyle(scroller).overflowY)) {
+      const o = option.getBoundingClientRect();
+      const s = scroller.getBoundingClientRect();
+      if (o.top < s.top) scroller.scrollTop -= s.top - o.top;
+      else if (o.bottom > s.bottom) scroller.scrollTop += o.bottom - s.bottom;
+      break;
+    }
+    if (scroller === box) break;
+  }
+  // A menu that runs past the window (one on the wall) still shows the option.
+  const rect = option.getBoundingClientRect();
+  if (rect.bottom > window.innerHeight || rect.top < 0) option.scrollIntoView({ block: "nearest" });
+}
+
 /** ↑/↓/Home/End between the focusable entries of a list. */
 export function moveFocus(event: KeyboardEvent<HTMLElement>, selector = '[role="menuitem"]:not([disabled])') {
   const items = Array.from(event.currentTarget.querySelectorAll<HTMLElement>(selector));
@@ -96,7 +118,7 @@ export function moveFocus(event: KeyboardEvent<HTMLElement>, selector = '[role="
     : -1;
   if (next < 0) return;
   event.preventDefault();
-  items[next]!.focus();
+  focusOption(event.currentTarget, items[next]);
 }
 
 export function Menu({

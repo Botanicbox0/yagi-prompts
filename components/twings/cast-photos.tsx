@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { Dictionary } from '@/lib/i18n/dictionaries';
+import { birthYearChoices } from '@/lib/account/adult-age';
 
 /**
  * docs/CAST-CATEGORIES.md §3 — the make card's other photos: the pet, or the person the buyer makes a
@@ -10,17 +11,26 @@ import type { Dictionary } from '@/lib/i18n/dictionaries';
  * rules (SelfieSheet); this never touches it.
  *
  * The partner photo carries one plain confirmation (the other person agreed); the pay button waits for it.
+ *
+ * docs/PERSONAL-STUDIO.md §6.1 — `adult`: the access call says the Sunra face switch is on and this account
+ * has no passing 19+ answer yet. Only then, and only beside a partner photo, the card also asks for a birth
+ * year and one "19 or older" box, and the pay button waits for both. The server decides on its own.
  */
 
 export interface CastPhotoState {
   pet: File | null;
   partner: File | null;
   partnerConsent: boolean;
+  /** '' until a year is picked. Sent as `birthYear` only when asked. */
+  birthYear: string;
+  adultAttested: boolean;
 }
-export const EMPTY_CAST_PHOTOS: CastPhotoState = { pet: null, partner: null, partnerConsent: false };
+export const EMPTY_CAST_PHOTOS: CastPhotoState = { pet: null, partner: null, partnerConsent: false, birthYear: '', adultAttested: false };
 
-export function castPhotosReady(need: { pet: boolean; partner: boolean }, value: CastPhotoState): boolean {
-  return (!need.pet || value.pet !== null) && (!need.partner || (value.partner !== null && value.partnerConsent));
+export function castPhotosReady(need: { pet: boolean; partner: boolean }, value: CastPhotoState, adult = false): boolean {
+  return (!need.pet || value.pet !== null)
+    && (!need.partner || (value.partner !== null && value.partnerConsent))
+    && (!need.partner || !adult || (value.birthYear !== '' && value.adultAttested));
 }
 
 type Copy = Dictionary['cast']['photo'];
@@ -87,12 +97,46 @@ function PhotoPicker({ slot, title, hint, tips, file, onFile, copy, disabled }: 
   );
 }
 
-export function CastPhotoFields({ need, value, onChange, copy, disabled }: {
+function AdultFields({ value, onChange, copy, disabled }: { value: CastPhotoState; onChange(next: CastPhotoState): void; copy: Copy; disabled?: boolean }) {
+  const yearId = useId();
+  const hintId = useId();
+  const years = useMemo(() => birthYearChoices(new Date()), []);
+  return (
+    <div data-adult-check className="mt-5 flex flex-col gap-2">
+      <label htmlFor={yearId} className="text-sm font-semibold">{copy.birthYearLabel}</label>
+      <select
+        id={yearId}
+        data-adult-birth-year
+        value={value.birthYear}
+        disabled={disabled}
+        aria-describedby={hintId}
+        onChange={(event) => onChange({ ...value, birthYear: event.target.value })}
+        className="min-h-11 w-full max-w-60 rounded-xl border border-black/15 bg-white px-4 text-sm transition-colors hover:border-black/40 disabled:opacity-60"
+      >
+        <option value="">{copy.birthYearPlaceholder}</option>
+        {years.map((year) => <option key={year} value={String(year)}>{year}</option>)}
+      </select>
+      <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm leading-relaxed"><input
+        data-adult-attest
+        type="checkbox"
+        checked={value.adultAttested}
+        disabled={disabled}
+        onChange={(event) => onChange({ ...value, adultAttested: event.target.checked })}
+        className="size-4 shrink-0 accent-black"
+      /><span>{copy.adultAttest}</span></label>
+      <p id={hintId} className="text-xs leading-relaxed text-black/65">{copy.adultHint}</p>
+    </div>
+  );
+}
+
+export function CastPhotoFields({ need, value, onChange, copy, disabled, adult = false }: {
   need: { pet: boolean; partner: boolean };
   value: CastPhotoState;
   onChange(next: CastPhotoState): void;
   copy: Copy;
   disabled?: boolean;
+  /** Ask the 19+ question beside the partner photo (see the file comment). */
+  adult?: boolean;
 }) {
   if (!need.pet && !need.partner) return null;
   return (
@@ -131,6 +175,7 @@ export function CastPhotoFields({ need, value, onChange, copy, disabled }: {
             />
             <span>{copy.partnerConsent}</span>
           </label>
+          {adult && <AdultFields value={value} onChange={onChange} copy={copy} disabled={disabled} />}
         </div>
       )}
     </div>
@@ -138,9 +183,10 @@ export function CastPhotoFields({ need, value, onChange, copy, disabled }: {
 }
 
 /** The one line under the pay button that says what is still missing, or null when nothing is. */
-export function castPhotoHint(need: { pet: boolean; partner: boolean }, value: CastPhotoState, copy: Copy): string | null {
+export function castPhotoHint(need: { pet: boolean; partner: boolean }, value: CastPhotoState, copy: Copy, adult = false): string | null {
   if (need.pet && !value.pet) return copy.needPet;
   if (need.partner && !value.partner) return copy.needPartner;
   if (need.partner && !value.partnerConsent) return copy.needConsent;
+  if (need.partner && adult && (value.birthYear === '' || !value.adultAttested)) return copy.needAdult;
   return null;
 }

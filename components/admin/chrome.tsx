@@ -238,6 +238,7 @@ const ERROR_KEYS = {
   notReleasable: "errNotReleasable",
   metricsRequired: "errMetricsRequired",
   brandConflict: "errBrandConflict",
+  billingConflict: "errBillingConflict",
   collaborationRateLimited: "errCollaborationRateLimited",
   studioRateLimited: "errStudioRateLimited",
   brandNotActive: "errBrandNotActive",

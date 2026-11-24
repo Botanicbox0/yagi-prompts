@@ -8,9 +8,9 @@
  * (`enhance: false`), so nothing is rewritten twice and the run records both.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { STUDIO_LIMITS, type StudioErrorCode } from "@/lib/brand-studio/contracts";
+import { STUDIO_LIMITS, type StudioErrorCode, type StudioPromptPreview } from "@/lib/brand-studio/contracts";
 import type { StudioMedium } from "@/lib/brand-studio/models";
-import { isFailure } from "./api";
+import { isFailure, type ApiResult } from "./api";
 import { errorLine, fill, newRequestId, type StudioCopy } from "./copy";
 import type { ReferenceVideoProblem } from "@/lib/brand-studio/reference-video";
 import {
@@ -23,7 +23,16 @@ import {
   type DockProblem,
   type FilmLimits,
 } from "./dock-model";
-import { addToTray, mentionLabel, moveInTray, removeFromTray, updateTrayItem, type TrayItem } from "./refs";
+import {
+  addToTray,
+  mentionLabel,
+  moveInTray,
+  refKeyOf,
+  removeFromTray,
+  renumberAfterMove,
+  updateTrayItem,
+  type TrayItem,
+} from "./refs";
 import type { MissingReference, ReusePlan } from "./reuse-model";
 import type { StudioController } from "./use-studio";
 import { focusDockPromptEnd, takeStudioPrefill } from "./prefill";
@@ -120,6 +129,30 @@ export function ownWordsOf(enhanced: Enhanced | null, prompt: string): string | 
   return shown && own && shown !== own ? own : null;
 }
 
+/**
+ * The designed sentence in a `prompt.enhance` answer, or null when there is none: a failure, an empty answer, or
+ * the server's fallback (no model wrote it). Null takes the failure path: the typed words stay, and the run is
+ * designed at send time when the switch is on.
+ */
+export function designedSentence(answer: ApiResult<StudioPromptPreview> | null): string | null {
+  if (!answer || isFailure(answer) || answer.source === "fallback") return null;
+  return answer.prompt.trim().slice(0, STUDIO_LIMITS.promptMax) || null;
+}
+
+/**
+ * The design tabs after the references moved: every sentence renumbered. A design still running was asked for
+ * the old order, so it is dropped (`dropped`) and its tab takes the failed state ("다시 설계하기").
+ */
+export function tabsAfterMove(tabs: DesignTabs, renumber: (text: string) => string): { tabs: DesignTabs; dropped: string[] } {
+  const dropped: string[] = [];
+  const next: DesignTabs = {};
+  for (const [id, tab] of Object.entries(tabs)) {
+    if (tab.status === "designing") dropped.push(id);
+    next[id] = { ...tab, status: tab.status === "designing" ? "failed" : tab.status, text: renumber(tab.text) };
+  }
+  return { tabs: next, dropped };
+}
+
 export function useDock({
   studio,
   copy,
@@ -171,6 +204,8 @@ export function useDock({
   /** The design call each tab waits for: a late answer for an older call (or a removed tab) is dropped. */
   const designTokens = useRef(new Map<string, number>());
   const designSeq = useRef(0);
+  /** The single bar's design call; a move of the references makes a running one stale. */
+  const singleDesign = useRef(0);
   const press = useRef<{ fingerprint: string; ids: string[] } | null>(null);
   // Several files can finish uploading in one tick; each attach must see the ones before it.
   const latest = useRef(tray);
@@ -299,6 +334,17 @@ export function useDock({
     [copy, mode, setDraft],
   );
 
+  /** ✕ on a thumbnail. */
+  const remove = useCallback((key: string) => setTray((t) => removeFromTray(t, key)), []);
+  /**
+   * An upload or a result this member deleted (library rail, viewer, wall) leaves the bar the way ✕ removes it.
+   * Only the explicit delete counts (use-studio.ts `onSourceDeleted`); a delete by another member is still
+   * caught at send time.
+   */
+  const onSourceDeleted = studio.onSourceDeleted;
+  // Optional call: a stand-in controller without deletes (a test's studio mock) still renders the bar.
+  useEffect(() => onSourceDeleted?.((source) => remove(refKeyOf(source))), [onSourceDeleted, remove]);
+
   const ownWords = ownWordsOf(enhanced, draft.prompt);
 
   const designing = Boolean(tabs && Object.values(tabs).some((tab) => tab.status === "designing"));
@@ -413,7 +459,7 @@ export function useDock({
           const answer = await Promise.race([studio.enhancePrompt(entry.inputs[0]!.input).catch(() => null), timer]);
           // Dropped when the tab is gone (taken back, model removed, settings reused) or designed again since.
           if (designTokens.current.get(id) !== tokens[id] || latestTabs.current?.[id]?.status !== "designing") return;
-          const improved = answer && !isFailure(answer) ? answer.prompt.trim().slice(0, STUDIO_LIMITS.promptMax) : "";
+          const improved = designedSentence(answer);
           const tab = improved ? { status: "ready" as const, text: improved } : { status: "failed" as const, text: sources[id]! };
           const next = { ...latestTabs.current, [id]: tab };
           latestTabs.current = next;
@@ -441,13 +487,15 @@ export function useDock({
     const own = ownWordsOf(enhanced, original) ?? original;
     setEnhancing(true);
     setMessage(null);
+    const token = (singleDesign.current += 1);
     const result = await studio.enhancePrompt(preview.input);
     setEnhancing(false);
-    if (isFailure(result) || !result.prompt.trim()) {
+    // A reference moved while it was designed: the answer numbers the old order, so it is not taken.
+    const improved = singleDesign.current === token ? designedSentence(result) : null;
+    if (!improved) {
       setNotice(copy.dock.enhanceFailed);
       return;
     }
-    const improved = result.prompt.trim().slice(0, STUDIO_LIMITS.promptMax);
     // The customer may have kept typing elsewhere; only replace the sentence that was sent.
     if (latestDraft.current.prompt !== original) return;
     setDraft((current) => (current.prompt === original ? { ...current, prompt: improved } : current));
@@ -504,6 +552,40 @@ export function useDock({
     [copy, dropTabs, organizationId, remembers, setDraft],
   );
 
+  /**
+   * A reference moved (drag, or Alt + arrow). Mentions name references by number, so every mention typed in
+   * the field, the "바꿀 것" line, the designed tabs and the kept own words is renumbered to keep naming the
+   * same picture.
+   */
+  const move = useCallback((from: number, to: number) => {
+    const before = latest.current;
+    const after = moveInTray(before, from, to);
+    latest.current = after;
+    setTray(after);
+    const renumber = (text: string) => renumberAfterMove(text, before, after);
+    const draftNow = latestDraft.current;
+    const draftNext = { ...draftNow, prompt: renumber(draftNow.prompt), change: renumber(draftNow.change) };
+    if (draftNext.prompt !== draftNow.prompt || draftNext.change !== draftNow.change) {
+      latestDraft.current = draftNext;
+      setDraft((current) => ({ ...current, prompt: renumber(current.prompt), change: renumber(current.change) }));
+    }
+    const kept = latestEnhanced.current;
+    if (kept) {
+      const next = { original: renumber(kept.original), improved: renumber(kept.improved) };
+      latestEnhanced.current = next;
+      setEnhanced(next);
+    }
+    // A design still running was asked for the old order: its answer is no longer taken.
+    singleDesign.current += 1;
+    const shown = latestTabs.current;
+    if (shown) {
+      const { tabs: next, dropped } = tabsAfterMove(shown, renumber);
+      for (const id of dropped) designTokens.current.delete(id);
+      latestTabs.current = next;
+      setTabs(next);
+    }
+  }, []);
+
   const groupTabs = tabs && activeTab && tabs[activeTab] ? { tabs, active: activeTab } : null;
 
   return {
@@ -514,8 +596,8 @@ export function useDock({
     setTray,
     attach,
     update: (key: string, patch: Partial<Pick<TrayItem, "role" | "use" | "avoid" | "frame">>) => setTray((t) => updateTrayItem(t, key, patch)),
-    remove: (key: string) => setTray((t) => removeFromTray(t, key)),
-    move: (from: number, to: number) => setTray((t) => moveInTray(t, from, to)),
+    remove,
+    move,
     message,
     errorCode,
     setMessage,

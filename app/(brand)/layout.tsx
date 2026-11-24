@@ -4,6 +4,7 @@ import { influencersOpen } from '@/lib/influencers/rules';
 import { getVerifiedEmail } from '@/lib/auth/verified-email';
 import { getSqlRunner } from '@/lib/db/connect';
 import { loadCachedBrandWorkspaceScope } from '@/components/brand-workspace/scope';
+import { countPendingSharedCampaigns } from '@/lib/brands/workspace/service';
 import "@/app/globals.css";
 import "./workspace.css";
 import "./rail.css";
@@ -68,6 +69,9 @@ export default async function BrandLayout({
   const railExpanded=studioV2&&scope?railCookieExpanded((await cookies()).get(RAIL_COOKIE)?.value):false;
   // The rail's two modes (rail-mode.ts): the side this browser last used per brand, read only where they exist.
   const railModes=studioV2&&rooms&&scope?parseRailModeCookie((await cookies()).get(RAIL_MODE_COOKIE)?.value):undefined;
+  // An account with no brand at all gets no tabs (each could only say "no brand yet"), unless a campaign it
+  // accepted is waiting for the studio to share it: that account keeps the bar it has today.
+  const pendingShare=Boolean(sql&&scope&&scope.choices.length===0&&await countPendingSharedCampaigns({sql},viewer).catch(()=>0)>0);
   return (
     <html lang={locale} className={fontVariables} data-brand-workspace>
       <head>
@@ -91,16 +95,19 @@ export default async function BrandLayout({
             {/* URL-derived: dynamic render resolves this on the server, the empty fallback never shows. */}
             <Suspense fallback={null}>
               {scope?<WorkspaceIdentity scope={scope} copy={b.identity} roles={b.roles}/>:<p className="bw-kicker">{b.title}</p>}
-              <WorkspaceNavigation home={b.home} members={b.members} settings={b.managed.settings} billing={studioCopy ? d.brandBilling.customer.pageTitle : undefined} library={b.managed.library} studio={studioCopy?b.productionStudio.title:""} identity={undefined} creators={influencersOpen() ? b.creatorPool.nav : undefined} scope={scope} studioV2={studioV2} shell={studioCopy?d.studioShell:undefined} locale={locale==="en"?"en":"ko"} railExpanded={railExpanded} rooms={rooms} roomsCopy={rooms?d.roomsShell.nav:undefined} homeLabel={studioV2?d.brandHome.nav.home:undefined} railModes={railModes} soundStudio={studioV2&&brandSoundStudioOpen()}/>
+              <WorkspaceNavigation home={b.home} members={b.members} settings={b.managed.settings} billing={studioCopy ? d.brandBilling.customer.pageTitle : undefined} library={b.managed.library} studio={studioCopy?b.productionStudio.title:""} identity={undefined} creators={influencersOpen() ? b.creatorPool.nav : undefined} scope={scope} studioV2={studioV2} shell={studioCopy?d.studioShell:undefined} locale={locale==="en"?"en":"ko"} railExpanded={railExpanded} rooms={rooms} roomsCopy={rooms?d.roomsShell.nav:undefined} homeLabel={studioV2?d.brandHome.nav.home:undefined} railModes={railModes} soundStudio={studioV2&&brandSoundStudioOpen()} pendingShare={pendingShare}/>
             </Suspense>
             <div className="bw-sidebar-utilities">
               <WorkspaceLanguage locale={locale} label={d.nav.localeToggle} compact applyLabel={b.languageApply}/>
+              {/* Signed out (the invitation landing) there is nothing to sign out of: the landing's sign-in is the action. */}
+              {viewer.userId&&(
               <form action="/auth/signout" method="post" className="bw-signout">
                 <button type="submit" aria-label={b.signOut} title={b.signOut}>
                   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4H4v16h6M14 8l4 4-4 4M8 12h10"/></svg>
                   <span>{b.signOut}</span>
                 </button>
               </form>
+              )}
               <div className="ys-powered-by" aria-label="Powered by YAGI">
                 <span>Powered by</span>
                 <YagiLogo size={16} />

@@ -1094,9 +1094,9 @@ body:has(.bw-triage-bulk) .bw-support-launch { translate:0 -76px; }
 @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))) { .bw-support-launch { background:var(--ys-surface); } }
 .bw-support-launch:hover { transform:translateY(-2px) scale(1.02);box-shadow:var(--ys-ring),var(--ys-rim),0 2px 4px rgba(16,18,24,0.05),0 14px 32px rgba(16,18,24,0.07),0 36px 72px rgba(16,18,24,0.06); }
 .bw-support-launch svg { width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;flex-shrink:0; }
-.bw-support-launch-dot { width:8px;height:8px;border-radius:999px;background:var(--ys-accent);box-shadow:var(--ys-dot-glow);flex-shrink:0; }
+/* Rendered only for a team reply not seen yet; a status mark, so ink, not the accent (TASTE 19). */
+.bw-support-launch-dot { width:8px;height:8px;border-radius:999px;background:var(--ys-ink);box-shadow:var(--ys-dot-glow);flex-shrink:0; }
 .bw-support-launch-label { white-space:nowrap; }
-.bw-support-unread { min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:var(--ys-accent);color:var(--ys-on-accent, #ffffff);font-size:11px;font-weight:700;display:inline-flex;align-items:center;justify-content:center; }
 .bw-support-dialog { position:fixed;inset:auto 24px 88px auto;margin:0;width:min(396px,calc(100vw - 32px));height:min(580px,calc(100svh - 116px));max-height:calc(100svh - 110px);padding:0;border:1px solid color-mix(in srgb, var(--ys-ink) 12%, transparent);border-radius:22px;box-shadow:0 28px 80px rgba(15, 15, 20, 0.17),0 0 0 1px color-mix(in srgb, var(--ys-ink) 4%, transparent);color:var(--ys-ink);background:var(--ys-surface);z-index:65;overflow:hidden; }
 .bw-support-dialog[open] { display:flex;flex-direction:column; }
 .bw-support-dialog::backdrop { background:transparent; }
@@ -1140,8 +1140,8 @@ body:has(.bw-triage-bulk) .bw-support-launch { translate:0 -76px; }
  .bw-featured-copy { padding:22px; }
  .bw-brand-list { grid-template-columns:1fr; }
  .bw-support-launch { right:14px;bottom:18px;width:44px;height:44px;padding:0;justify-content:center;gap:0; }
- .bw-support-launch-dot,.bw-support-launch-label { display:none; }
- .bw-support-unread { position:absolute;top:-4px;right:-4px; }
+ .bw-support-launch-label { display:none; }
+ .bw-support-launch-dot { position:absolute;top:6px;right:6px; }
  .bw-contract-row .bw-button { font-size:12px; }
  .bw-contract-row .bw-form { flex-basis:100%; }
 }
@@ -3780,7 +3780,6 @@ html[data-brand-workspace]::view-transition-group(bw-tab-indicator) { animation-
 :where([data-brand-workspace]) :is(.bw-concierge-header, .bw-support-tools, .bw-support-messages, .bw-concierge-quick-chips, .bw-support-dialog form) { background: transparent; border-color: var(--ys-hairline); }
 :where([data-brand-workspace]) .bw-concierge-avatar { border-radius: 12px; box-shadow: var(--ys-shadow-1); }
 :where([data-brand-workspace]) .bw-support-bubble[data-author='studio'] { background: var(--ys-surface); border: 0; box-shadow: var(--ys-card); }
-:where([data-brand-workspace]) .bw-support-unread { font-variant-numeric: tabular-nums; }
 :where([data-brand-workspace]) :is(.bw-studio-inquiry, .bw-invite-dialog) { border: 0; border-radius: 24px; box-shadow: var(--ys-float); }
 :where([data-brand-workspace]) :is(.bw-studio-inquiry, .bw-invite-dialog)[open] { animation: ys-rise-in var(--ys-dur-spring) var(--ys-spring) both; }
 :where([data-brand-workspace]) :is(.bw-studio-inquiry, .bw-invite-dialog)::backdrop { background: rgba(9, 9, 11, 0.56); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
@@ -5609,6 +5608,10 @@ html[data-brand-workspace]::view-transition-group(bw-tab-indicator) { animation-
     border-top: 0;
     box-shadow: none;
   }
+  /* A bar without tabs (signed out, or no brand yet) keeps the tabs' place, so the brand line stays by the lockup. */
+  :where([data-brand-workspace]) .bw-shell:has([data-brand-layout-mode="topbar"]) [data-brand-nav-empty] {
+    margin-inline: auto;
+  }
   :where([data-brand-workspace]) .bw-shell:has([data-brand-layout-mode="topbar"]) .bw-signout {
     margin: 0;
   }
@@ -5831,6 +5834,10 @@ html[data-brand-workspace]::view-transition-group(bw-tab-indicator) { animation-
   border-radius: 14px;
   background: var(--ys-surface);
   box-shadow: var(--ys-card);
+}
+/* A refused link or a wrong account is said in the note ink, not red (TASTE 3); role="alert" still announces it. */
+:where([data-brand-workspace]) .bw-sota-invite-landing .bw-error {
+  color: var(--ys-ink);
 }
 
 

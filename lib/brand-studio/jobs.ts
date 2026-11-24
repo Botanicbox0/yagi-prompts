@@ -319,7 +319,9 @@ export async function previewStudioPrompt(deps: StudioDeps, viewer: Viewer, raw:
     regionWindow,
   );
   const result = await runEnhancer({ ...deps, organizationId: seat.organizationId }, input);
-  return { ok: true, prompt: result.prompt, notes: result.notes };
+  // The director marks a structured prompt it keeps as written `fallback` too; that one is a choice, not a failure.
+  const passthrough = result.source === 'fallback' && (result as { intent?: string }).intent === 'passthrough';
+  return { ok: true, prompt: result.prompt, notes: result.notes, source: passthrough ? 'passthrough' : result.source };
 }
 
 export async function analyzeStudioFilm(deps: StudioDeps, viewer: Viewer, raw: unknown): Promise<StudioFilmAnalysis | StudioFailure> {

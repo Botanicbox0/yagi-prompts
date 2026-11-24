@@ -491,10 +491,11 @@ describe('manual plan organization (no flag)', () => {
     expect(await load(orgId, '2026-12-24T14:59:59Z')).toMatchObject({ capKrw: 630_000 });
     expect(await load(orgId, '2026-12-24T15:00:00Z')).toMatchObject({ capKrw: 460_000, extraKrw: 0, cycle: { start: '2026-12-25' } });
 
-    // The admin issues the draft as any other; the manual path stores no due day and uses 14 days from issue.
+    // The admin issues the draft as any other. R3 item 4 (changed on purpose): the manual issue now stores the due day,
+    // issue day + 14 — the same day the preview showed and the 14-day rule gives.
     const issued = await issueBrandInvoice({ sql, now: at('2026-11-25T03:00:00Z') }, ADMIN_VIEWER, { invoiceId: fresh!.id });
     if (!issued.ok) throw new Error(issued.code);
-    expect((await subscriptionInvoices(orgId)).find((r) => r.id === fresh!.id)).toMatchObject({ status: 'issued', due_on: null });
+    expect((await subscriptionInvoices(orgId)).find((r) => r.id === fresh!.id)).toMatchObject({ status: 'issued', due_on: '2026-12-09' });
     expect(effectiveInvoiceDueOn({ dueOn: null, issuedAt: issued.invoice.issuedAt })).toBe('2026-12-09');
   });
 

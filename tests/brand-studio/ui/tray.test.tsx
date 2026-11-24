@@ -49,13 +49,13 @@ describe("tray numbering", () => {
     expect(trayNumbers([pic(1), film(2), pic(3)])).toEqual([1, 1, 2]);
     const items = [pic(1), pic(2), pic(3)];
     const html = render({ items });
-    expect([...html.matchAll(/class="bs-thumb-n bs-num" aria-hidden="true">([^<]+)</g)].map((m) => m[1])).toEqual([
+    expect([...html.matchAll(/class="bs-thumb-n bs-num" aria-hidden="true"[^>]*>([^<]+)</g)].map((m) => m[1])).toEqual([
       "@image1",
       "@image2",
       "@image3",
     ]);
     const mixedHtml = render({ items: [pic(1), film(2), pic(3), sound(4)] });
-    expect([...mixedHtml.matchAll(/class="bs-thumb-n bs-num" aria-hidden="true">([^<]+)</g)].map((m) => m[1])).toEqual([
+    expect([...mixedHtml.matchAll(/class="bs-thumb-n bs-num" aria-hidden="true"[^>]*>([^<]+)</g)].map((m) => m[1])).toEqual([
       "@image1",
       "@video1",
       "@image2",

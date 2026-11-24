@@ -215,6 +215,8 @@ export function BillingPageClient({
 
   const plan = billing.plan;
   const allowance = billing.allowance;
+  // Not approved yet (no plan, no allowance of any kind): extra credits mean nothing, only "이용 신청" applies.
+  const beforeApproval = !plan && allowance.capCredits <= 0;
   const refill = refillWording(allowance.refill);
   const usedPct =
     allowance.capCredits > 0
@@ -442,7 +444,7 @@ export function BillingPageClient({
                   : copy.usageSection.explainer}
           </p>
 
-          {!readOnly ? (
+          {!readOnly && !beforeApproval ? (
             <div className={s.actionsRow}>
               <button
                 type="button"
@@ -697,6 +699,7 @@ export function BillingPageClient({
         locale={locale}
         initialIntent={dialogIntent}
         initialDesiredPlan={dialogPlan}
+        hiddenIntents={beforeApproval ? ['allowance_request'] : undefined}
         profileCompleteness={completeness}
         billingProfileHref="#billing-profile"
         surface="billing_page"

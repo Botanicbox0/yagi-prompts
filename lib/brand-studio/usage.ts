@@ -22,6 +22,7 @@ import {
   planActiveWithGrace,
 } from '@/lib/brands/billing/math';
 import { cycleContaining, cycleWindow, type BillingCycle } from '@/lib/brands/billing/cycle';
+import { resolvePlanCapKrw } from '@/lib/brands/billing/plan-credits';
 import { hasColumn, loadAllowanceSchemaState, loadSubscriptionSchemaReady } from '@/lib/brands/billing/schema-guard';
 import { brandBillingAutoIssueOpen } from '@/lib/flags';
 import { allowanceWindowView } from './allowance-window';
@@ -211,8 +212,9 @@ export async function usedKrwIn(sql: SqlRunner, organizationId: string, window: 
  * Precedence for `baseCapKrw`:
  *   1. An explicit override row in `brand_studio_allowances` (`is_override = true`; pre-0176 rows
  *      all default to `true`) -> `source: 'override'`.
- *   2. An active plan assignment in `brand_plan_assignments` (within `BRAND_PLAN_GRACE_DAYS`, default 7)
- *      with a non-null cap in `brand_plan_allowance_defaults` -> `source: 'plan'`.
+ *   2. An active paid plan assignment in `brand_plan_assignments` (within `BRAND_PLAN_GRACE_DAYS`: code default 7, production sets 14 since 2026-11-24): its
+ *      cap in `brand_plan_allowance_defaults`, or with none stored its confirmed credits x 10 (R3 item 6,
+ *      `resolvePlanCapKrw`) -> `source: 'plan'`.
  *   3. Otherwise `env.defaultMonthlyKrw` -> `source: 'default'`.
  *
  * Unexpired, unrevoked one-off `brand_allowance_grants` for the current KST month / date are then
@@ -352,15 +354,14 @@ export async function loadAllowance(
   let baseCapKrw = env.defaultMonthlyKrw;
   let planCycle: BillingCycle | null = null;
 
+  // R3 item 6: a paid plan with no stored default (no row, or a cleared one) opens its confirmed credits; a stored row
+  // wins, an override wins over both. Same statements as before: only this choice changed.
+  const resolvedPlanCap =
+    planId && (PAID_BRAND_PLAN_IDS as readonly string[]).includes(planId) ? resolvePlanCapKrw(planId, planDefaultCap) : null;
   if (isOverride && rowCap !== null) {
     source = 'override';
     baseCapKrw = rowCap;
-  } else if (
-    planId &&
-    planStartedOn &&
-    (PAID_BRAND_PLAN_IDS as readonly string[]).includes(planId) &&
-    planDefaultCap !== null
-  ) {
+  } else if (planId && planStartedOn && resolvedPlanCap !== null) {
     const { active } = planActiveWithGrace(
       { startedOn: planStartedOn, endsOn: planEndsOn },
       today,
@@ -370,7 +371,7 @@ export async function loadAllowance(
       source = 'plan';
       // B1c: the full plan cap every cycle (no first-month proration); the cycle runs from the plan start day and
       // simply continues through the grace days after `ends_on`.
-      baseCapKrw = planDefaultCap;
+      baseCapKrw = resolvedPlanCap;
       planCycle = cycleContaining(planStartedOn, today);
     }
   }
@@ -554,18 +555,18 @@ export async function setStudioAllowance(deps: { sql: SqlRunner }, viewer: Viewe
           [v.organizationId],
         )
       ).rows[0];
-      if (
-        planRow &&
-        (PAID_BRAND_PLAN_IDS as readonly string[]).includes(planRow.plan_id) &&
-        planRow.default_cap !== null &&
-        planRow.default_cap !== undefined
-      ) {
+      // R3 item 6: a paid plan without a stored default follows its confirmed credits.
+      const planCap =
+        planRow && (PAID_BRAND_PLAN_IDS as readonly string[]).includes(planRow.plan_id)
+          ? resolvePlanCapKrw(planRow.plan_id, planRow.default_cap)
+          : null;
+      if (planRow && planCap !== null) {
         const { active } = planActiveWithGrace(
           { startedOn: String(planRow.started_on), endsOn: planRow.ends_on == null ? null : String(planRow.ends_on) },
           kstDayOf(new Date()),
           planGraceDaysFromEnv(),
         );
-        if (active) activePlanDefaultCap = Number(planRow.default_cap);
+        if (active) activePlanDefaultCap = planCap;
       }
     }
 

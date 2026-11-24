@@ -22,7 +22,8 @@ import { BRAND_PLAN_GRACE_DAYS_DEFAULT } from '@/lib/brands/billing/math';
 import { syncPlanDefaultSnapshot } from '@/lib/brands/billing/snapshot';
 import { loadPlanAssignment, subscriptionManagesPlan, SUBSCRIPTION_MANAGED_PLAN } from '@/lib/brands/plans';
 import { previewDigest } from '@/lib/brands/subscriptions/service';
-import { isDbAdmin, UUID_RE } from './brand-ops-guard';
+import { formatPlanDefaultPreviewDetail } from './billing-preview-detail';
+import { isDbAdmin, UUID_RE, withBillingConflicts } from './brand-ops-guard';
 import { fail, ok, type AdminContext, type AdminOutcome } from './context';
 import { brandFailure } from './brand-workspace-operations';
 import * as f from './form';
@@ -117,11 +118,15 @@ const planDefaultSet: AdminOperation<{
     const result = await setPlanAllowanceDefault({ sql: ctx.sql, env: studioEnv() }, ctx.viewer, serviceInput);
     if (!result.ok) return billingFailure(result);
     if (!result.applied) {
-      const names = result.affectedOrganizations.map((o) => `${o.name}:${o.beforeCapKrw}->${o.afterCapKrw}`).join(',');
-      const capToken = result.monthlyCapKrw === null ? 'unset' : String(result.monthlyCapKrw);
-      const digestToken = input.clearDefault ? ` · digest=${planDefaultPreviewDigest(result)}` : '';
+      // R3 item 1: one formatter (lib/admin/billing-preview-detail.ts); the listed names are bounded so the detail —
+      // and the clear's digest at its end — always survives the outcome URL.
       return ok('prepared', {
-        detail: `${result.planId}=${capToken} · ${result.affectedCount}${names ? ` (${names})` : ''}${digestToken}`,
+        detail: formatPlanDefaultPreviewDetail({
+          planId: result.planId,
+          capKrw: result.monthlyCapKrw,
+          affected: result.affectedOrganizations,
+          ...(input.clearDefault ? { digest: planDefaultPreviewDigest(result) } : {}),
+        }),
       });
     }
     return ok('saved', { detail: String(result.affectedCount) });
@@ -694,7 +699,8 @@ const grantRevoke: AdminOperation<{ grantId: string; organizationId?: string }> 
   },
 };
 
-export const BRAND_BILLING_OPERATIONS = {
+/** R3 item 8: every conflict of these operations reads as `billingConflict` (lib/admin/brand-ops-guard.ts). */
+export const BRAND_BILLING_OPERATIONS = withBillingConflicts({
   'brandBilling.planDefault.set': planDefaultSet,
   'brandBilling.planAndAllowance.set': planAndAllowanceSet,
   'brandBilling.discount.grant': discountGrant,
@@ -709,4 +715,4 @@ export const BRAND_BILLING_OPERATIONS = {
   'brandBilling.invoice.void': invoiceVoid,
   'brandBilling.grant.create': grantCreate,
   'brandBilling.grant.revoke': grantRevoke,
-} as const;
+} as const);

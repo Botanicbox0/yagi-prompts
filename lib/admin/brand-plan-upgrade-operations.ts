@@ -1,6 +1,6 @@
 import { upgradeManualPlan, upgradeSubscriptionPlan, type PlanUpgradeOutcome } from '@/lib/brands/billing/plan-upgrade-apply';
 import { brandBillingAutoIssueOpen } from '@/lib/flags';
-import { isDbAdmin } from './brand-ops-guard';
+import { isDbAdmin, withBillingConflicts } from './brand-ops-guard';
 import { brandFailure } from './brand-workspace-operations';
 import { fail, ok, type AdminContext, type AdminOutcome } from './context';
 import * as f from './form';
@@ -112,7 +112,8 @@ function upgradeOperation(mode: 'manual' | 'subscription'): AdminOperation<Upgra
   };
 }
 
-export const BRAND_PLAN_UPGRADE_OPERATIONS = {
+/** R3 item 8: every conflict of these operations reads as `billingConflict` (lib/admin/brand-ops-guard.ts). */
+export const BRAND_PLAN_UPGRADE_OPERATIONS = withBillingConflicts({
   'brandSubscription.upgrade': upgradeOperation('subscription'),
   'brandBilling.planUpgrade': upgradeOperation('manual'),
-} as const;
+} as const);

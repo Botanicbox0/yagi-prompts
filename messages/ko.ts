@@ -1835,6 +1835,8 @@ export const ko: Dictionary = {
       editBadge: '부분 수정',
       finalBadge: '1080p 완성본',
       noPrompt: '입력한 문장 없음',
+      failedImage: '이미지를 생성하지 못했어요. 다시 시도해 주세요.',
+      failedVideo: '영상을 생성하지 못했어요. 다시 시도해 주세요.',
     },
     dock: {
       label: '만들 내용',
@@ -2219,7 +2221,7 @@ export const ko: Dictionary = {
       provider_unavailable: '지금은 잠시 만들 수 없어요. 조금 뒤에 다시 해 주세요.',
       region_misaligned: '영역이 정확히 일치하지 않아요. 수정할 부위만 조금 더 작게 선택해 주세요.',
       model_unavailable: '고른 모델 중 지금 쓸 수 없는 모델이 있어요. 모델을 다시 골라 주세요.',
-      failed: '이미지를 생성하지 못했어요. 다시 시도해 주세요.',
+      failed: '처리하지 못했어요. 다시 시도해 주세요.',
     },
     // 대표 확인 대기 (2026-11-24): 로컬 Gemma 초안, 용어 "이번 이용 기간"
     errorsCycle: {
@@ -2806,6 +2808,8 @@ export const ko: Dictionary = {
       "active": "참여 중",
       "settings": "설정",
       "support": "스튜디오에 문의",
+      // 대표 확인 대기 — 새 팀 답변이 있을 때 문의 버튼의 접근성 이름 (로컬 문구 모델 2패스 초안)
+      "supportNewReply": "스튜디오에 문의, 새로운 답변 있음",
       "supportHint": "브랜드 운영에 관한 문의를 남겨주세요. 캠페인 수정 요청은 해당 캠페인에서 보내주세요.",
       "supportEmpty": "궁금한 점이 있으면 편하게 남겨주세요.",
       "supportTitle": "문의 내역",
@@ -4007,6 +4011,12 @@ export const ko: Dictionary = {
       needPet: '반려동물 사진을 골라 주세요.',
       needPartner: '상대방 사진을 골라 주세요.',
       needConsent: '동의 여부를 확인해 주세요.',
+      // docs/PERSONAL-STUDIO.md §6.1 — shown only while the Sunra face switch is on. Provisional: founder confirms the wording.
+      birthYearLabel: '출생 연도',
+      birthYearPlaceholder: '연도를 골라 주세요',
+      adultAttest: '만 19세 이상이에요.',
+      adultHint: '처음 한 번만 물어봐요. 저장한 뒤에는 문의로만 바꿀 수 있어요.',
+      needAdult: '출생 연도를 고르고 만 19세 이상인지 확인해 주세요.',
     },
   },
   studio: {
@@ -4197,6 +4207,14 @@ export const ko: Dictionary = {
         partner_consent_required: '상대방의 동의를 확인해 주세요.',
         not_a_pet: '반려동물 사진만 올릴 수 있어요. 사람이 함께 나오지 않은 사진으로 골라 주세요.',
         pet_check_unavailable: '지금은 사진을 확인하지 못했어요. 잠시 후 다시 시도해 주세요.',
+        // docs/PERSONAL-STUDIO.md §6.1–6.2 — only while the Sunra face switch is on. Provisional: founder confirms the wording.
+        adult_confirmation_required: '출생 연도를 고르고 만 19세 이상인지 확인해 주세요.',
+        adult_only: '함께 나오는 영상과 이미지는 만 19세 이상만 만들 수 있어요.',
+        partner_not_one_person: '함께 나올 한 분만 나온 사진을 올려 주세요.',
+        partner_unclear: '얼굴이 잘 보이는 사진을 올려 주세요.',
+        partner_minor: '함께 나오는 분도 성인이어야 해요.',
+        partner_screen: '화면이나 인쇄물을 찍은 사진은 쓸 수 없어요.',
+        partner_check_unavailable: '사진을 확인하지 못했어요. 잠시 뒤에 다시 올려 주세요.',
         generic: '시작하지 못했습니다. 잠시 후 다시 시도해 주세요.',
       },
     },
@@ -5484,6 +5502,7 @@ export const ko: Dictionary = {
     brandStatusFinal: '끝난 캠페인입니다. 상태를 더 바꿀 수 없습니다.',
     inviteHiddenCampaign: '이 캠페인은 아직 고객에게 공개하지 않았습니다. 캠페인만 보는 초대는 공개한 뒤에 보낼 수 있습니다. 브랜드 전체 초대는 브랜드 권한 화면에서 보내세요.',
     errBrandConflict: '캠페인이 그사이 바뀌었거나, 지금 상태에서는 할 수 없는 변경입니다. 새로고침해 현재 상태를 확인해 주세요.',
+    errBillingConflict: '지금 상태에서는 할 수 없는 변경입니다. 아래 상세를 확인하고, 화면을 새로고침해 현재 상태를 본 뒤 다시 시도하세요.',
     errCollaborationRateLimited: '요청이 많습니다. 잠시 후 다시 시도해 주세요.',
     errStudioRateLimited: '짧은 시간에 너무 많이 바꿨어요. 10분 뒤에 다시 해 주세요.',
     errBrandNotActive: '진행 중인 캠페인에서만 할 수 있습니다. 먼저 캠페인을 진행 상태로 바꿔 주세요.',

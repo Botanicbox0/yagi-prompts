@@ -8,7 +8,7 @@
  */
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { StudioIcon } from "../icons";
-import { moveFocus, useDismiss } from "./menu";
+import { focusOption, moveFocus, useDismiss } from "./menu";
 
 export interface ChipOption {
   value: string;
@@ -61,7 +61,7 @@ export function ChipSelect({ label, value, options, data, mono = false, initialO
     setOpen(false);
     if (!refocus) return;
     requestAnimationFrame(() => {
-      if (!document.activeElement || document.activeElement === document.body) chip.current?.focus();
+      if (!document.activeElement || document.activeElement === document.body) chip.current?.focus({ preventScroll: true });
     });
   };
   return (
@@ -130,7 +130,7 @@ function ChipList({
 }: Pick<ChipSelectProps, "label" | "value" | "options" | "data" | "note"> & { id: string; onPick(value: string): void; onClose(): void }) {
   const box = useDismiss(onClose);
   useEffect(() => {
-    (box.current?.querySelector<HTMLElement>('[aria-selected="true"]') ?? box.current?.querySelector<HTMLElement>('[role="option"]'))?.focus({ preventScroll: true });
+    focusOption(box.current, box.current?.querySelector<HTMLElement>('[aria-selected="true"]') ?? box.current?.querySelector<HTMLElement>('[role="option"]'));
   }, [box]);
   return (
     <div ref={box} className="bs-menu bs-pick-list" data-studio-pick-list={data}>

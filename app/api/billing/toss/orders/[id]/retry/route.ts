@@ -21,6 +21,11 @@ const STATUS: Record<string, number> = {
   photo_gone: 410,
   photos_gone: 410,
   rate_limited: 429,
+  // docs/PERSONAL-STUDIO.md §6.1–6.2 (switch on only), refused by planRetryPhotos before the new order exists.
+  adult_confirmation_required: 400,
+  adult_only: 403,
+  adult_check_unavailable: 503,
+  partner_check_unavailable: 503,
 };
 
 /**

@@ -206,6 +206,8 @@ const SUBSCRIBED_WRITERS: Record<string, string> = {
 };
 
 const NON_WRITER_OPS: readonly string[] = [
+  // docs/PERSONAL-STUDIO.md §6.1: a person's stored 19+ answer (adult_confirmations) + an audit row, nothing brand.
+  'account.adultConfirmation.correct',
   'account.deletion.cancel',
   'account.deletion.complete',
   'account.deletion.run',

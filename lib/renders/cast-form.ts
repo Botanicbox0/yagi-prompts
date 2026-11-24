@@ -8,13 +8,19 @@ import {
 } from './cast-inputs';
 import type { RenderStore } from './store';
 import { checkPetPhoto, petRefusal, type PetPhotoVerdict } from './pet-photo-check';
+import { parseAdultAnswer } from '@/lib/account/adult-age';
+import { personalSunraFacesOpen } from '@/lib/flags';
+import { PARTNER_SLOT } from '@/lib/recipes/schema';
+import { partnerCheckStamp, type PartnerCheckStamp } from './cast-inputs';
+import { partnerAtFulfilment, partnerIntake, type PartnerPhotoCheck, type PartnerRuleRefusal } from './partner-rules';
 
 /**
  * docs/CAST-CATEGORIES.md §3 — the make request's photos, read the same way by the paid order route
  * (`/api/billing/toss/orders`) and the operator's free render (`/api/renders`).
  *
  * Field names: `selfieId` (the buyer's saved selfie, unchanged), `slot_pet`, `slot_partner` (files),
- * `partnerConsent=yes` (the uploader confirmed the partner agreed). Nothing here prices, charges or
+ * `partnerConsent=yes` (the uploader confirmed the partner agreed), and — only while the Sunra face switch
+ * is on — `birthYear` + `adultAttested=yes` (docs/PERSONAL-STUDIO.md §6.1). Nothing here prices, charges or
  * changes an order: it only decides which photo the order carries and which extra photos go with it.
  */
 
@@ -32,9 +38,9 @@ export async function castFormPhotos(form: FormData): Promise<CastFormPhotos> {
   return { slots, partnerConsent: form.get('partnerConsent') === 'yes' };
 }
 
-export type OrderPhotosFailure = 'selfie_required' | 'not_found' | 'not_for_sale' | 'slot_missing' | 'bad_slot_photo' | 'partner_consent_required' | 'not_a_pet' | 'pet_check_unavailable';
+export type OrderPhotosFailure = 'selfie_required' | 'not_found' | 'not_for_sale' | 'slot_missing' | 'bad_slot_photo' | 'partner_consent_required' | 'not_a_pet' | 'pet_check_unavailable' | PartnerRuleRefusal;
 export type OrderPhotos =
-  | { ok: true; photo: SlotPhoto; selfieId: string | null; extras: Partial<Record<RenderSlot, SlotPhoto>>; partnerConsent: boolean; templateId: string | null }
+  | { ok: true; photo: SlotPhoto; selfieId: string | null; extras: Partial<Record<RenderSlot, SlotPhoto>>; partnerConsent: boolean; templateId: string | null; partnerCheck?: PartnerCheckStamp }
   | { ok: false; code: OrderPhotosFailure };
 
 /**
@@ -44,7 +50,7 @@ export type OrderPhotos =
  * by `bindOrderPhotos` once the order exists. Optional custom reference slots (`look_ref`, `prop_ref`,
  * `scene_ref`) ride along when provided without altering face consent rules.
  */
-export async function orderPhotos(sql: SqlRunner, store: RenderStore, userId: string, form: FormData, deps: { petCheck?: (photo: SlotPhoto) => Promise<PetPhotoVerdict> } = {}): Promise<OrderPhotos> {
+export async function orderPhotos(sql: SqlRunner, store: RenderStore, userId: string, form: FormData, deps: { petCheck?: (photo: SlotPhoto) => Promise<PetPhotoVerdict>; partnerCheck?: PartnerPhotoCheck; now?: Date } = {}): Promise<OrderPhotos> {
   const petCheck = deps.petCheck ?? checkPetPhoto;
   const selfieId = String(form.get('selfieId') ?? '');
   const selfie = async () => (selfieId ? await savedSelfiePhoto(sql, store, userId, selfieId) : null);
@@ -89,6 +95,14 @@ export async function orderPhotos(sql: SqlRunner, store: RenderStore, userId: st
     }
   }
   if (extras.partner && !partnerConsent) return { ok: false, code: 'partner_consent_required' };
+  // docs/PERSONAL-STUDIO.md §6.1–6.2, only while the Sunra face switch is on: 19+ (the answer sent with this
+  // order is stored once), then the partner photo check — both before the order exists or anything is stored.
+  if (extras.partner && personalSunraFacesOpen()) {
+    const now = deps.now ?? new Date();
+    const gate = await partnerIntake(sql, { userId, photo: extras.partner, answer: parseAdultAnswer(form, now), now }, deps.partnerCheck);
+    if (!gate.ok) return { ok: false, code: gate.code };
+    return { ok: true, photo, selfieId: usedSelfie, extras, partnerConsent, templateId: template.id, partnerCheck: gate.stamp };
+  }
   return { ok: true, photo, selfieId: usedSelfie, extras, partnerConsent, templateId: template.id };
 }
 
@@ -97,7 +111,7 @@ export async function orderPhotos(sql: SqlRunner, store: RenderStore, userId: st
  * job is created with that id when the payment confirms, and reads them from there. An order that is
  * never paid leaves them unclaimed, and the render pass deletes them (lib/renders/cast-inputs.ts).
  */
-export async function bindOrderPhotos(sql: SqlRunner, store: RenderStore, input: { orderId: string; userId: string; templateId: string; extras: Partial<Record<RenderSlot, SlotPhoto>>; partnerConsent: boolean; now: Date }): Promise<void> {
+export async function bindOrderPhotos(sql: SqlRunner, store: RenderStore, input: { orderId: string; userId: string; templateId: string; extras: Partial<Record<RenderSlot, SlotPhoto>>; partnerConsent: boolean; now: Date; partnerCheck?: PartnerCheckStamp }): Promise<void> {
   if (Object.keys(input.extras).length === 0) return;
   if (!(await slotSchemaReady(sql))) return;
   const { rows } = await sql.query<{ render_ref: string }>('select render_ref from billing_payments where id = $1 and user_id = $2', [input.orderId, input.userId]);
@@ -106,6 +120,8 @@ export async function bindOrderPhotos(sql: SqlRunner, store: RenderStore, input:
   await storeSlotPhotos(sql, store, {
     renderId: renderRef, userId: input.userId, templateId: input.templateId, photos: input.extras,
     partnerConsentAt: input.partnerConsent ? input.now : null, now: input.now,
+    // The pass from orderPhotos (switch on only); fulfilment needs it on the bound partner row.
+    ...(input.partnerCheck ? { partnerCheck: input.partnerCheck } : {}),
   });
 }
 
@@ -118,10 +134,10 @@ export async function bindOrderPhotos(sql: SqlRunner, store: RenderStore, input:
 
 export type RetryPhotoPlan =
   | { kind: 'solo' }
-  | { kind: 'refuse'; code: 'not_found' | 'photos_gone' }
+  | { kind: 'refuse'; code: 'not_found' | 'photos_gone' | PartnerRuleRefusal }
   | { kind: 'copy'; fromRef: string; templateId: string; slots: RenderSlot[] };
 
-export async function planRetryPhotos(sql: SqlRunner, userId: string, orderId: string): Promise<RetryPhotoPlan> {
+export async function planRetryPhotos(sql: SqlRunner, userId: string, orderId: string, now: Date = new Date()): Promise<RetryPhotoPlan> {
   // A malformed id is the retry's own `not_found`; never a database error from this read.
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orderId)) return { kind: 'solo' };
   const { rows } = await sql.query<{ template_id: string | null; render_ref: string | null }>(
@@ -147,6 +163,12 @@ export async function planRetryPhotos(sql: SqlRunner, userId: string, orderId: s
   const slots: RenderSlot[] = extraSlots(inputs);
   if (slots.length === 0 && customLiveSlots.length === 0) return { kind: 'solo' };
   if (!slots.every((slot) => live.some((row) => row.slot === slot))) return { kind: 'refuse', code: 'photos_gone' };
+  // docs/PERSONAL-STUDIO.md §6.1–6.2, switch on only: the new order is refused before it exists unless the
+  // account is confirmed and the old partner photo carries a stored pass (copied across below).
+  if (slots.includes(PARTNER_SLOT) && personalSunraFacesOpen()) {
+    const refused = await partnerAtFulfilment(sql, { userId, renderId: order.render_ref, now });
+    if (refused) return { kind: 'refuse', code: refused };
+  }
   return { kind: 'copy', fromRef: order.render_ref, templateId: template.id, slots: [...slots, ...customLiveSlots] };
 }
 
@@ -165,5 +187,7 @@ export async function copyRetryPhotos(sql: SqlRunner, store: RenderStore, input:
     photos[slot] = { bytes: await store.read(row.storage_key), mime: row.mime };
     if (slot === 'partner' && row.partner_consent_at) consentAt = new Date(row.partner_consent_at);
   }
-  await storeSlotPhotos(sql, store, { renderId: toRef, userId: input.userId, templateId: input.plan.templateId, photos, partnerConsentAt: consentAt, now: input.now });
+  // Switch on only: the pass travels with the photo it belongs to, with its original time.
+  const partnerCheck = input.plan.slots.includes(PARTNER_SLOT) && personalSunraFacesOpen() ? { partnerCheck: await partnerCheckStamp(sql, input.plan.fromRef) } : {};
+  await storeSlotPhotos(sql, store, { renderId: toRef, userId: input.userId, templateId: input.plan.templateId, photos, partnerConsentAt: consentAt, now: input.now, ...partnerCheck });
 }

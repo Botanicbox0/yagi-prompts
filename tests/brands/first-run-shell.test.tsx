@@ -15,7 +15,11 @@ import { getDictionary } from '@/lib/i18n/dictionaries';
  *    dark theme's ink, so the lockup, the "no brand yet" line, sign-out and the powered-by mark could not
  *    be read;
  *  - the first tab was an icon with no name: the layout withholds the studio label from a viewer with no
- *    studio-capable brand, but the tab was drawn anyway.
+ *    studio-capable brand, but the tab was drawn anyway;
+ *  - the remaining tabs (library, campaigns, the order toggle) led to pages that could only say "no brand
+ *    yet", and a signed-out visitor on the invitation landing got every tab and a sign-out button.
+ * Now such a bar has no tabs at all; it keeps the topbar frame (the lockup, the brand line, language and,
+ * when signed in, sign-out stay in the layout).
  */
 const state = vi.hoisted(() => ({ path: '/brand' }));
 vi.mock('next/navigation', () => ({
@@ -39,20 +43,29 @@ function links(html: string): Array<[string, string]> {
 }
 
 describe('the shell of an account without a workspace', () => {
-  it('draws no tab without a name when the studio label is withheld', () => {
+  it('draws no tabs at all, and so no tab without a name, while the topbar frame stays', () => {
     // app/(brand)/layout.tsx passes studio="" to a signed-in viewer with no studio-capable brand.
     const html = renderToStaticMarkup(<WorkspaceNavigation {...labels} studio="" scope={NO_WORKSPACE} />);
+    expect(html).toContain('data-brand-layout-mode="topbar"');
+    expect(links(html)).toEqual([]);
+    expect(html).not.toContain('data-nav-item');
+    expect(html).not.toContain('data-nav-order-toggle');
+  });
+
+  it('draws no tabs for a signed-out visitor either, even when the studio label travels', () => {
+    const html = renderToStaticMarkup(<WorkspaceNavigation {...labels} studio={b.productionStudio.title} scope={null} />);
+    expect(html).toContain('data-brand-layout-mode="topbar"');
+    expect(links(html)).toEqual([]);
+    expect(html).not.toContain('data-nav-invite-cta');
+  });
+
+  it('keeps named tabs for an account waiting on a shared campaign', () => {
+    const html = renderToStaticMarkup(<WorkspaceNavigation {...labels} studio="" scope={NO_WORKSPACE} pendingShare />);
     expect(html).toContain('data-brand-layout-mode="topbar"');
     const all = links(html);
     expect(all.length).toBeGreaterThan(0);
     for (const [href, text] of all) expect(text, `link to ${href} has no name`).not.toBe('');
     expect(html).not.toContain('data-nav-item="/brand/studio"');
-  });
-
-  it('still draws the studio tab when its label travels (signed-out invitation landing)', () => {
-    const html = renderToStaticMarkup(<WorkspaceNavigation {...labels} studio={b.productionStudio.title} scope={null} />);
-    expect(html).toContain('data-nav-item="/brand/studio"');
-    expect(links(html).find(([href]) => href === '/brand/studio')?.[1]).toBe(b.productionStudio.title);
   });
 });
 

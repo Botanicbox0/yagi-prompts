@@ -16,7 +16,7 @@ import { credits, fill, type StudioCopy, type StudioLocale } from "../copy";
 import { imageCreditsFor, type DockDraft } from "../dock-model";
 import type { CheckBlock } from "../group-model";
 import { StudioIcon } from "../icons";
-import { moveFocus, useDismiss } from "./menu";
+import { focusOption, moveFocus, useDismiss } from "./menu";
 
 export interface ModelMenuProps {
   models: readonly StudioModel[];
@@ -54,7 +54,7 @@ export function ModelMenu({ models, value, draft, references, copy, locale, init
   const close = () => {
     setOpen(false);
     requestAnimationFrame(() => {
-      if (!document.activeElement || document.activeElement === document.body) chip.current?.focus();
+      if (!document.activeElement || document.activeElement === document.body) chip.current?.focus({ preventScroll: true });
     });
   };
   return (
@@ -117,7 +117,7 @@ function ModelList({
   const box = useDismiss(onClose);
   const multi = Boolean(picked && onToggle);
   useEffect(() => {
-    (box.current?.querySelector<HTMLElement>('[aria-selected="true"]') ?? box.current?.querySelector<HTMLElement>('[role="option"]'))?.focus();
+    focusOption(box.current, box.current?.querySelector<HTMLElement>('[aria-selected="true"]') ?? box.current?.querySelector<HTMLElement>('[role="option"]'));
   }, [box]);
   const full = multi && models.some((model) => blockOf?.(model.id)?.kind === "full");
   const toggle = (model: string) => {

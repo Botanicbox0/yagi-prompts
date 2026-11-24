@@ -35,11 +35,29 @@ export function errorLine(
   return (code && Object.hasOwn(errors, code) ? errors[code as StudioErrorCode] : undefined) ?? errors.failed;
 }
 
+const VIDEO_RUN_KINDS: ReadonlySet<string> = new Set(["video", "video_remix", "video_final", "video_revise"]);
+
+/**
+ * A failed run's line on its card: its own code's sentence, or, for a plain failure (or a code without one),
+ * "이미지를 …" / "영상을 생성하지 못했어요" by the run's kind. `errors.failed` names no medium (it is every
+ * operation's fallback).
+ */
+export function runFailedLine(copy: StudioCopy, kind: string, code: string | null | undefined): string {
+  if (code && code !== "failed" && Object.hasOwn(copy.errors, code)) return errorLine(copy, code);
+  return VIDEO_RUN_KINDS.has(kind) ? copy.board.failedVideo : copy.board.failedImage;
+}
+
+/** "스튜디오를 불러오지 못했어요." plus the code's own sentence, or alone when the code says nothing more (`failed`, unknown). */
+export function loadFailedLine(copy: StudioCopy, code: string | null | undefined): string {
+  if (!code || code === "failed" || !Object.hasOwn(copy.errors, code)) return copy.state.loadFailed;
+  return `${copy.state.loadFailed} ${errorLine(copy, code)}`;
+}
+
 /**
  * Upload refusals whose library sentence is true for an upload: the reason is said as it is. Every other code an
  * upload can come back with (`failed` from a dropped connection or an unexpected answer, `invalid` when the
  * stored bytes could not be read, `conflict`, `too_many_running`, `not_found`, anything unknown) only means the
- * file did not go up this time, and gets `uploadFailed`: the generic `errors.failed` speaks of making an image,
+ * file did not go up this time, and gets `uploadFailed`: the generic `errors.failed` is every operation's fallback and says nothing of an upload,
  * and `conflict` asks for a reload, which in the editing studio is what removes a file that stayed in the tab.
  */
 const UPLOAD_REASON_CODES: ReadonlySet<string> = new Set<StudioErrorCode>([

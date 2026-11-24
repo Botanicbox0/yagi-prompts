@@ -5,29 +5,25 @@ import { fill } from '@/components/brand-studio/copy';
 import { materialBySrc } from '@/lib/brand-studio/editor-v2/fixture';
 import { cssFilterForColorGrade } from '@/lib/brand-studio/compose/color-grade';
 import { COMPOSE_DIMENSIONS, activeColorGradeForFrame, toColorGradeSpec } from '@/lib/brand-studio/compose/timeline';
-import { imageOverlaysAt, storedCutFor } from '@/lib/brand-studio/editor-v2/export-plan';
+import { imageOverlaysAt, soundShiftSec, storedCutFor } from '@/lib/brand-studio/editor-v2/export-plan';
 import { CURRENT_EXPORT_BACKGROUND, currentExportFrame } from '@/lib/brand-studio/editor-v2/framing';
-import { formatTimecode, frameStateAt, spansOf, totalFrames } from '@/lib/brand-studio/editor-v2/frames';
-import { curveSpeedAt, curveStartMedia, curveTimeAt, curveTotalSpanMedia } from '@/lib/brand-studio/editor-v2/speed-curve';
+import { formatTimecode } from '@/lib/brand-studio/editor-v2/frames';
 import { DEFAULT_REFRAME, gradeMatrix, isNeutral } from '@/lib/brand-studio/editor-v2/model';
 import { formatBinding } from '@/lib/brand-studio/editor-v2/shortcuts';
 import { EditorIcon } from './icons';
+import { playForward } from './play-forward';
 import type { EditorApi } from './use-editor';
 import styles from './editor-v2.module.css';
+
+export { disablePitchPreservation } from './play-forward';
 
 const ASPECT_CSS = { '16:9': '16 / 9', '9:16': '9 / 16', '1:1': '1 / 1', '4:5': '4 / 5' } as const;
 const ASPECT_RATIO = { '16:9': 16 / 9, '9:16': 9 / 16, '1:1': 1, '4:5': 4 / 5 } as const;
 
-export function disablePitchPreservation(video: HTMLVideoElement): void {
-  const media = video as HTMLVideoElement & {
-    preservesPitch?: boolean;
-    mozPreservesPitch?: boolean;
-    webkitPreservesPitch?: boolean;
-  };
-  if ('preservesPitch' in media) media.preservesPitch = false;
-  if ('mozPreservesPitch' in media) media.mozPreservesPitch = false;
-  if ('webkitPreservesPitch' in media) media.webkitPreservesPitch = false;
-}
+/** A cut's sound track: not known for a real film's files (heard if they have one). */
+const unknownTrack = (): boolean | null => null;
+/** The sample film's footage has none (tests/brand-studio/editor-v2/preview-sound.test.ts reads each file). */
+const sampleTrack = (): boolean | null => false;
 
 /** How far the platform's own interface reaches into a vertical frame (percent of the frame). */
 const SAFE_ZONES = {
@@ -46,8 +42,15 @@ export function Preview({ api }: { api: EditorApi }) {
   /** The picture's own size, once the video knows it: a real film is framed by it (framing.ts). */
   const [natural, setNatural] = useState<{ src: string; width: number; height: number } | null>(null);
 
-  const latest = useRef({ sequence, playhead, seek: api.seek, setRate: api.setRate });
-  latest.current = { sequence, playhead, seek: api.seek, setRate: api.setRate };
+  const soundTrack = api.real ? unknownTrack : sampleTrack;
+  // A cut's stored sound offset, as the export moves it: the film as the next save writes it (split pieces
+  // carry their parent's). The preview cannot move the element's sound, so such a cut stays silent here.
+  const storedNow = api.real ? (api.filmView?.film ?? null) : null;
+  const soundShift = (cutId: string) => soundShiftSec(storedNow, cutId);
+  const latest = useRef({ sequence, playhead, seek: api.seek, setRate: api.setRate, soundTrack, soundShift });
+  latest.current = { sequence, playhead, seek: api.seek, setRate: api.setRate, soundTrack, soundShift };
+  /** The rate the film last played at: a change from one forward speed to another resumes, it does not start over. */
+  const lastRate = useRef(0);
 
   const clip = activeClip?.clip ?? null;
   const look = clip ? doc.looks[clip.id] : undefined;
@@ -106,79 +109,14 @@ export function Preview({ api }: { api: EditorApi }) {
   }, []);
 
   // Playing forward (1×, or 2× and 4× on the shuttle): the video element is the clock and the playhead
-  // follows it, one whole frame at a time, cut by cut.
+  // follows it, one whole frame at a time, cut by cut; the cut on screen is heard (play-forward.ts).
   useEffect(() => {
+    const resumed = lastRate.current > 0;
+    lastRate.current = rate;
     if (rate <= 0) return;
     const video = videoRef.current;
     if (!video) return;
-    let raf = 0;
-    let lastPush = 0;
-    let expectedId: string | null = null;
-    let seekTo: number | null = null;
-    const startTotal = totalFrames(latest.current.sequence);
-    let cursor = latest.current.playhead >= startTotal - 1 ? 0 : latest.current.playhead;
-    const tick = (now: number) => {
-      const current = latest.current.sequence;
-      const end = totalFrames(current);
-      const active = cursor < end ? frameStateAt(current, cursor).active : null;
-      if (!active) {
-        latest.current.seek(end - 1);
-        latest.current.setRate(0);
-        return;
-      }
-      const { clip: playing } = active;
-      const span = spansOf(current)[active.index]!;
-      if (video.dataset.src !== playing.srcUrl) {
-        video.dataset.src = playing.srcUrl;
-        video.src = playing.srcUrl;
-        seekTo = active.seekSec;
-      } else if (expectedId !== playing.id && Math.abs(video.currentTime - active.seekSec) > 0.5 / playing.sourceFps) {
-        seekTo = active.seekSec;
-      }
-      expectedId = playing.id;
-      if (seekTo !== null) {
-        if (video.readyState >= 1) {
-          video.currentTime = seekTo;
-          seekTo = null;
-        }
-      } else if (playing.speedCurve) {
-        const mediaPos = video.currentTime * current.fps + 1e-6;
-        const startMedia = curveStartMedia(playing.speedCurve);
-        const totalSpan = curveTotalSpanMedia(playing.speedCurve);
-        const u = (mediaPos - startMedia) / Math.max(1e-6, totalSpan);
-        if (u >= 1 || video.ended) {
-          cursor = span.end;
-        } else {
-          const clampedU = Math.max(0, u);
-          const instSpeed = curveSpeedAt(playing.speedCurve, clampedU);
-          disablePitchPreservation(video);
-          video.playbackRate = Math.max(0.0625, Math.min(16, instSpeed * rate));
-          if (video.paused) void video.play().catch(() => undefined);
-          const offset = Math.floor(curveTimeAt(playing.speedCurve, clampedU));
-          if (offset >= playing.frames) cursor = span.end;
-          else if (offset >= 0) cursor = Math.max(cursor, span.start + offset);
-        }
-      } else {
-        disablePitchPreservation(video);
-        video.playbackRate = Math.max(0.0625, Math.min(16, (playing.speedNum / playing.speedDen) * rate));
-        if (video.paused) void video.play().catch(() => undefined);
-        // The film-grid frame the video is on, then back through the cut's speed to a timeline frame.
-        const mediaFrame = Math.floor(video.currentTime * current.fps + 1e-6);
-        const offset = Math.floor(((mediaFrame - playing.inFrame) * playing.speedDen - playing.phase) / playing.speedNum);
-        if (offset >= playing.frames || video.ended) cursor = span.end;
-        else if (offset >= 0) cursor = Math.max(cursor, span.start + offset);
-      }
-      if (now - lastPush > 40 && cursor < end) {
-        lastPush = now;
-        latest.current.seek(cursor);
-      }
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => {
-      cancelAnimationFrame(raf);
-      video.pause();
-    };
+    return playForward(video, latest, rate, { resumed });
   }, [rate]);
 
   // Shuttling backwards: a browser cannot play a video in reverse, so the playhead steps back at the
@@ -320,6 +258,7 @@ export function Preview({ api }: { api: EditorApi }) {
           data-aspect={sequence.aspect}
           data-editor-frame
         >
+          {/* Muted unless the film plays forward: play-forward.ts lets the cut on screen be heard then. */}
           <video
             ref={videoRef}
             className={styles.video}

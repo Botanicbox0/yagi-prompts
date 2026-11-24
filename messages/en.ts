@@ -1824,6 +1824,8 @@ export const en = {
       editBadge: 'Partial edit',
       finalBadge: '1080p',
       noPrompt: 'No prompt',
+      failedImage: 'This image could not be made. Please try again.',
+      failedVideo: 'This video could not be made. Please try again.',
     },
     dock: {
       label: 'What to make',
@@ -2795,6 +2797,8 @@ export const en = {
       "active": "Active member",
       "settings": "Settings",
       "support": "Contact the studio",
+      // 대표 확인 대기
+      "supportNewReply": "Contact the studio, new reply",
       "supportHint": "Ask us about your brand workspace. Send campaign revisions from the relevant campaign.",
       "supportEmpty": "Leave a message whenever you need a hand.",
       "supportTitle": "Conversations",
@@ -4017,6 +4021,12 @@ export const en = {
       needPet: 'Choose your pet’s photo.',
       needPartner: 'Choose the other person’s photo.',
       needConsent: 'Confirm they agreed.',
+      // docs/PERSONAL-STUDIO.md §6.1 — shown only while the Sunra face switch is on. Provisional: founder confirms the wording.
+      birthYearLabel: 'Year of birth',
+      birthYearPlaceholder: 'Choose a year',
+      adultAttest: 'I am 19 or older.',
+      adultHint: 'We ask once. After that, only our support team can change it.',
+      needAdult: 'Choose your year of birth and confirm you are 19 or older.',
     },
   },
   studio: {
@@ -4208,6 +4218,14 @@ export const en = {
         partner_consent_required: 'Confirm the other person agreed.',
         not_a_pet: 'Only a photo of your pet can go here. Choose one with no people in it.',
         pet_check_unavailable: 'We could not check the photo just now. Try again in a moment.',
+        // docs/PERSONAL-STUDIO.md §6.1–6.2 — only while the Sunra face switch is on. Provisional: founder confirms the wording.
+        adult_confirmation_required: 'Choose your year of birth and confirm you are 19 or older.',
+        adult_only: 'Videos and images with another person are for ages 19 and up.',
+        partner_not_one_person: 'Use a photo with only the person who will appear with you.',
+        partner_unclear: 'Use a photo where their face is easy to see.',
+        partner_minor: 'The person who appears with you must be an adult too.',
+        partner_screen: 'A photo of a screen or a printed picture cannot be used.',
+        partner_check_unavailable: 'We could not check the photo. Upload it again in a moment.',
         generic: 'Could not start. Try again in a moment.',
       },
     },
@@ -5514,6 +5532,7 @@ export const en = {
     brandStatusFinal: 'This campaign has ended. Its status cannot change any more.',
     inviteHiddenCampaign: 'This campaign is not shared with the client yet. Campaign-only invitations open once it is shared. For brand-wide access, invite from the brand access page.',
     errBrandConflict: 'The campaign changed in the meantime, or that change is not possible from its current status. Refresh to see where it stands.',
+    errBillingConflict: 'That change is not possible in the current state. Check the detail below, refresh to see where it stands, then try again.',
     errCollaborationRateLimited: 'Too many requests. Try again shortly.',
     errStudioRateLimited: 'Too many changes in a short time. Try again in 10 minutes.',
     errBrandNotActive: 'Only an active campaign accepts this. Move the campaign to active first.',
