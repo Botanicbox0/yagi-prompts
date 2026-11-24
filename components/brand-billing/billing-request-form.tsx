@@ -28,6 +28,8 @@ export interface BillingRequestFormProps {
   neededCredits?: number;
   remainingCredits?: number;
   allowIntentSwitch?: boolean;
+  /** Intents left out of the switch (e.g. extra credits before the workspace has any allowance). */
+  hiddenIntents?: readonly BillingRequestIntent[];
   onSuccess?: (result: {
     id: string;
     noticeKind: string;
@@ -65,6 +67,7 @@ export function BillingRequestForm({
   neededCredits,
   remainingCredits,
   allowIntentSwitch = true,
+  hiddenIntents,
   onSuccess,
   onClose,
 }: BillingRequestFormProps) {
@@ -194,7 +197,7 @@ export function BillingRequestForm({
       {allowIntentSwitch ? (
         <div className={s.field}>
           <div className={s.pillGroup} role="radiogroup" aria-label={intentLabels[intent]}>
-            {BILLING_REQUEST_INTENTS.map((item) => {
+            {BILLING_REQUEST_INTENTS.filter((item) => !hiddenIntents?.includes(item)).map((item) => {
               const active = intent === item;
               return (
                 <button

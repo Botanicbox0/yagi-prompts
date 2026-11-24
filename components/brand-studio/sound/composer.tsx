@@ -103,6 +103,11 @@ export const MusicComposer = forwardRef<
     /** `{n} 크레딧` (brandStudio.credits.amount). */
     amountTemplate: string;
     busy: boolean;
+    /**
+     * The workspace's allowance is closed (the studio's closed notice is the explanation): 만들기 is disabled and no
+     * submit path (the button, Enter in a field, Ctrl/Cmd+Enter) starts a run.
+     */
+    closed?: boolean;
     /** Example descriptions, for a brand that has made no music yet (the first minute, §4.2). */
     showExamples: boolean;
     /** "더 고르게 만들기" is offered (server setting `BRAND_SOUND_MAX_MODE=on`; hidden by default). */
@@ -253,7 +258,7 @@ export const MusicComposer = forwardRef<
   };
   const submit = (event?: FormEvent) => {
     event?.preventDefault();
-    if (!trimmed || props.busy || drafting) return;
+    if (!trimmed || props.busy || drafting || props.closed) return;
     if (namedArtist(trimmed)) return setLocalError(copy.errors.artist);
     if (sentLyrics && namedArtist(sentLyrics)) return setLocalError(copy.composer.lyricsBlocked);
     // A name in the brand or the words to include stops here, as it would stop the draft and the run.
@@ -631,7 +636,7 @@ export const MusicComposer = forwardRef<
           className="bs-btn"
           data-variant="solid"
           data-size="md"
-          disabled={!trimmed || props.busy || drafting}
+          disabled={!trimmed || props.busy || drafting || props.closed}
           aria-label={interpolate(copy.composer.createLabel, { credits: creditsText })}
           data-sound-create
         >
