@@ -73,6 +73,7 @@ import { StudioAllowanceNotice } from '@/components/brand-studio/studio-allowanc
 import type { StudioComposeCopy } from '@/messages/studio-compose';
 import { AssistPanel, AssistPreviewBar } from './assist/assist-panel';
 import { useEditAssist } from './assist/use-edit-assist';
+import { makeComposeRequestId, postComposeOperation } from './compose-request';
 import { commitHistory, initHistory, redoHistory, replaceHistory, undoHistory, type History } from './history';
 import s from './video-composer.module.css';
 
@@ -190,23 +191,6 @@ const MUSIC_STYLE_SPECS: Record<
 function sameOriginComposeUrl(organizationId: string, source: 'asset' | 'output', id: string): string {
   const q = new URLSearchParams({ organizationId, source, id });
   return `/api/brand-studio/compose?${q.toString()}`;
-}
-
-function makeComposeRequestId(prefix = 'cmp'): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return `${prefix}_${crypto.randomUUID().replace(/-/g, '')}`;
-  }
-  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 12)}`;
-}
-
-async function postComposeOperation(operation: string, input: Record<string, unknown>): Promise<Record<string, unknown>> {
-  const res = await fetch('/api/brand-studio/compose', {
-    method: 'POST',
-    credentials: 'same-origin',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ operation, input }),
-  });
-  return (await res.json()) as Record<string, unknown>;
 }
 
 async function postPostProduction(operation: string, input: Record<string, unknown>): Promise<Record<string, unknown>> {
