@@ -171,6 +171,7 @@ export function WorkspaceHome(props: WorkspaceHomeProps) {
           canOpenBilling={props.canOpenBilling}
           closedRequestDraft={copy.closedRequestDraft}
           closedRequestOrgFallback={copy.closedRequestOrgFallback}
+          allowanceWindow={props.allowance?.window ?? null}
         />
       ) : null}
 

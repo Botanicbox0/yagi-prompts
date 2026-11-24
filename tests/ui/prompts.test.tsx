@@ -244,6 +244,42 @@ describe('rails (§13.2)', () => {
     expect(html.indexOf('data-prompt-card="neon-alley-dolly"')).toBeLessThan(html.indexOf('data-prompt-card="second"'));
   });
 
+  it('tags each item with the buyer facts the list filters by: length band, NEW and cast', () => {
+    const html = render(
+      <PromptRail
+        id="video"
+        heading="Video"
+        lede=""
+        cards={[
+          card({ slug: 'short-new', runtimeSeconds: 8, publishedAt: '2026-11-20T00:00:00.000Z' }),
+          card({ slug: 'mid', runtimeSeconds: 15 }),
+          card({ slug: 'long', runtimeSeconds: 30, cast: 'pet' }),
+          card({ slug: 'unknown', runtimeSeconds: null }),
+          card({ slug: 'still', medium: 'image', runtimeSeconds: null }),
+        ]}
+        locale="en"
+        labels={labels}
+        useCaseLabels={useCaseLabels}
+        emptyLabel=""
+        filteredEmptyLabel=""
+        now={new Date('2026-11-24T00:00:00.000Z')}
+      />,
+    );
+    const item = (slug: string) => new RegExp(`<li[^>]*>(?:(?!</li>).)*data-prompt-card="${slug}"`, 's').exec(html)?.[0] ?? '';
+    expect(item('short-new')).toMatch(/data-length="short"/);
+    expect(item('short-new')).toMatch(/data-new="true"/);
+    expect(item('mid')).toMatch(/data-length="mid"/);
+    expect(item('mid')).toMatch(/data-new="false"/);
+    expect(item('long')).toMatch(/data-length="long"/);
+    expect(item('long')).toMatch(/data-cast="pet"/);
+    expect(item('mid')).toMatch(/data-cast="solo"/);
+    // An unknown length is no band: the card shows under "all" only.
+    expect(item('unknown')).toMatch(/data-length=""/);
+    expect(item('still')).toMatch(/data-length=""/);
+    // The use cases stay on the item for the image list.
+    expect(item('mid')).toMatch(/data-use-case="cinematic"/);
+  });
+
   it('says so when a rail is empty rather than leaving a headline over a void', () => {
     expect(rail([])).toContain(dict.prompts.emptyYagi);
   });

@@ -4,6 +4,7 @@
  * the server returns. Amounts are always credits (lib/brand-studio/credits.ts), never money.
  */
 import type { Dictionary } from "@/lib/i18n/dictionaries";
+import { isCycleWindow, type AllowanceWindowView } from "@/lib/brand-studio/allowance-window";
 import type { StudioErrorCode } from "@/lib/brand-studio/contracts";
 import { isUnapprovedUploadReason, type UploadLimitReason } from "@/lib/brands/upload-limits-format";
 import { formatCredits } from "@/lib/brand-studio/credits";
@@ -16,8 +17,13 @@ export function fill(template: string, values: Record<string, string | number>):
   return template.replace(/\{(\w+)\}/g, (match, key: string) => (key in values ? String(values[key]) : match));
 }
 
-/** The customer sentence for an error code; anything unknown reads as the generic failure. */
-export function errorLine(copy: StudioCopy, code: string | null | undefined): string {
+/**
+ * The customer sentence for an error code; anything unknown reads as the generic failure. `window` (R1): the allowance
+ * window of the screen's organization, when it holds one — a billing cycle says "this usage period" instead of "this
+ * month"; without it the words are the calendar month's, as before.
+ */
+export function errorLine(copy: StudioCopy, code: string | null | undefined, window?: Pick<AllowanceWindowView, "kind"> | null): string {
+  if (code === "allowance_exhausted" && isCycleWindow(window)) return copy.errorsCycle.allowance_exhausted;
   const errors = copy.errors as Record<StudioErrorCode, string>;
   return (code && Object.hasOwn(errors, code) ? errors[code as StudioErrorCode] : undefined) ?? errors.failed;
 }

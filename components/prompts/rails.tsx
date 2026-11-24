@@ -3,6 +3,7 @@ import type { PromptCard } from '@/lib/prompts/catalog';
 import { PromptCardView } from './prompt-card';
 import { RevealGrid } from '@/components/motion/reveal-grid';
 import { cardRatio, railOrder } from './card-frame';
+import { cardFacets } from '@/lib/prompts/facets';
 import type { PromptLabels } from './labels';
 
 /**
@@ -66,22 +67,30 @@ export function PromptRail({
       ) : (
         <>
           <RevealGrid className={`${hideHeading ? '' : 'mt-8 '}film-rows`}>
-            {railOrder(cards, now).map((card) => (
-              <li
-                key={card.slug}
-                data-prompt-item
-                data-use-case={card.useCase.join(' ')}
-                style={{ '--r': cardRatio(card) } as CSSProperties}
-              >
-                <PromptCardView
-                  card={card}
-                  locale={locale}
-                  labels={labels}
-                  useCaseLabels={useCaseLabels}
-                  {...(now === undefined ? {} : { now })}
-                />
-              </li>
-            ))}
+            {railOrder(cards, now).map((card) => {
+              // The buyer facts the list filter reads back (lib/prompts/facets.ts); an unknown
+              // length is an empty band, shown under "all" only.
+              const facets = cardFacets(card, now);
+              return (
+                <li
+                  key={card.slug}
+                  data-prompt-item
+                  data-use-case={facets.useCase.join(' ')}
+                  data-length={facets.length ?? ''}
+                  data-new={facets.new ? 'true' : 'false'}
+                  data-cast={facets.cast}
+                  style={{ '--r': cardRatio(card) } as CSSProperties}
+                >
+                  <PromptCardView
+                    card={card}
+                    locale={locale}
+                    labels={labels}
+                    useCaseLabels={useCaseLabels}
+                    {...(now === undefined ? {} : { now })}
+                  />
+                </li>
+              );
+            })}
           </RevealGrid>
           {/* Shown by the client filter when it empties this rail; hidden in the static HTML. */}
           <p data-rail-filtered-empty hidden className="mt-2 text-sm text-muted">

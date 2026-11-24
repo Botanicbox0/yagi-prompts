@@ -52,7 +52,8 @@ function Links({
   // Studio-first default order: Studio -> Brand Kit -> Library -> Campaigns -> Creators
   const basePrimaryEntries: ReadonlyArray<NavEntry> = (
     [
-      ['/brand/studio', labels.studio, 'M3 4h10v12H3z M13 8l5-3v10l-5-3', visible.studio],
+      // A viewer with no studio-capable brand is sent an empty studio label (app/(brand)/layout.tsx): no label, no tab.
+      ['/brand/studio', labels.studio, 'M3 4h10v12H3z M13 8l5-3v10l-5-3', visible.studio && Boolean(labels.studio)],
       ['/brand/identity', labels.identity ?? '', 'M4 3h12v14H4z M7 7h6M7 10h6M7 13h4', Boolean(visible.identity && labels.identity)],
       ['/brand/library', labels.library, 'M3 5h14v12H3z M6 2h8M6 13l3-4 3 3 2-2 3 4', true],
       ['/brand', labels.home, 'M3 3h14v14H3z M3 8h14M8 8v9', true],

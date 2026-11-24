@@ -67,6 +67,11 @@ export interface StudioStyle {
   castInputs?: { selfie: boolean; pet: boolean; partner: boolean };
 }
 
+/** A video template's style: it has an example film or a length (an image style has neither). */
+export function isVideoStyle(style: Pick<StudioStyle, 'videoSrc' | 'runtime'>): boolean {
+  return Boolean(style.videoSrc) || Number(style.runtime) > 0;
+}
+
 export interface StudioLabels {
   stepPhoto: string;
   stepStyle: string;
@@ -878,7 +883,8 @@ export function TwingsStudio({
                         </span>
                         <span className="flex flex-col gap-1 p-3">
                           <span className="font-display text-[1.15rem] leading-[1] font-black uppercase">{style.title}</span>
-                          <span className="font-mono text-[0.72rem] opacity-55">{style.blurb}</span>
+                          {/* 2026-11-24 (founder): genre words say nothing about a video, so a video card leaves them out. */}
+                          {!isVideoStyle(style) && style.blurb && <span className="font-mono text-[0.72rem] opacity-55">{style.blurb}</span>}
                           <span className="mt-1 flex items-baseline justify-between font-label text-[0.7rem] tracking-[0.12em] uppercase">
                             {!monthly && <span className="text-accent">{style.price}</span>}
                             <span className="opacity-45">{labels.runtimeLabel.replace('{seconds}', style.runtime)}</span>

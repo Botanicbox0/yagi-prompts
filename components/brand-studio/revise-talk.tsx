@@ -363,6 +363,7 @@ export function TalkView({
                 allowance ? creditsLeft(allowance.capKrw, allowance.usedKrw) : null
               }
               resetsAt={allowance?.resetsAt ?? null}
+              allowanceWindow={allowance?.window ?? null}
               surface="studio_revise"
             />
           );

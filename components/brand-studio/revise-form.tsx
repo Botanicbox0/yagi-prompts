@@ -733,6 +733,7 @@ export function ReviseFormView(props: ReviseFormViewProps) {
           props.allowance ? creditsLeft(props.allowance.capKrw, props.allowance.usedKrw) : null
         }
         resetsAt={props.allowance?.resetsAt ?? null}
+        allowanceWindow={props.allowance?.window ?? null}
         surface="studio_revise"
       />
     ) : (

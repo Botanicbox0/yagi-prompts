@@ -1059,7 +1059,14 @@ async function sweepTemplates(): Promise<void> {
     expectPresent('…and a ratio chip', page.body, 'data-card-aspect');
     expectAbsent('…and no engine chip', page.body, 'data-model-chip');
     expectAbsent('…and no "view template" button', page.body, 'data-card-detail');
-    expectPresent('the use-case filter', page.body, 'data-use-case-filter');
+    // 2026-11-24 (founder, second time): the video list filters by length, never by genre chips.
+    expectPresent('the list filter', page.body, 'data-list-filter');
+    expectPresent('…grouped by length', page.body, 'data-filter-facet="length"');
+    expectPresent('…with the short band', page.body, 'data-filter-option="length:short"');
+    if (/data-filter-option="length:(mid|long)"/.test(page.body)) ok('…and another band', 'mid or long');
+    else fail('…and another band', 'neither data-filter-option="length:mid" nor "length:long"');
+    expectPresent('cards carry their length band', page.body, 'data-length=');
+    expectAbsent('…and no genre chips', page.body, 'data-filter-option="useCase:');
     // §15.3-5: the GEO definition is still in the HTML, under the grid rather than above it.
     {
       const definition = page.body.indexOf('data-service-definition');
@@ -1087,6 +1094,8 @@ async function sweepTemplates(): Promise<void> {
   expectPresent('is the image tab', image.body, 'data-templates="image"');
   expectPresent('shows the image template', image.body, `data-prompt-card="${IMAGE_TEMPLATE}"`);
   expectAbsent('and no video template', image.body, `data-prompt-card="${GATED_PROMPT}"`);
+  expectPresent('the list filter', image.body, 'data-list-filter');
+  expectAbsent('…with no length group on images', image.body, 'data-filter-facet="length"');
 
   console.log('\n/en/t/[slug] — template pages, anonymous');
   const detail = await get(`/en/t/${GATED_PROMPT}`);

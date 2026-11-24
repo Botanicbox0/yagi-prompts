@@ -2066,6 +2066,7 @@ export function VideoComposer({
           neededCredits={allowanceError?.neededCredits ?? null}
           remainingCredits={creditsLeft(allowance.capKrw, allowance.usedKrw)}
           resetsAt={allowance.resetsAt}
+          allowanceWindow={allowance.window}
           surface="studio_compose"
           solidCta={false}
         />
