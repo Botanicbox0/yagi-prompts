@@ -417,6 +417,9 @@ export default async function TemplatePage({ params }: RouteParams) {
                             subscription: { copy: dict.creatorSubscription, editorCopy: dict.premiumEditor },
                             // docs/PERSONAL-STUDIO.md §3.1 — the sheet card only with the server flag on.
                             ...(personalEditSheetOpen() ? { editSheet: dict.editSheet } : {}),
+                            // docs/PERSONAL-STUDIO.md §3.3 — a template's locked parts, flag on or off: the card's
+                            // public projection only (which parts, never the lock block's words).
+                            ...(card.locks ? { locks: card.locks, lockCopy: dict.editSheet } : {}),
                             labels: {
                               badge: dict.renders.studio.badge,
                               operatorBadge: dict.renders.studio.operatorBadge,

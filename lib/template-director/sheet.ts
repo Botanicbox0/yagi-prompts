@@ -13,7 +13,7 @@
  * Client-safe: plain functions over the types in `./schema` and `lib/revision/sheet-core`; no node-only imports.
  */
 import { normSheetText, sheetTextKey, uniqueSheetTexts } from '@/lib/revision/sheet-core';
-import { NO_LOCKS, lockPhrases, lockSheet, lockTextHit, lockVerdict, type TemplateLocks } from './locks';
+import { NO_LOCKS, lockPhrases, lockSheet, lockedPartText, lockVerdict, type TemplateLocks } from './locks';
 import {
   CUSTOM_DIRECTOR_REF_SLOTS,
   DIRECTOR_EDITABLE_SLOTS,
@@ -180,7 +180,8 @@ export function cleanPersonalSheet(raw: unknown): PersonalEditSheet {
 
 /**
  * Drops every text that fails `guardSheetText`, in every block and in `was`; `dropped` counts them. With template
- * locks (docs/PERSONAL-STUDIO.md §3.3) it also drops locked change lines and exclusions that name a locked part.
+ * locks (docs/PERSONAL-STUDIO.md §3.3) it also drops locked change lines (`lockVerdict`) and exclusions that touch a
+ * locked part (`lockedPartText`: named, or about a closed slot). `keep` lines are never dropped for a lock.
  */
 export function guardPersonalSheet(sheet: PersonalEditSheet, locks: TemplateLocks = NO_LOCKS): { sheet: PersonalEditSheet; dropped: number } {
   const guarded = guardSheetTexts(sheet);
@@ -430,9 +431,9 @@ export function settleSheetTurn(input: {
 
   const added = (list: unknown, max: number) => asList(list).slice(0, max).filter(passes);
   const keep = uniqueSheetTexts([...prior.sheet.keep.filter((_, i) => !removed.keep.has(i)), ...added(reading.keep, L.keepAddMax)], L.keepMax);
-  const priorExclude = prior.sheet.exclude.filter((t, i) => !removed.exclude.has(i) && !lockTextHit(t, locks));
+  const priorExclude = prior.sheet.exclude.filter((t, i) => !removed.exclude.has(i) && !lockedPartText(t, locks));
   const newExclude = added(reading.exclude, L.excludeAddMax).filter((t) => {
-    if (!lockTextHit(t, locks)) return true;
+    if (!lockedPartText(t, locks)) return true;
     locked += 1;
     return false;
   });
@@ -538,7 +539,7 @@ export function planSheetCompile(
     unboundRefs: [],
     replaced: [],
     keep: [...sheet.keep],
-    exclude: locks.any ? sheet.exclude.filter((t) => !lockTextHit(t, locks)) : [...sheet.exclude],
+    exclude: locks.any ? sheet.exclude.filter((t) => !lockedPartText(t, locks)) : [...sheet.exclude],
   };
   const bound = new Set<CustomDirectorRefSlot>();
   for (const l of sheet.change) {
