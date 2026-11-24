@@ -200,6 +200,10 @@ describe('the helper and the warning line in the admin forms', () => {
       expect(html).not.toContain('data-styling-helper');
       expect(html).not.toContain('data-template-styling="missing"');
     }
+    // A recipe template's order reads its steps, not this text: the styling panel declares it there instead.
+    const recipe = renderToStaticMarkup(createElement(PromptFields, { row: row(BASE), dict: ko, recipeTemplate: true }));
+    expect(recipe).not.toContain('data-styling-helper');
+    expect(recipe).not.toContain('data-template-styling="missing"');
   });
 
   it('the helper: two parts, two choices each, photo by default; nothing is posted with the form', () => {

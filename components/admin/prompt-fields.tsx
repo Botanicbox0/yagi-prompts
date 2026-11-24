@@ -235,7 +235,7 @@ export function stylingPartLabels(styling: PublicTemplateStyling, dict: Dict): s
  * when a person template has none: it still saves, but a new template could not be made that way), and a collapsed
  * example an author can copy. Admin-only, so it names the parts; the block's own words stay in the field above.
  */
-function TemplateLocksNote({ promptText, cast, dict }: { promptText: string | null; cast: PromptRow['cast'] | null; dict: Dict }) {
+function TemplateLocksNote({ promptText, cast, recipeTemplate, dict }: { promptText: string | null; cast: PromptRow['cast'] | null; recipeTemplate: boolean; dict: Dict }) {
   const a = dict.admin;
   const check = promptText === null ? null : checkLockBlock(promptText);
   const styling = promptText === null ? null : checkStylingBlock(promptText);
@@ -256,7 +256,7 @@ function TemplateLocksNote({ promptText, cast, dict }: { promptText: string | nu
           {a.templateStylingMalformed}
         </p>
       )}
-      {styling?.state === 'none' && cast !== 'pet' && (
+      {styling?.state === 'none' && cast !== 'pet' && !recipeTemplate && (
         <p data-template-styling="missing" className="font-mono text-[0.72rem] text-accent">
           {a.templateStylingMissing}
         </p>
@@ -287,7 +287,7 @@ export function LockBlockRefusalNote({ detail, dict }: { detail: string | undefi
   return <LockRefusalNotice lines={lines} className="mt-3 rounded-[10px] border border-accent px-3.5 py-2.5 text-[13px] text-accent" />;
 }
 
-export function PromptFields({ row, dict, look }: {
+export function PromptFields({ row, dict, look, recipeTemplate = false }: {
   row: PromptRow | null;
   dict: Dict;
   /**
@@ -296,6 +296,11 @@ export function PromptFields({ row, dict, look }: {
    * is turned on. Absent, the form has no select and the save leaves the style alone.
    */
   look?: TemplateAudience;
+  /**
+   * §3.4.9, rule 3: an order compiles the template's recipe steps, not this text (lib/template-director/compile-prompts.ts),
+   * so the styling helper and warning stay off here; the styling panel declares it in every step at once.
+   */
+  recipeTemplate?: boolean;
 }) {
   const a = dict.admin;
   const existing = row === null ? {} : parsePromptMedia(row.media);
@@ -360,12 +365,14 @@ export function PromptFields({ row, dict, look }: {
       </div>
 
       {/* §3.4.9, rule 3: a person template says how its hair and makeup are made; the helper writes the block. */}
-      <TemplateStylingHelper
-        copy={a.stylingHelper}
-        partLabels={{ hair: dict.editSheet.slots.hair, makeup: dict.editSheet.slots.makeup }}
-        initialPrompt={row?.promptText ?? ''}
-        initialCast={row?.cast ?? 'solo'}
-      />
+      {!recipeTemplate && (
+        <TemplateStylingHelper
+          copy={a.stylingHelper}
+          partLabels={{ hair: dict.editSheet.slots.hair, makeup: dict.editSheet.slots.makeup }}
+          initialPrompt={row?.promptText ?? ''}
+          initialCast={row?.cast ?? 'solo'}
+        />
+      )}
       <Field label={a.fieldPromptBody}>
         <textarea
           name="promptText"
@@ -377,7 +384,7 @@ export function PromptFields({ row, dict, look }: {
           className={INPUT}
         />
       </Field>
-      <TemplateLocksNote promptText={row?.promptText ?? null} cast={row?.cast ?? null} dict={dict} />
+      <TemplateLocksNote promptText={row?.promptText ?? null} cast={row?.cast ?? null} recipeTemplate={recipeTemplate} dict={dict} />
 
       <details open={row !== null} className="border border-hairline p-3">
         <summary className="cursor-pointer font-label text-eyebrow">{a.promptOptionalDetails}</summary>
