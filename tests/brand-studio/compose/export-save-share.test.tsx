@@ -13,7 +13,9 @@ import type { MountedDom } from '@/tests/brands/_dom-harness';
  *   by the export and measured by it (width, height and length from the export, not read again);
  * - which line for which refusal: `saveQuotaExceeded` for `asset_limit` and `storage_quota_exceeded` (whatever the
  *   reason), `saveFailed` for anything else (`file_too_large`, `forbidden`, a dropped connection);
- * - the saved-once guard: saved, the button says so and a second press uploads nothing;
+ * - the saving state (the button says so and cannot be pressed while the upload runs) and the saved-once guard:
+ *   saved, the button says so and a second press uploads nothing;
+ * - the saved asset goes first in the editor's own list of uploads, without a reload;
  * - what the review share window is opened with in each branch: the saved export first, else the selected (first)
  *   clip's asset, else its studio result, else the export uploaded there and then; the title is the clip's name or
  *   the editor's own; with nothing to share it still asks and says `reviewNeedsSave`.
@@ -63,6 +65,8 @@ interface Plan {
   reserveStatus?: number;
   /** Where the connection drops. */
   drop?: 'reserve' | 'bytes';
+  /** The reserve never answers (to look at the saving state). */
+  hang?: boolean;
 }
 
 function savedAsset(id: string) {
@@ -86,6 +90,7 @@ function network(plan: Plan = {}) {
     if (entry.url === '/api/brand-studio/compose') return json({ ok: true, jobId: 'job-1', creditsUsed: 0 });
     if (entry.url === '/api/brand-studio/share-bridge') return json({ ok: true, projects: [], shares: [] });
     if (entry.url === '/api/brand-studio' && entry.operation === 'asset.reserve') {
+      if (plan.hang) return new Promise<Response>(() => undefined);
       if (plan.drop === 'reserve') throw new TypeError('Failed to fetch');
       return json(plan.reserve ?? { ok: true, id: SAVED, direct: false }, plan.reserveStatus ?? 200);
     }
@@ -108,7 +113,10 @@ function network(plan: Plan = {}) {
 let dom: MountedDom | null = null;
 let shared: ShareReviewTarget[] = [];
 
-async function mountComposer(project: ComposerProject, canCreate = true) {
+/** An asset the organization already has (listed under "uploads"). */
+const EARLIER = { ...savedAsset('30000000-0000-4000-8000-0000000000e1'), name: 'earlier.mp4', createdAt: '2026-11-20T01:00:00.000Z' };
+
+async function mountComposer(project: ComposerProject, canCreate = true, list: { assets?: unknown[]; filter?: 'uploads' } = {}) {
   const { mountDom } = await import('@/tests/brands/_dom-harness');
   const { VideoComposer } = await import('@/components/brand-studio/compose/video-composer');
   dom = await mountDom(
@@ -120,8 +128,9 @@ async function mountComposer(project: ComposerProject, canCreate = true) {
       copy={copy}
       videoStudioHref={`/brand/studio/video?organizationId=${ORG}`}
       initialAllowance={{ capKrw: 300_000, usedKrw: 0, resetsAt: '2026-12-01T00:00:00.000Z', window: 'month', refill: 'monthly' } as never}
-      initialAssets={[]}
+      initialAssets={(list.assets ?? []) as never}
       initialVideoOutputs={[]}
+      initialBrowserFilter={list.filter}
       initialProject={project}
     />,
   );
@@ -208,6 +217,32 @@ describe('the current editor saves its export to the assets', () => {
     expect(net.uploads()).toHaveLength(1);
     // Only the export record went to the compose route; nothing else asks for credits.
     expect(net.sent.filter((entry) => entry.url === '/api/brand-studio/compose').map((entry) => entry.operation)).toEqual(['render.reserve']);
+  });
+
+  it('while the upload runs the button says it is saving and cannot be pressed', async () => {
+    const net = network({ hang: true });
+    await mountComposer(film(clip('c1', {})));
+    await exportFilm();
+    await settle();
+    await dom!.click(saveButton()!);
+    await settle();
+    expect(saveButton()?.textContent).toBe(copy.actions.savingToAssets);
+    expect(saveButton()?.hasAttribute('disabled')).toBe(true);
+    await dom!.click(saveButton()!);
+    await settle();
+    expect(net.uploads()).toHaveLength(1);
+  });
+
+  it('puts the saved asset first in its own list of uploads, without a reload', async () => {
+    network();
+    await mountComposer(film(clip('c1', {})), true, { assets: [EARLIER], filter: 'uploads' });
+    const cards = () => dom!.queryAll('[data-compose-asset-card]').map((card) => card.getAttribute('data-compose-asset-card'));
+    expect(cards()).toEqual([EARLIER.id]);
+    await exportFilm();
+    await settle();
+    await dom!.click(saveButton()!);
+    await settle();
+    expect(cards()).toEqual([SAVED, EARLIER.id]);
   });
 
   it('a new export makes the button pressable again, and that press is a second asset', async () => {

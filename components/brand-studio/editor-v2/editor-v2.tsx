@@ -48,8 +48,9 @@ export interface EditorV2Props {
  */
 export function EditorV2({ copy, currentEditorHref, initialWorkspace, exportPath = null, autoDownload = true, real, keep = null }: EditorV2Props) {
   const api = useEditor(copy, { real, initialWorkspace });
-  // The review share window is titled by the film's name, as the header shows it.
-  const exportKeep = real && keep ? { copy: keep.copy, title: fill(copy.real.filmName, { name: real.organizationName }) } : null;
+  // "에셋에 저장" and "검수 · 공유" are for people who may change the organization's own film; the review share
+  // window is titled by the film's name, as the header shows it. Anyone else gets neither, nor the window's host.
+  const exportKeep = real && keep && real.canEdit ? { copy: keep.copy, title: fill(copy.real.filmName, { name: real.organizationName }) } : null;
   const latest = useRef<EditorApi>(api);
   latest.current = api;
 
@@ -181,7 +182,7 @@ export function EditorV2({ copy, currentEditorHref, initialWorkspace, exportPath
         </div>
       )}
       {api.exportOpen && <ExportSheet api={api} exportPath={exportPath} autoDownload={autoDownload} keep={exportKeep} />}
-      {real && keep && <ExportShareHost organizationId={real.organizationId} locale={keep.locale} />}
+      {real && keep && exportKeep && <ExportShareHost organizationId={real.organizationId} locale={keep.locale} />}
       {api.shortcutsOpen && <ShortcutsPanel api={api} />}
       {api.toast && <p className={styles.toast} role="status" data-editor-toast>{api.toast}</p>}
     </div>
