@@ -14,6 +14,7 @@ import { parseDisclosure, parsePresentation, recipeSchemaReady, type Disclosure,
 import { MAX_RECIPE_BYTES, parseRecipe, recipeCast, recipeMedium, type Recipe, type RecipeIssue, type RecipeMedium } from './schema';
 import { selfPublishFormat, selfPublishOpen } from './self-publish';
 import { parseVideoKeyframes, type VideoKeyframe } from '@/lib/prompts/keyframes';
+import { imageTestRecipe } from './test-render';
 
 /**
  * The maker editor's server half (`/creators/workspace/formats/new`, docs/PLATFORM-2.0.md §7.4).
@@ -22,7 +23,9 @@ import { parseVideoKeyframes, type VideoKeyframe } from '@/lib/prompts/keyframes
  *           choices and the requested royalty. Only the owner's own draft changes.
  *   files   reference files and an uploaded example attach to a draft (lib/recipes/assets.ts).
  *   test    a test render with the maker's OWN saved photo — at most MAKER_TEST_RENDERS a format,
- *           counted in the same transaction that writes the job. TWINGS pays; the cost is recorded.
+ *           counted in the same transaction that writes the job. It is not an order, so it runs the
+ *           IMAGE steps only (lib/recipes/test-render.ts, founder decision 2026-11-24): video is made
+ *           when a buyer pays. A film-only recipe has nothing to test and is refused before the count.
  *   submit  draft → submitted, after every recipe rule, the files check (each handle is this
  *           format's own reference file), the example and the rights confirmation.
  *
@@ -97,7 +100,7 @@ async function checkedRecipe(sql: SqlRunner, row: DraftRow): Promise<{ recipe: R
   return { recipe: checked.recipe, medium: checked.medium };
 }
 
-export async function makerAction(deps: { sql: SqlRunner; store: RenderStore; storage?: StorageDriver }, viewer: Viewer, raw: unknown, access: MakerAccess): Promise<{ id: string; renderId?: string; templateId?: string; slug?: string; priceKrw?: number }> {
+export async function makerAction(deps: { sql: SqlRunner; store: RenderStore; storage?: StorageDriver }, viewer: Viewer, raw: unknown, access: MakerAccess): Promise<{ id: string; renderId?: string; skipped?: string[]; templateId?: string; slug?: string; priceKrw?: number }> {
   const parsed = MakerActionInput.safeParse(raw);
   demand(parsed.success, 'invalid');
   const input = parsed.data;
@@ -181,15 +184,19 @@ export async function makerAction(deps: { sql: SqlRunner; store: RenderStore; st
     // docs/CAST-CATEGORIES.md §3: a test render sends only the maker's own selfie. A pet or couple recipe
     // also needs the pet or partner photo, so it is refused here — before a test render is counted.
     demand(recipeCast(recipe) === 'solo', 'cast_test_unavailable');
+    // Founder decision 2026-11-24: no free video. The test runs the image steps; a film-only recipe is
+    // refused here, before a test render is counted.
+    const test = imageTestRecipe(recipe);
+    demand(test.ok, 'video_test_unavailable');
     const used = await tx.query<{ n: number }>("update platform_formats set test_renders_used=test_renders_used+1 where id=$1 and test_renders_used<$2 returning test_renders_used n", [row.id, MAKER_TEST_RENDERS]);
     demand(used.rows.length, 'test_limit');
     const selfieId = input.selfieId ?? (await currentSelfie(tx, userId))?.id;
     demand(selfieId, 'selfie_required');
     const photo = await savedSelfiePhoto(tx, deps.store, userId, selfieId);
     demand(photo, 'selfie_required');
-    const created = await createRecipeSandboxRender({ sql: tx, store: deps.store }, { userId, locale: viewer.locale ?? null, formatId: row.id, purpose: 'maker_test', recipe, photo, selfieId });
+    const created = await createRecipeSandboxRender({ sql: tx, store: deps.store }, { userId, locale: viewer.locale ?? null, formatId: row.id, purpose: 'maker_test', recipe: test.recipe, photo, selfieId });
     demand(created.ok, 'selfie_required');
-    return { id: row.id, renderId: created.id };
+    return { id: row.id, renderId: created.id, skipped: test.skipped };
   });
 }
 

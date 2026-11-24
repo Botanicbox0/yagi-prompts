@@ -53,4 +53,23 @@ describe('recipe editor', () => {
     expect(company).toContain(ko.makerRecipe.earningCompany);
     expect(company).not.toContain('한 번 만들 때');
   });
+
+  // Founder decision 2026-11-24: a test never makes video. A film-only recipe says so and offers no test.
+  it('tells a film-only recipe that there is nothing to test', () => {
+    const film = { kind: 'video' as const, engine: 'seedance-2.5', text: '[내 사진]의 인물이 비 오는 거리를 천천히 걷는다.', aspect: '9:16', duration: 10, resolution: '720p' as const };
+    const still = { kind: 'image' as const, engine: 'gpt-image-2', text: '[내 사진]의 인물이 비 오는 거리에 선 스틸.', aspect: '4:5', duration: 10, resolution: '720p' as const };
+    const render = (steps: Parameters<typeof toRecipe>[0]) => {
+      const recipe = toRecipe(steps, 'video', [], label);
+      expect(parseRecipe(recipe).ok).toBe(true);
+      const draft = { status: 'draft' as const, title: 'Rain walk', titleKo: null, recipe, exampleUrl: null, disclosure: { prompts: false, assets: false }, presentation: 'make-first' as const, royaltyKrw: 0, testRendersUsed: 0, files: [], tests: [], revisionOf: null };
+      return renderToString(<RecipeEditor copy={ko.makerRecipe} formatId="11111111-1111-4111-8111-111111111111" draft={draft}
+        engines={[{ id: 'gpt-image-2', label: 'GPT IMAGE 2', kind: 'image' }, { id: 'seedance-2.5', label: 'SEEDANCE 2.5', kind: 'video', minDuration: 4, maxDuration: 30, resolutions: ['720p'] }]}
+        aspects={{ image: ['4:5'], video: ['9:16'] }} hasSelfie testLimit={3} selfieHref="/identity/selfie" workspaceHref="/creators/workspace" locale="ko" selfPublish />);
+    };
+    const filmOnly = render([film]);
+    expect(filmOnly).toContain('data-recipe-test-video-only');
+    expect(filmOnly).toContain(ko.makerRecipe.testVideoOnly);
+    const imageThenFilm = render([still, { ...film, text: '[1단계 결과]의 인물이 비 오는 거리를 천천히 걷는다.' }]);
+    expect(imageThenFilm).not.toContain('data-recipe-test-video-only');
+  });
 });

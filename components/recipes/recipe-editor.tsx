@@ -8,6 +8,7 @@ import { exportRecipe, INTRO_MAX, MAX_RECIPE_STEPS, MAX_STEP_PROMPT_CHARS, NOTE_
 import { BUTTON, BUTTON_OUTLINE, FIELD, HINT, PANEL } from '@/components/creators/styles';
 import { KeyframePicker } from './keyframe-picker';
 import type { VideoKeyframe } from '@/lib/prompts/keyframes';
+import { imageTestRecipe } from '@/lib/recipes/test-render';
 
 /**
  * The maker recipe editor (docs/PLATFORM-2.0.md §7.4): editor on the left, the template page preview
@@ -229,6 +230,9 @@ export function RecipeEditor({ copy, formatId, draft, engines, aspects, hasSelfi
     return `${where}${copy.issues[issue.code] ?? copy.errors.invalid}`;
   };
   const testsLeft = Math.max(0, testLimit - used);
+  // A test makes the image steps only (founder decision 2026-11-24); with none to test, the example film stands in.
+  const untestable = checked.ok && !imageTestRecipe(checked.recipe).ok;
+  const publishReady = untestable ? exampleFile?.kind === 'video' : tests.some((t) => t.status === 'succeeded');
   const disabled = !ready || !editable;
 
   const howBlock = <section data-preview-how className="space-y-3 rounded-2xl border border-hairline p-4">
@@ -433,7 +437,7 @@ export function RecipeEditor({ copy, formatId, draft, engines, aspects, hasSelfi
         <div className="flex flex-wrap gap-3">
           <button type="button" disabled={!ready || !!busy} onClick={() => void run('save', () => save())} className={BUTTON_OUTLINE}>{busy === 'save' ? copy.saving : copy.save}</button>
           {selfPublish
-            ? <button type="button" data-recipe-publish disabled={!ready || !!busy || !rights || !checked.ok || !exampleFile || !tests.some((t) => t.status === 'succeeded')} onClick={() => void publish()} className={BUTTON}>{busy === 'publish' ? copy.publishing : copy.publish}</button>
+            ? <button type="button" data-recipe-publish disabled={!ready || !!busy || !rights || !checked.ok || !exampleFile || !publishReady} onClick={() => void publish()} className={BUTTON}>{busy === 'publish' ? copy.publishing : copy.publish}</button>
             : <button type="button" data-recipe-submit disabled={!ready || !!busy || !rights || !checked.ok} onClick={() => void submit()} className={BUTTON}>{busy === 'submit' ? copy.submitting : copy.submit}</button>}
         </div>
         {selfPublish ? <p className={HINT}>{copy.publishHint}</p> : null}
@@ -450,8 +454,9 @@ export function RecipeEditor({ copy, formatId, draft, engines, aspects, hasSelfi
       <section data-recipe-test className={PANEL}>
         <div className="flex flex-wrap items-baseline justify-between gap-2"><h2 className="text-lg font-semibold">{copy.test}</h2><span className="text-xs tabular-nums opacity-70">{interpolate(copy.testLeft, { n: String(testsLeft) })}</span></div>
         <p className="text-xs leading-relaxed opacity-60">{interpolate(copy.testHint, { limit: String(testLimit) })}</p>
+        {untestable ? <p data-recipe-test-video-only className="text-sm">{copy.testVideoOnly}</p> : null}
         {!hasSelfie ? <p className="text-sm">{copy.testNeedsSelfie} <a href={selfieHref} className="underline underline-offset-4">{copy.selfieLink}</a></p> : null}
-        <button type="button" data-recipe-test-start disabled={!ready || !!busy || !hasSelfie || !testsLeft || !checked.ok || (status !== null && status !== 'draft' && status !== 'submitted')} onClick={() => void testRender()} className={BUTTON}>{busy === 'test' ? copy.saving : copy.testCta}</button>
+        <button type="button" data-recipe-test-start disabled={!ready || !!busy || !hasSelfie || !testsLeft || !checked.ok || untestable || (status !== null && status !== 'draft' && status !== 'submitted')} onClick={() => void testRender()} className={BUTTON}>{busy === 'test' ? copy.saving : copy.testCta}</button>
         {tests.length ? <ul className="space-y-3">{tests.map((test) => <li key={test.id} data-recipe-test-render={test.id} data-status={test.status} className="space-y-2 border-t border-hairline pt-3 text-sm">
           <p className="flex flex-wrap items-baseline justify-between gap-2"><span>{copy.testStatus[test.status as keyof Copy['testStatus']] ?? test.status}</span><a href={`/renders/${test.id}`} className="text-xs underline underline-offset-4">{copy.testOpen}</a></p>
           {test.status === 'succeeded' && test.outputs ? <ul className="flex flex-wrap gap-2">{Array.from({ length: test.outputs }, (_, n) => <li key={n}><a href={`/api/makers/renders/${test.id}/${n}`} target="_blank" rel="noopener noreferrer" className="text-xs underline underline-offset-4">{interpolate(copy.testFrame, { n: String(n + 1) })}</a></li>)}</ul> : null}
