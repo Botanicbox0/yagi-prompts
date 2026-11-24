@@ -1,6 +1,27 @@
 'use client';
 
-import { useEffect, useId, useRef, useState, useTransition } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, useTransition } from 'react';
+import {
+  EditSheetCard,
+  buildSheetDirectorSpec,
+  pendingFoldNotice,
+  readSheetTurnAnswer,
+  sheetNoticeText,
+  pendingLineNotice,
+  visibleSheetQuestion,
+  type EditSheetCopy,
+  type SheetNotice
+} from './edit-sheet-card';
+import {
+  chipsFromSheet,
+  dropRef,
+  emptyPersonalSheetState,
+  hasSheetContent,
+  removeLine,
+  removeSlot,
+  revertChange
+} from '@/lib/template-director/sheet';
+import type { PersonalEditSheet, PersonalSheetState } from '@/lib/template-director/schema';
 import {
   DEFAULT_EDITORIAL_TEMPLATE_BASELINE,
   diagnosePhotoSuitability,
@@ -350,6 +371,12 @@ export interface TemplateDirectorPanelProps {
     summaryChips: DirectorSummaryChip[];
   }>;
   onChipsChange?: (chips: DirectorSummaryChip[]) => void;
+  /**
+   * docs/PERSONAL-STUDIO.md §3.1 — the edit sheet's words. The page passes them only when
+   * `TWINGS_PERSONAL_EDIT_SHEET` is on; present, the panel keeps an edit sheet, shows it as a card instead of the
+   * chips row, sends it with every turn and hands it to the order. Absent, the panel is exactly the chips panel.
+   */
+  editSheet?: EditSheetCopy | null;
 }
 
 const FOCUS_RING =
@@ -383,7 +410,8 @@ export function TemplateDirectorPanel({
   onSelectIdentityCandidate,
   onRequestReupload,
   onSubmitTurn,
-  onChipsChange
+  onChipsChange,
+  editSheet = null
 }: TemplateDirectorPanelProps) {
   const baseId = useId();
   const drawerId = `${baseId}-drawer`;
@@ -478,7 +506,14 @@ export function TemplateDirectorPanel({
     'nano-banana-2.1': null
   });
   const [userMessage, setUserMessage] = useState('');
-  const [chips, setChips] = useState<DirectorSummaryChip[]>(initialChips);
+  const [chipsState, setChips] = useState<DirectorSummaryChip[]>(initialChips);
+  // docs/PERSONAL-STUDIO.md §3.1 — sheet mode (`editSheet` present): the sheet is the state and the chips are
+  // derived from it; without `editSheet` these stay empty and `chips` is the chips state exactly as before.
+  const [sheetState, setSheetState] = useState<PersonalSheetState>(emptyPersonalSheetState);
+  const [sheetNotice, setSheetNotice] = useState<SheetNotice | null>(null);
+  const sheetChips = useMemo(() => chipsFromSheet(sheetState.sheet), [sheetState.sheet]);
+  const chips = editSheet ? sheetChips : chipsState;
+  const sheetQuestion = visibleSheetQuestion(sheetState.question, locale);
   const [assistantMessage, setAssistantMessage] = useState<string | null>(initialAssistantMessage);
   const [turnAccepted, setTurnAccepted] = useState<boolean>(true);
   const [fileError, setFileError] = useState<string | null>(null);
@@ -499,8 +534,38 @@ export function TemplateDirectorPanel({
   const textInputRef = useRef<HTMLTextAreaElement>(null);
   const onDraftChangeRef = useRef(onDraftChange);
   onDraftChangeRef.current = onDraftChange;
+  const onChipsChangeRef = useRef(onChipsChange);
+  onChipsChangeRef.current = onChipsChange;
   const activeUrlsRef = useRef<Set<string>>(new Set());
   const requestEpochRef = useRef(0);
+
+  // Sheet mode: what the order carries — typed text not sent yet is folded in, so it is on the card and never
+  // silently dropped (docs/PERSONAL-STUDIO.md §3.1 "화면 조각이 지켜야 할 것").
+  const sheetDraft = useMemo(
+    () =>
+      editSheet
+        ? buildSheetDirectorSpec({
+            sheet: sheetState.sheet,
+            pendingNote: userMessage,
+            audioMode: isVideoContext ? audioMode : 'ambient',
+            bgmMood,
+            slotOverrides: [
+              ...(outfitSlot ? (['look_ref'] as const) : []),
+              ...(propSlot ? (['prop_ref'] as const) : []),
+              ...(sceneSlot ? (['scene_ref'] as const) : [])
+            ]
+          })
+        : null,
+    [audioMode, bgmMood, editSheet, isVideoContext, outfitSlot, propSlot, sceneSlot, sheetState.sheet, userMessage]
+  );
+
+  // Sheet mode: tell a listener when the derived chips change (the first render is not a change).
+  const lastSheetChipsRef = useRef(sheetChips);
+  useEffect(() => {
+    if (!editSheet || lastSheetChipsRef.current === sheetChips) return;
+    lastSheetChipsRef.current = sheetChips;
+    onChipsChangeRef.current?.(sheetChips);
+  }, [editSheet, sheetChips]);
 
   // Sync draft spec and attached slot files to the parent studio form without re-trigger loops.
   useEffect(() => {
@@ -511,6 +576,10 @@ export function TemplateDirectorPanel({
       ...(propSlot ? { prop_ref: propSlot.file } : {}),
       ...(sceneSlot ? { scene_ref: sceneSlot.file } : {})
     };
+    if (sheetDraft) {
+      notify({ slotFiles, directorSpec: sheetDraft.spec });
+      return;
+    }
     const slotOverrides: Array<'look_ref' | 'prop_ref' | 'scene_ref'> = [];
     if (outfitSlot) slotOverrides.push('look_ref');
     if (propSlot) slotOverrides.push('prop_ref');
@@ -532,7 +601,7 @@ export function TemplateDirectorPanel({
           }
         : null
     });
-  }, [audioMode, bgmMood, chips, isVideoContext, outfitSlot, propSlot, sceneSlot, userMessage]);
+  }, [audioMode, bgmMood, chips, isVideoContext, outfitSlot, propSlot, sceneSlot, sheetDraft, userMessage]);
 
   // Clean up all created object URLs on unmount so mobile Safari never leaks blob memory.
   useEffect(() => {
@@ -604,6 +673,18 @@ export function TemplateDirectorPanel({
       setSceneSlot(null);
       if (sceneInputRef.current) sceneInputRef.current.value = '';
     }
+    // Sheet mode: lines that took from the photo keep their words but no longer bind it.
+    const removedPhoto = slotName === 'outfit' ? outfitSlot : slotName === 'prop' ? propSlot : sceneSlot;
+    if (editSheet && removedPhoto) {
+      const ref = slotName === 'outfit' ? 'look_ref' : slotName === 'prop' ? 'prop_ref' : 'scene_ref';
+      setSheetState((s) => ({ ...s, sheet: dropRef(s.sheet, ref) }));
+    }
+  };
+
+  /** Sheet mode: a local edit (remove, revert, slot back to default). No server call; the live line clears. */
+  const editSheetLocally = (edit: (sheet: PersonalEditSheet) => PersonalEditSheet) => {
+    setSheetState((s) => ({ ...s, sheet: edit(s.sheet) }));
+    setSheetNotice(null);
   };
 
   const removeChip = (indexToRemove: number) => {
@@ -621,6 +702,10 @@ export function TemplateDirectorPanel({
       clearReferenceSlot('prop');
     } else if (slot === 'lighting_mood') {
       clearReferenceSlot('scene');
+    }
+    if (editSheet) {
+      editSheetLocally((sheet) => removeSlot(sheet, slot));
+      return;
     }
     startTransition(() => {
       const next = chips.filter((chip) => chip.slot !== slot);
@@ -668,10 +753,76 @@ export function TemplateDirectorPanel({
     setPasteNotice(null);
     setAssistantMessage(null);
     setTurnAccepted(true);
+    if (editSheet) {
+      setSheetState(emptyPersonalSheetState());
+      setSheetNotice(null);
+      return;
+    }
     startTransition(() => {
       setChips([]);
       onChipsChange?.([]);
     });
+  };
+
+  /**
+   * Sheet mode (docs/PERSONAL-STUDIO.md §3.1): one turn posts today's fields plus the kept state as `sheet`, and
+   * reads `turn.sheet`, `question`, `asked`, `changed` back. A refusal shows dictionary copy; a rate limit or any
+   * failure leaves the sheet as it was. `fromInput` clears the typed text once the request is taken (a question's
+   * option leaves it alone).
+   */
+  const submitSheetTurn = async (message: string, fromInput: boolean) => {
+    const hasPhoto = outfitSlot !== null || propSlot !== null || sceneSlot !== null;
+    if ((!message && !hasPhoto) || submitting || disabled) return;
+    if (!templateId || typeof fetch !== 'function') {
+      setSheetNotice({ key: 'retry' });
+      return;
+    }
+    const myEpoch = ++requestEpochRef.current;
+    const prior = sheetState;
+    setSubmitting(true);
+    setFileError(null);
+    setSheetNotice(null);
+    try {
+      const form = new FormData();
+      form.set('template', templateId);
+      form.set('locale', locale);
+      // Empty with only a photo attached: the server words the request itself, in the customer's locale.
+      form.set('message', message);
+      form.set('audioMode', isVideoContext ? audioMode : 'ambient');
+      if (isVideoContext && audioMode === 'bgm') {
+        form.set('bgmMood', bgmMood);
+      }
+      if (outfitSlot) form.set('slot_look_ref', outfitSlot.file);
+      if (propSlot) form.set('slot_prop_ref', propSlot.file);
+      if (sceneSlot) form.set('slot_scene_ref', sceneSlot.file);
+      form.set('sheet', JSON.stringify(prior));
+
+      const res = await fetch('/api/template-director', {
+        method: 'POST',
+        body: form,
+        credentials: 'same-origin'
+      });
+      if (requestEpochRef.current !== myEpoch) return;
+      const payload: unknown = await res.json().catch(() => null);
+      if (requestEpochRef.current !== myEpoch) return;
+      const outcome = readSheetTurnAnswer({
+        prior,
+        message,
+        status: res.status,
+        payload,
+        // The studio writes its note on a softened request (and, for now, its question) in Korean.
+        locale
+      });
+      setSheetState(outcome.state);
+      setSheetNotice(outcome.notice);
+      if (outcome.accepted && fromInput) setUserMessage('');
+    } catch {
+      if (requestEpochRef.current === myEpoch) setSheetNotice({ key: 'retry' });
+    } finally {
+      if (requestEpochRef.current === myEpoch) {
+        setSubmitting(false);
+      }
+    }
   };
 
   const handleApplyTurn = async () => {
@@ -680,6 +831,11 @@ export function TemplateDirectorPanel({
       (item): item is DirectorReferenceSlotValue => item !== null
     );
     if ((!trimmed && refs.length === 0) || submitting || disabled) return;
+
+    if (editSheet) {
+      await submitSheetTurn(trimmed, true);
+      return;
+    }
 
     const effectiveMessage = trimmed || copy.defaultReferencePrompt;
 
@@ -1591,7 +1747,7 @@ export function TemplateDirectorPanel({
           )}
         </button>
 
-        {chips.length > 0 && (
+        {(editSheet ? hasSheetContent(sheetState.sheet) : chips.length > 0) && (
           <button
             type="button"
             data-director-reset
@@ -1605,7 +1761,7 @@ export function TemplateDirectorPanel({
       </div>
 
       {/* Applied Customization Summary Chips (Visible even when drawer is collapsed) */}
-      {chips.length > 0 && (
+      {!editSheet && chips.length > 0 && (
         <div
           data-director-summary-chips
           aria-label={copy.activeChipsLabel}
@@ -2320,6 +2476,33 @@ export function TemplateDirectorPanel({
           )}
         </div>
       </div>
+
+      {/* Sheet mode: the edit sheet card, right above the studio's price and its one button (docs §3.1). */}
+      {editSheet &&
+        sheetDraft &&
+        (expanded ||
+          hasSheetContent(sheetDraft.fold.sheet) ||
+          sheetQuestion !== null ||
+          sheetNotice !== null) && (
+          <EditSheetCard
+            copy={editSheet}
+            sheet={sheetDraft.fold.sheet}
+            pendingIndex={sheetDraft.fold.pendingIndex}
+            pendingNotice={pendingLineNotice(sheetDraft.fold, editSheet)}
+            question={sheetQuestion}
+            notice={sheetNoticeText(sheetNotice, editSheet)}
+            noticeDetail={sheetNotice?.detail ?? null}
+            foldNotice={pendingFoldNotice(sheetDraft.fold, editSheet)}
+            disabled={disabled || submitting}
+            onRemove={(block, index) => editSheetLocally((sheet) => removeLine(sheet, block, index))}
+            onRevert={(index) => editSheetLocally((sheet) => revertChange(sheet, index))}
+            onDiscardPending={() => {
+              setUserMessage('');
+              textInputRef.current?.focus();
+            }}
+            onAnswer={(option) => void submitSheetTurn(option, false)}
+          />
+        )}
     </div>
   );
 }

@@ -5976,6 +5976,71 @@ export const en = {
     errUnknown: 'Something went wrong.',
     detailLabel: 'Detail',
   },
+
+  /**
+   * docs/PERSONAL-STUDIO.md §2.3, §3.1 — the edit sheet card on a template page (flag `TWINGS_PERSONAL_EDIT_SHEET`):
+   * the customer's requests shown back as three blocks. PROVISIONAL: not final, a wording pass replaces these
+   * strings; keep each key's meaning. Never name models, providers, prompts or internal terms here.
+   */
+  editSheet: {
+    /** Card heading above the three blocks: the list of changes this order will make. */
+    title: 'Your changes',
+    /** Shown instead of the blocks while nothing is listed: invites the first request. */
+    empty: "Tell us what you'd like changed and we'll list it here.",
+    /** Heading of the block of changes to make. */
+    changeHeading: 'Change',
+    /** Heading of the block of things to keep exactly as the template has them. */
+    keepHeading: 'Keep as is',
+    /** Heading of the block of things that must not appear. */
+    excludeHeading: 'Leave out',
+    /** Name of the part of the template a change line edits, shown above the line's text (looked up by slot). */
+    slots: {
+      outfit: 'Outfit',
+      makeup: 'Makeup',
+      hair: 'Hair',
+      prop: 'Prop',
+      shot_action: 'Action',
+      lighting_mood: 'Mood',
+    },
+    /** Marker on a change line that takes from a photo the customer attached. */
+    photoAttached: 'Attached photo',
+    /** Marker on a change limited to one shot; {n} is the shot number. */
+    shotOne: 'Shot {n}',
+    /** Marker on a change limited to a run of shots; {from} and {to} are shot numbers. */
+    shotRange: 'Shots {from}–{to}',
+    /** Visible label of the button that puts a change line back to what it said before. */
+    revert: 'Undo',
+    /** Accessible name of that button; {item} is the line (part name and text). */
+    revertLabel: 'Undo {item}',
+    /** Accessible name of the remove button on any line; {item} is the line. */
+    removeLabel: 'Remove {item}',
+    /** Tag on a line made from text typed but not sent yet: it still goes with the order. */
+    pendingTag: 'Not sent yet',
+    /** Under that line when the typed text is longer than one line holds: only part of it is listed; send it first. */
+    pendingTooLong: "This request is long, so only part of it is listed. Send it first and we'll sort it out.",
+    /** Typed text cannot be added because the change block is full; {max} is the limit. Text stays in the box. */
+    full: 'You can list up to {max} changes. Remove one, then send this again.',
+    /** Small label above the studio's one clarifying question. */
+    questionLabel: 'One quick question',
+    /** Under the question: answering is optional and does not hold up the order. */
+    questionOptional: 'You can go ahead without answering.',
+    /** Live line after a request changed the list (the studio's own reply is not shown). */
+    updated: 'Added to your changes.',
+    /** Live line after a request was taken but nothing on the list changed. */
+    unchanged: 'Nothing changed. Try putting it another way.',
+    /** Live line when requests came too fast (rate limit); the list is unchanged. */
+    rateLimited: 'Too many requests at once. Wait a moment, then send it again.',
+    /** Live line for any other failure; the list is unchanged. */
+    retry: "We couldn't add that. Please send it again.",
+    /** Refusal: a request to use someone else's face. Only the customer's own face is used. */
+    refusedIdentity: "Only your own face can be used. We can't swap in someone else's.",
+    /** Refusal: a request outside changes to the scene (outfit, hair, props, action). */
+    refusedUnsafe: 'We can only take requests about the scene, such as outfit, hair, props and action.',
+    /** Refusal: this part of this scene cannot be changed. */
+    refusedUnsupported: "That part of this scene can't be changed.",
+    /** Refusal: the request is too long. */
+    refusedTooLarge: 'That request is too long. Send it in shorter parts.',
+  },
 } as const;
 
 /**
