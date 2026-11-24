@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { PromptDetailMedia } from '@/components/prompts/detail-media';
-import { ResolutionPicker, TwingsStudio, type StudioLabels, type StudioLive, type StudioStyle } from '@/components/twings/studio';
+import { isVideoStyle, ResolutionPicker, TwingsStudio, type StudioLabels, type StudioLive, type StudioStyle } from '@/components/twings/studio';
 
 /**
  * The studio as MARKUP — the first render, before any interaction. What it says to someone who
@@ -142,6 +142,30 @@ describe('the studio without a live loop at all (the catalogue shape)', () => {
     expect(html).toContain('data-phase="closed"');
     // No endpoint to post to: the button exists for the copy, but cannot promise anything.
     expect(html).toMatch(/data-studio-interest="open"[^>]*disabled=""/);
+  });
+});
+
+/** Founder 2026-11-24: genre words ("cinematic · MV") say nothing about a video template. */
+describe('the style picker card', () => {
+  const image: StudioStyle = { ...styles[0]!, id: 'window-portrait', title: 'Window portrait', runtime: '0', blurb: 'Portrait · Editorial', videoSrc: null };
+  const html = renderToStaticMarkup(
+    <TwingsStudio styles={[styles[0]!, image]} labels={labels} live={live} initialAccess={{ open: true, live: true, signedIn: true }} />,
+  );
+
+  it('leaves the genre words off a video template and keeps the rest of the line', () => {
+    expect(html).toContain('90s Seoul Interview');
+    expect(html).not.toContain(styles[0]!.blurb);
+    expect(html).toContain(labels.runtimeLabel.replace('{seconds}', '15'));
+  });
+
+  it('still names an image template with its words', () => {
+    expect(html).toContain('Portrait · Editorial');
+  });
+
+  it('tells the two apart by the example film or the length', () => {
+    expect(isVideoStyle({ videoSrc: '/v.mp4', runtime: '0' })).toBe(true);
+    expect(isVideoStyle({ videoSrc: null, runtime: '10' })).toBe(true);
+    expect(isVideoStyle({ videoSrc: null, runtime: '0' })).toBe(false);
   });
 });
 
