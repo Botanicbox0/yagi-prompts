@@ -26,6 +26,53 @@ async function tableExists(sql: SqlRunner, table: string): Promise<boolean> {
 }
 
 /**
+ * Whether this organization has already sent a studio access request: an `allowance_request` notice, or
+ * a `plan_request` notice that is not a plain plan question (`billing:plan_question…` surface). Shared by
+ * `/brand/home`'s checklist and the closed studio banner (`GET /api/brand-workspace/access-request`).
+ * False when the notice outbox table does not exist yet.
+ */
+export async function loadUsageRequestSent(sql: SqlRunner, organizationId: string): Promise<boolean> {
+  if (!(await tableExists(sql, 'team_notice_deliveries'))) return false;
+  const row = (
+    await sql.query<{ sent: boolean }>(
+      "select exists(select 1 from team_notice_deliveries where organization_id = $1 and (kind = 'allowance_request' or (kind = 'plan_request' and (surface is null or surface not like 'billing:plan_question%')))) as sent",
+      [organizationId],
+    )
+  ).rows[0];
+  return Boolean(row?.sent);
+}
+
+/** How long a sent request is still read as "waiting for the team" by the closed studio. */
+export const USAGE_REQUEST_PENDING_DAYS = 30;
+
+/**
+ * Whether a studio access request is still WAITING: the rule above, narrowed to requests sent in the last
+ * `USAGE_REQUEST_PENDING_DAYS` days and after the team's latest answer (the workspace approval, or the
+ * current plan assignment being written). The closed studio banner is shown whenever the allowance is
+ * closed, with no 30-day window of its own, so without this a workspace whose credits ran out months
+ * after its first request would be told the request "was received" and never send a new one.
+ */
+export async function loadUsageRequestPending(sql: SqlRunner, organizationId: string): Promise<boolean> {
+  if (!(await tableExists(sql, 'team_notice_deliveries'))) return false;
+  const [hasApprovals, hasPlans] = await Promise.all([
+    tableExists(sql, 'brand_workspace_approvals'),
+    tableExists(sql, 'brand_plan_assignments'),
+  ]);
+  const answered = [
+    hasApprovals ? '(select approved_at from brand_workspace_approvals where organization_id = $1)' : null,
+    hasPlans ? '(select updated_at from brand_plan_assignments where organization_id = $1)' : null,
+  ].filter((part): part is string => part !== null);
+  const since = `greatest(now() - make_interval(days => ${USAGE_REQUEST_PENDING_DAYS})${answered.map((part) => `, ${part}`).join('')})`;
+  const row = (
+    await sql.query<{ pending: boolean }>(
+      `select exists(select 1 from team_notice_deliveries where organization_id = $1 and created_at > ${since} and (kind = 'allowance_request' or (kind = 'plan_request' and (surface is null or surface not like 'billing:plan_question%')))) as pending`,
+      [organizationId],
+    )
+  ).rows[0];
+  return Boolean(row?.pending);
+}
+
+/**
  * Derives `/brand/home`'s dismissable first-run checklist strictly from existing workspace tables
  * without adding any schema/migration. Only shows while the workspace is new (<= 30 days) and
  * incomplete; counts only active memberships.
@@ -89,15 +136,7 @@ export async function loadFirstRunChecklistState(
   const hasLogo = Boolean(context.logoUrl);
   const hasUploads = assetRow > 0;
   const usageApproved = (context.capKrw ?? 0) > 0 || planActiveOn(plan, todayKst(now));
-  const hasOutboxTable = await tableExists(sql, 'team_notice_deliveries');
-  const usageRequestSent = hasOutboxTable
-    ? await sql
-        .query<{ sent: boolean }>(
-          "select exists(select 1 from team_notice_deliveries where organization_id = $1 and (kind = 'allowance_request' or (kind = 'plan_request' and (surface is null or surface not like 'billing:plan_question%')))) as sent",
-          [organizationId],
-        )
-        .then((r) => Boolean(r.rows[0]?.sent))
-    : false;
+  const usageRequestSent = await loadUsageRequestSent(sql, organizationId);
   const usageState: ChecklistUsageState = usageApproved
     ? 'ready'
     : usageRequestSent
