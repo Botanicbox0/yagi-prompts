@@ -22,6 +22,7 @@
  *
  * Client-safe: plain functions over the types in `./schema`; no node-only imports.
  */
+import { interpolate } from '@/lib/i18n/format';
 import {
   CUSTOM_DIRECTOR_REF_SLOTS,
   DIRECTOR_EDITABLE_SLOTS,
@@ -540,6 +541,69 @@ export const TEMPLATE_LOCK_EXAMPLE = renderLockBlock([
   { kind: 'shots', from: 2, to: 3 },
   { kind: 'slot', slot: 'hair', note: 'a bright pink chin-length bob.' },
 ]);
+
+/**
+ * The admin copy a refusal is said in: the `admin` dictionary keys of these names. `lockRefusalCopy` picks just these
+ * from the dictionary, so the new-template screen (a client component) is handed ten strings, not the whole section.
+ */
+export const LOCK_REFUSAL_COPY_KEYS = [
+  'lockRefused',
+  'lockProblemUnknownLine',
+  'lockProblemEmptyBlock',
+  'lockProblemSecondHeader',
+  'lockProblemHeaderTypo',
+  'lockProblemWithoutHeader',
+  'lockProblemTooManyLines',
+  'lockProblemTooManyShotRanges',
+  'lockProblemMore',
+  'lockRules',
+] as const;
+export type LockRefusalCopy = Record<(typeof LOCK_REFUSAL_COPY_KEYS)[number], string>;
+
+export function lockRefusalCopy(source: LockRefusalCopy): LockRefusalCopy {
+  return Object.fromEntries(LOCK_REFUSAL_COPY_KEYS.map((key) => [key, source[key]])) as LockRefusalCopy;
+}
+
+const PROBLEM_COPY: Readonly<Record<LockBlockProblem['kind'], keyof LockRefusalCopy>> = {
+  unknown_line: 'lockProblemUnknownLine',
+  empty_block: 'lockProblemEmptyBlock',
+  second_header: 'lockProblemSecondHeader',
+  header_typo: 'lockProblemHeaderTypo',
+  lock_lines_without_header: 'lockProblemWithoutHeader',
+  too_many_lines: 'lockProblemTooManyLines',
+  too_many_shot_ranges: 'lockProblemTooManyShotRanges',
+};
+
+/** How a block is written, with the parts a line may name and the limits filled in (`lockRules` copy). */
+export function lockRulesText(template: string): string {
+  return interpolate(template, {
+    keys: TEMPLATE_LOCK_KEY_PHRASES.join(', '),
+    max: TEMPLATE_LOCK_LIMITS.max,
+    shots: TEMPLATE_LOCK_LIMITS.shotRangesMax,
+  });
+}
+
+/** A refusal said in sentences: a title, one sentence per problem (and "n more"), the first problem's line, the rules. */
+export interface LockRefusalLines {
+  title: string;
+  items: string[];
+  text: string;
+  rules: string;
+}
+
+/**
+ * The one place a refusal detail becomes sentences, for the template's page and the new-template screen alike.
+ * Null for any detail that is not a lock-block refusal.
+ */
+export function lockRefusalLines(detail: string, copy: LockRefusalCopy): LockRefusalLines | null {
+  const refusal = readLockBlockRefusal(detail);
+  if (refusal === null) return null;
+  const items = refusal.items.map((item) =>
+    interpolate(copy[PROBLEM_COPY[item.kind]], { line: item.line ?? '', count: item.count ?? '', max: item.max ?? '' }),
+  );
+  if (refusal.more > 0) items.push(interpolate(copy.lockProblemMore, { n: refusal.more }));
+  return { title: copy.lockRefused, items, text: refusal.text, rules: lockRulesText(copy.lockRules) };
+}
 
 // --- Verdicts -------------------------------------------------------------------------------------------------------
 

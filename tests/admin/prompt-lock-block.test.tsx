@@ -1,11 +1,19 @@
+import { readFileSync } from 'node:fs';
 import { prerender } from 'react-dom/static';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { LockRefusalNotice, refusalMessage } from '@/components/admin/prompt-create-feedback';
 import { PromptFields } from '@/components/admin/prompt-fields';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { interpolate } from '@/lib/i18n/format';
 import { loadPromptBySlug } from '@/lib/prompts/repo';
-import { TEMPLATE_KEEP_LINE_PREFIX, TEMPLATE_LOCK_KEY_PHRASES } from '@/lib/template-director/locks';
+import {
+  LOCK_REFUSAL_COPY_KEYS,
+  TEMPLATE_KEEP_LINE_PREFIX,
+  TEMPLATE_LOCK_KEY_PHRASES,
+  lockRefusalCopy,
+  lockRefusalLines,
+} from '@/lib/template-director/locks';
 import { adminHarness, upload, type AdminHarness } from '../helpers/admin';
 import { runner } from '../helpers/pglite';
 
@@ -213,6 +221,54 @@ describe('the template page says what a saved block locks', () => {
   it('shows no lock sentences for any other refusal', async () => {
     const html = await render(await created(BASE), { err: 'invalid', detail: 'engine: not a video engine' });
     expect(html).not.toContain('data-lock-refusal');
+  });
+});
+
+/** Round 2: the new-template screen (enhanced submit) says a lock-block refusal in the edit page's sentences. */
+describe('the new-template screen says a lock-block refusal in sentences', () => {
+  const copy = lockRefusalCopy(a);
+  const labels = {
+    useCase: 'U',
+    poster: 'P',
+    invalid: a.errInvalid,
+    upload: 'UP',
+    session: 'S',
+    uncertain: 'UN',
+    retained: 'R',
+    publishing: 'PB',
+    lockCopy: copy,
+  };
+  const detail = `promptText: template locks: line 4 unknown_line, line 6 second_header — "${KEEP}the shoes."`;
+
+  it('turns the answer into the same sentences, offending line and rules as the edit page', () => {
+    const refusal = refusalMessage({ ok: false, code: 'invalid', field: 'promptText', detail }, labels);
+    expect(refusal.message).toBe(a.lockRefused);
+    expect(refusal.lock).toEqual(lockRefusalLines(detail, a));
+    const html = renderToStaticMarkup(<LockRefusalNotice lines={refusal.lock!} />);
+    expect(html).toContain('data-lock-refusal');
+    expect(html).toContain(a.lockRefused);
+    expect(html).toContain(interpolate(a.lockProblemUnknownLine, { line: 4 }));
+    expect(html).toContain(interpolate(a.lockProblemSecondHeader, { line: 6 }));
+    expect(html).toContain(`${KEEP}the shoes.`);
+    for (const key of TEMPLATE_LOCK_KEY_PHRASES) expect(html).toContain(key);
+  });
+
+  it('answers every other refusal exactly as before', () => {
+    expect(refusalMessage({ ok: false, code: 'invalid', field: 'poster' }, labels)).toEqual({ message: 'P', lock: null });
+    expect(refusalMessage({ ok: false, code: 'invalid', field: 'useCase' }, labels)).toEqual({ message: 'U', lock: null });
+    expect(refusalMessage({ ok: false, code: 'invalid' }, labels)).toEqual({ message: a.errInvalid, lock: null });
+    expect(refusalMessage({ ok: false, code: 'upload' }, labels)).toEqual({ message: 'UP', lock: null });
+    expect(refusalMessage({ ok: false, code: 'unknown' }, labels)).toEqual({ message: 'UN', lock: null });
+    // A prompt-field answer that is not a lock refusal, and a page that passes no lock copy, fall back to the generic line.
+    expect(refusalMessage({ ok: false, code: 'invalid', field: 'promptText', detail: 'promptText: too short' }, labels)).toEqual({ message: a.errInvalid, lock: null });
+    const { lockCopy: _none, ...older } = labels;
+    expect(refusalMessage({ ok: false, code: 'invalid', field: 'promptText', detail }, older)).toEqual({ message: a.errInvalid, lock: null });
+  });
+
+  it('hands the screen the ten lock strings only, and the create page passes them', () => {
+    expect(Object.keys(copy).sort()).toEqual([...LOCK_REFUSAL_COPY_KEYS].sort());
+    const page = readFileSync(new URL('../../app/(admin)/admin/prompts/new/page.tsx', import.meta.url), 'utf8');
+    expect(page).toContain('lockCopy: lockRefusalCopy(a)');
   });
 });
 

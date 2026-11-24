@@ -9,6 +9,7 @@ import {
   savePromptDraft,
   type PromptDraft,
 } from '@/lib/admin/prompt-draft';
+import { lockRefusalLines, type LockRefusalCopy, type LockRefusalLines } from '@/lib/template-director/locks';
 
 type Labels = {
   useCase: string;
@@ -22,7 +23,48 @@ type Labels = {
   draftRestored?: string;
   draftDiscard?: string;
   draftSavedAt?: string;
+  /** docs/PERSONAL-STUDIO.md §3.3 (C3): the sentences a lock-block refusal is said in (`lockRefusalCopy`). */
+  lockCopy?: LockRefusalCopy;
 };
+
+/**
+ * What a refused create says. A lock-block refusal (`/admin/do` hands its reason back on the prompt field) is said in
+ * the same sentences as on the template's page; every other answer keeps its one line.
+ */
+export function refusalMessage(
+  result: { ok?: unknown; code?: unknown; field?: unknown; detail?: unknown },
+  labels: Labels,
+): { message: string; lock: LockRefusalLines | null } {
+  if (result.field === 'promptText' && typeof result.detail === 'string' && labels.lockCopy) {
+    const lock = lockRefusalLines(result.detail, labels.lockCopy);
+    if (lock !== null) return { message: lock.title, lock };
+  }
+  const message =
+    result.field === 'useCase' ? labels.useCase
+      : result.field === 'poster' ? labels.poster
+        : result.code === 'upload' ? labels.upload
+          : result.code === 'invalid' ? labels.invalid
+            : labels.uncertain;
+  return { message, lock: null };
+}
+
+/** A lock-block refusal: which lines, what is wrong, the first offending line, and how a block is written. */
+export function LockRefusalNotice({ lines, className }: { lines: LockRefusalLines; className?: string }) {
+  return (
+    <div data-refused-field="promptText" data-lock-refusal className={className}>
+      <p className="font-medium">{lines.title}</p>
+      <ul className="mt-1.5 list-disc pl-5">
+        {lines.items.map((item, index) => (
+          <li key={`${index}-${item}`}>
+            {item}
+            {index === 0 && lines.text && <span className="block font-mono text-[12px] break-words opacity-80">{lines.text}</span>}
+          </li>
+        ))}
+      </ul>
+      <p className="mt-1.5">{lines.rules}</p>
+    </div>
+  );
+}
 
 function formatIsoTime(iso: string): string {
   try {
@@ -112,6 +154,7 @@ export function PromptCreateFeedback({ children, labels }: { children: ReactNode
   const busy = useRef(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
+  const [lock, setLock] = useState<LockRefusalLines | null>(null);
   const [restoredTime, setRestoredTime] = useState<string | null>(null);
   const alertRef = useRef<HTMLDivElement>(null);
 
@@ -195,8 +238,9 @@ export function PromptCreateFeedback({ children, labels }: { children: ReactNode
     }
   }
 
-  function showError(message: string) {
+  function showError(message: string, lockLines: LockRefusalLines | null = null) {
     setError(message);
+    setLock(lockLines);
     requestAnimationFrame(() => {
       alertRef.current?.focus();
       alertRef.current?.scrollIntoView({ block: 'nearest' });
@@ -217,6 +261,7 @@ export function PromptCreateFeedback({ children, labels }: { children: ReactNode
     busy.current = true;
     setPending(true);
     setError('');
+    setLock(null);
     let navigating = false;
     try {
       const response = await fetch(form.action, {
@@ -239,8 +284,8 @@ export function PromptCreateFeedback({ children, labels }: { children: ReactNode
         return;
       }
       if (result.ok === false) {
-        showError(result.field === 'useCase' ? labels.useCase : result.field === 'poster' ? labels.poster
-          : result.code === 'upload' ? labels.upload : result.code === 'invalid' ? labels.invalid : labels.uncertain);
+        const refusal = refusalMessage(result, labels);
+        showError(refusal.message, refusal.lock);
       } else {
         showError(labels.uncertain);
       }
@@ -281,7 +326,7 @@ export function PromptCreateFeedback({ children, labels }: { children: ReactNode
         </div>
       )}
       {error && <div ref={alertRef} role="alert" tabIndex={-1} className="mb-4 border border-accent p-3 font-mono text-[0.75rem]">
-        <p>{error}</p><p className="mt-1 opacity-60">{labels.retained}</p>
+        {lock ? <LockRefusalNotice lines={lock} /> : <p>{error}</p>}<p className="mt-1 opacity-60">{labels.retained}</p>
       </div>}
       {pending && <p role="status" className="mb-3 font-mono text-[0.75rem]">{labels.publishing}</p>}
       <fieldset disabled={pending} className="min-w-0 border-0 p-0" aria-busy={pending}>{children}</fieldset>

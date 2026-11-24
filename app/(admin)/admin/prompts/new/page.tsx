@@ -4,6 +4,7 @@ import { getLocaleFromHeaders } from '@/lib/i18n/server';
 import { interpolate } from '@/lib/i18n/format';
 import { USE_CASE_MAX, USE_CASE_MIN } from '@/lib/prompts/schemas';
 import { ADMIN_PROMPTS_PATH, ADMIN_PROMPT_NEW_PATH, ADMIN_PROMPT_NEW_SET_PATH } from '@/lib/prompts/links';
+import { lockRefusalCopy } from '@/lib/template-director/locks';
 import { AdminShell, BUTTON_PRIMARY, OpForm, OutcomeBanner, Panel } from '@/components/admin/chrome';
 import { AdminPageHeader } from '@/components/admin/patterns';
 import { PromptFields } from '@/components/admin/prompt-fields';
@@ -113,6 +114,7 @@ export default async function AdminPromptNewPage({ searchParams }: { searchParam
           invalid: a.errInvalid, upload: a.mediaUploadFailed, session: a.mediaUploadSession,
           uncertain: a.promptPublishUncertain, retained: a.promptInputsRetained, publishing: a.promptPublishing,
           draftRestored: a.promptDraftRestored, draftDiscard: a.promptDraftDiscard, draftSavedAt: a.promptDraftSavedAt,
+          lockCopy: lockRefusalCopy(a),
         }}>
         <OpForm op="prompt.create" back={ADMIN_PROMPT_NEW_PATH} className="flex flex-col gap-4">
           <PromptFields row={null} dict={dict} />

@@ -9,13 +9,12 @@ import { PROMPT_TEXT_MAX, PROMPT_TEXT_MIN, TEMPLATE_CASTS, TEMPLATE_MEDIA } from
 import { promptHref } from '@/lib/prompts/links';
 import {
   TEMPLATE_LOCK_EXAMPLE,
-  TEMPLATE_LOCK_KEY_PHRASES,
-  TEMPLATE_LOCK_LIMITS,
   checkLockBlock,
-  readLockBlockRefusal,
-  type LockBlockRefusal,
+  lockRefusalLines,
+  lockRulesText,
   type PublicTemplateLocks,
 } from '@/lib/template-director/locks';
+import { LockRefusalNotice } from '@/components/admin/prompt-create-feedback';
 import { visibilityLabel, visibilityOptions } from '@/components/admin/labels';
 import type { Dictionary } from '@/lib/i18n/dictionaries';
 import type { PromptRow } from '@/lib/prompts/repo';
@@ -203,15 +202,6 @@ function CostFloorNote({ row, dict }: { row: PromptRow | null; dict: Dict }) {
 
 // --- Template locks (docs/PERSONAL-STUDIO.md §3.3, C3) ------------------------------------------------------------
 
-/** How a lock block is written, with the parts a line may name (the same sentence under the field and in a refusal). */
-function lockRules(a: Dict['admin']): string {
-  return interpolate(a.lockRules, {
-    keys: TEMPLATE_LOCK_KEY_PHRASES.join(', '),
-    max: TEMPLATE_LOCK_LIMITS.max,
-    shots: TEMPLATE_LOCK_LIMITS.shotRangesMax,
-  });
-}
-
 /** The locked parts in the customer screen's words (C2): named parts, closed slots (the product covers the prop), shots. */
 function lockedPartLabels(locks: PublicTemplateLocks, dict: Dict): string[] {
   const e = dict.editSheet;
@@ -244,7 +234,7 @@ function TemplateLocksNote({ promptText, dict }: { promptText: string | null; di
       )}
       <details data-template-locks-help className="border border-hairline p-3">
         <summary className="cursor-pointer font-label text-eyebrow">{a.templateLocksHelp}</summary>
-        <p className="mt-2 font-mono text-[0.72rem] opacity-70">{lockRules(a)}</p>
+        <p className="mt-2 font-mono text-[0.72rem] opacity-70">{lockRulesText(a.lockRules)}</p>
         <pre className="mt-2 overflow-auto border border-hairline p-3 font-mono text-[0.72rem] whitespace-pre-wrap select-all">
           {TEMPLATE_LOCK_EXAMPLE}
         </pre>
@@ -253,39 +243,14 @@ function TemplateLocksNote({ promptText, dict }: { promptText: string | null; di
   );
 }
 
-const LOCK_PROBLEM_COPY = {
-  unknown_line: 'lockProblemUnknownLine',
-  empty_block: 'lockProblemEmptyBlock',
-  second_header: 'lockProblemSecondHeader',
-  header_typo: 'lockProblemHeaderTypo',
-  lock_lines_without_header: 'lockProblemWithoutHeader',
-  too_many_lines: 'lockProblemTooManyLines',
-  too_many_shot_ranges: 'lockProblemTooManyShotRanges',
-} as const satisfies Record<LockBlockRefusal['items'][number]['kind'], keyof Dict['admin']>;
-
 /**
  * A save the lock check refused (`?err=invalid&detail=promptText: template locks: …`), in sentences: which line, what
- * is wrong, and how a block is written. Nothing for any other detail.
+ * is wrong, and how a block is written. Nothing for any other detail. The new-template screen shows the same notice.
  */
 export function LockBlockRefusalNote({ detail, dict }: { detail: string | undefined; dict: Dict }) {
-  const refusal = detail ? readLockBlockRefusal(detail) : null;
-  if (refusal === null) return null;
-  const a = dict.admin;
-  return (
-    <div data-refused-field="promptText" data-lock-refusal className="mt-3 rounded-[10px] border border-accent px-3.5 py-2.5 text-[13px] text-accent">
-      <p className="font-medium">{a.lockRefused}</p>
-      <ul className="mt-1.5 list-disc pl-5">
-        {refusal.items.map((item, index) => (
-          <li key={`${item.kind}-${item.line ?? index}`}>
-            {interpolate(a[LOCK_PROBLEM_COPY[item.kind]], { line: item.line ?? '', count: item.count ?? '', max: item.max ?? '' })}
-            {index === 0 && refusal.text && <span className="block font-mono text-[12px] break-words opacity-80">{refusal.text}</span>}
-          </li>
-        ))}
-        {refusal.more > 0 && <li>{interpolate(a.lockProblemMore, { n: refusal.more })}</li>}
-      </ul>
-      <p className="mt-1.5">{lockRules(a)}</p>
-    </div>
-  );
+  const lines = detail ? lockRefusalLines(detail, dict.admin) : null;
+  if (lines === null) return null;
+  return <LockRefusalNotice lines={lines} className="mt-3 rounded-[10px] border border-accent px-3.5 py-2.5 text-[13px] text-accent" />;
 }
 
 export function PromptFields({ row, dict }: { row: PromptRow | null; dict: Dict }) {
