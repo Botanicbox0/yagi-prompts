@@ -30,6 +30,24 @@ import {
   type TemplateLocks
 } from './locks';
 import {
+  TEMPLATE_STYLING_HEADER_LINE,
+  applyOwnChoice,
+  ensureOwnStyle,
+  ensureTemplateStyling,
+  explicitStyleParts,
+  ownChoiceFor,
+  ownStylePlan,
+  ownStyleRuleEn,
+  parseTemplateStyling,
+  stripTemplateStylingBlocks,
+  templateStylingUses,
+  withOwnStyleIntent,
+  withOwnStyleSheetPlan,
+  type OwnStylePart,
+  type OwnStylePlan,
+  type TemplateStyling
+} from './styling';
+import {
   IDENTITY_SWAP_REGEX,
   PROMPT_INJECTION_REGEX,
   SHEET_SLOT_LABEL_KO,
@@ -561,6 +579,8 @@ function tidyPromptText(text: string): string {
  * own words, notes included) reaches the provider exactly as written. Private-use characters: no rule matches them.
  */
 const TEMPLATE_LOCKS_PLACEHOLDER = '\uE000TWINGSTEMPLATELOCKS\uE000';
+/** The same for a template's `Template styling:` block (docs/PERSONAL-STUDIO.md \u00A73.4.9). */
+const TEMPLATE_STYLING_PLACEHOLDER = '\uE000TWINGSTEMPLATESTYLING\uE000';
 
 export function sanitizeRewrittenPrompt(
   rawPrompt: string,
@@ -583,8 +603,14 @@ export function sanitizeRewrittenPrompt(
   // docs/PERSONAL-STUDIO.md §3.3 — a prompt without the header takes exactly the path below as before.
   const templateLocks = parseTemplateLocks(rawPrompt);
   const held = templateLocks.any && rawPrompt.includes(templateLocks.block) ? templateLocks.block : null;
+  // docs/PERSONAL-STUDIO.md §3.4.9 — the styling block is the template author's words too; a prompt without the header
+  // holds nothing more.
+  const templateStyling = parseTemplateStyling(rawPrompt);
+  const heldStyling = templateStyling.any && rawPrompt.includes(templateStyling.block) ? templateStyling.block : null;
   const lockTemplateAudio = opts.lockSound === true || templateLocks.named.includes('sound');
-  let cleaned = stripLegacySkinContract((held ? rawPrompt.replace(held, () => TEMPLATE_LOCKS_PLACEHOLDER) : rawPrompt).trim());
+  let source = held ? rawPrompt.replace(held, () => TEMPLATE_LOCKS_PLACEHOLDER) : rawPrompt;
+  if (heldStyling) source = source.replace(heldStyling, () => TEMPLATE_STYLING_PLACEHOLDER);
+  let cleaned = stripLegacySkinContract(source.trim());
   cleaned = scrubEquipmentBrands(cleaned);
   cleaned = stripBannedBuzzwords(cleaned);
   for (const pink of BANNED_PINK_MAKEUP_TERMS) {
@@ -604,7 +630,8 @@ export function sanitizeRewrittenPrompt(
     bgmMood: opts.bgmMood,
     ...(lockTemplateAudio ? { lockTemplateAudio: true } : {}),
   });
-  return held ? guarded.split(TEMPLATE_LOCKS_PLACEHOLDER).join(held) : guarded;
+  const restored = held ? guarded.split(TEMPLATE_LOCKS_PLACEHOLDER).join(held) : guarded;
+  return heldStyling ? restored.split(TEMPLATE_STYLING_PLACEHOLDER).join(heldStyling) : restored;
 }
 
 export function verifyRewrittenPrompt(
@@ -732,6 +759,15 @@ const STAGE2_EDIT_SHEET_ADDENDUM = [
  */
 const STAGE2_TEMPLATE_LOCKS_LINE =
   'TEMPLATE LOCKS: basePrompt carries the template\'s own `Template locks:` block (its lines are in `templateLocks`). Copy that block into the prompt unchanged, word for word; a template lock wins over every edit, note, sheet line and audio rule above, so a locked part is never changed, replaced, removed or excluded. Each lock governs only its own part. A locked shot keeps its action, framing, camera, timing, order, product and every other detail exactly as written, with one exception: a wardrobe, makeup or hair change the customer made (allowed because that part is not itself locked) applies to the person in EVERY shot, locked shots included, so the person never changes look mid-video; in a locked shot rewrite only the words that describe that styling and leave every other word of the shot as written.';
+
+/**
+ * docs/PERSONAL-STUDIO.md §3.4.9 — appended to the Stage-2 doctrine only when the payload carries `templateStyling`
+ * (the base prompt's `Template styling:` block styles a part that is neither locked nor changed by the customer).
+ * Without it the doctrine (items 1 and 4) can switch a template-styled hairstyle to the photo's whenever the buyer
+ * changes anything else. Server-only, like the doctrine.
+ */
+export const STAGE2_TEMPLATE_STYLING_LINE =
+  'TEMPLATE STYLING: basePrompt carries the template\'s own `Template styling:` block; copy it into the prompt unchanged, word for word. `templateStyling` lists the parts (hair, makeup or outfit) the template styles itself, each with the template\'s own line for it. use "template": the buyer keeps the template\'s style; keep the template\'s wording for that part exactly as written in every shot where it appears, and do NOT take that part from @Image 1 or synchronize it to @Image 1 (for that part this overrides items 1 and 4), whatever else the customer changes. use "own": the buyer keeps their own look for that part; delete the template\'s styling of it (the description in its line) from every shot, apply the structuredIntent override or the editSheet element for that part (taken from @Image 1) in EVERY shot, locked shots included like any styling change the customer makes, and name the template\'s styling of it only in [Exclusions].';
 
 /**
  * docs/PERSONAL-STUDIO.md §3.3 — the one Stage-1 sheet-turn line added when the template has locks. The model writes no
@@ -1191,6 +1227,10 @@ export function createFlashTemplateDirector(
       const templateLocks = parseTemplateLocks(input.basePrompt);
       const sentLocks = input.locks?.length ? input.locks : templateLocks.any ? lockLines(templateLocks) : null;
       if (sentLocks) payload.templateLocks = [...sentLocks];
+      // docs/PERSONAL-STUDIO.md §3.4.9 — only when the base's `Template styling:` block styles a part the rewrite must
+      // keep or hand to the photo. Names, uses and the template's own lines; the own rule travels in the intent/sheet.
+      const sentStyling = input.styling?.length ? input.styling : null;
+      if (sentStyling) payload.templateStyling = sentStyling.map((s) => ({ part: s.part, use: s.use, line: s.line }));
       const parts: Array<Record<string, unknown>> = [
         {
           text: JSON.stringify(payload)
@@ -1198,8 +1238,9 @@ export function createFlashTemplateDirector(
       ];
 
       const doctrine = input.sheet ? `${STAGE2_VIDEO_CREATOR_DOCTRINE}\n${STAGE2_EDIT_SHEET_ADDENDUM}` : STAGE2_VIDEO_CREATOR_DOCTRINE;
-      // The output contract is always the last line, after the sheet addendum and the lock line.
-      const system = `${sentLocks ? `${doctrine}\n${STAGE2_TEMPLATE_LOCKS_LINE}` : doctrine}\n${STAGE2_OUTPUT_CONTRACT_LINE}`;
+      const withLocks = sentLocks ? `${doctrine}\n${STAGE2_TEMPLATE_LOCKS_LINE}` : doctrine;
+      // The output contract is always the last line, after the sheet addendum, the lock line and the styling line.
+      const system = `${sentStyling ? `${withLocks}\n${STAGE2_TEMPLATE_STYLING_LINE}` : withLocks}\n${STAGE2_OUTPUT_CONTRACT_LINE}`;
       const raw = await callGeminiStructuredJson(
         config,
         fetchImpl,
@@ -1215,8 +1256,10 @@ export function createFlashTemplateDirector(
         bgmMood: input.bgmMood,
         ...(templateLocks.named.includes('sound') ? { lockSound: true } : {}),
       });
-      // The template's own block is its author's words (checked as the template is); the rest is checked as before.
-      const check = verifyRewrittenPrompt(templateLocks.any ? stripTemplateLockBlocks(sanitized) : sanitized);
+      // The template's own blocks are its author's words (checked as the template is); the rest is checked as before.
+      const templateStyling = parseTemplateStyling(input.basePrompt);
+      const withoutLockBlocks = templateLocks.any ? stripTemplateLockBlocks(sanitized) : sanitized;
+      const check = verifyRewrittenPrompt(templateStyling.any ? stripTemplateStylingBlocks(withoutLockBlocks) : withoutLockBlocks);
       if (!check.ok) {
         throw new Error(`stage2_prompt_verification_failed:${check.reason}`);
       }
@@ -1225,7 +1268,13 @@ export function createFlashTemplateDirector(
       if (/\n/.test(input.basePrompt.trim()) && !/\n/.test(raw.rewrittenPrompt.trim())) {
         throw new Error('stage2_prompt_verification_failed:collapsed_lines');
       }
-      const compiled = templateLocks.any ? ensureTemplateLocks(sanitized, templateLocks) : sanitized;
+      const lockedCompiled = templateLocks.any ? ensureTemplateLocks(sanitized, templateLocks) : sanitized;
+      // docs/PERSONAL-STUDIO.md §3.4.9 — the block as sent (own parts already in the photo form) stays word for word,
+      // and each own part keeps its canonical rule and loses any leftover "Styled by the template" line.
+      const ownRules = (input.styling ?? []).flatMap((s) =>
+        s.use === 'own' && (s.part === 'hair' || s.part === 'makeup') ? [{ part: s.part as OwnStylePart, rule: s.rule ?? ownStyleRuleEn(s.part, { medium: 'video', cast }) }] : []
+      );
+      const compiled = templateStyling.any ? ensureOwnStyle(ensureTemplateStyling(lockedCompiled, templateStyling), ownRules) : lockedCompiled;
 
       return {
         compiledPrompt: sealServerOnlyPrompt(compiled),
@@ -1650,7 +1699,14 @@ function insertIntoSection(lines: string[], header: RegExp, added: readonly stri
   const at = lines.findIndex((l) => header.test(l));
   if (at < 0) return false;
   let end = at + 1;
-  while (end < lines.length && lines[end]!.trim() !== '' && !TEMPLATE_LOCKS_HEADER_LINE.test(lines[end]!)) end += 1;
+  while (
+    end < lines.length &&
+    lines[end]!.trim() !== '' &&
+    !TEMPLATE_LOCKS_HEADER_LINE.test(lines[end]!) &&
+    // docs/PERSONAL-STUDIO.md §3.4.9 — nor inside the template's styling block.
+    !TEMPLATE_STYLING_HEADER_LINE.test(lines[end]!)
+  )
+    end += 1;
   lines.splice(end, 0, ...added);
   return true;
 }
@@ -1676,18 +1732,24 @@ function applyDeterministicSheet(
     directorSpec?: PersonalDirectorSpec | null;
   },
   sheet: PersonalEditSheet,
-  templateLocks: TemplateLocks = NO_LOCKS
+  templateLocks: TemplateLocks = NO_LOCKS,
+  own: readonly OwnStylePlan[] = []
 ): string {
   const cast = input.cast ?? 'solo';
   const note = sheetCastNote(cast);
-  const plan = planSheetCompile(
-    sheet,
-    {
-      look: Boolean(input.hasOutfitRef),
-      prop: Boolean(input.hasPropRef),
-      scene: Boolean(input.hasSceneRef),
-    },
-    templateLocks
+  // docs/PERSONAL-STUDIO.md §3.4.9 — an own part is one more element line and a tailed exclusion (none without `own`).
+  const plan = withOwnStyleSheetPlan(
+    planSheetCompile(
+      sheet,
+      {
+        look: Boolean(input.hasOutfitRef),
+        prop: Boolean(input.hasPropRef),
+        scene: Boolean(input.hasSceneRef),
+      },
+      templateLocks
+    ),
+    own,
+    { replaced: false }
   );
   const lines = input.basePrompt.trim().split('\n');
   const blocks: string[] = [];
@@ -1818,20 +1880,67 @@ function lockCompileInput<T extends DeterministicInput & { referenceSlots?: read
  * A base prompt with a `Template locks:` block is compiled with its locks (docs/PERSONAL-STUDIO.md §3.3).
  */
 export function applyDeterministicDirectorSpec(input: DeterministicInput, opts: { env?: Record<string, string | undefined> } = {}): string {
+  const env = opts.env ?? process.env;
   const locks = parseTemplateLocks(input.basePrompt);
-  return deterministicCompile(locks.any ? lockCompileInput(input, locks) : input, opts.env ?? process.env, locks);
+  const styling = parseTemplateStyling(input.basePrompt);
+  const owned = ownCompileInput(locks.any ? lockCompileInput(input, locks) : input, styling, locks, env);
+  return deterministicCompile(owned.input, env, locks, owned.own);
 }
 
-/** The deterministic compile of an input already cleared of what the locks forbid; the block is kept in the result. */
-function deterministicCompile(input: DeterministicInput, env: Record<string, string | undefined>, locks: TemplateLocks): string {
+/**
+ * The deterministic compile of an input already cleared of what the locks forbid (and with own parts already in the
+ * photo form, docs/PERSONAL-STUDIO.md §3.4.9); the template's blocks are kept in the result.
+ */
+function deterministicCompile(
+  input: DeterministicInput,
+  env: Record<string, string | undefined>,
+  locks: TemplateLocks,
+  own: readonly OwnStylePlan[] = []
+): string {
   const sheet = activePersonalSheet(input.directorSpec ?? null, env, locks);
-  const prompt = sheet ? applyDeterministicSheet(input, sheet, locks) : applyDeterministicChips(input, locks);
-  return locks.any ? ensureTemplateLocks(prompt, locks) : prompt;
+  const prompt = sheet ? applyDeterministicSheet(input, sheet, locks, own) : applyDeterministicChips(input, locks, own);
+  const locked = locks.any ? ensureTemplateLocks(prompt, locks) : prompt;
+  const styling = parseTemplateStyling(input.basePrompt);
+  return styling.any ? ensureTemplateStyling(locked, styling) : locked;
 }
 
-function applyDeterministicChips(input: DeterministicInput, locks: TemplateLocks): string {
+/**
+ * docs/PERSONAL-STUDIO.md §3.4.9 — the buyer's choice on a template whose `Template styling:` block styles hair or
+ * makeup: which parts are their own (`ownChoiceFor`: lock wins, explicit request wins), the base with those lines in the
+ * photo form, the compile plan, and what the rewrite is told about every styled part. Without a valid block the same
+ * input and nothing else.
+ */
+function ownCompileInput<T extends DeterministicInput>(
+  input: T,
+  styling: TemplateStyling,
+  locks: TemplateLocks,
+  env: Record<string, string | undefined>
+): { input: T; own: OwnStylePlan[]; uses: ReturnType<typeof templateStylingUses> } {
+  if (!styling.any) return { input, own: [], uses: [] };
+  const spec = input.directorSpec ?? null;
+  const sheet = activePersonalSheet(spec, env, locks);
+  const cast: DirectorCast = input.cast ?? 'solo';
+  const ctx = { sheet, cast, hasPersonSlot: input.hasPersonSlot, hasOutfitRef: input.hasOutfitRef };
+  const parts = ownChoiceFor(spec, styling, locks, ctx);
+  const own = ownStylePlan(styling, parts, { medium: input.medium, cast });
+  const uses = templateStylingUses(styling, locks, parts, explicitStyleParts(spec, ctx), own);
+  if (own.length === 0) return { input, own, uses };
+  return { input: { ...input, basePrompt: applyOwnChoice(input.basePrompt, styling, parts) }, own, uses };
+}
+
+function applyDeterministicChips(input: DeterministicInput, locks: TemplateLocks, own: readonly OwnStylePlan[] = []): string {
   const parts: string[] = [input.basePrompt.trim()];
   const spec = input.directorSpec ?? null;
+
+  // docs/PERSONAL-STUDIO.md §3.4.9 — an own part's tailed exclusion goes into the template's [Exclusions] (or a new one
+  // after the customization block). Nothing here without `own`.
+  let ownExclusionsBlock: string | null = null;
+  if (own.length > 0) {
+    const lines = parts[0]!.split('\n');
+    const exclusions = own.map((o) => sheetExclusion(o.exclusion));
+    if (insertIntoSection(lines, EXCLUSIONS_HEADER, exclusions)) parts[0] = lines.join('\n');
+    else ownExclusionsBlock = ['[Exclusions]', ...exclusions].join('\n');
+  }
 
   if (input.hasOutfitRef) parts.push(CUSTOM_REF_AUTHORITY_EN.look_ref);
   if (input.hasPropRef) parts.push(CUSTOM_REF_AUTHORITY_EN.prop_ref);
@@ -1839,7 +1948,9 @@ function applyDeterministicChips(input: DeterministicInput, locks: TemplateLocks
 
   // docs/PERSONAL-STUDIO.md §4 #4: one block, after the template, that says it wins over the template's
   // wardrobe/prop/makeup/hair wording in every shot it concerns. "Shot N:" only for an index the Stage 1 model gave.
-  const intent = spec?.structuredIntent ?? null;
+  // §3.4.9: an own part fills the hair/makeup override with its canonical rule (an explicit one never meets `own`).
+  const specIntent = spec?.structuredIntent ?? null;
+  const intent = own.length > 0 ? withOwnStyleIntent(specIntent ?? EMPTY_DIRECTOR_INTENT, own) : specIntent;
   const items: string[] = [];
   if (intent?.outfitOverrideEn) items.push(`- Wardrobe: ${intent.outfitOverrideEn}`);
   if (intent?.makeupOverrideEn) items.push(`- Makeup: ${intent.makeupOverrideEn}`);
@@ -1863,6 +1974,7 @@ function applyDeterministicChips(input: DeterministicInput, locks: TemplateLocks
     items.push(`- Selected adjustments: ${spec.summaryChips.map((c) => `${c.slot}=${c.summaryKo}`).join('; ')}`);
   }
   if (items.length > 0) parts.push([USER_CUSTOMIZATION_HEADER_EN, ...items].join('\n'));
+  if (ownExclusionsBlock) parts.push(ownExclusionsBlock);
 
   const combined = parts.join('\n\n');
   const hasPerson = input.hasPersonSlot ?? input.cast !== 'pet';
@@ -1964,29 +2076,34 @@ export async function compileDirectorPromptDetailed(
   // docs/PERSONAL-STUDIO.md §3.3 — the template's locks come from its own prompt text. A base prompt without the
   // `Template locks:` header gives NO_LOCKS, and every branch below that reads `locks` checks `locks.any` first.
   const locks = parseTemplateLocks(rawInput.basePrompt);
-  const input = locks.any ? lockCompileInput(rawInput, locks) : rawInput;
-  const spec = input.directorSpec ?? null;
   const env = deps.env ?? process.env;
+  // docs/PERSONAL-STUDIO.md §3.4.9 — the template's styling comes from its own prompt text too. Without a valid
+  // `Template styling:` block: no own part, no uses, the same input (every branch below checks `own`/`uses` first).
+  const styling = parseTemplateStyling(rawInput.basePrompt);
+  const owned = ownCompileInput(locks.any ? lockCompileInput(rawInput, locks) : rawInput, styling, locks, env);
+  const { input, own, uses } = owned;
+  const spec = input.directorSpec ?? null;
   // docs/PERSONAL-STUDIO.md §2.3 — with a sheet, chips, intent and note are ignored; the flag off = the chips path.
   const sheet = activePersonalSheet(spec, env, locks);
-  const hasCustomization = locks.any
-    ? lockedCustomization(input, spec, sheet)
-    : Boolean(
-        sheet ||
-          spec?.userMessage?.trim() ||
-          spec?.summaryChips?.length ||
-          spec?.structuredIntent ||
-          spec?.audioMode === 'bgm' ||
-          input.hasOutfitRef ||
-          input.hasPropRef ||
-          input.hasSceneRef
-      );
+  const hasCustomization =
+    (locks.any
+      ? lockedCustomization(input, spec, sheet)
+      : Boolean(
+          sheet ||
+            spec?.userMessage?.trim() ||
+            spec?.summaryChips?.length ||
+            spec?.structuredIntent ||
+            spec?.audioMode === 'bgm' ||
+            input.hasOutfitRef ||
+            input.hasPropRef ||
+            input.hasSceneRef
+        )) || own.length > 0;
   if (!hasCustomization) return { prompt: input.basePrompt, path: 'unchanged' };
   const sheetMark: { sheet?: true } = sheet ? { sheet: true } : {};
 
   const config = directorConfigFromEnv(env);
   if (!config || input.medium !== 'video') {
-    return { prompt: deterministicCompile(input, env, locks), path: 'deterministic', ...sheetMark };
+    return { prompt: deterministicCompile(input, env, locks, own), path: 'deterministic', ...sheetMark };
   }
 
   const director = createFlashTemplateDirector(config, { fetch: deps.fetch });
@@ -2013,19 +2130,24 @@ export async function compileDirectorPromptDetailed(
       audioMode: spec?.audioMode ?? 'ambient',
       bgmMood: spec?.bgmMood ?? null,
       userNoteRaw: null,
-      sheet: planSheetCompile(
-        sheet,
-        {
-          look: slots.some((s) => s.slotName === 'look_ref'),
-          prop: slots.some((s) => s.slotName === 'prop_ref'),
-          scene: slots.some((s) => s.slotName === 'scene_ref'),
-        },
-        locks
+      // docs/PERSONAL-STUDIO.md §3.4.9 — an own part rides the sheet as an element, a replaced element and an exclusion.
+      sheet: withOwnStyleSheetPlan(
+        planSheetCompile(
+          sheet,
+          {
+            look: slots.some((s) => s.slotName === 'look_ref'),
+            prop: slots.some((s) => s.slotName === 'prop_ref'),
+            scene: slots.some((s) => s.slotName === 'scene_ref'),
+          },
+          locks
+        ),
+        own,
+        { replaced: true }
       ),
       cast,
     };
   } else {
-    const intent: DirectorEditIntent = spec?.structuredIntent ?? {
+    const chipsIntent: DirectorEditIntent = spec?.structuredIntent ?? {
       hairOverrideEn: spec?.summaryChips?.find((c) => c.slot === 'hair')?.summaryKo ?? null,
       makeupOverrideEn: spec?.summaryChips?.find((c) => c.slot === 'makeup')?.summaryKo ?? null,
       outfitOverrideEn: spec?.summaryChips?.find((c) => c.slot === 'outfit')?.summaryKo ?? null,
@@ -2033,6 +2155,8 @@ export async function compileDirectorPromptDetailed(
       shotEdits: [],
       strictExclusionsEn: [],
     };
+    // docs/PERSONAL-STUDIO.md §3.4.9 — an own part fills its override with the canonical rule and adds its exclusion.
+    const intent = withOwnStyleIntent(chipsIntent, own);
     const slots = withCustomRefSlots(
       input.referenceSlots
         ? input.referenceSlots.filter((s): s is RewriteSlot => s.role !== 'mask')
@@ -2050,6 +2174,8 @@ export async function compileDirectorPromptDetailed(
   }
   // docs/PERSONAL-STUDIO.md §3.3 — the template's own lock lines travel only when it has a block.
   if (locks.any) rewriteInput.locks = lockLines(locks);
+  // docs/PERSONAL-STUDIO.md §3.4.9 — and its styled parts only when its styling block styles one the rewrite must handle.
+  if (uses.length > 0) rewriteInput.styling = uses;
 
   let lastError: unknown = null;
   for (let attempt = 1; attempt <= DIRECTOR_REWRITE_MAX_ATTEMPTS; attempt += 1) {
@@ -2064,7 +2190,7 @@ export async function compileDirectorPromptDetailed(
   console.warn(
     `${DIRECTOR_REWRITE_FALLBACK_LOG_TAG} attempts=${DIRECTOR_REWRITE_MAX_ATTEMPTS} error=${rewriteErrorCode(lastError)}`
   );
-  return { prompt: deterministicCompile(input, env, locks), path: 'deterministic_fallback', ...sheetMark };
+  return { prompt: deterministicCompile(input, env, locks, own), path: 'deterministic_fallback', ...sheetMark };
 }
 
 /**

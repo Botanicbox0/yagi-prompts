@@ -43,6 +43,7 @@ import { announceTemplate, markPromptAnnounced } from '@/lib/prompts/announce';
 import { buildImageTemplateSet, writeImageTemplateSet } from '@/lib/prompts/image-templates';
 import { aspectsForMedium, enginesForMedium, imageFitsAspect, isImageAspect, isImageEngine, type ImageAspect, type ImageEngineId } from '@/lib/images/engines';
 import { checkLockBlock, lockBlockRefusalDetail } from '@/lib/template-director/locks';
+import { checkStylingBlock, stylingBlockRefusalDetail } from '@/lib/template-director/styling';
 import { fail, ok, type AdminContext, type AdminOutcome } from './context';
 import * as f from './form';
 import type { AdminOperation, ParseResult } from './operations';
@@ -161,7 +162,18 @@ function templateFields(form: FormData): ParseResult<z.infer<typeof TemplateFiel
  */
 function lockBlockRefusal(field: string, promptText: string): string | null {
   const check = checkLockBlock(promptText);
-  return check.state === 'malformed' || check.state === 'header_typo' ? lockBlockRefusalDetail(field, check.problems) : null;
+  if (check.state === 'malformed' || check.state === 'header_typo') return lockBlockRefusalDetail(field, check.problems);
+  return stylingBlockRefusal(field, promptText);
+}
+
+/**
+ * docs/PERSONAL-STUDIO.md §3.4.9 — a `Template styling:` block that does not parse (it would claim nothing), or that
+ * declares a part the lock block also names, is refused the same way, after the lock check. A prompt with a valid
+ * block, or with none, saves exactly as before.
+ */
+function stylingBlockRefusal(field: string, promptText: string): string | null {
+  const check = checkStylingBlock(promptText);
+  return check.state === 'malformed' ? stylingBlockRefusalDetail(field, check.problems) : null;
 }
 
 const Uuid = z.string().uuid();
