@@ -12,6 +12,7 @@ import type {
   BrandOrganization,
   BrandMessage,
 } from "@/lib/brands/workspace/types";
+import { TwingsMark } from "@/components/brand/twings-mark";
 import type { BrandCopy } from "./action-form";
 import { formatBrandTimestamp } from "./format";
 import { OPEN_BRAND_SUPPORT_EVENT, resolveSupportOpenDetail } from "./support-trigger";
@@ -350,20 +351,16 @@ export function SupportDrawer({
     <>
       <button
         type="button"
-        className={`bw-support-launch ${isOpen ? "bw-support-launch-open" : ""}`}
+        className="bw-support-launch"
         onClick={toggleWidget}
         aria-label={newReply ? b.managed.supportNewReply : b.managed.support}
+        title={newReply ? b.managed.supportNewReply : b.managed.support}
         aria-expanded={isOpen}
         data-concierge-launcher
       >
+        {/* The house mark on a round face (the mark the rail carries): no words on the button, its name is the label. */}
+        <TwingsMark className="bw-support-launch-mark" />
         {newReply ? <span className="bw-support-launch-dot" aria-hidden="true" data-concierge-new /> : null}
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M4 4h16v12H9l-5 4V4Z" />
-          <path d="M8 8h8M8 12h5" />
-        </svg>
-        <span className="bw-support-launch-label">
-          {concierge.launcher}
-        </span>
       </button>
 
       <dialog
@@ -377,7 +374,7 @@ export function SupportDrawer({
         <header className="bw-concierge-header">
           <div className="bw-concierge-brand">
             <div className="bw-concierge-avatar" aria-hidden="true">
-              <span>Y</span>
+              <TwingsMark className="bw-concierge-avatar-mark" />
               <i className="bw-concierge-online" />
             </div>
             <div>

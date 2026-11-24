@@ -11,11 +11,12 @@ import {
   BRAND_LANDING_PATH,
   brandHomeVisible,
   brandLandingPath,
-  HOME_DOOR_EXAMPLES,
   HOME_STARTERS,
-  homeDoorPictures,
+  HOME_WALL_LIMIT,
   homeLayout,
   homeResults,
+  homeTileRatio,
+  homeWallRows,
 } from '@/lib/brands/workspace/home';
 import type { BrandWorkspaceChoice } from '@/lib/brands/workspace/selection';
 import { getDictionary } from '@/lib/i18n/dictionaries';
@@ -122,8 +123,11 @@ describe('the default landing', () => {
   });
 });
 
-/* -------------------------------------------------------------------- the cards */
+/* -------------------------------------------------------------------- the layout the home reads */
 
+// The home no longer draws doors or tool cards (the rail lists every tool); it reads the layout for the
+// team line's request (`team`) and for the wall's one link out (`assets` in `tools`). The layout itself
+// still follows the rail's checks, so these stay as they were.
 describe('doors, tools and the team tile follow the same checks as the rail', () => {
   const shape = (input: Parameters<typeof homeLayout>[0]) => {
     const layout = homeLayout(input);
@@ -148,7 +152,8 @@ describe('doors, tools and the team tile follow the same checks as the rail', ()
     expect(layout.doors).toHaveLength(2);
   });
   it('serves only house frames the brand host already allows, and starters in both media', () => {
-    for (const path of [...Object.values(HOME_DOOR_EXAMPLES), ...HOME_STARTERS.map((s) => s.picture)]) {
+    // The doors' example frames went with the doors; the starters are the home's only house frames now.
+    for (const path of HOME_STARTERS.map((s) => s.picture)) {
       expect(brandRouteAllowed(path, 'GET'), path).toBe(true);
     }
     expect(new Set(HOME_STARTERS.map((s) => s.medium))).toEqual(new Set(['image', 'video']));
@@ -163,46 +168,154 @@ describe('doors, tools and the team tile follow the same checks as the rail', ()
 
 const job = (over: Partial<StudioJobView> & { outputs?: StudioJobView['outputs'] }): StudioJobView =>
   ({ id: 'j', kind: 'image', status: 'succeeded', outputs: [], ...over }) as StudioJobView;
-const output = (id: string, kind: 'image' | 'video', thumbUrl: string | null, url = `/m/${id}`) =>
-  ({ id, jobId: 'j', kind, url, thumbUrl, width: 800, height: 1000, seconds: kind === 'video' ? 6.2 : null, draft: false, savedAssetId: null }) as StudioJobView['outputs'][number];
+const output = (id: string, kind: 'image' | 'video' | 'audio', thumbUrl: string | null, url = `/m/${id}`) =>
+  ({ id, jobId: 'j', kind, url, thumbUrl, width: 800, height: 1000, seconds: kind === 'image' ? null : 6.2, draft: false, savedAssetId: null }) as StudioJobView['outputs'][number];
+const oid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 
-describe('recent results', () => {
+describe('recent results (the wall)', () => {
   const org = 'c0000000-0000-4000-8000-00000000000c';
-  it('takes finished results, newest first, at most eight, and links each to its screen viewer', () => {
+  it('takes finished results, newest first, at most twelve by default, and links each to its screen viewer', () => {
+    expect(HOME_WALL_LIMIT).toBe(12);
     const jobs = [
-      job({ id: 'v', kind: 'video', outputs: [output('00000000-0000-4000-8000-000000000001', 'video', '/m/poster')] }),
-      job({ id: 'f', kind: 'image', status: 'failed', outputs: [output('00000000-0000-4000-8000-000000000002', 'image', null)] }),
-      job({ id: 'x', kind: 'image', purpose: 'fill', outputs: [output('00000000-0000-4000-8000-000000000003', 'image', null)] }),
-      job({ id: 'n', kind: 'video', outputs: [output('00000000-0000-4000-8000-000000000004', 'video', null)] }),
-      job({ id: 'r', kind: 'region_edit', outputs: [output('00000000-0000-4000-8000-000000000005', 'image', null)] }),
-      ...Array.from({ length: 8 }, (_, i) => job({ id: `i${i}`, outputs: [output(`00000000-0000-4000-8000-00000000001${i}`, 'image', `/m/t${i}`)] })),
+      job({ id: 'v', kind: 'video', outputs: [output(oid(1), 'video', '/m/poster')] }),
+      job({ id: 'f', kind: 'image', status: 'failed', outputs: [output(oid(2), 'image', null)] }),
+      job({ id: 'x', kind: 'image', purpose: 'fill', outputs: [output(oid(3), 'image', null)] }),
+      job({ id: 'n', kind: 'video', outputs: [output(oid(4), 'video', null)] }),
+      job({ id: 'r', kind: 'region_edit', outputs: [output(oid(5), 'image', null)] }),
+      job({ id: 'm', kind: 'music', outputs: [output(oid(6), 'audio', null)] }),
+      ...Array.from({ length: 14 }, (_, i) => job({ id: `i${i}`, outputs: [output(oid(100 + i), 'image', `/m/t${i}`)] })),
     ];
     const results = homeResults(jobs, org);
-    expect(results).toHaveLength(8);
+    expect(results).toHaveLength(HOME_WALL_LIMIT);
+    // Newest first: the clip, the poster-less clip, the partial edit, then the images in order until the limit.
+    expect(results.map((r) => r.outputId)).toEqual([oid(1), oid(4), oid(5), ...Array.from({ length: 9 }, (_, i) => oid(100 + i))]);
     expect(results[0]).toMatchObject({ kind: 'video', src: '/m/poster', seconds: 6.2 });
-    expect(results[0]!.href).toBe(`/brand/studio/video?organizationId=${org}&view=o%3A00000000-0000-4000-8000-000000000001`);
+    expect(results[0]!.href).toBe(`/brand/studio/video?organizationId=${org}&view=o%3A${oid(1)}`);
     // A partial edit lives on the image screen; the image itself stands in when there is no thumbnail.
-    expect(results[2]).toMatchObject({ kind: 'image', src: '/m/00000000-0000-4000-8000-000000000005', clip: null });
+    expect(results[2]).toMatchObject({ kind: 'image', src: `/m/${oid(5)}`, clip: null });
     expect(results[2]!.href.startsWith(`/brand/studio?organizationId=${org}&view=`)).toBe(true);
-    // Failed runs and fill strips are left out; a clip without a poster shows its first frame.
-    expect(results.map((r) => r.outputId)).not.toContain('00000000-0000-4000-8000-000000000002');
-    expect(results.map((r) => r.outputId)).not.toContain('00000000-0000-4000-8000-000000000003');
-    expect(results.find((r) => r.outputId === '00000000-0000-4000-8000-000000000004')).toMatchObject({ src: null, clip: '/m/00000000-0000-4000-8000-000000000004' });
+    // Failed runs, fill strips and sound are left out.
+    for (const left of [oid(2), oid(3), oid(6)]) expect(results.map((r) => r.outputId)).not.toContain(left);
+    expect(results.some((r) => (r.kind as string) === 'audio')).toBe(false);
+    // An explicit limit still wins.
+    expect(homeResults(jobs, org, 2).map((r) => r.outputId)).toEqual([oid(1), oid(4)]);
   });
-});
 
-describe('door pictures', () => {
-  it('take the newest result of each kind, or none', () => {
-    const org = 'c0000000-0000-4000-8000-00000000000c';
-    const doors = homeDoorPictures(
+  it('gives a clip its own file to play, with or without a poster, and an image nothing to play', () => {
+    const [poster, still, image] = homeResults(
       [
-        job({ id: 'a', kind: 'image', outputs: [output('00000000-0000-4000-8000-000000000021', 'image', '/m/a')] }),
-        job({ id: 'b', kind: 'image', outputs: [output('00000000-0000-4000-8000-000000000022', 'image', '/m/b')] }),
+        job({ id: 'v', kind: 'video', outputs: [output(oid(11), 'video', '/m/poster-11', '/m/film-11.mp4')] }),
+        job({ id: 'n', kind: 'video_remix', outputs: [output(oid(12), 'video', null, '/m/film-12.mp4')] }),
+        job({ id: 'i', kind: 'image', outputs: [output(oid(13), 'image', '/m/thumb-13', '/m/full-13.png')] }),
       ],
       org,
     );
-    expect(doors.image?.outputId).toBe('00000000-0000-4000-8000-000000000021');
-    expect(doors.video).toBeNull();
+    // Over a poster: the poster is the picture, the file is what plays.
+    expect(poster).toMatchObject({ kind: 'video', src: '/m/poster-11', clip: null, play: '/m/film-11.mp4', seconds: 6.2, width: 800, height: 1000 });
+    // No poster: the file is both the still and what plays.
+    expect(still).toMatchObject({ kind: 'video', src: null, clip: '/m/film-12.mp4', play: '/m/film-12.mp4' });
+    expect(still!.href.startsWith(`/brand/studio/video?organizationId=${org}&view=`)).toBe(true);
+    // An image never plays.
+    expect(image).toMatchObject({ kind: 'image', src: '/m/thumb-13', clip: null, play: null, seconds: null });
+  });
+});
+
+describe('a wall tile keeps its own proportions (homeTileRatio)', () => {
+  it('reads width over height', () => {
+    expect(homeTileRatio({ kind: 'image', width: 800, height: 1000 })).toBe(0.8);
+    expect(homeTileRatio({ kind: 'image', width: 1000, height: 1000 })).toBe(1);
+    expect(homeTileRatio({ kind: 'video', width: 1920, height: 1080 })).toBe(1.778);
+    // 9:16 rounds to three decimals before the clamp (0.563), a hair inside the floor.
+    expect(homeTileRatio({ kind: 'video', width: 1080, height: 1920 })).toBeCloseTo(9 / 16, 3);
+  });
+  it('keeps every tile between a tall phone frame (9:16) and a wide strip (2.4:1)', () => {
+    expect(homeTileRatio({ kind: 'image', width: 500, height: 2000 })).toBe(0.5625);
+    expect(homeTileRatio({ kind: 'video', width: 4000, height: 1000 })).toBe(2.4);
+    expect(homeTileRatio({ kind: 'image', width: 1, height: 10_000 })).toBe(0.5625);
+    expect(homeTileRatio({ kind: 'image', width: 10_000, height: 1 })).toBe(2.4);
+  });
+  it('falls back to 4:5 for an image and 16:9 for a clip without a size', () => {
+    for (const size of [
+      { width: null, height: null },
+      { width: 800, height: null },
+      { width: null, height: 1000 },
+      { width: 0, height: 1000 },
+      { width: 800, height: 0 },
+    ]) {
+      expect(homeTileRatio({ kind: 'image', ...size }), JSON.stringify(size)).toBe(0.8);
+      expect(homeTileRatio({ kind: 'video', ...size }), JSON.stringify(size)).toBe(1.778);
+    }
+  });
+});
+
+describe('the wall as rows of one height (homeWallRows)', () => {
+  const TARGET = 4.6;
+  const sum = (row: { items: ReadonlyArray<{ ratio: number }> }) => row.items.reduce((total, entry) => total + entry.ratio, 0);
+  // A fixed spread of real proportions (9:16 … 2.4:1), cycled: deterministic, no randomness in the test.
+  const SPREAD = [0.5625, 0.8, 1, 1.778, 2.4, 0.75, 1.333, 0.5625, 1.5, 0.8, 2.4, 1];
+  const sample = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `t${i}`, ratio: SPREAD[i % SPREAD.length]! }));
+  const ratioOf = (t: { ratio: number }) => t.ratio;
+
+  it('gives no rows for no results', () => {
+    expect(homeWallRows([], ratioOf)).toEqual([]);
+  });
+
+  it('keeps every item once and in order, with the ratio it was given', () => {
+    for (const n of [1, 2, 5, 12, 31]) {
+      const items = sample(n);
+      const rows = homeWallRows(items, ratioOf);
+      expect(rows.flatMap((row) => row.items.map((entry) => entry.item)), String(n)).toEqual(items);
+      for (const row of rows) for (const entry of row.items) expect(entry.ratio).toBe(entry.item.ratio);
+      expect(rows.every((row) => row.items.length > 0)).toBe(true);
+    }
+  });
+
+  it('closes a row near the target: never further off than half a tile', () => {
+    const rows = homeWallRows(sample(48), ratioOf);
+    expect(rows.length).toBeGreaterThan(5);
+    // Every closed row (all but the last) sits within half the widest tile (2.4 / 2) of the target.
+    for (const row of rows.slice(0, -1)) {
+      expect(Math.abs(sum(row) - TARGET), JSON.stringify(row.items.map((e) => e.ratio))).toBeLessThanOrEqual(1.2 + 1e-9);
+    }
+    // Squares: four are 0.6 short of the target, five 0.4 over, six 1.4 over: rows of five.
+    const squares = homeWallRows(Array.from({ length: 10 }, (_, i) => ({ id: `s${i}`, ratio: 1 })), ratioOf);
+    expect(squares.map((row) => row.items.length)).toEqual([5, 5]);
+    // A custom target is honoured.
+    expect(homeWallRows(Array.from({ length: 6 }, (_, i) => ({ id: `s${i}`, ratio: 1 })), ratioOf, 3).map((row) => row.items.length)).toEqual([3, 3]);
+  });
+
+  it('marks a short last row with the room it leaves open, and every full row with none', () => {
+    const seven = homeWallRows(Array.from({ length: 7 }, (_, i) => ({ id: `s${i}`, ratio: 1 })), ratioOf);
+    expect(seven.map((row) => row.items.length)).toEqual([5, 2]);
+    expect(seven[0]!.rest).toBe(0);
+    expect(seven[1]!.rest).toBe(2.6);
+    // A last row that reaches the target is full: no room left open.
+    const ten = homeWallRows(Array.from({ length: 10 }, (_, i) => ({ id: `s${i}`, ratio: 1 })), ratioOf);
+    expect(ten.map((row) => row.rest)).toEqual([0, 0]);
+    // One tile alone: one short row.
+    const one = homeWallRows([{ id: 'only', ratio: 0.8 }], ratioOf);
+    expect(one).toEqual([{ items: [{ item: { id: 'only', ratio: 0.8 }, ratio: 0.8 }], rest: 3.8 }]);
+    // Across a long, mixed wall: every row but the last is full, and the last one's rest is what it lacks.
+    const rows = homeWallRows(sample(31), ratioOf);
+    for (const row of rows.slice(0, -1)) expect(row.rest).toBe(0);
+    const last = rows.at(-1)!;
+    expect(last.rest).toBeCloseTo(Math.max(0, TARGET - sum(last)), 3);
+    expect(rows.filter((row) => row.rest > 0).length).toBeLessThanOrEqual(1);
+  });
+
+  it('is deterministic: the same results always give the same wall', () => {
+    const items = sample(23);
+    expect(homeWallRows(items, ratioOf)).toEqual(homeWallRows(items, ratioOf));
+    expect(homeWallRows([...items], ratioOf)).toEqual(homeWallRows(items, ratioOf));
+  });
+
+  it('is what the home view draws from homeResults (ratios from homeTileRatio)', () => {
+    const results = homeResults(
+      Array.from({ length: 5 }, (_, i) => job({ id: `i${i}`, outputs: [output(oid(200 + i), i % 2 ? 'video' : 'image', `/m/p${i}`)] })),
+      'c0000000-0000-4000-8000-00000000000c',
+    );
+    const rows = homeWallRows(results, homeTileRatio);
+    expect(rows.flatMap((row) => row.items.map((entry) => entry.ratio))).toEqual(results.map((r) => homeTileRatio(r)));
   });
 });
 
@@ -298,55 +411,77 @@ describe('the home page', () => {
     expect(await signal(() => openHome(fx.orgId))).toContain('404');
   });
 
-  it('shows an owner every card, the credits and a one-line empty state, with no filled button', async () => {
+  // Markers of the home before the 2026-11-25 redesign: tool cards, doors and their pictures, example
+  // frames, the team tile's stage strip, the lower band and the credits sentence. None may come back.
+  const GONE = ['data-home-tools', 'data-home-doors', 'data-home-door', 'data-door-picture', 'data-home-example', 'data-home-team-stages', 'data-home-lower', 'data-home-credits'];
+  const actions = (html: string) => [...html.matchAll(/data-home-action="([^"]+)"/g)].map((m) => m[1]);
+
+  it('shows an owner the prompt bar, the team line and three starters: no tool cards, doors or credits', async () => {
     vi.stubEnv('BRAND_STUDIO_V2', 'on');
     vi.stubEnv('BRAND_ROOMS', 'on');
     const fx = await homeFixture();
     mocks.viewer = viewerOf(fx.ids.owner);
     const html = await openHome(fx.orgId);
     expect(html).toContain(`data-workspace-home="${fx.orgId}"`);
-    expect(html).toContain('Home fixture brand 작업공간');
-    for (const key of ['image', 'video', 'compose', 'workflows', 'assets', 'commission']) expect(html).toContain(`data-home-action="${key}"`);
-    // A new brand: house frames marked as examples on both doors, and three starters below.
-    expect(html.match(/data-door-picture="example"/g)).toHaveLength(2);
-    expect(html.match(/data-home-example/g)).toHaveLength(2);
-    expect(html).toContain('data-home-starters');
-    for (const key of ['product', 'look', 'film']) expect(html).toContain(`data-home-starter="${key}"`);
+    expect(html).toContain('data-home-state="empty"');
+    // The heading is the workspace's name, one quiet h1.
+    expect(html.match(/<h1[\s>]/g)).toHaveLength(1);
+    expect(html).toMatch(/<h1[^>]*>Home fixture brand 작업공간<\/h1>/);
+    for (const marker of GONE) expect(html, marker).not.toContain(marker);
+    // The rail lists every tool; the home repeats none of them. Its only link out here is the request.
+    expect(actions(html)).toEqual(['commission']);
+    for (const name of [ko.studioShell.rail.compose, ko.studioShell.rail.workflows, ko.roomsShell.nav.groupMake]) expect(html, name).not.toContain(name);
+    expect(html).not.toContain(`href="/brand/studio/compose?organizationId=${fx.orgId}"`);
     // The prompt bar is the one thing first, with the page's only filled button.
     expect(html).toContain('data-home-prompt');
     expect(html.match(/data-variant="solid"/g)).toHaveLength(1);
     expect(html).toContain(ko.brandStudio.dock.placeholder);
-    expect(html).not.toContain('data-home-action="campaign"');
-    // The rail's own names and groups.
-    for (const name of [ko.studioShell.rail.image, ko.studioShell.rail.video, ko.studioShell.rail.compose, ko.studioShell.rail.workflows, ko.studioShell.rail.assets, ko.roomsShell.nav.commission, ko.roomsShell.nav.groupMake, ko.roomsShell.nav.groupTeam]) {
-      expect(html).toContain(name);
-    }
-    expect(html).toContain(`href="/brand/studio/compose?organizationId=${fx.orgId}"`);
+    expect(html.indexOf('data-home-prompt')).toBeLessThan(html.indexOf('data-home-lines'));
+    // Nothing waits yet: no review lines. The team line is always there: a sentence (no project under way) and the request.
+    expect(html).toContain('data-home-lines');
+    expect(html).not.toContain('data-home-reviews');
+    expect(html).toContain('data-home-team="commission"');
+    expect(html).not.toContain('data-home-team-facts');
+    expect(html).toContain(ko.brandHome.lines.commission);
+    expect(html).toContain(ko.roomsShell.nav.groupTeam);
     expect(html).toContain(`href="/brand/projects/new?organizationId=${fx.orgId}"`);
-    expect(html).toContain('data-home-credits');
-    expect(html).toContain('크레딧 10,000 중 10,000 남았어요');
+    expect(html).not.toContain('data-home-action="campaign"');
+    // A new brand: three starters, no wall, and no link to the asset hub (there is nothing on the wall to see more of).
+    expect(html).toContain('data-home-starters');
+    for (const key of ['product', 'look', 'film']) expect(html).toContain(`data-home-starter="${key}"`);
+    expect(html).not.toContain('data-home-wall');
+    expect(html).not.toContain('data-home-results');
+    expect(html).not.toContain('data-home-action="assets"');
+    // No credits on the home (the rail's meter is the one place they are read), never won.
+    expect(html).not.toContain('크레딧 10,000 중 10,000 남았어요');
     expect(html).not.toMatch(/\d\s*원|₩|KRW/);
-    expect(html).not.toContain('data-home-continue');
     expect(html).not.toContain('bw-primary');
     expect(html).not.toContain('data-home-viewer-note');
   });
 
-  it('gives a viewer the screens they can open, no request card, and one line saying why', async () => {
+  it('gives a viewer no prompt bar, no request, the projects link and one line saying why', async () => {
     vi.stubEnv('BRAND_STUDIO_V2', 'on');
     vi.stubEnv('BRAND_ROOMS', 'on');
     const fx = await homeFixture();
     mocks.viewer = viewerOf(fx.ids.viewer);
     const html = await openHome(fx.orgId);
-    expect(html).toContain('data-home-action="image"');
+    for (const marker of GONE) expect(html, marker).not.toContain(marker);
     expect(html).not.toContain('data-home-action="commission"');
-    // No prompt bar for a role that cannot create; the team tile opens the projects list instead.
+    expect(html).not.toContain('/brand/projects/new');
+    // No prompt bar for a role that cannot create; the team line opens the projects list instead.
     expect(html).not.toContain('data-home-prompt');
     expect(html).not.toContain('data-variant="solid"');
-    expect(html).toContain('data-home-action="projects"');
+    expect(html).toContain('data-home-team="projects"');
+    expect(actions(html)).toEqual(['projects']);
+    expect(html).toContain(ko.brandHome.lines.projects);
     expect(html).toContain('data-home-viewer-note');
+    // Nor the first-run guide, which is for those who can act on it.
+    expect(html).not.toContain('data-home-first-run');
+    // The starters still show what the studios make, as plain links.
+    expect(html).toContain('data-home-starters');
   });
 
-  it('lists drafts waiting for review and the newest results under 이어서 하기', async () => {
+  it('lists drafts waiting for review as lines and the newest results as a wall', async () => {
     vi.stubEnv('BRAND_STUDIO_V2', 'on');
     vi.stubEnv('BRAND_ROOMS', 'on');
     const fx = await homeFixture();
@@ -362,19 +497,43 @@ describe('the home page', () => {
     ).rows[0]!.id;
     mocks.viewer = viewerOf(fx.ids.owner);
     const html = await openHome(fx.orgId);
-    expect(html).toContain('data-home-continue');
+    for (const marker of GONE) expect(html, marker).not.toContain(marker);
+    // What waits: one line, no "more" link (that is only beyond two).
     expect(html).toContain('data-home-reviews="1"');
+    expect(html.match(/data-home-review="/g)).toHaveLength(1);
+    expect(html).not.toContain('data-home-reviews-more');
     expect(html).toContain('Spring launch film');
     expect(html).toContain(`/brand/rooms/${fx.projectId}?organizationId=${fx.orgId}&amp;tab=review&amp;review=${reviewId}`);
     expect(html).toContain('시안 v1 확인 대기');
+    expect(html.indexOf('data-home-reviews')).toBeLessThan(html.indexOf('data-home-team='));
+    // The wall: one tile per result, each a link to its viewer; the asset hub one link away.
+    expect(html).toContain('data-home-state="content"');
+    const shown = Number(/data-home-results="(\d+)"/.exec(html)?.[1]);
+    expect(shown).toBeGreaterThanOrEqual(1);
+    expect(html.match(/data-home-result="/g)).toHaveLength(shown);
+    expect(html).toContain('data-home-wall');
     expect(html).toContain(`view=o%3A${outputId}`);
+    expect(html).toContain('data-home-action="assets"');
+    expect(html).toContain(`href="/brand/library?organizationId=${fx.orgId}"`);
+    expect(html).toContain(ko.studioLibrary.allAssets);
     expect(html).not.toContain('data-home-starters');
-    // The doors now show the brand's own newest image; no clip yet, so the video door keeps its example.
-    expect(html).toContain('data-door-picture="own"');
-    expect(html).toContain('data-door-picture="example"');
-    // Live facts on the team tile: drafts to look at.
-    expect(html).toContain('data-home-team-facts');
-    expect(html).toContain('확인할 시안 1개');
+    // The project is only requested, so the team line says what the team does rather than counting.
+    expect(html).not.toContain('data-home-team-facts');
+    expect(html).toContain(ko.brandHome.lines.commission);
+  });
+
+  it('counts projects under way on the team line, linked to the list, once one is active', async () => {
+    vi.stubEnv('BRAND_STUDIO_V2', 'on');
+    vi.stubEnv('BRAND_ROOMS', 'on');
+    const fx = await homeFixture();
+    await fx.sql.query("update brand_projects set status = 'active' where id = $1", [fx.projectId]);
+    mocks.viewer = viewerOf(fx.ids.owner);
+    const html = await openHome(fx.orgId);
+    expect(html).toMatch(new RegExp(`<a href="/brand\\?organizationId=${fx.orgId}"[^>]*data-home-team-facts[^>]*>`));
+    expect(html).toContain(`${ko.brandWorkspace.status.active} 1`);
+    expect(html).not.toContain(ko.brandHome.lines.commission);
+    // Still one request link beside it.
+    expect(actions(html)).toEqual(['commission']);
   });
 });
 
@@ -384,7 +543,9 @@ describe('the home in 야기 팀과 (founder 2026-11-20: team customers do not s
   const nav = ko.roomsShell.nav;
   const ov = ko.roomsShell.overview;
   const sp = ko.roomsShell.space;
-  const MAKING = ['data-home-prompt', 'data-home-doors', 'data-home-tools', 'data-home-starters', 'data-home-credits', ko.brandStudio.dock.placeholder];
+  // The making side as it is drawn since the 2026-11-25 redesign (prompt bar, waiting lines, wall, starters),
+  // plus the credits sentence it no longer has either: none of it on 야기 팀과.
+  const MAKING = ['data-home-prompt', 'data-home-lines', 'data-home-wall', 'data-home-results', 'data-home-starters', 'data-home-credits', ko.brandStudio.dock.placeholder];
 
   it('opens the making home with no remembered mode and with 직접 만들기 remembered', async () => {
     vi.stubEnv('BRAND_STUDIO_V2', 'on');

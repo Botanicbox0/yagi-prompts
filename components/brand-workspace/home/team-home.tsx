@@ -115,7 +115,7 @@ export function WorkspaceTeamHome(props: WorkspaceTeamHomeProps) {
   return (
     <div className={s.home} data-workspace-home={organizationId} data-follows-rail-mode="" data-home-mode="team" data-home-read-only={props.canRequest ? undefined : 'true'}>
       <header className={s.head}>
-        <h1 className={s.title} title={heading}>
+        <h1 className={s.name} title={heading}>
           {heading}
         </h1>
         {fresh ? null : request}

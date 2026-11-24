@@ -222,6 +222,73 @@ describe('support launcher dot', () => {
   });
 });
 
+describe('the launcher face (the TWINGS mark, no words)', () => {
+  const button = (html: string) => /<button[^>]*data-concierge-launcher[^>]*>([\s\S]*?)<\/button>/.exec(html);
+
+  it('is a round button with the mark and no visible words: its name is its label and its title', () => {
+    const html = renderToStaticMarkup(<SupportDrawer organizations={[org(ORG_A)]} b={b} locale="ko" />);
+    const match = button(html);
+    expect(match).not.toBeNull();
+    const [whole, inner] = match!;
+    expect(whole).toContain('class="bw-support-launch"');
+    expect(inner).toContain('data-twings-mark');
+    expect(inner).toContain('bw-support-launch-mark');
+    // No text node at all inside the button, and none of the old label or speech bubble.
+    expect(inner!.replace(/<[^>]*>/g, '')).toBe('');
+    expect(inner).not.toContain('<svg');
+    expect(html).not.toContain('bw-support-launch-label');
+    expect(html).not.toContain(`>${b.managed.concierge.launcher}<`);
+    // The accessible name and the tooltip are the same words.
+    expect(whole).toContain(`aria-label="${b.managed.support}"`);
+    expect(whole).toContain(`title="${b.managed.support}"`);
+  });
+
+  it('switches its name and title together when the new-reply dot shows', async () => {
+    stubFetch(async () => okJson({ ok: true, latestStudioReplyAt: '2026-11-21T03:30:00.000Z' }));
+    const dom = await mountDrawer([org(ORG_A)]);
+    const launch = dom.query('[data-concierge-launcher]')!;
+    expect(launcher(dom)).toEqual(DOT);
+    expect(launch.getAttribute('title')).toBe(b.managed.supportNewReply);
+    expect(launch.getAttribute('aria-label')).toBe(b.managed.supportNewReply);
+    expect(launch.textContent).toBe('');
+    expect(dom.query('[data-concierge-launcher] [data-twings-mark]')).toBeTruthy();
+    expect(dom.query('[data-concierge-launcher] [data-concierge-new]')!.getAttribute('aria-hidden')).toBe('true');
+
+    // Opening the window clears the dot: back to the plain name, on both.
+    await dom.click('[data-concierge-launcher]');
+    await settle();
+    await dom.click('[data-concierge-launcher]');
+    await settle();
+    expect(launcher(dom)).toEqual(NO_DOT);
+    expect(launch.getAttribute('title')).toBe(b.managed.support);
+    expect(launch.getAttribute('aria-label')).toBe(b.managed.support);
+  });
+
+  it('keeps title and name equal without a dot', async () => {
+    stubFetch(async () => okJson({ ok: true, latestStudioReplyAt: null }));
+    const dom = await mountDrawer([org(ORG_A)]);
+    const launch = dom.query('[data-concierge-launcher]')!;
+    expect(launch.getAttribute('title')).toBe(b.managed.support);
+    expect(launch.getAttribute('aria-label')).toBe(launch.getAttribute('title'));
+  });
+
+  it('carries the same mark in the window header\'s avatar, instead of a letter', async () => {
+    const html = renderToStaticMarkup(<SupportDrawer organizations={[org(ORG_A)]} b={b} locale="ko" />);
+    const avatar = /<div class="bw-concierge-avatar"[^>]*>([\s\S]*?)<\/div>/.exec(html);
+    expect(avatar).not.toBeNull();
+    expect(avatar![0]).toContain('aria-hidden="true"');
+    expect(avatar![1]).toContain('data-twings-mark');
+    expect(avatar![1]).toContain('bw-concierge-avatar-mark');
+    expect(avatar![1]).toContain('bw-concierge-online');
+    expect(avatar![1]!.replace(/<[^>]*>/g, '')).toBe('');
+
+    stubFetch(async () => okJson({ ok: true, latestStudioReplyAt: null }));
+    const dom = await mountDrawer([org(ORG_A)]);
+    expect(dom.query('.bw-concierge-avatar [data-twings-mark]')).toBeTruthy();
+    expect(dom.query('.bw-concierge-avatar')!.textContent).toBe('');
+  });
+});
+
 describe('quick question chips', () => {
   const chipLabels = (html: string) => [...html.matchAll(/<button[^>]*class="bw-concierge-chip"[^>]*>([^<]*)<\/button>/g)].map((m) => m[1]);
   const topics = b.managed.concierge.topics;
