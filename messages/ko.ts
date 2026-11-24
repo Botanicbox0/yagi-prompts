@@ -1872,6 +1872,8 @@ export const ko: Dictionary = {
       // 대표 확인 대기 (2026-11-24): 로컬 Gemma 초안, 용어 "이번 이용 기간"
       usageCycle: '이번 이용 기간 크레딧',
       resets: '{date}에 다시 채워져요',
+      // 대표 확인 대기 (2026-11-24): 로컬 Gemma 2패스 초안, 체험 크레딧만 있는 조직용
+      resetsTrial: '{date}까지 사용할 수 있어요',
       closedTitle: '아직 이용 한도가 활성화되지 않았어요',
       closedBody: '크레딧은 이미지나 영상을 만들 때 사용해요. 플랜이 확정되면 바로 제작할 수 있어요. 아래에서 이용 신청을 해주시면 워크스페이스 채팅으로 안내해 드릴게요.',
       closedAction: '이용 신청',
@@ -2222,6 +2224,10 @@ export const ko: Dictionary = {
     // 대표 확인 대기 (2026-11-24): 로컬 Gemma 초안, 용어 "이번 이용 기간"
     errorsCycle: {
       allowance_exhausted: '이번 이용 기간 한도를 넘어서 만들 수 없어요.',
+    },
+    // 대표 확인 대기 (2026-11-24): 로컬 Gemma 2패스 초안, 체험 크레딧만 있는 조직용
+    errorsTrial: {
+      allowance_exhausted: '체험 크레딧을 모두 사용해서 만들 수 없어요.',
     },
     unapprovedUpload: {
       quotaExceeded: `플랜 확정 전에는 총 ${formatLimitMb(UNAPPROVED_UPLOAD_QUOTA_BYTES)} MB, 최대 ${UNAPPROVED_UPLOAD_MAX_FILES}개까지 올릴 수 있어요. 안 쓰는 파일을 지우거나 대화창에서 야기 팀에 문의해 주세요.`,

@@ -27,7 +27,8 @@ import type { StudioAllowanceView, StudioErrorCode } from '@/lib/brand-studio/co
 import { creditsOf } from '@/lib/brand-studio/credits';
 import { callGeminiJson, studioGeminiConfig } from '@/lib/brand-studio/enhancer/gemini';
 import type { StudioDeps } from '@/lib/brand-studio/types';
-import { allowanceView, loadAllowance } from '@/lib/brand-studio/usage';
+import { allowanceViewWithRefill } from '@/lib/brand-studio/allowance-refill';
+import { loadAllowance } from '@/lib/brand-studio/usage';
 import { AssistPlanInputSchema, planEditAssist, type AssistPlanResult } from '../edit-assist/service';
 import {
   ComposePatchesEnvelopeSchema,
@@ -411,7 +412,7 @@ export async function runComposeOperation(
               ok: true as const,
               jobId: existing.id,
               creditsUsed: creditsOf(Number(existing.usage_krw ?? existing.estimate_krw ?? 0)),
-              allowance: allowanceView(allowance),
+              allowance: await allowanceViewWithRefill(tx, v.organizationId, allowance, { now }),
             };
           }
           return { ok: false as const, code: 'conflict' as const };
@@ -440,7 +441,7 @@ export async function runComposeOperation(
           ok: true as const,
           jobId: inserted.rows[0]!.id,
           creditsUsed: 0,
-          allowance: allowanceView(updated),
+          allowance: await allowanceViewWithRefill(tx, v.organizationId, updated, { now }),
         };
       });
     } catch (error) {
@@ -482,7 +483,7 @@ export async function runComposeOperation(
       return {
         ok: true as const,
         refunded: updatedJob.rows.length > 0,
-        allowance: allowanceView(updated),
+        allowance: await allowanceViewWithRefill(tx, v.organizationId, updated, { now }),
       };
     });
   } catch (error) {

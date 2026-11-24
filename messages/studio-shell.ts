@@ -46,6 +46,9 @@ export const studioShellEn = {
     label: 'Credits',
     refill: 'Refills on {date}',
     summary: '{left} of {total} credits left. Refills on {date}.',
+    // 대표 확인 대기 (2026-11-24): 로컬 Gemma 2패스 초안, 체험 크레딧만 있는 조직용
+    refillTrial: 'Available until {date}',
+    summaryTrial: '{left} of {total} credits left. Available until {date}.',
   },
   toast: {
     imageDone: 'Your image is ready',
@@ -67,6 +70,8 @@ export const studioShellEn = {
     total: 'Whole team',
     totalAmount: '{used} / {cap} credits',
     refill: 'Refills on {date}',
+    // 대표 확인 대기 (2026-11-24): 로컬 Gemma 2패스 초안, 체험 크레딧만 있는 조직용
+    refillTrial: 'Available until {date}',
     member: 'Member',
     credits: 'Credits',
     runs: 'Runs',
@@ -182,6 +187,9 @@ export const studioShellKo: typeof studioShellEn = {
     label: '크레딧',
     refill: '{date}에 다시 채워져요',
     summary: '크레딧 {total} 중 {left} 남았어요. {date}에 다시 채워져요.',
+    // 대표 확인 대기 (2026-11-24): 로컬 Gemma 2패스 초안, 체험 크레딧만 있는 조직용
+    refillTrial: '{date}까지 사용할 수 있어요',
+    summaryTrial: '크레딧 {total} 중 {left} 남았어요. {date}까지 사용할 수 있어요.',
   },
   toast: {
     imageDone: '이미지가 완성됐어요',
@@ -204,6 +212,8 @@ export const studioShellKo: typeof studioShellEn = {
     total: '팀 전체',
     totalAmount: '{used} / {cap} 크레딧',
     refill: '{date}에 다시 채워져요',
+    // 대표 확인 대기 (2026-11-24): 로컬 Gemma 2패스 초안, 체험 크레딧만 있는 조직용
+    refillTrial: '{date}까지 사용할 수 있어요',
     member: '멤버',
     credits: '크레딧',
     runs: '실행',

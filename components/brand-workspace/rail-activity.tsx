@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { STUDIO_JOB_SETTLED, STUDIO_JOB_STARTED } from '@/components/brand-studio/seams';
 import { ROOM_ACTIVITY, type RoomSummary } from '@/components/brand-rooms/seams';
+import { refillWording, windowDayInstant, withoutLastSentence, type RefillWording } from '@/lib/brand-studio/allowance-window';
 import { creditsLeft, creditsOf, formatCredits } from '@/lib/brand-studio/credits';
 import type { StudioSummary } from '@/lib/brand-studio/summary';
 import { interpolate } from '@/lib/i18n/format';
@@ -263,6 +264,10 @@ export interface MeterFigures {
   leftText: string;
   totalText: string;
   date: string;
+  /** R4: refill words as today's, the trial's words with its last day, or none (extra credits without a trial). */
+  refill: RefillWording;
+  /** The trial's last day in the same format as `date`; empty unless `refill` is the trial's. */
+  trialDate: string;
 }
 
 /** Null when the allowance is closed (cap 0): the meter is not shown at all. */
@@ -270,6 +275,7 @@ export function meterFigures(allowance: RailSummary['allowance'] | null | undefi
   if (!allowance || !(allowance.capKrw > 0)) return null;
   const total = creditsOf(allowance.capKrw);
   const left = Math.min(total, creditsLeft(allowance.capKrw, allowance.usedKrw));
+  const refill = refillWording(allowance.refill);
   return {
     left,
     total,
@@ -277,7 +283,24 @@ export function meterFigures(allowance: RailSummary['allowance'] | null | undefi
     leftText: formatCredits(left, locale),
     totalText: formatCredits(total, locale),
     date: refillDate(allowance.resetsAt, locale),
+    refill,
+    trialDate: refill.kind === 'trial' ? refillDate(windowDayInstant(refill.through).toISOString(), locale) : '',
   };
+}
+
+/** The meter's sentence ("크레딧 400 중 120 남았어요. …"), shared by the rail and the home so the two never disagree. */
+export function meterSummary(figures: MeterFigures, copy: StudioShellCopy): string {
+  const values = { left: figures.leftText, total: figures.totalText };
+  if (figures.refill.kind === 'trial') return interpolate(copy.credits.summaryTrial, { ...values, date: figures.trialDate });
+  if (figures.refill.kind === 'hidden') return interpolate(withoutLastSentence(copy.credits.summary), values);
+  return interpolate(copy.credits.summary, { ...values, date: figures.date });
+}
+
+/** The meter's refill line; null when nothing refills and there is no trial (extra credits only). */
+export function meterRefillLine(figures: MeterFigures, copy: StudioShellCopy): string | null {
+  if (figures.refill.kind === 'trial') return interpolate(copy.credits.refillTrial, { date: figures.trialDate });
+  if (figures.refill.kind === 'hidden') return null;
+  return interpolate(copy.credits.refill, { date: figures.date });
 }
 
 const RING_R = 8;
@@ -296,7 +319,8 @@ export function CreditsMeter({
 }) {
   const figures = meterFigures(allowance, locale);
   if (!figures) return null;
-  const summary = interpolate(copy.credits.summary, { left: figures.leftText, total: figures.totalText, date: figures.date });
+  const summary = meterSummary(figures, copy);
+  const refillLine = meterRefillLine(figures, copy);
   const low = figures.ratio < 0.1;
   return (
     <div
@@ -338,7 +362,7 @@ export function CreditsMeter({
         >
           <span style={{ width: `${(figures.ratio * 100).toFixed(1)}%` }} />
         </span>
-        <span className="bw-rail-credits-refill">{interpolate(copy.credits.refill, { date: figures.date })}</span>
+        {refillLine !== null ? <span className="bw-rail-credits-refill">{refillLine}</span> : null}
       </div>
     </div>
   );

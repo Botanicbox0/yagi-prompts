@@ -9,7 +9,8 @@ import { listMcpTokens, normalizeMcpOrigin } from '@/lib/brand-studio/mcp';
 import { DEFAULT_MCP_ORIGIN } from '@/lib/brand-studio/mcp/clients';
 import { createStudioMediaStore } from '@/lib/brand-studio/media-store';
 import { assetView, assetsOf, jobsOf, viewsOf } from '@/lib/brand-studio/repo';
-import { allowanceView, loadAllowance } from '@/lib/brand-studio/usage';
+import { allowanceViewWithRefill } from '@/lib/brand-studio/allowance-refill';
+import { loadAllowance } from '@/lib/brand-studio/usage';
 import { studioShowroomVisible, studioV2Visible } from '@/lib/brand-studio/visibility';
 import { listOrgPlaybooks, listOrgWorkflows, STARTER_WORKFLOWS, toRecentRunSummaries } from '@/lib/brand-studio/workflows';
 import type { RecentRunSummaryWire } from '@/lib/brand-studio/workflows/contracts';
@@ -90,6 +91,8 @@ export default async function StudioWorkflowsPage({
   const videoAssets = allAssets.filter((a) => a.kind === 'video');
 
   const jobViews = await viewsOf(deps.sql, rawJobs, media);
+  // R4: the refill fact beside the window (no statement unless the base cap is 0).
+  const initialAllowance = await allowanceViewWithRefill(deps.sql, choice.id, allowance);
   const imageOutputs = jobViews.flatMap((job) =>
     job.outputs
       .filter((out) => out.kind === 'image')
@@ -123,7 +126,7 @@ export default async function StudioWorkflowsPage({
       imageStudioHref={scopedHref('/brand/studio', choice)}
       videoStudioHref={scopedHref('/brand/studio/video', choice)}
       assetsHref={scopedHref('/brand/library', choice)}
-      initialAllowance={allowanceView(allowance)}
+      initialAllowance={initialAllowance}
       initialStarters={[...STARTER_WORKFLOWS]}
       initialWorkflows={customWorkflows}
       initialPlaybooks={playbooks}

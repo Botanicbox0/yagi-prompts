@@ -10,7 +10,7 @@
 import { z } from 'zod';
 import type { StudioStorageQuotaView } from '@/lib/brands/storage-quota-format';
 import type { UploadLimitReason } from '@/lib/brands/upload-limits-format';
-import type { AllowanceWindowView } from './allowance-window';
+import type { AllowanceRefillView, AllowanceWindowView } from './allowance-window';
 import { STUDIO_IMAGE_BACKGROUNDS, STUDIO_IMAGE_QUALITIES, type StudioImageQuality } from './models';
 import { LYRIC_STRUCTURES } from './sound/lyrics';
 import type { LyricsModel } from './sound/lyrics-model';
@@ -887,6 +887,12 @@ export interface StudioAllowanceView {
    * elsewhere: the screens then keep the calendar-month words.
    */
   window?: AllowanceWindowView;
+  /**
+   * R4: present only when the base cap is 0 and the cap comes from grants (lib/brand-studio/allowance-refill.ts): nothing
+   * refills on a date, and a trial-only organization learns its trial's last day. Absent (every plan, override and
+   * env-default organization, and a view built elsewhere): the screens keep today's refill words.
+   */
+  refill?: AllowanceRefillView;
 }
 
 /** `GET /api/brand-studio?organizationId=…` */
