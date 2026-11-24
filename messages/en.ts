@@ -6016,6 +6016,8 @@ export const en = {
     removeLabel: 'Remove {item}',
     /** Tag on a line made from text typed but not sent yet: it still goes with the order. */
     pendingTag: 'Not sent yet',
+    /** Under that line when the typed text is longer than one line holds: only part of it is listed; send it first. */
+    pendingTooLong: "This request is long, so only part of it is listed. Send it first and we'll sort it out.",
     /** Typed text cannot be added because the change block is full; {max} is the limit. Text stays in the box. */
     full: 'You can list up to {max} changes. Remove one, then send this again.',
     /** Small label above the studio's one clarifying question. */

@@ -7,11 +7,11 @@ import {
   pendingFoldNotice,
   readSheetTurnAnswer,
   sheetNoticeText,
+  pendingLineNotice,
   visibleSheetQuestion,
   type EditSheetCopy,
   type SheetNotice
 } from './edit-sheet-card';
-import { SHEET_BLOCK_LIMITS } from '@/lib/revision/sheet-core';
 import {
   chipsFromSheet,
   dropRef,
@@ -514,8 +514,6 @@ export function TemplateDirectorPanel({
   const sheetChips = useMemo(() => chipsFromSheet(sheetState.sheet), [sheetState.sheet]);
   const chips = editSheet ? sheetChips : chipsState;
   const sheetQuestion = visibleSheetQuestion(sheetState.question, locale);
-  // Sheet mode: a typed request becomes one sheet line, so the box takes no more than a line holds.
-  const inputMaxChars = editSheet ? SHEET_BLOCK_LIMITS.itemMax : MAX_DIRECTOR_INPUT_CHARS;
   const [assistantMessage, setAssistantMessage] = useState<string | null>(initialAssistantMessage);
   const [turnAccepted, setTurnAccepted] = useState<boolean>(true);
   const [fileError, setFileError] = useState<string | null>(null);
@@ -812,8 +810,8 @@ export function TemplateDirectorPanel({
         message,
         status: res.status,
         payload,
-        // The studio's note on a softened request is written in Korean; other locales show the dictionary line only.
-        adjustmentReadable: locale === 'ko'
+        // The studio writes its note on a softened request (and, for now, its question) in Korean.
+        locale
       });
       setSheetState(outcome.state);
       setSheetNotice(outcome.notice);
@@ -2412,7 +2410,7 @@ export function TemplateDirectorPanel({
               data-director-char-count
               className="font-mono text-[0.68rem] text-[#71717A] tabular-nums"
             >
-              {userMessage.length}/{inputMaxChars}
+              {userMessage.length}/{MAX_DIRECTOR_INPUT_CHARS}
             </span>
           </div>
           <div className="mt-1.5 flex flex-col gap-2 sm:flex-row sm:items-end">
@@ -2421,7 +2419,7 @@ export function TemplateDirectorPanel({
               id={inputId}
               data-director-input
               rows={2}
-              maxLength={inputMaxChars}
+              maxLength={MAX_DIRECTOR_INPUT_CHARS}
               disabled={disabled || submitting}
               value={userMessage}
               placeholder={copy.inputPlaceholder}
@@ -2490,6 +2488,7 @@ export function TemplateDirectorPanel({
             copy={editSheet}
             sheet={sheetDraft.fold.sheet}
             pendingIndex={sheetDraft.fold.pendingIndex}
+            pendingNotice={pendingLineNotice(sheetDraft.fold, editSheet)}
             question={sheetQuestion}
             notice={sheetNoticeText(sheetNotice, editSheet)}
             noticeDetail={sheetNotice?.detail ?? null}

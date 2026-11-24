@@ -5967,6 +5967,7 @@ export const ko: Dictionary = {
     revertLabel: '{item} 되돌리기',
     removeLabel: '{item} 빼기',
     pendingTag: '보내기 전',
+    pendingTooLong: '요청이 길어 일부만 담겼어요. 먼저 보내서 정리해 주세요.',
     full: '바꿀 것은 {max}개까지 담을 수 있어요. 하나를 빼고 다시 보내 주세요.',
     questionLabel: '하나만 여쭤볼게요',
     questionOptional: '답하지 않아도 바로 만들 수 있어요.',

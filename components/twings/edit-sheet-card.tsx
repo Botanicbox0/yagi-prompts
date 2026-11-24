@@ -57,12 +57,15 @@ export interface PendingFold {
   pendingIndex: number | null;
   /** Why a `blocked` note was refused. */
   blockedAs?: 'identity' | 'unsafe';
+  /** `folded`, but the line holds only part of the typed text (a sheet line is at most `itemMax` characters). */
+  truncated?: boolean;
 }
 
 const isUnrangedAction = (l: PersonalSheetChange): boolean => l.slot === 'shot_action' && !l.shots && !l.ref;
 
 export function foldPendingForOrder(sheet: PersonalEditSheet, note: string): PendingFold {
-  const text = normSheetText(note).slice(0, PERSONAL_SHEET_LIMITS.itemMax).trim();
+  const full = normSheetText(note).trim();
+  const text = full.slice(0, PERSONAL_SHEET_LIMITS.itemMax).trim();
   if (!text) return { sheet, status: 'none', pendingIndex: null };
   const verdict = guardSheetText(text);
   if (verdict !== 'ok') return { sheet, status: 'blocked', pendingIndex: null, blockedAs: verdict };
@@ -72,7 +75,10 @@ export function foldPendingForOrder(sheet: PersonalEditSheet, note: string): Pen
     return { sheet, status: listed ? 'present' : 'full', pendingIndex: null };
   }
   const changedAt = next.change.findIndex((l, i) => l !== sheet.change[i]);
-  return { sheet: next, status: 'folded', pendingIndex: changedAt < 0 ? next.change.length - 1 : changedAt };
+  const pendingIndex = changedAt < 0 ? next.change.length - 1 : changedAt;
+  // Cut when the line no longer holds the whole request (too long on its own, or joined onto a full line).
+  const truncated = !(next.change[pendingIndex]?.text ?? '').includes(full);
+  return { sheet: next, status: 'folded', pendingIndex, ...(truncated ? { truncated: true } : {}) };
 }
 
 /**
@@ -162,8 +168,11 @@ export function readSheetTurnAnswer(input: {
   message: string;
   status: number;
   payload: unknown;
-  /** The studio writes `guardrailAdjustmentKo` in Korean; true when that is the viewer's language. */
-  adjustmentReadable: boolean;
+  /**
+   * The screen's locale: the studio writes `guardrailAdjustmentKo` (and, for now, its question) in Korean, so the
+   * note shows only in `ko`, and a question counts only where `visibleSheetQuestion` lets it render.
+   */
+  locale: string;
 }): SheetTurnOutcome {
   const { prior } = input;
   const kept = (key: SheetNoticeKey): SheetTurnOutcome => ({
@@ -190,10 +199,14 @@ export function readSheetTurnAnswer(input: {
     return { state, notice: { key: sheetRefusalNotice(turn.refusal) }, accepted: false, changed: false };
   }
   const changed = turn.changed === true;
+  // A turn that asked a question the card will show: no "unchanged" line, the question stands alone (and "updated"
+  // only when the sheet did change). A question the guard hides does not count.
+  const asksQuestion = visibleSheetQuestion(state.question, input.locale) !== null;
+  if (!changed && asksQuestion) return { state, notice: null, accepted: true, changed };
   const adjustment = typeof turn.guardrailAdjustmentKo === 'string' ? turn.guardrailAdjustmentKo.trim() : '';
   const notice: SheetNotice = {
     key: changed ? 'updated' : 'unchanged',
-    ...(input.adjustmentReadable && adjustment ? { detail: adjustment } : {}),
+    ...(input.locale === 'ko' && adjustment ? { detail: adjustment } : {}),
   };
   return { state, notice, accepted: true, changed };
 }
@@ -216,6 +229,11 @@ export function visibleSheetQuestion(
   if (!question) return null;
   if (locale === 'en' && [question.text, ...question.options].some((text) => HANGUL.test(text))) return null;
   return question;
+}
+
+/** What the card says under the pending line when only part of the typed text is on it; never blocks ordering. */
+export function pendingLineNotice(fold: Pick<PendingFold, 'status' | 'truncated'>, copy: EditSheetCopy): string | null {
+  return fold.status === 'folded' && fold.truncated ? copy.pendingTooLong : null;
 }
 
 /** What the card says about typed text it could not carry; null when there is nothing to say. */
@@ -247,6 +265,8 @@ export interface EditSheetCardProps {
   sheet: PersonalEditSheet;
   /** The change line that holds typed text not sent yet; its remove button clears the input instead. */
   pendingIndex?: number | null;
+  /** Shown directly under the pending line when it holds only part of the typed text. */
+  pendingNotice?: string | null;
   question?: PersonalSheetQuestion | null;
   /** The turn's live line (taken, unchanged, refusal, rate limit, failure), already resolved to text. */
   notice?: string | null;
@@ -265,6 +285,7 @@ export function EditSheetCard({
   copy,
   sheet,
   pendingIndex = null,
+  pendingNotice = null,
   question = null,
   notice = null,
   noticeDetail = null,
@@ -364,6 +385,11 @@ export function EditSheetCard({
                                   )}
                                 </div>
                                 <p className="mt-0.5 text-sm leading-[1.5]">{line.text}</p>
+                                {pending && pendingNotice && (
+                                  <p data-edit-sheet-pending-cut className="mt-1 text-xs leading-relaxed text-[#52525B]">
+                                    {pendingNotice}
+                                  </p>
+                                )}
                               </div>
                               {canRevert && (
                                 <button

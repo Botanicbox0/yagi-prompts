@@ -7,6 +7,7 @@ import {
   buildSheetDirectorSpec,
   foldPendingForOrder,
   pendingFoldNotice,
+  pendingLineNotice,
   readSheetTurnAnswer,
   sheetNoticeText,
   sheetRefusalNotice,
@@ -130,6 +131,18 @@ describe('EditSheetCard markup', () => {
     expect(html).not.toContain('data-edit-sheet-adjustment');
   });
 
+  it('shows the cut notice directly under the pending line, and nowhere else', () => {
+    const html = renderToStaticMarkup(
+      <EditSheetCard copy={ko.editSheet} sheet={filled} pendingIndex={2} pendingNotice={ko.editSheet.pendingTooLong} />
+    );
+    expect(count(html, 'data-edit-sheet-pending-cut')).toBe(1);
+    expect(html).toMatch(/<p[^>]*>마지막 컷 손 인사<\/p><p data-edit-sheet-pending-cut[^>]*>요청이 길어 일부만 담겼어요\./);
+    const notPending = renderToStaticMarkup(
+      <EditSheetCard copy={ko.editSheet} sheet={filled} pendingNotice={ko.editSheet.pendingTooLong} />
+    );
+    expect(notPending).not.toContain('data-edit-sheet-pending-cut');
+  });
+
   it('puts the studio note on a softened request on a second line under the live line', () => {
     const html = renderToStaticMarkup(
       <EditSheetCard copy={ko.editSheet} sheet={filled} notice={ko.editSheet.updated} noticeDetail="표정은 자연스럽게 다듬었어요." />
@@ -158,6 +171,7 @@ describe('edit sheet copy', () => {
         copy={copy}
         sheet={filled}
         pendingIndex={2}
+        pendingNotice={pendingLineNotice({ status: 'folded', truncated: true }, copy)}
         question={{ point: 'p', text: 'Q?', options: ['O1'] }}
         notice={sheetNoticeText({ key: 'updated' }, copy)}
         noticeDetail="NOTE"
@@ -207,17 +221,17 @@ describe('the panel in sheet mode', () => {
     expect(html).toContain('data-director-toggle');
   });
 
-  it('caps the request box at one sheet line in sheet mode, and keeps 320 without it', () => {
+  it('keeps the request box cap and counter of the chips panel (a long request is legitimate)', () => {
     const sheet = renderToStaticMarkup(
       <TemplateDirectorPanel locale="ko" editSheet={ko.editSheet} initialExpanded={true} />
     );
-    expect(SHEET_BLOCK_LIMITS.itemMax).toBe(120);
-    expect(sheet).toContain(`maxLength="${SHEET_BLOCK_LIMITS.itemMax}"`);
-    expect(sheet).toContain(`0/${SHEET_BLOCK_LIMITS.itemMax}`);
-    expect(sheet).not.toContain('0/320');
     const chips = renderToStaticMarkup(<TemplateDirectorPanel locale="ko" initialExpanded={true} />);
-    expect(chips).toContain('maxLength="320"');
-    expect(chips).toContain('0/320');
+    const cap = (html: string) => html.match(/maxLength="(\d+)"/)?.[1];
+    const counter = (html: string) => html.match(/data-director-char-count[^>]*>([^<]*)</)?.[1];
+    expect(cap(sheet)).toBe('320');
+    expect(cap(sheet)).toBe(cap(chips));
+    expect(counter(sheet)).toBe('0/320');
+    expect(counter(sheet)).toBe(counter(chips));
   });
 });
 
@@ -299,6 +313,43 @@ describe('buildSheetDirectorSpec (what the order carries)', () => {
     expect(fold.sheet.change[5]!.text).toBe('천천히 걷기 · 손 흔들기');
   });
 
+  it('folds a long unsent request cut to one line and says so, without blocking the order', () => {
+    const long = '마지막 컷에서 '.repeat(20).trim(); // well over one line
+    expect(long.length).toBeGreaterThan(SHEET_BLOCK_LIMITS.itemMax);
+    const { spec, fold } = buildSheetDirectorSpec({ ...base, sheet: filled, pendingNote: long });
+    expect(fold.status).toBe('folded');
+    expect(fold.truncated).toBe(true);
+    const line = fold.sheet.change[fold.pendingIndex!]!;
+    expect(line.text.length).toBeLessThanOrEqual(SHEET_BLOCK_LIMITS.itemMax);
+    expect(long.startsWith(line.text)).toBe(true);
+    expect(spec!.sheet!.change.at(-1)!.text).toBe(line.text);
+    expect(pendingLineNotice(fold, ko.editSheet)).toBe(ko.editSheet.pendingTooLong);
+    expect(pendingLineNotice(fold, en.editSheet)).toBe(en.editSheet.pendingTooLong);
+
+    const short = foldPendingForOrder(filled, '배경을 바다로');
+    expect(short.truncated).toBeUndefined();
+    expect(pendingLineNotice(short, ko.editSheet)).toBeNull();
+    // Exactly one line long is not cut.
+    const exact = foldPendingForOrder(filled, '가'.repeat(SHEET_BLOCK_LIMITS.itemMax));
+    expect(exact.truncated).toBeUndefined();
+  });
+
+  it('also reports the cut when a full block joins the request onto its last action line', () => {
+    const six: PersonalEditSheet = {
+      change: [
+        ...(['outfit', 'makeup', 'hair', 'prop', 'lighting_mood'] as const).map((slot, i) => ({ text: `줄 ${i + 1}`, slot })),
+        { text: '나'.repeat(100), slot: 'shot_action' }
+      ],
+      keep: [],
+      exclude: []
+    };
+    const fold = foldPendingForOrder(six, '손을 흔들며 카메라 쪽으로 천천히 걸어오기');
+    expect(fold.status).toBe('folded');
+    expect(fold.pendingIndex).toBe(5);
+    expect(fold.truncated).toBe(true);
+    expect(pendingLineNotice(fold, ko.editSheet)).toBe(ko.editSheet.pendingTooLong);
+  });
+
   it('does not repeat a request already listed, and refuses text the guard blocks', () => {
     expect(foldPendingForOrder(filled, '').status).toBe('none');
     const listed: PersonalEditSheet = { change: [{ text: '손 흔들기', slot: 'shot_action' }], keep: [], exclude: [] };
@@ -325,7 +376,7 @@ describe('readSheetTurnAnswer (refusals, 429, failures and the live line)', () =
   const nextSheet: PersonalEditSheet = { change: [{ text: '빨간 립', slot: 'makeup' }], keep: [], exclude: [] };
 
   it('leaves the sheet unchanged and says "try again shortly" on 429', () => {
-    const out = readSheetTurnAnswer({ prior, message: 'x', status: 429, payload: { ok: false, code: 'rate_limited' }, adjustmentReadable: true });
+    const out = readSheetTurnAnswer({ prior, message: 'x', status: 429, payload: { ok: false, code: 'rate_limited' }, locale: 'ko' });
     expect(out.state).toBe(prior);
     expect(out.accepted).toBe(false);
     expect(out.notice).toEqual({ key: 'rateLimited' });
@@ -339,7 +390,7 @@ describe('readSheetTurnAnswer (refusals, 429, failures and the live line)', () =
       [200, okTurn({ approved: true, refusal: 'none', replyKo: '반영', summaryChips: [] })],
       [200, 'not json']
     ] as const) {
-      const out = readSheetTurnAnswer({ prior, message: 'x', status, payload, adjustmentReadable: true });
+      const out = readSheetTurnAnswer({ prior, message: 'x', status, payload, locale: 'ko' });
       expect(out.state).toBe(prior);
       expect(out.notice).toEqual({ key: 'retry' });
     }
@@ -357,7 +408,7 @@ describe('readSheetTurnAnswer (refusals, 429, failures and the live line)', () =
       message: '연예인 얼굴로 바꿔줘',
       status: 200,
       payload: okTurn({ approved: false, refusal: 'identity', replyKo: '본인 얼굴만…', guardrailAdjustmentKo: '조정', summaryChips: [], sheet: filled, question: null, asked: false, changed: false }),
-      adjustmentReadable: true
+      locale: 'ko'
     });
     expect(out.accepted).toBe(false);
     expect(out.notice).toEqual({ key: 'refusedIdentity' });
@@ -377,8 +428,8 @@ describe('readSheetTurnAnswer (refusals, 429, failures and the live line)', () =
       asked: true,
       changed: true
     });
-    for (const adjustmentReadable of [true, false]) {
-      const out = readSheetTurnAnswer({ prior, message: '립 빨갛게', status: 200, payload: answer, adjustmentReadable });
+    for (const locale of ['ko', 'en']) {
+      const out = readSheetTurnAnswer({ prior, message: '립 빨갛게', status: 200, payload: answer, locale });
       expect(out.accepted).toBe(true);
       expect(out.state.sheet).toEqual(nextSheet);
       expect(out.state.question).toEqual({ point: '립', text: '매트로 할까요?', options: ['매트', '글로시'] });
@@ -393,11 +444,31 @@ describe('readSheetTurnAnswer (refusals, 429, failures and the live line)', () =
     }
   });
 
-  it('says "unchanged" whenever the sheet did not change', () => {
+  it('says "unchanged" when the sheet did not change and no question is shown', () => {
     const same = okTurn({ approved: true, refusal: 'none', replyKo: '그대로예요', summaryChips: [], sheet: filled, question: null, asked: false, changed: false });
-    expect(readSheetTurnAnswer({ prior, message: 'x', status: 200, payload: same, adjustmentReadable: true }).notice).toEqual({ key: 'unchanged' });
-    const asked = okTurn({ approved: true, refusal: 'none', replyKo: '', summaryChips: [], sheet: filled, question: { point: 'p', text: '어느 쪽?', options: [] }, asked: true, changed: false });
-    expect(readSheetTurnAnswer({ prior, message: 'x', status: 200, payload: asked, adjustmentReadable: false }).notice).toEqual({ key: 'unchanged' });
+    expect(readSheetTurnAnswer({ prior, message: 'x', status: 200, payload: same, locale: 'ko' }).notice).toEqual({ key: 'unchanged' });
+    expect(readSheetTurnAnswer({ prior, message: 'x', status: 200, payload: same, locale: 'en' }).notice).toEqual({ key: 'unchanged' });
+  });
+
+  it('lets a question stand alone: no status line unless the sheet changed in that turn', () => {
+    const korean = { point: '범위', text: '모든 컷에서 바꿀까요?', options: ['모든 컷', '첫 컷만'] };
+    const english = { point: 'range', text: 'Change it in every shot?', options: ['Every shot', 'First shot only'] };
+    const turn = (question: unknown, changed: boolean) =>
+      okTurn({ approved: true, refusal: 'none', replyKo: '', summaryChips: [], sheet: changed ? nextSheet : filled, question, asked: true, changed });
+    const read = (question: unknown, changed: boolean, locale: string) =>
+      readSheetTurnAnswer({ prior, message: 'x', status: 200, payload: turn(question, changed), locale });
+
+    // Asked, nothing changed: the question alone.
+    expect(read(korean, false, 'ko').notice).toBeNull();
+    expect(read(english, false, 'en').notice).toBeNull();
+    // Asked and changed: "updated" above the question.
+    expect(read(korean, true, 'ko').notice).toEqual({ key: 'updated' });
+    expect(read(english, true, 'en').notice).toEqual({ key: 'updated' });
+    // A Korean question the English screen hides counts as no question.
+    expect(read(korean, false, 'en').notice).toEqual({ key: 'unchanged' });
+    expect(read(korean, true, 'en').notice).toEqual({ key: 'updated' });
+    // The question is still kept in the state either way.
+    expect(read(korean, false, 'en').state.question).toEqual(korean);
   });
 
   it('adds the studio note on a softened request only where it is readable (Korean)', () => {
@@ -412,13 +483,13 @@ describe('readSheetTurnAnswer (refusals, 429, failures and the live line)', () =
       asked: false,
       changed: true
     });
-    expect(readSheetTurnAnswer({ prior, message: 'x', status: 200, payload: softened, adjustmentReadable: true }).notice).toEqual({
+    expect(readSheetTurnAnswer({ prior, message: 'x', status: 200, payload: softened, locale: 'ko' }).notice).toEqual({
       key: 'updated',
       detail: '크게 소리치는 표정은 자연스러운 미소로 다듬었어요.'
     });
-    expect(readSheetTurnAnswer({ prior, message: 'x', status: 200, payload: softened, adjustmentReadable: false }).notice).toEqual({ key: 'updated' });
+    expect(readSheetTurnAnswer({ prior, message: 'x', status: 200, payload: softened, locale: 'en' }).notice).toEqual({ key: 'updated' });
     const blank = okTurn({ approved: true, refusal: 'none', replyKo: '', guardrailAdjustmentKo: '   ', summaryChips: [], sheet: nextSheet, question: null, asked: false, changed: true });
-    expect(readSheetTurnAnswer({ prior, message: 'x', status: 200, payload: blank, adjustmentReadable: true }).notice).toEqual({ key: 'updated' });
+    expect(readSheetTurnAnswer({ prior, message: 'x', status: 200, payload: blank, locale: 'ko' }).notice).toEqual({ key: 'updated' });
   });
 
   it('starts from an empty state', () => {
