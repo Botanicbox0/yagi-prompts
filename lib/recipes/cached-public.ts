@@ -19,7 +19,9 @@ const cached = unstable_cache(
   // v4 (2026-10-30, #111): the projection carries the creative's notes (intro, step tips, outro) and each
   // file's number and download address — a v3 entry has none of them.
   // v5 (2026-11-11, docs/CAST-CATEGORIES.md): the pet and partner photos have their own labels.
-  ['public-recipe-v5', resolveRuntimeMode()],
+  // v6 (2026-11-25, docs/CREATOR-PLATFORM.md): shown prompts go without their `Template styling:` / `Template locks:`
+  // blocks; a v5 entry still carries them.
+  ['public-recipe-v6', resolveRuntimeMode()],
   { tags: ['prompts'], revalidate: 3600 },
 );
 

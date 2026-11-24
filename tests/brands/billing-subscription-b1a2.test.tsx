@@ -327,6 +327,7 @@ const NON_WRITER_OPS: readonly string[] = [
   'creative.format',
   'creative.grant',
   'creative.settle',
+  'format.reviseRecipe',
   'landingMedia.replace',
   'landingMedia.reset',
   'payout.export',
