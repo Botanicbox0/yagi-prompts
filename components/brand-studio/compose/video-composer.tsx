@@ -59,6 +59,7 @@ import {
   type DetectedCut,
   type TimelinePatch,
 } from '@/lib/brand-studio/compose';
+import { DEVICE_FILE_ACCEPT, deviceFileAccept, deviceFileKind } from '@/lib/brand-studio/compose/device-files';
 import { exportCompositionMp4, type ComposeExportResult } from '@/lib/brand-studio/compose/export-client';
 import { exportProjectNleBundleZip } from '@/lib/brand-studio/compose/nle-export';
 import { musicCredits } from '@/lib/brand-studio/music/contracts';
@@ -1365,15 +1366,11 @@ export function VideoComposer({
     let current = project;
     let addedVideo = false;
     for (const file of files) {
-      const isVideo = file.type === 'video/mp4' || file.type === 'video/quicktime' || /\.(mp4|mov)$/i.test(file.name);
-      const isAudio = file.type === 'audio/mpeg' || file.type === 'audio/wav' || /\.(mp3|wav)$/i.test(file.name);
-      const isImage =
-        file.type === 'image/jpeg' ||
-        file.type === 'image/png' ||
-        file.type === 'image/webp' ||
-        /\.(jpe?g|png|webp)$/i.test(file.name);
+      const kind = deviceFileKind(file);
+      const isVideo = kind === 'video';
+      const isImage = kind === 'image';
 
-      if (!isVideo && !isAudio && !isImage) {
+      if (!kind) {
         setStatusMessage(copy.status.unsupportedFile);
         continue;
       }
@@ -1839,7 +1836,7 @@ export function VideoComposer({
             <span>{copy.sources.browser.uploadBtn}</span>
             <input
               type="file"
-              accept="video/mp4,video/quicktime,audio/mpeg,audio/wav,image/jpeg,image/png,image/webp,.mp4,.mov,.mp3,.wav,.jpg,.jpeg,.png,.webp"
+              accept={DEVICE_FILE_ACCEPT}
               multiple
               hidden
               onChange={(e) => void handleLocalFilePick(e)}
@@ -2361,7 +2358,7 @@ export function VideoComposer({
                     <span>{copy.musicGen.uploadAudioBtn}</span>
                     <input
                       type="file"
-                      accept="audio/mpeg,audio/wav,.mp3,.wav"
+                      accept={deviceFileAccept('audio')}
                       hidden
                       onChange={(e) => void handleLocalFilePick(e)}
                       data-compose-audio-upload-input
