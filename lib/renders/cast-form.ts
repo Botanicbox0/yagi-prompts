@@ -1,5 +1,5 @@
 import type { SqlRunner } from '@/lib/db/sql-runner';
-import { savedSelfiePhoto } from '@/lib/identity/selfie-service';
+import { readSavedSelfie, type SavedSelfieRead } from '@/lib/identity/selfie-service';
 import { loadPromptBySlug } from '@/lib/prompts/repo';
 import {
   ALL_RENDER_SLOTS, CAST_SLOTS, CUSTOM_REF_SLOTS, castOpen, cleanSlotPhoto, extraSlots, liveSlotRows, petIsPrimary,
@@ -38,7 +38,7 @@ export async function castFormPhotos(form: FormData): Promise<CastFormPhotos> {
   return { slots, partnerConsent: form.get('partnerConsent') === 'yes' };
 }
 
-export type OrderPhotosFailure = 'selfie_required' | 'not_found' | 'not_for_sale' | 'slot_missing' | 'bad_slot_photo' | 'partner_consent_required' | 'not_a_pet' | 'pet_check_unavailable' | PartnerRuleRefusal;
+export type OrderPhotosFailure = 'selfie_required' | 'selfie_file_missing' | 'not_found' | 'not_for_sale' | 'slot_missing' | 'bad_slot_photo' | 'partner_consent_required' | 'not_a_pet' | 'pet_check_unavailable' | PartnerRuleRefusal;
 export type OrderPhotos =
   | { ok: true; photo: SlotPhoto; selfieId: string | null; extras: Partial<Record<RenderSlot, SlotPhoto>>; partnerConsent: boolean; templateId: string | null; partnerCheck?: PartnerCheckStamp }
   | { ok: false; code: OrderPhotosFailure };
@@ -53,7 +53,8 @@ export type OrderPhotos =
 export async function orderPhotos(sql: SqlRunner, store: RenderStore, userId: string, form: FormData, deps: { petCheck?: (photo: SlotPhoto) => Promise<PetPhotoVerdict>; partnerCheck?: PartnerPhotoCheck; now?: Date } = {}): Promise<OrderPhotos> {
   const petCheck = deps.petCheck ?? checkPetPhoto;
   const selfieId = String(form.get('selfieId') ?? '');
-  const selfie = async () => (selfieId ? await savedSelfiePhoto(sql, store, userId, selfieId) : null);
+  // A saved photo whose file is gone answers `selfie_file_missing` here, before the order exists.
+  const selfie = async (): Promise<SavedSelfieRead> => (selfieId ? await readSavedSelfie(sql, store, userId, selfieId) : { ok: false, code: 'selfie_required' });
   const template = await loadPromptBySlug(sql, String(form.get('template') ?? ''));
   const { slots, partnerConsent } = await castFormPhotos(form);
   const customExtras: Partial<Record<RenderSlot, SlotPhoto>> = {};
@@ -65,7 +66,7 @@ export async function orderPhotos(sql: SqlRunner, store: RenderStore, userId: st
   }
   if (template === null || template.cast === 'solo') {
     const saved = await selfie();
-    return saved ? { ok: true, photo: saved, selfieId, extras: customExtras, partnerConsent: false, templateId: template?.id ?? null } : { ok: false, code: 'selfie_required' };
+    return saved.ok ? { ok: true, photo: saved.photo, selfieId, extras: customExtras, partnerConsent: false, templateId: template?.id ?? null } : { ok: false, code: saved.code };
   }
   if (!castOpen(template.cast)) return { ok: false, code: 'not_found' };
   const inputs = await templateMakeInputs(sql, template);
@@ -80,8 +81,8 @@ export async function orderPhotos(sql: SqlRunner, store: RenderStore, userId: st
     if (refused) return { ok: false, code: refused };
   } else {
     const saved = await selfie();
-    if (!saved) return { ok: false, code: 'selfie_required' };
-    photo = saved;
+    if (!saved.ok) return { ok: false, code: saved.code };
+    photo = saved.photo;
     usedSelfie = selfieId;
   }
   const extras: Partial<Record<RenderSlot, SlotPhoto>> = { ...customExtras };

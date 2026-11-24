@@ -4217,6 +4217,8 @@ export const ko: Dictionary = {
         rate_limited: '오늘 만들 수 있는 횟수를 모두 썼습니다.',
         identity_required: '본인 인증 후 만들 수 있습니다.',
         selfie_required: '먼저 내 사진을 저장해 주세요.',
+        // Provisional: founder confirms the wording. The saved photo's row is live but its file is gone.
+        selfie_file_missing: '저장한 사진을 불러오지 못했어요. 사진을 다시 골라 주세요.',
         slot_missing: '사진이 빠졌어요. 다시 골라 주세요.',
         bad_slot_photo: '사용할 수 없는 사진이에요. 256px 이상의 JPG, PNG, WebP 파일을 선택해 주세요.',
         partner_consent_required: '상대방의 동의를 확인해 주세요.',

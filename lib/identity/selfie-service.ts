@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { SqlRunner } from '@/lib/db/sql-runner';
-import type { RenderStore } from '@/lib/renders/store';
+import { RenderObjectNotFound, type RenderStore } from '@/lib/renders/store';
 import { cleanSelfie } from './selfie-images';
 
 /**
@@ -112,8 +112,23 @@ async function lockOwner(sql: SqlRunner, userId: string): Promise<boolean> {
 }
 
 /**
+ * The same bytes as a photo whose file is gone (two were lost in the 2026-11-12 move to R2) put the
+ * file back, so "choose a photo again" also works with the very photo the person still has. A file
+ * that is there is left alone; any storage failure other than a missing object still throws.
+ */
+async function restoreSelfieFile(store: RenderStore, row: SelfieRow, bytes: Uint8Array): Promise<void> {
+  try {
+    await store.read(row.input_key);
+  } catch (error) {
+    if (!(error instanceof RenderObjectNotFound)) throw error;
+    await store.put(row.input_key, bytes, 'image/png');
+    console.warn('[identity] selfie_file_restored', { selfieId: row.id });
+  }
+}
+
+/**
  * Store a photo. The same bytes as ANY active photo (a double submit, a reload, the same file again)
- * are a no-op that returns that photo. `replaceId` swaps one active photo for the new one — the only
+ * are a no-op that returns that photo (restoring its file if it went missing). `replaceId` swaps one active photo for the new one — the only
  * way in once the library is full — and the new photo inherits its default; otherwise a new photo
  * needs a free slot, and the account's first one becomes the default. The object is written before
  * the row so a crash leaves an orphan file, never a row without bytes.
@@ -133,7 +148,10 @@ export async function saveSelfie(d: SelfieDeps, userId: string | null, input: { 
     if (!await lockOwner(sql, userId)) return { ok: false, code: 'sign_in_required' };
     const active = await listSelfies(sql, userId);
     const same = active.find(row => row.sha256 === sha256);
-    if (same) return { ok: true, id: same.id, replaced: false, unchanged: true };
+    if (same) {
+      await restoreSelfieFile(d.store, same, clean.bytes);
+      return { ok: true, id: same.id, replaced: false, unchanged: true };
+    }
     const target = input.replaceId === undefined ? null : active.find(row => row.id === input.replaceId) ?? null;
     if (input.replaceId !== undefined && !target) return { ok: false, code: 'not_found' };
     const recent = (await sql.query<{ n: number }>('select count(*)::int n from identity_selfies where user_id=$1 and created_at>$2', [userId, new Date(now.getTime() - 86400000)])).rows[0]?.n ?? 0;
@@ -196,13 +214,33 @@ export async function deleteSelfie(d: Pick<SelfieDeps, 'sql' | 'now'>, userId: s
  * so it is never bought a second later; a stranger's id is simply not found. Reading for an order
  * is what "used" means: `last_used_at` moves (inside the caller's transaction, when there is one).
  * Paid jobs keep their own copy, so a later replacement or deletion never touches them.
+ *
+ * A live row whose file is gone from the render store (two were lost in the 2026-11-12 move to R2)
+ * answers `selfie_file_missing`, so the order routes ask for a photo again before anything is
+ * created. Only a missing object is caught: a credentials or bucket failure still throws.
  */
-export async function savedSelfiePhoto(sql: SqlRunner, store: RenderStore, userId: string, id: string, now: Date = new Date()): Promise<{ bytes: Uint8Array; mime: 'image/png' } | null> {
+export type SavedSelfieRead =
+  | { ok: true; photo: { bytes: Uint8Array; mime: 'image/png' } }
+  | { ok: false; code: 'selfie_required' | 'selfie_file_missing' };
+export async function readSavedSelfie(sql: SqlRunner, store: RenderStore, userId: string, id: string, now: Date = new Date()): Promise<SavedSelfieRead> {
   const row = await activeSelfie(sql, userId, id);
-  if (!row) return null;
-  const bytes = await store.read(row.input_key);
+  if (!row) return { ok: false, code: 'selfie_required' };
+  let bytes: Uint8Array;
+  try {
+    bytes = await store.read(row.input_key);
+  } catch (error) {
+    if (!(error instanceof RenderObjectNotFound)) throw error;
+    console.warn('[identity] selfie_file_missing', { selfieId: row.id });
+    return { ok: false, code: 'selfie_file_missing' };
+  }
   await sql.query('update identity_selfies set last_used_at=$3 where id=$1 and user_id=$2', [row.id, userId, now]);
-  return { bytes, mime: 'image/png' };
+  return { ok: true, photo: { bytes, mime: 'image/png' } };
+}
+
+/** `readSavedSelfie` for the job creators that only need the bytes: null when there is no usable photo (a missing file included). */
+export async function savedSelfiePhoto(sql: SqlRunner, store: RenderStore, userId: string, id: string, now: Date = new Date()): Promise<{ bytes: Uint8Array; mime: 'image/png' } | null> {
+  const read = await readSavedSelfie(sql, store, userId, id, now);
+  return read.ok ? read.photo : null;
 }
 
 /**

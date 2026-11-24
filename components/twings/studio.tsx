@@ -333,6 +333,8 @@ export function TwingsStudio({
   }>({ directorSpec: null, slotFiles: {} });
   const [selfieJustSaved, setSelfieJustSaved] = useState(false);
   const [selfieEditing, setSelfieEditing] = useState(false);
+  // A saved photo whose file could not be opened: never ordered with; a new photo replaces it.
+  const [unreadableSelfieId, setUnreadableSelfieId] = useState<string | null>(null);
   const photo = chosenSelfie?.imageUrl ?? null;
   const [liveMode, setLiveMode] = useState(initialAccess?.live ?? false);
   const [charge, setCharge] = useState(true);
@@ -474,6 +476,7 @@ export function TwingsStudio({
           setSelfie(nextSelfie);
           setChosenSelfie(null);
           setSelfieJustSaved(false);
+          setUnreadableSelfieId(null);
           setSelfieEpoch(epoch => epoch + 1);
           setPhase('photo');
         }
@@ -515,6 +518,7 @@ export function TwingsStudio({
     if (offered) { previousSelfieId.current = offered.id; setSelfie(offered); }
     setChosenSelfie(face);
     setSelfieJustSaved(justSaved);
+    setUnreadableSelfieId(null);
     setLiveError(null);
     setPhase(current => current === 'photo' ? single ? 'pay' : 'style' : current);
     requestAnimationFrame(() => {
@@ -553,6 +557,14 @@ export function TwingsStudio({
     setSelfieEpoch(epoch => epoch + 1);
     requestAnimationFrame(() => selfiePanelRef.current?.scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' }));
     return next;
+  };
+  // The saved photo could not be opened (its image failed, or the order answered `selfie_file_missing`):
+  // drop it from this order and go back to the photo step, which says so and takes a new photo.
+  const markSelfieUnreadable = (face: SelfieView) => {
+    setUnreadableSelfieId(face.id);
+    setChosenSelfie(current => (current?.id === face.id ? null : current));
+    setSelfieJustSaved(false);
+    setPhase('photo');
   };
 
   const submitLive = async () => {
@@ -638,6 +650,12 @@ export function TwingsStudio({
       if (json.code === 'selfie_required') {
         const remaining = await reloadSelfies();
         setLiveError((remaining ? live.selfie?.libraryChanged : undefined) ?? live.labels.errors.selfie_required ?? live.labels.errors.generic ?? 'error');
+        return;
+      }
+      // The saved photo's file is gone (no order was made): the photo step says so and takes a new one.
+      if (json.code === 'selfie_file_missing' && chosenSelfie) {
+        markSelfieUnreadable(chosenSelfie);
+        requestAnimationFrame(() => selfiePanelRef.current?.scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' }));
         return;
       }
       if (monthly && ['insufficient_usage', 'usage_exhausted'].includes(json.code ?? '')) setUsageExhausted(true);
@@ -841,7 +859,10 @@ export function TwingsStudio({
           <h3 className="text-sm font-semibold">{live.selfie?.panelTitle ?? labels.stepPhoto}</h3>
           {live.selfie ? (
             <div className="mt-3">
-              {selfie ? (
+              {unreadableSelfieId && (
+                <p data-selfie-missing role="alert" className="mb-3 text-sm text-accent">{live.labels.errors.selfie_file_missing ?? live.labels.errors.generic}</p>
+              )}
+              {selfie && selfie.id !== unreadableSelfieId ? (
                 <SelfieSheet
                   key={`${selfieEpoch}:${selfie.id}`}
                   copy={live.selfie}
@@ -852,6 +873,7 @@ export function TwingsStudio({
                   signinHref={live.signinHref}
                   onChoose={onSelfieChosen}
                   onEditingChange={onSelfieEditing}
+                  onImageError={markSelfieUnreadable}
                 />
               ) : (
                 <SelfieUploader
@@ -859,6 +881,8 @@ export function TwingsStudio({
                   copy={live.selfie}
                   locale={live.locale}
                   initial={null}
+                  // The offered photo cannot be opened: the new one takes its place (a full library has no free slot).
+                  replaceId={selfie?.id ?? null}
                   signinHref={live.signinHref}
                   onSaved={onSelfieSaved}
                   onEditingChange={onSelfieEditing}

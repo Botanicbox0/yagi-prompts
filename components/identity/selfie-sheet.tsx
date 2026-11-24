@@ -62,6 +62,8 @@ export interface SelfieSheetProps {
   signinHref?: string;
   /** Say "saved" once, right after the person uploaded their first photo here. */
   justSaved?: boolean;
+  /** The shown photo's image did not load (its file may be gone): the parent asks for a photo again. */
+  onImageError?: (selfie: SelfieView) => void;
   /** Server-markup seams for tests: render with the chooser open, on this library. */
   initialOpen?: boolean;
   initialLibrary?: SelfieLibrary | null;
@@ -69,7 +71,7 @@ export interface SelfieSheetProps {
   initialPhotoCheck?: PhotoCheck | null;
 }
 
-export function SelfieSheet({ copy, locale, suggested, chosen, onChoose, onEditingChange, signinHref, justSaved = false, initialOpen = false, initialLibrary = null, initialPhotoCheck }: SelfieSheetProps) {
+export function SelfieSheet({ copy, locale, suggested, chosen, onChoose, onEditingChange, signinHref, justSaved = false, onImageError, initialOpen = false, initialLibrary = null, initialPhotoCheck }: SelfieSheetProps) {
   const [open, setOpen] = useState(initialOpen);
   const [view, setView] = useState<'grid' | 'upload'>('grid');
   const [library, setLibrary] = useState<SelfieLibrary | null>(initialLibrary);
@@ -299,7 +301,7 @@ export function SelfieSheet({ copy, locale, suggested, chosen, onChoose, onEditi
         <div className="flex items-center gap-4">
           <div className="size-20 shrink-0 overflow-hidden rounded-2xl bg-black sm:size-24">
             {/* eslint-disable-next-line @next/next/no-img-element -- owner-only private route */}
-            <img src={chosen.imageUrl} alt={selfieName(copy, chosen, locale)} width={chosen.width} height={chosen.height} className="h-full w-full object-cover" />
+            <img src={chosen.imageUrl} alt={selfieName(copy, chosen, locale)} width={chosen.width} height={chosen.height} onError={() => onImageError?.(chosen)} className="h-full w-full object-cover" />
           </div>
           <div className="min-w-0 flex-1">
             <p className="flex items-center gap-2 text-sm font-semibold"><span className="grid size-5 place-items-center rounded-full bg-accent text-white"><CheckIcon /></span>{copy.chosenTitle}</p>
@@ -313,7 +315,7 @@ export function SelfieSheet({ copy, locale, suggested, chosen, onChoose, onEditi
         <section aria-labelledby={questionId} className="flex flex-col gap-4">
           <div className="aspect-[4/5] overflow-hidden rounded-xl bg-black">
             {/* eslint-disable-next-line @next/next/no-img-element -- owner-only private route */}
-            <img src={face.imageUrl} alt={selfieName(copy, face, locale)} width={face.width} height={face.height} className="h-full w-full object-cover" />
+            <img src={face.imageUrl} alt={selfieName(copy, face, locale)} width={face.width} height={face.height} onError={() => onImageError?.(face)} className="h-full w-full object-cover" />
           </div>
           <div>
             <h4 id={questionId} className="text-xl leading-snug font-semibold">{copy.useThisFace}</h4>

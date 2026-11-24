@@ -21,6 +21,8 @@ import { parseSelectedFrames } from '@/lib/twings/selective-frames';
 export const dynamic = 'force-dynamic';
 /** Refusals that are not a plain 400. */
 const ORDER_PHOTO_STATUS: Partial<Record<OrderPhotosFailure, number>> = {
+  // The saved photo's row is live but its file is gone: the studio asks for a photo again (no order exists).
+  selfie_file_missing: 409,
   not_found: 404,
   pet_check_unavailable: 503,
   adult_only: 403,

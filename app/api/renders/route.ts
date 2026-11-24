@@ -7,7 +7,7 @@ import { createRenderJob, type CreateRenderFailure } from '@/lib/renders/service
 import { renderHref } from '@/lib/renders/share';
 import { identityVerifyHref } from '@/lib/identity/links';
 import { getRenderStore } from '@/lib/renders/store';
-import { savedSelfiePhoto } from '@/lib/identity/selfie-service';
+import { readSavedSelfie } from '@/lib/identity/selfie-service';
 import { castFormPhotos } from '@/lib/renders/cast-form';
 import { recordAdultAnswerFromForm } from '@/lib/account/adult-confirmation';
 import { parseDirectorSpecInput } from '@/lib/template-director/schema';
@@ -82,8 +82,10 @@ export async function POST(request: Request): Promise<NextResponse> {
   const rawLocale = form.get('locale');
   const store = await getRenderStore();
   const selfieId = String(form.get('selfieId') ?? '');
-  const saved = !(photo instanceof File) && selfieId ? await savedSelfiePhoto(sql, store, viewer.userId, selfieId) : null;
-  if (selfieId && !saved && !(photo instanceof File)) return json({ ok: false, code: 'selfie_required' }, 400);
+  const read = !(photo instanceof File) && selfieId ? await readSavedSelfie(sql, store, viewer.userId, selfieId) : null;
+  // A saved photo whose file is gone is 409, like the paid order: the studio asks for a photo again.
+  if (read && !read.ok) return json({ ok: false, code: read.code }, read.code === 'selfie_file_missing' ? 409 : 400);
+  const saved = read?.ok ? read.photo : null;
   // docs/CAST-CATEGORIES.md §3: the pet or partner photo. A pet-only template has no selfie: its pet
   // is the one photo. The service checks the template's cast (couples 404 while their flag is off).
   const cast = await castFormPhotos(form);
