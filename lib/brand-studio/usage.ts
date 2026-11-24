@@ -22,7 +22,8 @@ import {
   planActiveWithGrace,
 } from '@/lib/brands/billing/math';
 import { cycleContaining, cycleWindow, type BillingCycle } from '@/lib/brands/billing/cycle';
-import { hasColumn, loadAllowanceSchemaState } from '@/lib/brands/billing/schema-guard';
+import { hasColumn, loadAllowanceSchemaState, loadSubscriptionSchemaReady } from '@/lib/brands/billing/schema-guard';
+import { brandBillingAutoIssueOpen } from '@/lib/flags';
 import type { StudioAllowanceView } from './contracts';
 import { STUDIO_CREDIT_KRW } from './credits';
 import { planGraceDaysFromEnv } from './env';
@@ -70,6 +71,12 @@ export interface StudioAllowance {
    * exclusive (= the next billing day); `startAt` / `endAt` are the UTC instants at KST midnight.
    */
   cycle?: { anchor: string; index: number; start: string; end: string; startAt: string; endAt: string };
+  /**
+   * B1c-2 (flag on only): present and true while an issued subscription invoice of the current epoch is past its due
+   * date and unpaid; the plan part (`baseCapKrw`) is then half the plan cap, rounded down to 10 won. Grants (`extraKrw`)
+   * are never halved.
+   */
+  planCapHalvedUnpaid?: true;
 }
 
 /**
@@ -117,33 +124,73 @@ export function grantEffectiveStartSql(rangeColumns: boolean): string {
 }
 
 /**
+ * B1c-2, the unpaid 50% cap: whether the plan organization's statement also asks for the current cycle's invoice. Only
+ * with `BRAND_BILLING_AUTO_ISSUE` on and the subscription schema (0182 + the 0186 cycle columns) present; the positive
+ * probe is cached for the database root's lifetime by the schema guard, a negative one for 60 s here.
+ */
+const SUBSCRIPTION_SCHEMA_MISSING = new WeakMap<object, number>();
+
+async function unpaidCycleCheckReady(sql: SqlRunner): Promise<boolean> {
+  if (!brandBillingAutoIssueOpen()) return false;
+  const root = sqlCacheRoot(sql);
+  const missingSince = SUBSCRIPTION_SCHEMA_MISSING.get(root);
+  if (missingSince !== undefined && Date.now() - missingSince < RANGE_NEGATIVE_TTL_MS) return false;
+  const ok = await loadSubscriptionSchemaReady(sql);
+  if (ok) SUBSCRIPTION_SCHEMA_MISSING.delete(root);
+  else SUBSCRIPTION_SCHEMA_MISSING.set(root, Date.now());
+  return ok;
+}
+
+/** Down to a multiple of 10 won (credits are 10 won). */
+const floor10 = (krw: number): number => Math.floor(krw / 10) * 10;
+
+/**
  * A plan organization's one window (B1c): its usage inside the current cycle and the grants ATTACHED to that cycle — a
  * grant belongs to the one cycle that contains its effective start day (`grantEffectiveStartSql`), so nothing is
  * counted in two cycles and a cycle always starts from the full plan cap. A grant whose start day is before the plan
  * start belongs to no cycle (the range runs from the cycle start, which is never before the anchor). One statement.
+ *
+ * B1c-2 (`withUnpaidCheck`, flag on only): the same statement also says whether the current epoch of a non-ended
+ * subscription has an issued invoice whose due date has passed (`today > due_on`, KST; founder decision 2026-11-24 —
+ * ANY overdue invoice of the epoch, so paying only a newer one does not lift the cap) — no extra statement.
  */
 async function planCycleTotals(
   sql: SqlRunner,
   organizationId: string,
-  input: { cycle: BillingCycle; withGrants: boolean; rangeColumns: boolean },
-): Promise<{ usedKrw: number; grantsKrw: number }> {
+  input: { cycle: BillingCycle; withGrants: boolean; rangeColumns: boolean; withUnpaidCheck: boolean; todayKst: string },
+): Promise<{ usedKrw: number; grantsKrw: number; overdueUnpaid: boolean }> {
   const { start, end } = cycleWindow(input.cycle);
   const eff = grantEffectiveStartSql(input.rangeColumns);
+  const params: unknown[] = [organizationId, start.toISOString(), end.toISOString()];
   const grants = input.withGrants
     ? `,
               (select coalesce(sum(amount_krw), 0)::bigint from brand_allowance_grants
                 where organization_id = $1 and revoked_at is null and ${eff} >= $4::date and ${eff} < $5::date) as attached`
     : '';
+  if (input.withGrants) params.push(input.cycle.start, input.cycle.end);
+  let unpaid = '';
+  if (input.withUnpaidCheck) {
+    params.push(input.todayKst);
+    const today = `$${params.length}::date`;
+    unpaid = `,
+              exists (select 1 from brand_subscriptions s
+                        join brand_invoices i on i.organization_id = s.organization_id and i.subscription_epoch = s.epoch
+                       where s.organization_id = $1 and s.status <> 'ended'
+                         and i.kind = 'subscription' and i.status = 'issued'
+                         and coalesce(i.due_on, ((i.issued_at at time zone 'UTC') + interval '9 hours')::date + 14) < ${today}) as overdue_unpaid`;
+  }
   const row = (
-    await sql.query<{ used: string | number; attached?: string | number }>(
+    await sql.query<{ used: string | number; attached?: string | number; overdue_unpaid?: boolean }>(
       `select (select coalesce(sum(${jobUsageKrwSql()}), 0)::bigint from brand_studio_jobs
-                where organization_id = $1 and status not in ('failed','canceled') and created_at >= $2 and created_at < $3) as used${grants}`,
-      input.withGrants
-        ? [organizationId, start.toISOString(), end.toISOString(), input.cycle.start, input.cycle.end]
-        : [organizationId, start.toISOString(), end.toISOString()],
+                where organization_id = $1 and status not in ('failed','canceled') and created_at >= $2 and created_at < $3) as used${grants}${unpaid}`,
+      params,
     )
   ).rows[0];
-  return { usedKrw: Number(row?.used ?? 0), grantsKrw: Math.max(0, Number(row?.attached ?? 0)) };
+  return {
+    usedKrw: Number(row?.used ?? 0),
+    grantsKrw: Math.max(0, Number(row?.attached ?? 0)),
+    overdueUnpaid: row?.overdue_unpaid === true,
+  };
 }
 
 export async function usedKrwIn(sql: SqlRunner, organizationId: string, window: { start: Date; end: Date }): Promise<number> {
@@ -343,12 +390,18 @@ export async function loadAllowance(
 
   // Plan organizations (B1c): ONE window, the current cycle. Used = usage inside it; cap = full plan cap + the grants
   // attached to it. Nothing from an earlier cycle or month is added or subtracted.
-  const planCap = Math.max(0, baseCapKrw);
+  const rangeColumns = schema.hasGrants && (await rangeGrantColumnsReady(sql));
   const totals = await planCycleTotals(sql, organizationId, {
     cycle: planCycle,
     withGrants: schema.hasGrants,
-    rangeColumns: schema.hasGrants && (await rangeGrantColumnsReady(sql)),
+    rangeColumns,
+    // B1c-2: only once 0186 is there (the cycle columns) and with the flag on.
+    withUnpaidCheck: rangeColumns && (await unpaidCycleCheckReady(sql)),
+    todayKst: today,
   });
+  // B1c-2, the unpaid 50% cap (founder 2026-11-24): while an issued invoice of the epoch is past its due date and unpaid,
+  // the PLAN part is halved; before the due date it is full. Grants are never halved.
+  const planCap = totals.overdueUnpaid ? floor10((Math.max(0, baseCapKrw) * 50) / 100) : Math.max(0, baseCapKrw);
   extraKrw = totals.grantsKrw;
   const cycleAt = cycleWindow(planCycle);
   return {
@@ -360,6 +413,7 @@ export async function loadAllowance(
     resetsAt: cycleAt.end.toISOString(),
     preferredLane,
     configured: true,
+    ...(totals.overdueUnpaid ? { planCapHalvedUnpaid: true as const } : {}),
     cycle: {
       anchor: planStartedOn,
       index: planCycle.index,

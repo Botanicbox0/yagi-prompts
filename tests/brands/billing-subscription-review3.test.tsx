@@ -142,7 +142,7 @@ afterEach(async () => {
 });
 
 describe('B1a review round 3', () => {
-  it('item 1 (+ round 4 B3/B6): a first invoice started on the 25th is due on the 30th, expires after the 7-day margin, and the notice counts the void and the recorded tax invoice', async () => {
+  it('item 1 (+ round 4 B6, B1c-2 rule 4): a first invoice started on the 25th is due on Dec 9, expires when today > due + 14, and the notice counts the void and the recorded tax invoice', async () => {
     const orgId = await makeOrg('First Due Fixture');
     const preview = await startSubscriptionCompat({ sql, now: at('2026-11-25T01:00:00Z') }, ADMIN_VIEWER, {
       organizationId: orgId,
@@ -150,14 +150,14 @@ describe('B1a review round 3', () => {
       startedOn: '2026-11-25',
       previewOnly: true,
     });
-    expect(preview).toMatchObject({ ok: true, applied: false, preview: { dueOn: '2026-11-30', shortPaymentWindow: false } });
+    expect(preview).toMatchObject({ ok: true, applied: false, preview: { dueOn: '2026-12-09', shortPaymentWindow: false } });
     const s = await startSubscriptionCompat({ sql, now: at('2026-11-25T01:00:00Z') }, ADMIN_VIEWER, {
       organizationId: orgId,
       planId: 'b2b_69',
       startedOn: '2026-11-25',
     });
     if (!s.ok || !s.applied) throw new Error('start failed');
-    expect(await invoiceRow(s.firstInvoiceId)).toMatchObject({ status: 'issued', due_on: '2026-11-30' });
+    expect(await invoiceRow(s.firstInvoiceId)).toMatchObject({ status: 'issued', due_on: '2026-12-09' });
     const tax = await recordBrandInvoiceTaxInvoice({ sql, now: at('2026-11-26T01:00:00Z') }, ADMIN_VIEWER, {
       invoiceId: s.firstInvoiceId,
       issuedOn: '2026-11-26',
@@ -165,12 +165,12 @@ describe('B1a review round 3', () => {
     });
     expect(tax.ok).toBe(true);
 
-    for (const iso of ['2026-11-30T01:00:00Z', '2026-12-01T01:00:00Z', '2026-12-07T01:00:00Z']) {
+    for (const iso of ['2026-12-09T01:00:00Z', '2026-12-15T01:00:00Z', '2026-12-23T01:00:00Z']) {
       expect(await runBrandSubscriptionTick({ sql, now: at(iso) }), iso).toMatchObject({ voided: 0 });
       expect(await invoiceRow(s.firstInvoiceId), iso).toMatchObject({ status: 'issued' });
     }
     const before = (await notices()).length;
-    const dec8 = await runBrandSubscriptionTick({ sql, now: at('2026-12-08T01:00:00Z') });
+    const dec8 = await runBrandSubscriptionTick({ sql, now: at('2026-12-24T01:00:00Z') });
     expect(dec8).toMatchObject({ voided: 1, voidNoticeEnqueued: true });
     expect(await invoiceRow(s.firstInvoiceId)).toMatchObject({ status: 'void', void_reason: 'first_invoice_expired', voided_by: null });
     // B1a-2: the same run also sends the daily attention notice (this pending subscription now needs a reissue).
@@ -184,49 +184,15 @@ describe('B1a review round 3', () => {
     expect(added[0]!.preview).not.toContain(orgId);
     expect(added[0]!.preview).toContain('이후 입금이 확인되면 다시 발행');
     // A second run on the same day adds nothing.
-    await runBrandSubscriptionTick({ sql, now: at('2026-12-08T03:00:00Z') });
+    await runBrandSubscriptionTick({ sql, now: at('2026-12-24T03:00:00Z') });
     expect((await notices()).length).toBe(before + 2);
 
     // The admin page marks the void row that had a tax invoice recorded.
     vi.useFakeTimers({ toFake: ['Date'] });
-    vi.setSystemTime(new Date('2026-12-09T01:00:00Z'));
+    vi.setSystemTime(new Date('2026-12-25T01:00:00Z'));
     const html = await renderOrg(orgId);
     expect(html).toContain('data-void-needs-corrective-tax-invoice');
     expect(html).toContain('수정 세금계산서 필요');
-  });
-
-  it('item 1: starting on the 29th warns about the short payment window in the preview and on the page', async () => {
-    const orgId = await makeOrg('Short Window Fixture');
-    const preview = await startSubscriptionCompat({ sql, now: at('2026-11-29T01:00:00Z') }, ADMIN_VIEWER, {
-      organizationId: orgId,
-      planId: 'b2b_69',
-      startedOn: '2026-11-29',
-      previewOnly: true,
-    });
-    expect(preview).toMatchObject({ ok: true, applied: false, preview: { dueOn: '2026-11-30', shortPaymentWindow: true } });
-    // Early access: no first-invoice rule, no warning.
-    const early = await startSubscriptionCompat({ sql, now: at('2026-11-29T01:00:00Z') }, ADMIN_VIEWER, {
-      organizationId: orgId,
-      planId: 'b2b_69',
-      startedOn: '2026-11-29',
-      activateBeforePayment: true,
-      previewOnly: true,
-    });
-    expect(early).toMatchObject({ ok: true, applied: false, preview: { dueOn: '2026-12-13', shortPaymentWindow: false } });
-
-    vi.useFakeTimers({ toFake: ['Date'] });
-    vi.setSystemTime(new Date('2026-11-29T01:00:00Z'));
-    const step1 = await h.run('brandSubscription.start', {
-      organizationId: orgId,
-      planId: 'b2b_69',
-      collectionMethod: 'transfer',
-      startedOn: '2026-11-29',
-    });
-    expect(step1).toMatchObject({ ok: true, code: 'prepared' });
-    expect(String(step1.detail)).toContain('due=2026-11-30');
-    expect(String(step1.detail)).toContain('short_window=1');
-    const html = await renderOrg(orgId, { ok: 'prepared', detail: String(step1.detail) });
-    expect(html).toContain('data-subscription-short-window');
   });
 
   it('item 2: a failing draft never freezes the organization — status and ends_on are still written, failures are counted, one notice at 3, reset on success', async () => {
@@ -331,8 +297,9 @@ describe('B1a review round 3', () => {
     expect(await invoiceRow(redo.invoice.id)).toMatchObject({ status: 'void', void_reason: 'null_epoch_draft' });
     const re = await reissueConfirmed({ sql, now: at('2026-11-25T03:00:00Z') }, ADMIN_VIEWER, { organizationId: orgId, period: '2026-11' });
     if (!re.ok || !re.applied) throw new Error('reissue failed');
-    expect(await invoiceRow(re.invoice.id)).toMatchObject({ status: 'issued', due_on: '2026-11-30' });
-    await runBrandSubscriptionTick({ sql, now: at('2026-12-08T01:00:00Z') });
+    // B1c-2, rule 4: a new first invoice without a cycle, due today + 14; voided when today > due + 14.
+    expect(await invoiceRow(re.invoice.id)).toMatchObject({ status: 'issued', due_on: '2026-12-09' });
+    await runBrandSubscriptionTick({ sql, now: at('2026-12-24T01:00:00Z') });
     expect(await invoiceRow(re.invoice.id)).toMatchObject({ status: 'void', void_reason: 'first_invoice_expired' });
   });
 
@@ -356,9 +323,9 @@ describe('B1a review round 3', () => {
     expect(
       await reissueCompat({ sql, now: at('2026-11-05T01:00:00Z') }, ADMIN_VIEWER, { organizationId: orgId, period: '2026-11', confirm: true }),
     ).toMatchObject({ ok: false, code: 'invalid', field: 'previewDigest', detail: 'preview_required' });
-    // Reissue of a never-paid subscription without early access uses the first-invoice due date.
+    // B1c-2, rule 4: a never-paid subscription without early access reissues a new first invoice due today + 14.
     const preview = await reissueCompat({ sql, now: at('2026-11-25T01:00:00Z') }, ADMIN_VIEWER, { organizationId: orgId, period: '2026-11' });
-    expect(preview).toMatchObject({ ok: true, applied: false, preview: { reason: 'admin_voided', dueOn: '2026-11-30' } });
+    expect(preview).toMatchObject({ ok: true, applied: false, preview: { reason: 'needs_reissue', dueOn: '2026-12-09', cycleStart: null } });
   });
 
   it('item 6: preview_required has the neutral text in both languages', () => {

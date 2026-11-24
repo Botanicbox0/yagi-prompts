@@ -104,8 +104,44 @@ describe('BRAND_WORKSPACE_APPROVAL off: exact origin/main parity', () => {
           );
           actual.push({ op, status: res.status, body: normalize(await res.json()), log: normalize(r.log) });
         }
-        expect(actual).toEqual(fixture.route);
+        // The subscription flag off (the real flag-off path): byte-identical.
+        expect(actual[0]).toEqual(fixture.route[0]);
         expect(fixture.route[0]).toMatchObject({ op: 'routeBothOff', body: { ok: true, skipped: 'disabled' }, log: [] });
+        // B1c-2, on purpose and only with BRAND_BILLING_AUTO_ISSUE on: the cycle engine needs 0186, so the subscription
+        // schema guard also requires brand_invoices.cycle_start/cycle_end. With 0186 every statement and the answer are
+        // origin/main's except those two extra entries in the guard's parameters; without 0186 the job stops right
+        // after the guard (`schema_not_ready`, zero further statements).
+        const recorded = fixture.route[1]!;
+        const recordedLog = recorded.log as Array<{ text: string; params: string[][] }>;
+        const gi = recordedLog.findIndex((s) => s.text.includes('from unnest($1::text[], $2::text[]) as req(tbl, col) join pg_attribute'));
+        expect(gi).toBeGreaterThanOrEqual(0);
+        expect(recordedLog.filter((s) => s.text.includes('as req(tbl, col) join pg_attribute'))).toHaveLength(1);
+        const guard = {
+          text: recordedLog[gi]!.text,
+          params: [
+            [...recordedLog[gi]!.params[0]!, 'brand_invoices', 'brand_invoices'],
+            [...recordedLog[gi]!.params[1]!, 'cycle_start', 'cycle_end'],
+          ],
+        };
+        const has0186 =
+          (await db.query("select 1 from information_schema.columns where table_name = 'brand_invoices' and column_name = 'cycle_start'"))
+            .rows.length > 0;
+        expect(has0186).toBe(label !== 'before 0184');
+        if (has0186) {
+          // Fix round 1, B4: the job's answer also counts the invoices it held (0 here; no extra statement).
+          expect(actual[1]).toEqual({
+            ...recorded,
+            body: { ...(recorded.body as Record<string, unknown>), held: 0 },
+            log: [...recordedLog.slice(0, gi), guard, ...recordedLog.slice(gi + 1)],
+          });
+        } else {
+          expect(actual[1]).toEqual({
+            op: 'routeSubscriptionOn',
+            status: 200,
+            body: { ok: true, skipped: 'schema_not_ready' },
+            log: [...recordedLog.slice(0, gi), guard],
+          });
+        }
       } finally {
         await db.close();
       }

@@ -91,7 +91,7 @@ afterEach(async () => {
 });
 
 describe('B1a brand subscriptions integration & route (§8.2–§8.11)', () => {
-  it('§8.2 KST boundary: 14:59:59Z vs 15:00:00Z on the last day of month drafts/issues for the right KST period', async () => {
+  it('§8.2 KST boundary (B1c-2: the cycle boundary): 14:59:59Z vs 15:00:00Z on the day before the cycle start drafts/issues for the right KST day', async () => {
     const startAt = new Date('2026-11-10T01:00:00Z');
     const started = await startSubscriptionCompat({ sql: f.sql, now: () => startAt }, admin(), {
       organizationId: f.orgId,
@@ -105,15 +105,16 @@ describe('B1a brand subscriptions integration & route (§8.2–§8.11)', () => {
       paidMethod: 'transfer',
     });
 
-    // At 2026-11-30T14:59:59Z -> still 2026-11-30 KST (D-1 of Dec): draft for 2026-12 exists, NOT issued yet.
-    const beforeMidnight = new Date('2026-11-30T14:59:59Z');
+    // Paid on Nov 10 -> cycle [Nov 10, Dec 10). At 2026-12-09T14:59:59Z -> still Dec 9 KST (D-1): the next cycle's
+    // draft exists, NOT issued yet.
+    const beforeMidnight = new Date('2026-12-09T14:59:59Z');
     const t1 = await runBrandSubscriptionTick({ sql: f.sql, now: () => beforeMidnight });
-    expect(t1).toMatchObject({ ok: true, period: '2026-11', drafted: 1, issued: 0 });
+    expect(t1).toMatchObject({ ok: true, period: '2026-12', drafted: 1, issued: 0 });
     const invBefore = await listBrandInvoices(f.sql, { organizationId: f.orgId, now: beforeMidnight });
     expect(invBefore.find((i) => i.period === '2026-12')?.status).toBe('draft');
 
-    // 1 second later: 2026-11-30T15:00:00Z -> 2026-12-01 00:00:00 KST -> issues 2026-12!
-    const atMidnight = new Date('2026-11-30T15:00:00Z');
+    // 1 second later: 2026-12-09T15:00:00Z -> 2026-12-10 00:00:00 KST -> issues the Dec 10 cycle.
+    const atMidnight = new Date('2026-12-09T15:00:00Z');
     const t2 = await runBrandSubscriptionTick({ sql: f.sql, now: () => atMidnight });
     expect(t2).toMatchObject({ ok: true, period: '2026-12', drafted: 0, issued: 1 });
     const invAfter = await listBrandInvoices(f.sql, { organizationId: f.orgId, now: atMidnight });
@@ -122,7 +123,7 @@ describe('B1a brand subscriptions integration & route (§8.2–§8.11)', () => {
     const meta = await loadExtendedInvoiceMetaByOrg(f.sql, f.orgId);
     expect(meta.get(decInv!.id)).toMatchObject({
       kind: 'subscription',
-      dueOn: '2026-12-15',
+      dueOn: '2026-12-24',
       collectionMethod: 'transfer',
       issuedVia: 'system',
     });
@@ -210,7 +211,8 @@ describe('B1a brand subscriptions integration & route (§8.2–§8.11)', () => {
       paidMethod: 'transfer',
     });
     expect(await loadBrandSubscription(f.sql, f.orgId)).toMatchObject({ status: 'active' });
-    expect(await loadPlanAssignment(f.sql, f.orgId)).toMatchObject({ planId: 'b2b_29', endsOn: '2026-12-01' });
+    // B1c-2, rule 4: paid on Nov 10 -> cycle 0 is [Nov 10, Dec 10).
+    expect(await loadPlanAssignment(f.sql, f.orgId)).toMatchObject({ planId: 'b2b_29', startedOn: '2026-11-10', endsOn: '2026-12-10' });
     // B1c (changed on purpose): the full plan cap on every cycle; the B1b first-month proration (189,000 here) is gone.
     expect((await loadAllowance(f.sql, f.orgId, studioEnv(), t0)).capKrw).toBe(270_000);
 
@@ -234,7 +236,8 @@ describe('B1a brand subscriptions integration & route (§8.2–§8.11)', () => {
     expect(started2).toMatchObject({ ok: true, applied: true });
     expect(await loadBrandSubscription(f.sql, org2Res.id)).toMatchObject({ status: 'pending', activatedBeforePayment: true });
     expect(await loadPlanAssignment(f.sql, org2Res.id)).toMatchObject({ planId: 'b2b_49', endsOn: '2026-11-24' });
-    // B1c: full cap (was 322,000 under the B1b first-month proration).
+    // B1c: full cycle, no first-month proration (was 322,000 under B1b). The unpaid 50% cap applies only after the due
+    // date (founder 2026-11-24), so early access on its start day is full.
     expect((await loadAllowance(f.sql, org2Res.id, studioEnv(), t0)).capKrw).toBe(460_000);
   });
 
@@ -257,11 +260,12 @@ describe('B1a brand subscriptions integration & route (§8.2–§8.11)', () => {
     expect(await loadPlanAssignment(f.sql, f.orgId)).toMatchObject({ endsOn: '2026-12-15' });
     const decInv = (await listBrandInvoices(f.sql, { organizationId: f.orgId, now: dec01 })).find((i) => i.period === '2026-12')!;
 
-    // Dec 16 -> past_due, allowance STILL active within 14-day grace
+    // Dec 16 -> past_due, allowance STILL active within 14-day grace — B1c-2, unpaid 50% cap: an invoice is past its
+    // due date (Dec 15) and unpaid, so the plan part is half (270,000 → 135,000).
     const dec16 = new Date('2026-12-16T01:00:00Z');
     await runBrandSubscriptionTick({ sql: f.sql, now: () => dec16 });
     expect(await loadBrandSubscription(f.sql, f.orgId)).toMatchObject({ status: 'past_due' });
-    expect((await loadAllowance(f.sql, f.orgId, studioEnv(), dec16)).capKrw).toBe(270_000);
+    expect((await loadAllowance(f.sql, f.orgId, studioEnv(), dec16)).capKrw).toBe(135_000);
 
     // Dec 30 (15 days after due_on 2026-12-15, grace=14) -> suspended, allowance drops to 0, no 2027-01 draft
     const dec30 = new Date('2026-12-30T01:00:00Z');
@@ -283,13 +287,19 @@ describe('B1a brand subscriptions integration & route (§8.2–§8.11)', () => {
     });
     expect(await loadBrandSubscription(f.sql, f.orgId)).toMatchObject({ status: 'active' });
     const janInv = (await listBrandInvoices(f.sql, { organizationId: f.orgId, now: jan05 })).find((i) => i.period === '2027-01');
+    // B1c-2, rule 8: a new full-price cycle starts on the paid date (no proration).
     expect(janInv).toMatchObject({
       status: 'issued',
-      proratedDays: 27,
-      periodDays: 31,
+      proratedDays: null,
+      cycleStart: '2027-01-05',
+      cycleEnd: '2027-02-05',
     });
     expect(await loadPlanAssignment(f.sql, f.orgId)).toMatchObject({ endsOn: '2027-01-19' });
+    // The restart cycle's invoice is issued but not yet due → full (the 50% cap applies only after the due date).
     expect((await loadAllowance(f.sql, f.orgId, studioEnv(), jan05)).capKrw).toBe(270_000);
+    expect((await loadAllowance(f.sql, f.orgId, studioEnv(), new Date('2027-01-20T01:00:00Z'))).capKrw).toBe(135_000);
+    await markBrandInvoicePaid({ sql: f.sql, now: () => new Date('2027-01-20T02:00:00Z') }, admin(), { invoiceId: (janInv as { id: string }).id, paidMethod: 'transfer' });
+    expect((await loadAllowance(f.sql, f.orgId, studioEnv(), new Date('2027-01-20T03:00:00Z'))).capKrw).toBe(270_000);
   });
 
   it('§8.6 Cancel, undoCancel, cancel with nothing paid, downgrade on 1st, and upgrade rejected', async () => {

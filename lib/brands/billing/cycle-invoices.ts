@@ -5,6 +5,7 @@
  * row is a monthly subscription invoice), before 0186 no cycle columns.
  */
 import type { SqlRunner } from '@/lib/db/sql-runner';
+import { cycleStartAt } from './cycle';
 import { hasColumn } from './schema-guard';
 
 async function coverageSql(sql: SqlRunner): Promise<{ kindFilter: string; startExpr: string; endExpr: string }> {
@@ -19,23 +20,46 @@ async function coverageSql(sql: SqlRunner): Promise<{ kindFilter: string; startE
   };
 }
 
-/** True when a non-void subscription invoice of the organization covers any day of `[start, end)` (KST dates). */
+/**
+ * True when a non-void subscription invoice of the organization covers any day of `[start, end)` (KST dates).
+ * `excludeInvoiceId` leaves one row out (the invoice whose own cycle is being placed).
+ */
 export async function subscriptionInvoiceOverlaps(
   sql: SqlRunner,
   organizationId: string,
   range: { start: string; end: string },
+  excludeInvoiceId?: string,
 ): Promise<boolean> {
   const c = await coverageSql(sql);
   const row = (
     await sql.query(
       `select 1 from brand_invoices
         where organization_id = $1 and status <> 'void'${c.kindFilter}
-          and ${c.startExpr} < $3::date and ${c.endExpr} > $2::date
+          and ${c.startExpr} < $3::date and ${c.endExpr} > $2::date${excludeInvoiceId ? ' and id <> $4' : ''}
         limit 1`,
-      [organizationId, range.start, range.end],
+      excludeInvoiceId ? [organizationId, range.start, range.end, excludeInvoiceId] : [organizationId, range.start, range.end],
     )
   ).rows[0];
   return Boolean(row);
+}
+
+export const PAID_AT_BEFORE_START = 'paid_at_before_start' as const;
+export const PAID_AT_OVERLAPS_CYCLE = 'paid_at_overlaps_cycle' as const;
+
+/**
+ * B1c-2 fix round 1, B1: a subscription's first invoice (no cycle yet) starts cycle 0 on its paid day. That day may not be
+ * before the day the current epoch's subscription started, and `[paid day, one cycle later)` may not overlap any other
+ * non-void subscription invoice of the organization (any epoch; cycle rows by date range, calendar-month rows by month).
+ * Returns the refusal code, or null when the paid day is fine. Used by `markPaid` and by the job before it writes cycle 0.
+ */
+export async function firstPaymentCycleRefusal(
+  sql: SqlRunner,
+  input: { organizationId: string; invoiceId: string; subscriptionStartedOn: string; paidDay: string },
+): Promise<typeof PAID_AT_BEFORE_START | typeof PAID_AT_OVERLAPS_CYCLE | null> {
+  if (input.paidDay < input.subscriptionStartedOn) return PAID_AT_BEFORE_START;
+  const range = { start: input.paidDay, end: cycleStartAt(input.paidDay, 1) };
+  if (await subscriptionInvoiceOverlaps(sql, input.organizationId, range, input.invoiceId)) return PAID_AT_OVERLAPS_CYCLE;
+  return null;
 }
 
 /** The calendar month `YYYY-MM` as `[1st, next 1st)`. */

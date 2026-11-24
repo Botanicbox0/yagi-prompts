@@ -19,7 +19,7 @@ import {
   proposeProration,
 } from './math';
 import { cycleContaining, cycleStartAt, type BillingCycle } from './cycle';
-import { monthRange, subscriptionInvoiceOverlaps } from './cycle-invoices';
+import { firstPaymentCycleRefusal, monthRange, subscriptionInvoiceOverlaps } from './cycle-invoices';
 import { hasColumn, hasTable, hasTables, loadSubscriptionSchemaReady } from './schema-guard';
 import type {
   BrandBillingFailureCode,
@@ -39,6 +39,9 @@ export interface SubscriptionInvoiceWriteMeta {
   dueOn: string | null;
   collectionMethod: 'transfer' | 'card' | null;
   subscriptionEpoch?: number | null;
+  /** B1c-2: the billing cycle of a subscription invoice (null: a first invoice waiting for its payment). */
+  cycleStart?: string | null;
+  cycleEnd?: string | null;
 }
 
 /** What the post-commit reconcile reports back: a failed step, and whether it cost the customer access. */
@@ -331,6 +334,8 @@ type InvoiceRow = {
   updated_at: unknown;
   /** 0182; absent before it. */
   kind?: unknown;
+  /** 0182; absent before it, null on invoices no subscription owns. */
+  subscription_epoch?: unknown;
   /** 0186 (B1c); absent before it, null on calendar-month rows. */
   cycle_start?: unknown;
   cycle_end?: unknown;
@@ -523,6 +528,22 @@ export type ValidatedDraftInvoiceInput = z.infer<typeof DraftInvoiceInput>;
 export type ValidatedUpdateDraftInvoiceInput = z.infer<typeof UpdateDraftInvoiceInput>;
 export type ValidatedIssueInvoiceInput = z.infer<typeof IssueInvoiceInput>;
 
+/**
+ * The days a new subscription draft will cover, for the no-overlap check (B1c fix round × B1c-2):
+ * - the engine's cycle draft: its cycle `[cycle_start, cycle_end)`;
+ * - the engine's first invoice without early access (no cycle yet; the cycle starts on its paid day): one cycle from
+ *   today, so an earlier subscription's cycle that ended before today does not block a new start in the same month;
+ * - an admin calendar-month draft (organizations without a plan): its month.
+ */
+function subscriptionDraftRange(period: string, meta: SubscriptionInvoiceWriteMeta | undefined, nowDate: Date): { start: string; end: string } {
+  if (meta?.cycleStart && meta.cycleEnd) return { start: meta.cycleStart, end: meta.cycleEnd };
+  if (meta) {
+    const today = kstDayOf(nowDate);
+    return { start: today, end: cycleStartAt(today, 1) };
+  }
+  return monthRange(period);
+}
+
 export async function draftBrandInvoiceInTx(
   sql: SqlRunner,
   actor: InvoiceActor,
@@ -573,7 +594,7 @@ export async function draftBrandInvoiceInTx(
   }
   // B1c fix round: a subscription invoice (admin or engine) never overlaps another non-void subscription invoice in time;
   // a calendar-month invoice covers its month, a cycle invoice its cycle.
-  if (targetKind === 'subscription' && (await subscriptionInvoiceOverlaps(sql, v.organizationId, monthRange(v.period!)))) {
+  if (targetKind === 'subscription' && (await subscriptionInvoiceOverlaps(sql, v.organizationId, subscriptionDraftRange(v.period!, subscriptionMeta, nowDate)))) {
     return { ok: false, code: 'conflict' };
   }
   const planId = v.planId ?? assignment?.planId;
@@ -595,9 +616,9 @@ export async function draftBrandInvoiceInTx(
              id, organization_id, period, plan_id, base_list_krw, list_krw, prorated_days, period_days,
              discount_id, discount_percent, discount_krw, supply_krw, vat_krw, total_krw,
              manual_amounts, manual_reason, status, memo, created_by, created_at, updated_by, updated_at,
-             kind, covers_months, due_on, collection_method, created_via, subscription_epoch
+             kind, covers_months, due_on, collection_method, created_via, subscription_epoch, cycle_start, cycle_end
            ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, 'draft', $17, $18, $19::timestamptz, $18, $19::timestamptz,
-                     $20, $21, $22::date, $23, $24, $25)
+                     $20, $21, $22::date, $23, $24, $25, $26::date, $27::date)
            returning *`,
           [
             id,
@@ -625,6 +646,8 @@ export async function draftBrandInvoiceInTx(
             subscriptionMeta.collectionMethod,
             actor.kind,
             subscriptionMeta.subscriptionEpoch ?? null,
+            subscriptionMeta.cycleStart ?? null,
+            subscriptionMeta.cycleEnd ?? null,
           ],
         )
       ).rows[0]!
@@ -1302,11 +1325,16 @@ export async function issueBrandInvoiceInTx(
   if (!invoiceRowConsistent(row)) {
     return { ok: false, code: 'conflict', detail: 'inconsistent_amounts' };
   }
-  // Review round 4, B4: a subscription draft of a month that has ended is never issued (admin or job).
+  // Review round 4, B4 / B1c-2: a subscription draft whose cycle has ended is never issued by the job.
+  const rowCycleEnd = subscriptionMeta
+    ? ((await sql.query<{ cycle_end: string | null }>('select cycle_end::text as cycle_end from brand_invoices where id = $1', [row.id])).rows[0]
+        ?.cycle_end ?? null)
+    : null;
   if (
     subscriptionMeta &&
     String((row as unknown as { kind?: string }).kind ?? 'subscription') === 'subscription' &&
-    String(row.period) < kstDayOf(nowDate).slice(0, 7)
+    rowCycleEnd != null &&
+    String(rowCycleEnd).slice(0, 10) <= kstDayOf(nowDate)
   ) {
     return { ok: false, code: 'conflict', detail: 'period_ended' };
   }
@@ -1488,6 +1516,37 @@ export async function markBrandInvoicePaid(
         ).rows[0]
       ) {
         return { ok: false as const, code: 'invalid' as const, detail: 'paid_at_in_future' };
+      }
+      // B1c-2 fix round 1, B1: a subscription's first invoice (an epoch invoice with no cycle yet) starts cycle 0 on its
+      // paid day — not before the subscription started, and not overlapping another subscription invoice. Refused,
+      // nothing written. The payment transaction reads only invoices (it never reads the subscription or locks the
+      // organization — review round 1, B1): the epoch's start day is the KST creation day of its first invoice (the one
+      // `start` wrote; adopted rows are left out), which a reissue does not move. The job checks again with the
+      // subscription row before it writes cycle 0.
+      if (
+        row.kind === 'subscription' &&
+        row.subscription_epoch != null &&
+        row.cycle_start == null &&
+        brandBillingAutoIssueOpen(deps.env) &&
+        (await loadSubscriptionSchemaReady(sql))
+      ) {
+        const epochStart = (
+          await sql.query<{ start_day: string | null }>(
+            `select ((min(i.created_at) at time zone 'UTC') + interval '9 hours')::date::text as start_day
+               from brand_invoices i
+              where i.organization_id = $1 and i.subscription_epoch = $2 and i.kind = 'subscription'
+                and not exists (select 1 from brand_invoice_events e where e.invoice_id = i.id and e.action = 'adopted')`,
+            [row.organization_id, row.subscription_epoch],
+          )
+        ).rows[0]?.start_day;
+        const paidDay = kstDayOf(new Date(paidAtIso));
+        const refusal = await firstPaymentCycleRefusal(sql, {
+          organizationId: String(row.organization_id),
+          invoiceId: String(row.id),
+          subscriptionStartedOn: epochStart ? String(epochStart).slice(0, 10) : paidDay,
+          paidDay,
+        });
+        if (refusal) return { ok: false as const, code: 'invalid' as const, field: 'paidAt', detail: refusal };
       }
 
       const memo = v.memo !== undefined ? v.memo : String(row.memo ?? '');

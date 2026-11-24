@@ -5,7 +5,6 @@ import { insertLegacyDraft } from '@/tests/brands/helpers/legacy-invoice';
 import { formatBillingOutcomeDetail } from '@/lib/admin/brand-billing-console';
 import {
   draftBrandInvoice,
-  draftBrandInvoiceInTx,
   issueBrandInvoice,
   issueBrandInvoiceInTx,
   listBrandInvoices,
@@ -363,7 +362,8 @@ describe('B1a review round 4 — B: remaining findings', () => {
     expect(await loadBrandSubscription(sql, orgId)).toMatchObject({ status: 'suspended' });
     await markBrandInvoicePaid({ sql, now: at('2027-01-09T03:00:00Z') }, ADMIN_VIEWER, { invoiceId: dec!.id, paidMethod: 'transfer', paidAt: '2027-01-09' });
     const [jan] = await invoiceOf(orgId, '2027-01');
-    expect(jan).toMatchObject({ status: 'issued', proratedDays: 23 });
+    // B1c-2, rule 8: paying while suspended starts a NEW full-price cycle on the paid date.
+    expect(jan).toMatchObject({ status: 'issued', proratedDays: null, cycleStart: '2027-01-09', cycleEnd: '2027-02-09' });
     expect(await loadBrandSubscription(sql, orgId)).toMatchObject({ status: 'active' });
 
     // B4: a subscription draft of a month that has ended cannot be issued (admin), even if the job never voided it.
@@ -380,41 +380,6 @@ describe('B1a review round 4 — B: remaining findings', () => {
     );
     expect(stale).toMatchObject({ ok: false, code: 'conflict', detail: 'period_ended' });
     expect(await invoiceRow(staleDec!.id)).toMatchObject({ status: 'draft' });
-  });
-
-  it('B3: an on-time transfer recorded late (paidAt Nov 30, recorded Dec 1) is accepted and December is billed in full', async () => {
-    const orgId = await makeOrg('Recorded Late Fixture');
-    const s = await startUnpaid(orgId, '2026-11-25');
-    expect(await invoiceRow(s.firstInvoiceId)).toMatchObject({ due_on: '2026-11-30' });
-    await runBrandSubscriptionTick({ sql, now: at('2026-12-01T00:10:00Z') });
-    expect(await invoiceRow(s.firstInvoiceId)).toMatchObject({ status: 'issued' });
-    const paid = await markBrandInvoicePaid({ sql, now: at('2026-12-01T03:00:00Z') }, ADMIN_VIEWER, { invoiceId: s.firstInvoiceId, paidMethod: 'transfer', paidAt: '2026-11-30' });
-    expect(paid).toMatchObject({ ok: true });
-    const [dec] = await invoiceOf(orgId, '2026-12');
-    expect(dec).toMatchObject({ status: 'issued', proratedDays: null });
-    expect(await invoiceRow(dec!.id)).toMatchObject({ due_on: '2026-12-15' });
-    expect(await loadPlanAssignment(sql, orgId)).toMatchObject({ endsOn: '2026-12-15' });
-    expect(await loadBrandSubscription(sql, orgId)).toMatchObject({ status: 'active' });
-  });
-
-  it('B3: a late payment (paidAt Dec 3, recorded Dec 5) prorates December from Dec 3; no payment expires on Dec 8 with a reissue hint', async () => {
-    const orgId = await makeOrg('Paid Late Fixture');
-    const s = await startUnpaid(orgId, '2026-11-25');
-    for (const iso of ['2026-12-01T01:00:00Z', '2026-12-04T01:00:00Z']) await runBrandSubscriptionTick({ sql, now: at(iso) });
-    await markBrandInvoicePaid({ sql, now: at('2026-12-05T01:00:00Z') }, ADMIN_VIEWER, { invoiceId: s.firstInvoiceId, paidMethod: 'transfer', paidAt: '2026-12-03' });
-    const [dec] = await invoiceOf(orgId, '2026-12');
-    expect(dec).toMatchObject({ status: 'issued', proratedDays: 29 });
-
-    const silent = await makeOrg('Never Paid Fixture');
-    const n = await startUnpaid(silent, '2026-11-25');
-    await runBrandSubscriptionTick({ sql, now: at('2026-12-07T01:00:00Z') });
-    expect(await invoiceRow(n.firstInvoiceId)).toMatchObject({ status: 'issued' });
-    const before = (await notices()).length;
-    await runBrandSubscriptionTick({ sql, now: at('2026-12-08T01:00:00Z') });
-    expect(await invoiceRow(n.firstInvoiceId)).toMatchObject({ status: 'void', void_reason: 'first_invoice_expired' });
-    const added = (await notices()).slice(before).map((x) => x.preview).join('\n');
-    expect(added).toContain('기한 지난 첫 청구서 1건');
-    expect(added).toContain('이후 입금이 확인되면 다시 발행');
   });
 
   it('B5: failures counted outside the job are reported by the next run, once per KST day; the admin reconcile reports a failure', async () => {
@@ -510,19 +475,24 @@ describe('B1a review round 4 — B: remaining findings', () => {
       confirm: true,
     });
     if (!s.ok || !s.applied) throw new Error('start failed');
-    // Four stale system drafts of earlier months in this epoch (the job voids each one as its own step).
-    await sql.transaction(async (tx) => {
-      for (const period of ['2026-07', '2026-08', '2026-09', '2026-10']) {
-        const r = await draftBrandInvoiceInTx(
-          tx,
-          { kind: 'system' },
-          { organizationId: orgId, period, planId: 'b2b_69', prorate: false, applyActiveDiscount: false, manualAmounts: false, manualReason: '', memo: '' },
-          new Date('2026-11-02T01:00:00Z'),
-          { kind: 'subscription', coversMonths: 1, dueOn: null, collectionMethod: 'transfer', subscriptionEpoch: s.subscription.epoch },
-        );
-        if (!r.ok) throw new Error(r.code);
-      }
-    });
+    // Four stale system drafts of earlier months in this epoch (the job voids each one as its own step). B1c-2: written
+    // straight into the ledger — the engine's write path no longer creates a cycle-less invoice while another invoice
+    // (here the early-access cycle Nov 1 – Dec 1) covers the coming cycle (B1c no-overlap rule).
+    for (const period of ['2026-07', '2026-08', '2026-09', '2026-10']) {
+      const id = randomUUID();
+      await sql.query(
+        `insert into brand_invoices (id, organization_id, period, plan_id, base_list_krw, list_krw, discount_percent, discount_krw,
+            supply_krw, vat_krw, total_krw, status, created_at, updated_at, kind, covers_months, collection_method, created_via, subscription_epoch)
+         values ($1, $2, $3, 'b2b_69', 690000, 690000, 0, 0, 690000, 69000, 759000, 'draft', '2026-11-02T01:00:00Z', '2026-11-02T01:00:00Z',
+                 'subscription', 1, 'transfer', 'system', $4)`,
+        [id, orgId, period, s.subscription.epoch],
+      );
+      await sql.query(
+        `insert into brand_invoice_events (invoice_id, organization_id, action, from_status, to_status, snapshot, note, actor_id, actor_kind)
+         values ($1, $2, 'drafted', null, 'draft', '{}'::jsonb, '', null, 'system')`,
+        [id, orgId],
+      );
+    }
     vi.stubEnv('BRAND_BILLING_AUTO_ISSUE', 'off');
     await markBrandInvoicePaid({ sql, now: at('2026-11-10T01:00:00Z') }, ADMIN_VIEWER, { invoiceId: s.firstInvoiceId, paidMethod: 'transfer' });
     vi.stubEnv('BRAND_BILLING_AUTO_ISSUE', 'on');
@@ -551,14 +521,15 @@ describe('B1a review round 4 — B: remaining findings', () => {
       await reissueSubscriptionPeriod({ sql, now: at('2026-11-29T01:00:00Z') }, ADMIN_VIEWER, { organizationId: orgId, period: '2026-11' }),
     ).toMatchObject({ ok: false, code: 'invalid', detail: 'preview_required' });
     const preview = await reissueSubscriptionPeriod({ sql, now: at('2026-11-29T01:00:00Z') }, ADMIN_VIEWER, { organizationId: orgId, period: '2026-11', previewOnly: true });
-    expect(preview).toMatchObject({ ok: true, applied: false, preview: { dueOn: '2026-11-30', shortPaymentWindow: true } });
+    // B1c-2: due today + 14; the short-payment-window warning is gone with the month-end due date.
+    expect(preview).toMatchObject({ ok: true, applied: false, preview: { dueOn: '2026-12-13', shortPaymentWindow: false } });
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-11-29T01:00:00Z'));
     const op = await h.run('brandSubscription.reissuePeriod', { organizationId: orgId, period: '2026-11' });
     expect(op).toMatchObject({ ok: true, code: 'prepared' });
-    expect(String(op.detail)).toContain('short_window=1');
+    expect(String(op.detail)).not.toContain('short_window=1');
     const html = await renderOrg(orgId, { ok: 'prepared', detail: String(op.detail) });
-    expect(html).toContain('data-reissue-short-window');
+    expect(html).not.toContain('data-reissue-short-window');
   });
 
   it('messages: the new refusals have admin texts in both languages', () => {

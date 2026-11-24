@@ -14,12 +14,12 @@ export interface SystemVoidRecord {
 
 const VOID_REASON_LABELS: Record<string, string> = {
   first_invoice_expired: '기한 지난 첫 청구서',
-  stale_system_draft: '지난달 자동 초안',
+  stale_system_draft: '지난 주기 자동 초안',
   null_epoch_draft: '자동 발행을 끈 동안 만든 초안',
   subscription_canceled_unpaid: '해지(결제 없음)',
-  subscription_canceled_future_draft: '해지(다음 달 초안)',
-  subscription_canceled_future_invoice: '해지(다음 달 청구서)',
-  subscription_canceled_current_draft: '해지(이번 달 초안)',
+  subscription_canceled_future_draft: '해지(다음 주기 초안)',
+  subscription_canceled_future_invoice: '해지(다음 주기 청구서)',
+  subscription_canceled_current_draft: '해지(이번 주기 초안)',
 };
 
 /** "시스템 취소 N건 (사유별) · 세금계산서 발행 기록이 있는 취소 M건 — 수정 세금계산서 필요" */
@@ -154,13 +154,16 @@ export async function subscriptionAttentionCounts(sql: SqlRunner): Promise<{ sus
   return { suspended: Number(row?.suspended ?? 0), pendingReissue: Number(row?.pending_reissue ?? 0) };
 }
 
-/** Once per KST day, when anything is suspended or waiting for a reissue. */
-export async function enqueueAttentionNotice(sql: SqlRunner, kstDay: string): Promise<boolean> {
+/**
+ * Once per KST day, when anything is suspended or waiting for a reissue — or (fix round 1, B4) when the job held
+ * invoices it could not adopt into a cycle (`held`, counted by this run; counts only).
+ */
+export async function enqueueAttentionNotice(sql: SqlRunner, kstDay: string, held = 0): Promise<boolean> {
   const { suspended, pendingReissue } = await subscriptionAttentionCounts(sql);
-  if (suspended === 0 && pendingReissue === 0) return false;
+  if (suspended === 0 && pendingReissue === 0 && held === 0) return false;
   return enqueueSubscriptionNotice(sql, {
-    keyParts: ['attention', kstDay],
-    preview: `[B2B 정기구독 확인 필요] ${kstDay} 이용 정지 ${suspended}곳 · 다시 발행이 필요한 대기 ${pendingReissue}곳. 조직 구독 카드에서 확인해 주세요.`,
+    keyParts: ['attention', kstDay, ...(held > 0 ? [`held:${held}`] : [])],
+    preview: `[B2B 정기구독 확인 필요] ${kstDay} 이용 정지 ${suspended}곳 · 다시 발행이 필요한 대기 ${pendingReissue}곳${held > 0 ? ` · 편입 보류 ${held}건` : ''}. 조직 구독 카드에서 확인해 주세요.`,
     period: kstDay.slice(0, 7),
     surface: 'brand_billing:subscription_attention',
   });

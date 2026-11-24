@@ -3,7 +3,6 @@ import type {
   BrandCollectionMethod,
   BrandInvoiceKind,
   BrandSubscriptionStatus,
-  SubscriptionCalendar,
 } from './engine';
 
 export type BrandSubscriptionFailureCode =
@@ -83,10 +82,20 @@ export interface ExtendedInvoiceMeta {
 
 /** What the admin panel needs beyond the row (review round 2). */
 export interface SubscriptionPanelFacts {
+  /** `YYYY-MM` of the current cycle's start (or of today while waiting for the first payment). */
   currentPeriod: string;
+  /** B1c-2: this cycle `[start, end)`, the next cycle to bill, its draft day, the anchor and access end. */
+  currentCycle?: { start: string; end: string } | null;
+  nextCycle?: { start: string; end: string } | null;
+  nextDraftDay?: string | null;
+  anchor?: string | null;
+  accessEnd?: string | null;
+  oldestUnpaid?: { invoiceId: string; dueOn: string | null } | null;
+  /** A first invoice without early access waiting for its payment: its due date and the day it is voided. */
+  firstInvoicePending?: { invoiceId: string; dueOn: string; expiresOn: string } | null;
   /** Admin-voided periods after an earlier paid period: covered, not billed. */
   waivedPeriods: string[];
-  /** This month was voided by an admin and is waived: show the alert with `reissuePeriod`. */
+  /** The current cycle was voided by an admin and is waived: show the alert with `reissuePeriod`. */
   currentPeriodWaived: boolean;
   /** Nothing paid and nothing open (voided or expired first invoice): persistent alert, reissue or cancel. */
   needsReissue: boolean;
@@ -94,6 +103,8 @@ export interface SubscriptionPanelFacts {
   nothingPaid: boolean;
   /** Round 3, item 2: periods an older epoch's invoice occupies. */
   blockedByOlderEpoch: string[];
+  /** Fix round 1, B4: null-epoch issued/paid invoices the job cannot adopt, and why. */
+  heldInvoices?: Array<{ invoiceId: string; period: string; status: string; reason: 'no_assignment' | 'no_free_cycle' }>;
   graceDays: number;
 }
 
@@ -117,6 +128,8 @@ export interface BrandSubscriptionTickResult {
   partialFailures?: number;
   /** Null-epoch issued or paid invoices adopted into a current epoch. */
   adopted?: number;
+  /** Fix round 1, B4: null-epoch issued or paid invoices the job could not place into a cycle (held, not adopted). */
+  held?: number;
   /** The daily notice of system voids (from the invoice events of the KST day, whichever path wrote them). */
   voidNoticeEnqueued?: boolean;
   /** Periods held because an older epoch's invoice occupies them. */

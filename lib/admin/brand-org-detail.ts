@@ -29,10 +29,8 @@ import {
   loadBrandSubscription,
   loadExtendedInvoiceMetaByOrg,
   loadSubscriptionPanelFacts,
-  subscriptionCalendarForDay,
   type BrandSubscription,
   type ExtendedInvoiceMeta,
-  type SubscriptionCalendar,
   type SubscriptionPanelFacts,
 } from '@/lib/brands/subscriptions';
 import { kstDayOf } from '@/lib/brands/billing/math';
@@ -92,7 +90,8 @@ export interface OrgSubscriptionPanelState {
   enabled: boolean;
   schemaReady: boolean;
   subscription: BrandSubscription | null;
-  calendar: SubscriptionCalendar;
+  /** B1c-2: the next draft day and the next billing day (start of the next cycle), from the subscription's cycles. */
+  calendar: { nextDraftOpenDay: string | null; nextIssueDay: string | null };
   oldestUnpaid: {
     id: string;
     period: string;
@@ -561,7 +560,7 @@ export async function loadBrandOrgDetailOps(
 
   let subscriptionPanel: OrgSubscriptionPanelState | null = null;
   if (autoIssueEnabled) {
-    const calendar = subscriptionCalendarForDay(todayKst, subscription?.collectionMethod ?? 'transfer');
+    let calendar: OrgSubscriptionPanelState['calendar'] = { nextDraftOpenDay: null, nextIssueDay: null };
     if (!subscriptionSchemaReady) {
       subscriptionPanel = {
         enabled: true,
@@ -578,6 +577,7 @@ export async function loadBrandOrgDetailOps(
       const facts = subscription
         ? await loadSubscriptionPanelFacts(sql, subscription, now, env.planGraceDays ?? 7).catch(() => null)
         : null;
+      calendar = { nextDraftOpenDay: facts?.nextDraftDay ?? null, nextIssueDay: facts?.nextCycle?.start ?? null };
       // A1: only the current subscription epoch counts; older manual invoices are not this subscription's debt.
       const unpaidSubOrAdj = invoices
         .filter((inv) => {

@@ -318,7 +318,7 @@ describe('B1a review round 1 — integration gaps', () => {
     const nov10 = at('2026-11-10T01:00:00Z');
     expect(
       await startSubscriptionCompat({ sql: f.sql, now: nov10 }, admin(), { organizationId: f.orgId, planId: 'b2b_29', startedOn: '2026-11-20' }),
-    ).toEqual({ ok: false, code: 'invalid', field: 'startedOn', detail: 'started_on_in_future' });
+    ).toEqual({ ok: false, code: 'invalid', field: 'startedOn', detail: 'started_on_must_be_today' }); // B1c-2 fix round 1, B2: always today
 
     // A manual (null-epoch) invoice drafted for next month before the subscription would collide with the
     // engine's own December draft (the unique index spans every epoch).
@@ -337,6 +337,9 @@ describe('B1a review round 1 — integration gaps', () => {
       ['conflict:manual_plan_active', '유효한 수동 플랜'],
       ['conflict:period_already_invoiced', '그 이후 달에'],
       ['startedOn:started_on_in_future', '오늘(KST) 또는 그 이전'],
+      ['startedOn:started_on_must_be_today', '오늘(KST) 시작'],
+      ['paidAt:paid_at_before_start', '구독을 시작한 날보다 앞설 수 없습니다'],
+      ['paidAt:paid_at_overlaps_cycle', '다른 청구서의 기간과 겹칩니다'],
       ['invalid:preview_required', '미리보기를 확인한 뒤 다시 실행하세요.'],
     ] as const) {
       const text = formatBillingOutcomeDetail(detail, 'ko') ?? '';
@@ -520,33 +523,6 @@ describe('B1a review round 1 — integration gaps', () => {
     }
   });
 
-  it('B4.2/B4.4: paying an old invoice after a suspension that skipped a whole month resumes billing prorated from that day', async () => {
-    const started = await startSubscriptionCompat({ sql: f.sql, now: at('2026-11-01T01:00:00Z') }, admin(), {
-      organizationId: f.orgId,
-      planId: 'b2b_29',
-      startedOn: '2026-11-01',
-    });
-    if (!started.ok || !started.applied) throw new Error('start failed');
-    await markBrandInvoicePaid({ sql: f.sql, now: at('2026-11-01T02:00:00Z') }, admin(), { invoiceId: started.firstInvoiceId, paidMethod: 'transfer' });
-    await runBrandSubscriptionTick({ sql: f.sql, now: at('2026-11-25T01:00:00Z') });
-    await runBrandSubscriptionTick({ sql: f.sql, now: at('2026-11-30T16:00:00Z') }); // Dec 1 KST: December issued, due Dec 15
-    await runBrandSubscriptionTick({ sql: f.sql, now: at('2026-12-30T01:00:00Z') }); // Dec 15 + 14 passed
-    expect(await loadBrandSubscription(f.sql, f.orgId)).toMatchObject({ status: 'suspended' });
-    await runBrandSubscriptionTick({ sql: f.sql, now: at('2027-01-01T01:00:00Z') });
-    await runBrandSubscriptionTick({ sql: f.sql, now: at('2027-01-25T01:00:00Z') });
-    expect((await listBrandInvoices(f.sql, { organizationId: f.orgId })).map((i) => i.period).sort()).toEqual(['2026-11', '2026-12']);
-
-    const dec = (await listBrandInvoices(f.sql, { organizationId: f.orgId })).find((i) => i.period === '2026-12')!;
-    const paid = await markBrandInvoicePaid({ sql: f.sql, now: at('2027-02-02T16:00:00Z') }, admin(), { invoiceId: dec.id, paidMethod: 'transfer' });
-    expect(paid).toEqual({ ok: true, invoice: expect.objectContaining({ status: 'paid' }) });
-    expect(await loadBrandSubscription(f.sql, f.orgId)).toMatchObject({ status: 'active' });
-    const feb = (await listBrandInvoices(f.sql, { organizationId: f.orgId })).find((i) => i.period === '2027-02');
-    // Resumed on Feb 3 (KST): 26 of 28 days, never January.
-    expect(feb).toMatchObject({ status: 'issued', proratedDays: 26, periodDays: 28, planId: 'b2b_29' });
-    expect((await listBrandInvoices(f.sql, { organizationId: f.orgId })).some((i) => i.period === '2027-01')).toBe(false);
-    expect(await loadPlanAssignment(f.sql, f.orgId)).toMatchObject({ endsOn: '2027-02-17' });
-  });
-
   it('C2: two runs on the same day that each issue a different invoice both notify; a rerun with nothing new does not', async () => {
     const org2 = await newOrg(f.sql, 'Notice Pair Fixture');
     for (const orgId of [f.orgId, org2]) {
@@ -631,7 +607,7 @@ describe('explicit allowance overrides stay untouched (product owner requirement
     });
     if (!started.ok || !started.applied) throw new Error('start failed');
     await check('pending', '2026-11-02T01:00:00Z');
-    await markBrandInvoicePaid({ sql: f.sql, now: at('2026-11-03T01:00:00Z') }, admin(), { invoiceId: started.firstInvoiceId, paidMethod: 'transfer' });
+    await markBrandInvoicePaid({ sql: f.sql, now: at('2026-11-03T01:00:00Z') }, admin(), { invoiceId: started.firstInvoiceId, paidMethod: 'transfer', paidAt: '2026-11-01' });
     await check('active', '2026-11-25T01:00:00Z');
     await check('active', '2026-12-01T01:00:00Z');
     await check('past_due', '2026-12-16T01:00:00Z');
