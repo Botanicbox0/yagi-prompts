@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
 import { EditorV2 } from '@/components/brand-studio/editor-v2/editor-v2';
+import { studioUploadErrorLine } from '@/components/brand-studio/copy';
 import { studioRouteContext } from '@/components/brand-studio/route-context';
 import { exportAutoDownload, exportPathOverride } from '@/lib/brand-studio/editor-v2/decode-plan';
 import { EDITOR_WORKSPACES, type EditorWorkspace } from '@/lib/brand-studio/editor-v2/model';
@@ -74,6 +75,17 @@ export default async function StudioEditorV2Page({
   );
   // The same rule as the current editor: the studio team looking in and viewers only watch.
   const canEdit = !access.staff && (choice.role === 'owner' || choice.role === 'editor');
+  // "에셋에 저장" and "검수 · 공유" on the finished export speak the current editor's words, taken from its
+  // dictionary here (none is copied into the new editor's), and the library's sentence for a file over its limit.
+  const { actions, status } = dict.studioCompose;
+  const keep = {
+    copy: {
+      actions: { saveToAssets: actions.saveToAssets, savingToAssets: actions.savingToAssets, savedToAssets: actions.savedToAssets, shareReview: actions.shareReview },
+      status: { saveQuotaExceeded: status.saveQuotaExceeded, saveFailed: status.saveFailed, reviewOpened: status.reviewOpened, reviewNeedsSave: status.reviewNeedsSave },
+      fileTooLarge: studioUploadErrorLine(dict.brandStudio, 'file_too_large'),
+    },
+    locale: ctx.locale,
+  };
 
   return (
     <EditorV2
@@ -93,6 +105,7 @@ export default async function StudioEditorV2Page({
         sampleBase: sampleFilm ? scopedHref('/brand/studio/editor?sample=1', choice) : null,
         gradeNames: { presets: dict.studioCompose.colorGrade.presets, reference: dict.studioCompose.colorGrade.activeRef },
       }}
+      keep={keep}
     />
   );
 }

@@ -84,6 +84,22 @@ let job: ExportJob = IDLE;
 let controller: AbortController | null = null;
 let openSheets = 0;
 const listeners = new Set<() => void>();
+/**
+ * The finished file of the done job, for "에셋에 저장" and "검수 · 공유" (export-keep.tsx). The same Blob the job's
+ * download address already holds alive (`URL.createObjectURL` keeps it until revoked), so it costs no memory of its
+ * own, and it is let go at the same moment as that address: when the next export starts.
+ */
+let finished: { job: ExportJob; file: ExportedFile } | null = null;
+
+/** The finished MP4 and what the export measured it as. */
+export interface ExportedFile {
+  blob: Blob;
+  mime: 'video/mp4';
+  filename: string;
+  width: number;
+  height: number;
+  durationSec: number;
+}
 
 function set(next: ExportJob) {
   job = next;
@@ -120,9 +136,18 @@ export function downloadFile(url: string, filename: string): void {
 }
 
 function release(previous: ExportJob) {
+  if (finished?.job === previous) finished = null;
   if (previous.status !== 'done') return;
   URL.revokeObjectURL(previous.url);
   if (previous.captionFile) URL.revokeObjectURL(previous.captionFile.url);
+}
+
+/**
+ * The finished file of `of` while it is the last export and its file is still held; `null` for any other job and
+ * for a file the next export released (closing the sheet keeps it: the job lives outside the sheet).
+ */
+export function exportedFile(of: ExportJob): ExportedFile | null {
+  return of.status === 'done' && of === job && finished?.job === of ? finished.file : null;
 }
 
 export function startExport(request: ExportRequest): void {
@@ -195,7 +220,7 @@ export function startExport(request: ExportRequest): void {
       const captionFile = request.captionText
         ? { url: URL.createObjectURL(new Blob([request.captionText], { type: 'application/x-subrip' })), filename: result.filename.replace(/\.mp4$/, '.srt') }
         : null;
-      set({
+      const done: ExportJob = {
         status: 'done',
         url,
         filename: result.filename,
@@ -207,7 +232,9 @@ export function startExport(request: ExportRequest): void {
         warnings: result.warnings,
         paths: result.paths,
         restarts: result.restarts,
-      });
+      };
+      finished = { job: done, file: { blob: result.blob, mime: result.mime, filename: result.filename, width: result.width, height: result.height, durationSec: result.durationSec } };
+      set(done);
       if (request.download !== false) downloadFile(url, result.filename);
       if (openSheets === 0) request.notify('done');
     },

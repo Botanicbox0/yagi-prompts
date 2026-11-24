@@ -10,6 +10,7 @@ import { filmContents } from '@/lib/brand-studio/editor-v2/film-contents';
 import type { StoredFilmView } from '@/lib/brand-studio/editor-v2/stored';
 import { browserCanExport, plannedPath, type SourcePath } from './export-film';
 import { cancelExport, exportJobSnapshot, idleExportJob, startExport, subscribeExportJob, watchExportJob, type ExportJob } from './export-job';
+import { ExportKeep, type ExportKeepCopy, type KeepOptions } from './export-keep';
 import { FilmContentsList } from './film-contents-list';
 import { EditorIcon } from './icons';
 import type { EditorApi } from './use-editor';
@@ -32,11 +33,28 @@ import styles from './editor-v2.module.css';
  * `exportPath` is the developer's override for the proof (`?exportPath=seek|decoder`, read by the page), and
  * `autoDownload` `false` (`?exportDownload=off`) keeps the finished file from downloading by itself; the
  * sheet shows nothing of either.
+ *
+ * `keep` (the current editor's words for "에셋에 저장" and "검수 · 공유", and the film's name) gives the done state
+ * those two actions (export-keep.tsx), on the organization's own film and for people who may change it only.
  */
-export function ExportSheet({ api, exportPath = null, autoDownload = true }: { api: EditorApi; exportPath?: ExportPathOverride; autoDownload?: boolean }) {
+export function ExportSheet({
+  api,
+  exportPath = null,
+  autoDownload = true,
+  keep = null,
+}: {
+  api: EditorApi;
+  exportPath?: ExportPathOverride;
+  autoDownload?: boolean;
+  keep?: { copy: ExportKeepCopy; title: string } | null;
+}) {
   const { copy, doc, sequence } = api;
   const e = copy.export;
   const job = useSyncExternalStore(subscribeExportJob, exportJobSnapshot, idleExportJob);
+  const keepOptions: KeepOptions | null =
+    keep && api.real && !api.readOnly && api.organizationId
+      ? { organizationId: api.organizationId, canSave: true, title: keep.title, copy: keep.copy, onSaved: api.noteSavedAsset }
+      : null;
   const [supported, setSupported] = useState(true);
   const [view, setView] = useState<StoredFilmView | null>(null);
   /** The path each uneven footage will take: through the decoder it follows its own timestamps (spec F, F5). */
@@ -156,7 +174,7 @@ export function ExportSheet({ api, exportPath = null, autoDownload = true }: { a
           </ul>
         </section>
       )}
-      <ExportStatus job={job} copy={e} />
+      <ExportStatus job={job} copy={e} keep={keepOptions} />
       {running ? (
         <button type="button" className={styles.fixBtn} onClick={cancelExport} data-editor-export-cancel>
           {e.cancel}
@@ -243,7 +261,7 @@ function pathSummary(paths: readonly SourcePath[]): 'decoder' | 'seek' | 'mixed'
   return 'mixed';
 }
 
-export function ExportStatus({ job, copy: e }: { job: ExportJob; copy: ExportCopy }) {
+export function ExportStatus({ job, copy: e, keep = null }: { job: ExportJob; copy: ExportCopy; keep?: KeepOptions | null }) {
   if (job.status === 'running') {
     const { phase, done, total } = job.progress;
     const share = total > 0 ? done / total : 0;
@@ -316,6 +334,7 @@ export function ExportStatus({ job, copy: e }: { job: ExportJob; copy: ExportCop
             </a>
           )}
         </p>
+        {keep && <ExportKeep job={job} options={keep} />}
       </div>
     );
   }

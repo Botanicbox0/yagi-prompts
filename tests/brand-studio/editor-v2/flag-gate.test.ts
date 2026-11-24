@@ -93,7 +93,7 @@ interface RealProps {
   sources: Array<{ key: string; kind: string; srcUrl: string; thumbUrl: string | null; label: string }>;
   sampleBase: string | null;
 }
-type Element = ReactElement<{ copy: unknown; currentEditorHref: string; initialWorkspace: string; real: RealProps | null }>;
+type Element = ReactElement<{ copy: unknown; currentEditorHref: string; initialWorkspace: string; real: RealProps | null; keep?: { copy: Record<string, unknown>; locale: string } | null }>;
 
 describe('/brand/studio/editor page gate', () => {
   const dict = getDictionary('ko');
@@ -176,6 +176,8 @@ describe('/brand/studio/editor page gate', () => {
         const element = (await Page({ searchParams: Promise.resolve(query) })) as Element;
         expect((element.type as { name?: string }).name, JSON.stringify(query)).toBe('EditorV2Stub');
         expect(element.props.real, `${list} ${JSON.stringify(query)}`).toBeNull();
+        // The sample film has nothing to save or share.
+        expect(element.props.keep ?? null).toBeNull();
         expect(element.props.currentEditorHref).toBe(`/brand/studio/compose?classic=1&organizationId=${ORG}`);
       }
     }
@@ -248,6 +250,14 @@ describe('/brand/studio/editor page gate', () => {
       [`o:${OUTPUT}`, 'output', `/api/brand-studio/compose?organizationId=${ORG}&source=output&id=${OUTPUT}`, '/media/o.jpg', 'A slow walk through the morning market'.slice(0, 36)],
       [`a:${ASSET}`, 'asset', `/api/brand-studio/compose?organizationId=${ORG}&source=asset&id=${ASSET}`, '/media/a.jpg', 'runway.mp4'],
     ]);
+    // "에셋에 저장" and "검수 · 공유" on the finished export: the current editor's own words and the library's sentence
+    // for a file over its limit, from their dictionaries (nothing copied into the new editor's).
+    const { actions, status } = dict.studioCompose;
+    expect(element.props.keep?.copy).toEqual({
+      actions: { saveToAssets: actions.saveToAssets, savingToAssets: actions.savingToAssets, savedToAssets: actions.savedToAssets, shareReview: actions.shareReview },
+      status: { saveQuotaExceeded: status.saveQuotaExceeded, saveFailed: status.saveFailed, reviewOpened: status.reviewOpened, reviewNeedsSave: status.reviewNeedsSave },
+      fileTooLarge: dict.brandStudio.errors.file_too_large,
+    });
   });
 
   it('lets owners and editors change the film; viewers and the studio team only look', async () => {
@@ -321,16 +331,31 @@ describe('where the editor keeps anything', () => {
    * read the film's own media: the export to decode its sound; footage-facts a clip's timing boxes with
    * Range requests (spec E addendum, C1; pinned in footage-facts.test.ts). The export record asks the
    * compose route for the current editor's 0-credit export record, through the current editor's own
-   * request helper and nothing else (pinned in export-record.test.tsx).
+   * request helper and nothing else (pinned in export-record.test.tsx). "에셋에 저장" and "검수 · 공유" on the
+   * finished export upload it through the library's own upload and open the review share window (which asks the
+   * share bridge), through the current editor's own helpers and nothing else (pinned in export-keep.test.tsx).
    */
   const NETWORK_FILES: Record<string, string[]> = {
     'export-film.ts': ['fetch('],
     'footage-facts.ts': ['fetch('],
     'export-record.ts': ['postComposeOperation', 'compose-request'],
+    'export-keep.tsx': ['createStudioApi', 'export-asset', 'share-review-dialog'],
   };
-  const NETWORK = ['fetch(', 'XMLHttpRequest', 'sendBeacon', 'WebSocket', 'EventSource', 'postComposeOperation', 'compose-request', '/api/'];
+  const NETWORK = [
+    'fetch(',
+    'XMLHttpRequest',
+    'sendBeacon',
+    'WebSocket',
+    'EventSource',
+    'postComposeOperation',
+    'compose-request',
+    '/api/',
+    'createStudioApi',
+    'export-asset',
+    'share-review-dialog',
+  ];
 
-  it('only the export, the footage reader and the export record make a request, each its own way', () => {
+  it('only the export, the footage reader, the export record and the export’s save and share make a request, each its own way', () => {
     for (const name of Object.keys(NETWORK_FILES)) expect(files).toContain(name);
     for (const name of files) {
       const allowed = NETWORK_FILES[name] ?? [];
@@ -342,6 +367,9 @@ describe('where the editor keeps anything', () => {
     }
     const record = readFileSync(join(dir, 'export-record.ts'), 'utf8');
     expect(record.match(/postComposeOperation\(/g), 'export-record.ts makes one request').toHaveLength(1);
+    // The save makes one library client, for its one upload.
+    const keep = readFileSync(join(dir, 'export-keep.tsx'), 'utf8');
+    expect(keep.match(/createStudioApi\(/g), 'export-keep.tsx makes one upload client').toHaveLength(1);
   });
 
   it('no component keeps session storage, a database or a cache', () => {
