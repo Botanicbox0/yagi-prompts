@@ -24,6 +24,8 @@ export interface TrayProps {
   medium: StudioMedium;
   copy: StudioCopy;
   dropActive: boolean;
+  /** Something the bar takes is being dragged over the page: the row says what it takes. */
+  dropReady?: boolean;
   uploading: readonly string[];
   /** Opens the popover for this key first (tests and "설정 다시 쓰기"). */
   initialOpen?: string | null;
@@ -54,6 +56,7 @@ export function Tray({
   medium,
   copy,
   dropActive,
+  dropReady = false,
   uploading,
   initialOpen = null,
   mentionedKeys,
@@ -89,7 +92,7 @@ export function Tray({
   };
 
   return (
-    <div className="bs-tray" data-studio-tray data-empty={empty ? "" : undefined} data-drop-target={dropActive ? "" : undefined} aria-label={t.label} role="group">
+    <div className="bs-tray" data-studio-tray data-empty={empty ? "" : undefined} data-drop-target={dropActive ? "" : undefined} data-drop-ready={dropReady && !dropActive ? "" : undefined} aria-label={t.label} role="group">
       <ul className="bs-tray-list">
         {items.map((item, i) => {
           const label = labels[i] ?? "";
@@ -227,7 +230,11 @@ export function Tray({
             <StudioIcon name="plus" />
           </button>
         </li>
-        {empty && <li className="bs-tray-hint">{dropActive ? t.drop : t.hint}</li>}
+        {(empty || dropReady) && (
+          <li className="bs-tray-hint" data-tray-drop-hint={dropReady ? "" : undefined}>
+            {dropActive ? t.drop : medium === "video" ? t.hintVideo : t.hint}
+          </li>
+        )}
       </ul>
       <span id={`${base}-move`} className="bs-sr">
         {t.moveHint}

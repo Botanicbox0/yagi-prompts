@@ -14,27 +14,34 @@ import type { BillingPlanCatalogueItem } from "@/lib/brands/billing-ui";
 import type { BrandBillingCopy } from "@/messages/brand-billing";
 import type { ReviseSheet } from "@/lib/brand-studio/revision/sheet";
 import type { ApiResult } from "./api";
-import { credits, errorLine, fill, type StudioCopy, type StudioLocale } from "./copy";
+import { credits, errorLine, fill, studioUploadErrorLine, type StudioCopy, type StudioLocale } from "./copy";
 import { StudioAllowanceNotice } from "./studio-allowance-notice";
 import { StudioIcon } from "./icons";
-import type { TrayItem } from "./refs";
 import { createFrameGrabber, type FrameGrabber } from "./revise-mark-frame";
 import { MarkLayer } from "./revise-mark-layer";
 import { MARKS_MAX, chipText, circled, insertDigit, wireGeometry, type MarkGeometry, type MarkState } from "./revise-marks";
-import { createTalkFlow, initialTalkState, type TalkDeps, type TalkState } from "./revise-talk-flow";
+import { createTalkFlow, initialTalkState, talkFilesRefusal, type TalkDeps, type TalkState, type TalkUpload, type TalkUploadNote } from "./revise-talk-flow";
 import { browserTalkStore } from "./revise-talk-store";
+import { carriesFiles, usePageDrag } from "./use-page-drag";
 
 export interface TalkSupport {
   organizationId: string;
   talk: TalkDeps["talk"];
   create: TalkDeps["create"];
-  upload(files: File[]): Promise<TrayItem[]>;
+  /** Uploads for the conversation (revise-talk-flow.ts `uploadForTalk`): what came back, and the first reason one did not. */
+  upload(files: File[]): Promise<TalkUpload>;
   readMark?(input: { organizationId: string; outputId: string; frame: string } & ReturnType<typeof wireGeometry>): Promise<ApiResult<StudioReviseMarkRead>>;
   /** The editing studio with this clip ready (the way to shorten or cut, free there). */
   editStudioHref(outputId: string): string;
 }
 
 const REFS_MAX = STUDIO_LIMITS.referencesMax - 1;
+
+/** The line for an attachment that did not land: the studio's upload lines, or the conversation's limit. */
+export function uploadNoteLine(copy: StudioCopy, note: TalkUploadNote): string {
+  if (note.code === "attach_full") return fill(copy.revise.attachFull, { images: REFS_MAX, videos: STUDIO_REVISE_MATERIALS_MAX });
+  return studioUploadErrorLine(copy, note.code, note.reason);
+}
 
 /** The viewer's other actions behind one quiet control in the conversation's title row. */
 export interface TalkMore {
@@ -201,6 +208,41 @@ export function TalkView({
   const files = useRef<HTMLInputElement>(null);
   const thread = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState(false);
+  // A file dragged anywhere over the page: the box says it takes it. Dropped anywhere on the viewer (the clip
+  // included) it lands here, as in the older revise form, instead of the browser opening the file.
+  const fileDrag = usePageDrag(true, carriesFiles);
+  const boxForm = useRef<HTMLFormElement>(null);
+  const takeFiles = useRef(onFiles);
+  takeFiles.current = onFiles;
+  useEffect(() => {
+    const onViewer = (target: EventTarget | null) => {
+      const body = boxForm.current?.closest(".bs-viewer-body");
+      return Boolean(body) && target instanceof Node && Boolean(body?.contains(target)) && !boxForm.current?.contains(target);
+    };
+    const over = (event: globalThis.DragEvent) => {
+      if (!carriesFiles(event.dataTransfer?.types) || !onViewer(event.target)) return;
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+    };
+    const dropped = (event: globalThis.DragEvent) => {
+      // A drop something else on the viewer already took (the mark layer, a player) is not taken twice.
+      if (event.defaultPrevented || !event.dataTransfer?.files.length || !onViewer(event.target)) return;
+      event.preventDefault();
+      takeFiles.current(Array.from(event.dataTransfer.files));
+    };
+    // However the drag ends (dropped anywhere, cancelled), the box stops saying "drop here".
+    const ended = () => setDragging(false);
+    window.addEventListener("dragover", over);
+    window.addEventListener("drop", dropped);
+    window.addEventListener("drop", ended);
+    window.addEventListener("dragend", ended);
+    return () => {
+      window.removeEventListener("dragover", over);
+      window.removeEventListener("drop", dropped);
+      window.removeEventListener("drop", ended);
+      window.removeEventListener("dragend", ended);
+    };
+  }, []);
   const ownBox = useRef<HTMLTextAreaElement>(null);
   const box = composer ?? ownBox;
   // The thread is the one part that scrolls, and it keeps to the newest line.
@@ -224,7 +266,6 @@ export function TalkView({
   const price = state.canMake && state.estimateKrw > 0 ? credits(copy.credits.amount, creditsOf(state.estimateKrw), locale) : null;
   const saidKeys = new Set(state.thread.flatMap((i) => (i.from === "customer" ? i.marks : [])));
   const draftMarks = state.marks.filter((m) => !saidKeys.has(m.key));
-  const attachedCount = state.thread.reduce((n, i) => n + (i.from === "customer" ? i.references.length : 0), 0) + state.references.length;
   const placeholder = open !== null ? t.answerPlaceholder : state.thread.length ? t.placeholderMore : r.placeholder;
   const afterText = fill(r.after, { n: state.version });
   return (
@@ -375,6 +416,11 @@ export function TalkView({
           </p>
         ) : null;
       })()}
+      {state.uploadNote && (
+        <p className="bs-dock-message" role="alert" data-talk-upload-note>
+          {uploadNoteLine(copy, state.uploadNote)}
+        </p>
+      )}
       {state.thread.length === 0 && (
         // Nothing said yet: one quiet line on what to do, right above the same input the conversation keeps.
         <p className="bs-muted bs-talk-first" data-talk-first>
@@ -382,9 +428,11 @@ export function TalkView({
         </p>
       )}
       <form
+        ref={boxForm}
         className="bs-talk-box"
         data-talk-box
         data-dragging={dragging ? "" : undefined}
+        data-drop-ready={fileDrag && !dragging ? "" : undefined}
         onSubmit={(event) => {
           event.preventDefault();
           onSend();
@@ -404,6 +452,13 @@ export function TalkView({
           onFiles(Array.from(event.dataTransfer.files));
         }}
       >
+        {(fileDrag || dragging) && (
+          // While a file is dragged over the page: this is where it goes and what it takes (as the "+" does).
+          <p className="bs-revise-drop" data-talk-drop-hint>
+            <StudioIcon name="upload" />
+            <span>{dragging ? r.dropHere : r.dropHint}</span>
+          </p>
+        )}
         <label className="bs-sr" htmlFor={`${id}-box`}>
           {r.prompt}
         </label>
@@ -461,7 +516,7 @@ export function TalkView({
               data-size="sm"
               aria-label={r.addRefs}
               title={r.addRefs}
-              disabled={uploading || busy || attachedCount >= REFS_MAX + STUDIO_REVISE_MATERIALS_MAX}
+              disabled={talkFilesRefusal(state, uploading) !== null}
               onClick={() => files.current?.click()}
               data-talk-attach
             >
@@ -679,15 +734,16 @@ export function ReviseTalk({
         onMake={() => void flow.make()}
         onStartOver={() => flow.startOver()}
         onFiles={(picked) => {
+          // The "+" button's guards hold for a drop too: nothing is uploaded while busy or once the conversation is full.
+          const refused = talkFilesRefusal(flow.state, uploading);
+          if (refused === "attach_full") return flow.noteUpload({ code: "attach_full" });
+          if (refused) return;
           setUploading(true);
           void support
             .upload(picked)
-            .then((added) => {
-              const images = added.filter((a) => a.kind === "image");
-              const videos = added.filter((a) => a.kind === "video");
-              if (images.length) flow.setReferences([...flow.state.references, ...images].slice(0, REFS_MAX));
-              if (videos.length) flow.setMaterials([...flow.state.materials, ...videos].slice(0, STUDIO_REVISE_MATERIALS_MAX));
-            })
+            // Pictures and clips join; the first reason a file did not (wrong kind, too large, storage, network) is said.
+            .then((result) => flow.attachUploads(result))
+            .catch(() => flow.noteUpload({ code: "failed" }))
             .finally(() => setUploading(false));
         }}
         onRemoveAttachment={(key) => {

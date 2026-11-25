@@ -1275,6 +1275,17 @@
   opacity: 0.92;
 }
 
+/* A reference or a file is being dragged over the page / over the pill: it takes the drop. */
+.collapsedDockPill[data-drop-ready] {
+  outline: 1px dashed var(--ys-ink-muted);
+  outline-offset: 3px;
+}
+
+.collapsedDockPill[data-drop-target] {
+  outline: 1px solid var(--ys-ink);
+  outline-offset: 3px;
+}
+
 /* ----------------------------------------------------- Selection-Triggered Floating Action Bar & Bottom Stack */
 
 .videoBottomStack {

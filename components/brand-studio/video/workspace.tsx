@@ -54,6 +54,9 @@ import { HandoffDialog, handoffInput } from "../handoff-dialog";
 import { LibraryRail } from "../rail";
 import { useStudioLibrary } from "../rail/use-library";
 import {
+  REF_DRAG_TYPE,
+  acceptsDrag,
+  decodeRefDrag,
   trayItemFromAsset,
   trayItemFromOutput,
   trayLabels,
@@ -61,6 +64,7 @@ import {
   type RefSource,
   type TrayItem,
 } from "../refs";
+import { usePageDrag } from "../use-page-drag";
 import { ShareReviewDialog, useShareReviewEvent, type ShareReviewTarget } from "../share-review-dialog";
 import { STUDIO_JOB_STARTED } from "../seams";
 import { findOutput, listedJobs } from "../store";
@@ -1463,6 +1467,9 @@ export function VideoStudioWorkspace({
     : "video";
   const loading = studio.store.phase === "loading" && !state;
   const dockCollapsed = railHeight === "full";
+  // The folded prompt bar takes the same drops as the open one (same attach and upload path), and says so.
+  const pillDrag = usePageDrag(Boolean(dockOpen && dockCollapsed), acceptsDrag);
+  const [pillOver, setPillOver] = useState(false);
 
   return (
     <div
@@ -1628,8 +1635,26 @@ export function VideoStudioWorkspace({
                       window.setTimeout(focusPrompt, 0);
                     }}
                     data-video-expand-dock
+                    data-drop-ready={pillDrag && !pillOver ? "" : undefined}
+                    data-drop-target={pillDrag && pillOver ? "" : undefined}
+                    onDragOver={(event) => {
+                      if (!acceptsDrag(event.dataTransfer?.types)) return;
+                      event.preventDefault();
+                      event.dataTransfer.dropEffect = "copy";
+                      if (!pillOver) setPillOver(true);
+                    }}
+                    onDragLeave={() => setPillOver(false)}
+                    onDrop={(event) => {
+                      if (!acceptsDrag(event.dataTransfer?.types)) return;
+                      event.preventDefault();
+                      setPillOver(false);
+                      setRailHeight("compact");
+                      const source = decodeRefDrag(event.dataTransfer.getData(REF_DRAG_TYPE));
+                      if (source) attachSource(source);
+                      else if (event.dataTransfer.files.length) void uploadFiles(Array.from(event.dataTransfer.files), true);
+                    }}
                   >
-                    {wc.projects.expandDock}
+                    {pillDrag ? copy.tray.drop : wc.projects.expandDock}
                   </button>
                 </div>
               ) : (

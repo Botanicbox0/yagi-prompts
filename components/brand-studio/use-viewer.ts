@@ -18,6 +18,7 @@ import { planReuse, type ReusePlan } from "./reuse-model";
 import { groupSiblings } from "./group-model";
 import type { ReviseSupport } from "./revise-form";
 import type { TalkSupport } from "./revise-talk";
+import { uploadForTalk } from "./revise-talk-flow";
 import { STUDIO_OPEN_REVERSE, announce, type LayerEditorRegionPreset } from "./seams";
 import { collapseRevisions, reviseRerunInput } from "./revision-model";
 import { boardOutputs } from "./store";
@@ -277,15 +278,8 @@ export function useViewer(input: {
               organizationId,
               talk: (body) => studio.talkRevision(body),
               create: (body) => studio.createJob(body as StudioJobCreate),
-              upload: async (files: File[]) => {
-                const added: TrayItem[] = [];
-                for (const file of files) {
-                  if (!(file.type.startsWith("image/") || file.type.startsWith("video/")) || uploadProblem(file)) continue;
-                  const result = await studio.upload(file);
-                  if (!isFailure(result)) added.push(trayItemFromAsset(result.asset));
-                }
-                return added;
-              },
+              // The same checks, plus the first reason a file did not come back (said with the studio's upload lines).
+              upload: (files: File[]) => uploadForTalk(files, (file) => studio.upload(file)),
               readMark: (body) => studio.readMark(body),
               // The editing studio with this clip ready (as videoComposeClipHref in studio-app.tsx builds it).
               editStudioHref: (outputId: string) => `/brand/studio/compose?${new URLSearchParams({ organizationId, clip: `o:${outputId}` }).toString()}`,

@@ -4,7 +4,7 @@
  * Font names are proper names and live with the fonts (components/brand-studio/layers/model.ts).
  */
 export const studioLayersEn = {
-  title: "Decorate",
+  title: "Detail edit",
   regionModeTitle: "Edit area",
   close: "Close",
   undo: "Undo",
@@ -254,7 +254,7 @@ export const studioLayersEn = {
     failBlocked: "An image from another site can't be saved into the picture.",
     failTooBig: "The picture is too large to save.",
     failUpload: "Couldn't save it. Please try again in a moment.",
-    fileSuffix: "decorated",
+    fileSuffix: "detail-edit",
     fallbackName: "image",
   },
 
@@ -268,7 +268,7 @@ export const studioLayersEn = {
 };
 
 export const studioLayersKo: typeof studioLayersEn = {
-  title: "꾸미기",
+  title: "디테일 편집",
   regionModeTitle: "부분 수정",
   close: "닫기",
   undo: "실행 취소",
@@ -517,12 +517,12 @@ export const studioLayersKo: typeof studioLayersEn = {
     failBlocked: "다른 사이트의 이미지가 섞여 있어 저장할 수 없어요.",
     failTooBig: "그림이 너무 커서 저장하지 못했어요.",
     failUpload: "저장하지 못했어요. 잠시 뒤 다시 시도해 주세요.",
-    fileSuffix: "꾸미기",
+    fileSuffix: "디테일편집",
     fallbackName: "이미지",
   },
 
   confirm: {
-    title: "꾸미기를 닫을까요?",
+    title: "디테일 편집을 닫을까요?",
     body: "아직 저장하지 않았어요. 지금까지 한 편집은 이 기기에 남아 있어서 다시 열면 이어서 할 수 있어요.",
     keep: "계속 편집하기",
     close: "닫기",

@@ -3,6 +3,8 @@
  * resizing always land inside the picture and never smaller than the contract's 2% side.
  */
 import type { RegionBox } from "@/lib/brand-studio/contracts";
+// Pure (no sharp): the same window rule the server cuts by, so the preview cannot drift from what is sent.
+import { planRegionWindow } from "@/lib/brand-studio/region-edit/window";
 
 export const MIN_SIDE = 0.02;
 export interface Point {
@@ -62,4 +64,37 @@ export function nudgeBox(box: RegionBox, key: string, resize: boolean, step = 0.
 /** The keyboard start: a box in the middle of the picture. */
 export function centeredBox(): RegionBox {
   return { x: 0.3, y: 0.3, w: 0.4, h: 0.4 };
+}
+
+/** What a partial edit sends as image 1, for the preview beside the picture. */
+export interface RegionInputFrame {
+  /** The part of the picture sent, in fractions of the picture. */
+  frame: RegionBox;
+  /** Its true shape in pixels, width over height. */
+  ratio: number;
+  /** The customer's selection inside `frame`, in fractions of the frame; null when the frame is the selection. */
+  selection: RegionBox | null;
+}
+
+/**
+ * With the one region engine (`wide`, region edit v2) the server sends the window `planRegionWindow` cuts
+ * around the selection, never stretched (lib/brand-studio/region-edit/window.ts, the same pure function);
+ * otherwise the preview is the box itself. Without a known picture size the box is all there is to show.
+ */
+export function regionInputFrame(picture: { width: number | null; height: number | null }, box: RegionBox, wide: boolean): RegionInputFrame {
+  const W = picture.width ?? 0;
+  const H = picture.height ?? 0;
+  if (!(W > 0 && H > 0)) return { frame: box, ratio: Math.max(MIN_SIDE, box.w) / Math.max(MIN_SIDE, box.h), selection: null };
+  if (!wide) {
+    const w = Math.max(1, Math.round(Math.max(MIN_SIDE, box.w) * W));
+    const h = Math.max(1, Math.round(Math.max(MIN_SIDE, box.h) * H));
+    return { frame: box, ratio: w / h, selection: null };
+  }
+  const { roi, select } = planRegionWindow({ width: W, height: H }, box);
+  const s = select ?? roi;
+  return {
+    frame: { x: roi.left / W, y: roi.top / H, w: roi.width / W, h: roi.height / H },
+    ratio: roi.width / roi.height,
+    selection: { x: (s.left - roi.left) / roi.width, y: (s.top - roi.top) / roi.height, w: s.width / roi.width, h: s.height / roi.height },
+  };
 }

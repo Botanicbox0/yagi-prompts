@@ -70,6 +70,7 @@ import { StudioIcon } from "./icons";
 import { PromptHighlight, mentionAtCaret, resolvePromptMentions, type PromptMentionSegment } from "./prompt-highlight";
 import { RemixPanel } from "./remix-panel";
 import { REF_DRAG_TYPE, acceptsDrag, decodeRefDrag, type RefSource, type TrayItem } from "./refs";
+import { usePageDrag } from "./use-page-drag";
 import { Tray } from "./tray";
 import { filmLimitLine } from "./use-dock";
 import type { FilmState } from "./use-studio";
@@ -251,6 +252,8 @@ export function Dock(props: DockProps) {
   const resolvedVideoCopy = props.videoCopy ?? (locale === "ko" ? studioVideoKo : studioVideoEn);
 
   const [dropActive, setDropActive] = useState(false);
+  // Video studio: while a reference or a file is dragged anywhere over the page, the bar says it takes it.
+  const pageDrag = usePageDrag(mode === "video" && !collapsed, acceptsDrag);
   const [mention, setMention] = useState<{
     open: boolean;
     query: string;
@@ -460,6 +463,7 @@ export function Dock(props: DockProps) {
       data-studio-dock
       data-mode={mode}
       data-drop-target={dropActive ? "" : undefined}
+      data-drop-ready={pageDrag && !dropActive ? "" : undefined}
       aria-label={d.label}
       aria-busy={busy}
       onSubmit={(event) => {
@@ -482,6 +486,7 @@ export function Dock(props: DockProps) {
         medium={draft.medium}
         copy={copy}
         dropActive={dropActive}
+        dropReady={mode === "video" && (pageDrag || dropActive)}
         uploading={props.uploading}
         initialOpen={props.initialOpenRef ?? null}
         mentionedKeys={mentionedKeys}

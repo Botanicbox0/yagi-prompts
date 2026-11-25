@@ -205,7 +205,7 @@ describe('1. Left Rail Promotion (편집 스튜디오 + Clear Client Room Labels
   });
 });
 
-describe('2. Layer editor (꾸미기) 1-Click Direct Entry (studio-app.tsx + asset-hub.tsx)', () => {
+describe('2. Layer editor (디테일 편집) 1-Click Direct Entry (studio-app.tsx + asset-hub.tsx)', () => {
   it('provides blank canvas presets (4:5, 9:16, 16:9, 1:1), white PNG generator, and direct deep-link builders', () => {
     expect(BLANK_CANVAS_PRESETS.map((p) => `${p.id}:${p.width}x${p.height}`)).toEqual([
       '4:5:1080x1350',
@@ -223,7 +223,7 @@ describe('2. Layer editor (꾸미기) 1-Click Direct Entry (studio-app.tsx + ass
     expect(videoComposeClipHref(ORG, { outputId: sampleId })).toBe(`/brand/studio/compose?organizationId=${ORG}&clip=o%3A${sampleId}`);
   });
 
-  it('renders the 1-click 새로 꾸미기 header button and empty-state quick action in Image Studio (and hides on Video / read-only)', () => {
+  it('renders the 1-click 디테일 편집 시작하기 header button and empty-state quick action in Image Studio (and hides on Video / read-only)', () => {
     const emptyImageHtml = renderToStaticMarkup(
       createElement(StudioApp, {
         organizationId: ORG,
@@ -236,9 +236,9 @@ describe('2. Layer editor (꾸미기) 1-Click Direct Entry (studio-app.tsx + ass
       }),
     );
     expect(emptyImageHtml).toContain('data-studio-open-canvas');
-    // One editor, one name: the entrance on a blank picture says "새로 꾸미기", never "캔버스 편집".
+    // One editor, one name: the entrance on a blank picture says "디테일 편집 시작하기", never "캔버스 편집".
     expect(emptyImageHtml).toContain(ko.brandStudio.gallery.decorateBlank);
-    expect(ko.brandStudio.gallery.decorateBlank).toBe('새로 꾸미기');
+    expect(ko.brandStudio.gallery.decorateBlank).toBe('디테일 편집 시작하기');
     expect(emptyImageHtml).not.toContain('캔버스 편집');
     expect(emptyImageHtml).toContain('data-studio-empty-open-canvas');
 
@@ -269,7 +269,7 @@ describe('2. Layer editor (꾸미기) 1-Click Direct Entry (studio-app.tsx + ass
     expect(viewerHtml).not.toContain('data-studio-open-canvas');
   });
 
-  it('offers 꾸미기 on image tiles, 편집 스튜디오로 on video tiles, and 검수 · 공유 in Asset Hub', () => {
+  it('offers 디테일 편집 on image tiles, 편집 스튜디오로 on video tiles, and 검수 · 공유 in Asset Hub', () => {
     const imgAsset = fixtureAsset(1, { kind: 'image', name: 'Packshot.png' });
     const vidAsset = fixtureAsset(2, { kind: 'video', name: 'Teaser.mp4', seconds: 8 });
     const genImg = fixtureOutput(3, { kind: 'image' });
@@ -312,8 +312,8 @@ describe('2. Layer editor (꾸미기) 1-Click Direct Entry (studio-app.tsx + ass
       return [...(main ? [main] : []), ...more];
     };
     const decorate = (key: string) => actionsOf(key).find((a) => a.marker === 'data-asset-hub-open-canvas');
-    expect(decorate(`a:${imgAsset.id}`)).toMatchObject({ label: '꾸미기', href: `/brand/studio?organizationId=${ORG}&canvas=a%3A${imgAsset.id}` });
-    expect(decorate(`o:${genImg.id}`)).toMatchObject({ label: '꾸미기', href: `/brand/studio?organizationId=${ORG}&canvas=o%3A${genImg.id}` });
+    expect(decorate(`a:${imgAsset.id}`)).toMatchObject({ label: '디테일 편집', href: `/brand/studio?organizationId=${ORG}&canvas=a%3A${imgAsset.id}` });
+    expect(decorate(`o:${genImg.id}`)).toMatchObject({ label: '디테일 편집', href: `/brand/studio?organizationId=${ORG}&canvas=o%3A${genImg.id}` });
     expect(decorate(`a:${vidAsset.id}`)).toBeUndefined();
     expect(h.shareReview).toBe('검수 · 공유');
     for (const key of [`a:${imgAsset.id}`, `a:${vidAsset.id}`, `o:${genImg.id}`]) {

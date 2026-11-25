@@ -204,8 +204,8 @@ describe("rendering", () => {
 
 describe("file name", () => {
   it("is the picture's name plus the suffix, without its extension or unsafe characters", () => {
-    expect(exportFileName("봄 캠페인.png", "꾸미기")).toBe("봄 캠페인-꾸미기.png");
-    expect(exportFileName("a/b:c*?.jpg", "꾸미기", "image/jpeg")).toBe("a-b-c-꾸미기.jpg");
+    expect(exportFileName("봄 캠페인.png", "디테일편집")).toBe("봄 캠페인-디테일편집.png");
+    expect(exportFileName("a/b:c*?.jpg", "디테일 편집", "image/jpeg")).toBe("a-b-c-디테일 편집.jpg");
     expect(exportFileName(null, "design")).toBe("twings-design.png");
     expect(exportFileName("   ", "design", "image/webp")).toBe("twings-design.webp");
     expect(exportFileName("x".repeat(200), "design").length).toBeLessThanOrEqual(60 + "-design.png".length);

@@ -21,9 +21,9 @@ import {
   type RegionAssistantTaskId,
 } from "@/lib/brand-studio/enhancer/region-assistant";
 import { qualityOf, regionCredits, regionInstructionForForm, regionProblem, type RegionProblem } from "../dock-model";
-import { REGION_ROLES, cropStyle } from "../gallery/region-form";
+import { REGION_ROLES, cropStyle, selectionStyle } from "../gallery/region-form";
 import { REF_DRAG_TYPE, acceptsDrag, decodeRefDrag, startRefDrag, type RefSource, type TrayItem } from "../refs";
-import { centeredBox } from "../region-math";
+import { centeredBox, regionInputFrame } from "../region-math";
 import type { LayerEditorRegionPreset, LayerEditorRegionSupport } from "../seams";
 import { LayerIcon } from "./icons";
 import { fill, type LayersCopy } from "./panels";
@@ -347,12 +347,20 @@ export function RegionEditPanel(props: RegionEditPanelProps) {
       ) : (
         <>
           <figure className="bsl-region-preview" data-layers-region-preview>
-            <span
-              className="bsl-region-crop"
-              role="img"
-              aria-label={r.inputPreviewLabel}
-              style={cropStyle(box, baseSize, region.previewUrl)}
-            />
+            {/* Exactly what goes in as image 1, at its own shape, letterboxed in the stage; with the one
+                region engine that is the window around the selection, which is outlined inside it. */}
+            {(() => {
+              const input = regionInputFrame(baseSize, box, Boolean(region.fixedModel));
+              return (
+                <span className="bsl-region-stage">
+                  <span className="bsl-region-crop" role="img" aria-label={r.inputPreviewLabel} style={cropStyle(input.frame, baseSize, region.previewUrl)}>
+                    {input.selection && (
+                      <span className="bsl-region-select" data-layers-region-select aria-hidden="true" style={selectionStyle(input.selection)} />
+                    )}
+                  </span>
+                </span>
+              );
+            })()}
             <figcaption className="bsl-region-caption">
               <span className="bsl-num-badge bsl-num">1</span>
               <span>{region.fixedModel ? r.inputPreviewCaptionWide : r.inputPreviewCaption}</span>
