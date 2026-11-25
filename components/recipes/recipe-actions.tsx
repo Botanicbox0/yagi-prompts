@@ -17,6 +17,8 @@ export interface RecipeActionsProps {
   /** The same per-viewer call "만드는 법" makes: a signed-in viewer gets the full recipe there. */
   accessEndpoint: string;
   signinHref: string;
+  /** Present when the template's studio prompt is explicitly public (`text_visibility = 'public'`), so visitors copy without signing in. */
+  initialUnlocked?: PublicRecipe | null;
 }
 
 // Both quiet: the page's one blue button is the make card's (docs/design/IDENTITY.md §4, TASTE rule 1).
@@ -48,9 +50,10 @@ export function RecipeActionsView({ steps, labels: a, makeHref, shopOpen, signin
   </section>;
 }
 
-export function RecipeActions({ accessEndpoint, ...props }: RecipeActionsProps) {
-  const [unlocked, setUnlocked] = useState<PublicRecipe | null>(null);
+export function RecipeActions({ accessEndpoint, initialUnlocked = null, ...props }: RecipeActionsProps) {
+  const [unlocked, setUnlocked] = useState<PublicRecipe | null>(initialUnlocked);
   useEffect(() => {
+    if (initialUnlocked) return;
     let cancelled = false;
     fetch(accessEndpoint, { credentials: 'same-origin' })
       .then((res) => (res.ok ? res.json() : null))
@@ -59,6 +62,6 @@ export function RecipeActions({ accessEndpoint, ...props }: RecipeActionsProps) 
       })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [accessEndpoint]);
+  }, [accessEndpoint, initialUnlocked]);
   return <RecipeActionsView {...props} unlocked={unlocked} />;
 }

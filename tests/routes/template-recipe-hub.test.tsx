@@ -145,4 +145,31 @@ describe('a story-first template with a public recipe', () => {
       expect(html).not.toMatch(/Template (locks|styling):|Keep exactly as in the template|Styled by the template|sleek low bun/);
     }
   });
+
+  it('shows the full prompt, step note and outro without a login gate when a studio template is public', async () => {
+    const saved = { origin: film.origin, makerProfile: film.makerProfile, authorHandle: film.authorHandle, lock: film.lock };
+    try {
+      Object.assign(film, { origin: 'studio', makerProfile: false, authorHandle: null, lock: null });
+      state.recipe = {
+        presentation: 'story-first',
+        intro: 'OPEN_INTRO',
+        outro: 'OPEN_OUTRO_GUIDE',
+        steps: [{ n: 1, kind: 'video', engine: 'SEEDANCE 2.5', inputs: [{ kind: 'selfie' }], prompt: `[My photo] among goldfish. ${'Shot detail. '.repeat(30)}MEMBERS_ONLY_TAIL`, note: 'OPEN_STEP_NOTE' }],
+        files: null,
+      };
+      const html = await page('ko');
+      expect(html).not.toContain('data-recipe-gate');
+      expect(html).toContain('OPEN_INTRO');
+      expect(html).toContain('MEMBERS_ONLY_TAIL');
+      expect(html).toContain('OPEN_STEP_NOTE');
+      expect(html).toContain('OPEN_OUTRO_GUIDE');
+
+      state.recipe = { ...state.recipe, presentation: 'make-first' };
+      const makeFirstHtml = await page('ko');
+      expect(makeFirstHtml).not.toContain('data-recipe-signin');
+      expect(makeFirstHtml).toContain('data-recipe-unlocked="true"');
+    } finally {
+      Object.assign(film, saved);
+    }
+  });
 });
