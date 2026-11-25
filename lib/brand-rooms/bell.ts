@@ -2,14 +2,18 @@
  * The bell of 직접 만들기 (docs/BRAND-PROJECT-SPINE.md §5.1, §8.1 "알림 종", §8.4, §11-5; slice 3a): one unread number
  * for the bell and the rail's 알림함 row, and the bell's small list. Read only: nothing here marks, sends or queues.
  *
- * It is not a second count. It is built from the rooms summary the 알림함 already reads (`loadRoomSummary`,
- * ./messages.ts), for the same person in the same transaction, so the bell, the rail row and the 알림함 cannot
- * disagree:
+ * It is not a second count. It is built from the rooms summary the 알림함 page already reads (`loadRoomSummary`,
+ * ./messages.ts), for the same person in the same transaction, from exactly the items that page draws: its alert cards
+ * and its conversations with their unread badges.
  *  - a line per alert the summary carries (a storyboard or a draft waiting for the brand: `summary.alerts`), always
  *    counted, because it waits for a decision and no read mark exists for it;
  *  - a line per conversation the summary lists that has had any activity (`lastAt`), counted while it has unread
  *    messages for this person (`channels[].unread`, the existing per person × channel read rule).
- * The number is the count of counted lines over the whole set, before the list is cut to `ROOM_BELL_LIMITS.items`.
+ * The number (docs/BRAND-PROJECT-SPINE.md §8.4: unread conversations + drafts and storyboards to check) is the count of
+ * counted lines over everything the summary carries, before the list is cut to `ROOM_BELL_LIMITS.items`. The summary
+ * itself carries at most 20 alerts and `ROOM_LIMITS.channelsMax` conversations, exactly what the 알림함 page lists.
+ * It is NOT the badge the 야기 팀과 rail shows today: that badge is the summary's `unread`, the total of unread messages
+ * with no alerts, and it is still in the same answer (see the slice 3a contract and its open question).
  *
  * Mentions and files sent between members come with slice 4 (§8.4); nothing of them is here.
  *
@@ -174,10 +178,25 @@ export function roomBellOf(summary: Pick<RoomSummary, 'channels' | 'alerts'>, or
 
 /**
  * The bell for this seat from the summary just read in the same transaction, or null when the seat does not get it.
- * At most two statements beyond the gate, whatever the number of lines: the storyboards' covers and the drafts'
- * thumbnails of the alerts (both ≤ the summary's 20 alerts).
+ * A fixed number of statements beyond the summary, whatever the number of lines: the gate (the policy and plan rows
+ * `self_studio` reads), then the storyboards' covers and the drafts' thumbnails of the alerts (each one statement, for
+ * at most the summary's 20 alerts). All of it under one savepoint: if any of it fails, the answer is the plain summary
+ * (null here), never a failed summary, exactly as the summary treats its own alerts.
  */
 export async function roomBellFor(sql: SqlRunner, seat: RoomSeat, summary: Pick<RoomSummary, 'channels' | 'alerts'>, request: RoomBellRequest): Promise<RoomBell | null> {
+  if (seat.role === 'guest') return null;
+  await sql.query('savepoint brand_room_bell');
+  try {
+    const bell = await bellFrom(sql, seat, summary, request);
+    await sql.query('release savepoint brand_room_bell');
+    return bell;
+  } catch {
+    await sql.query('rollback to savepoint brand_room_bell');
+    return null;
+  }
+}
+
+async function bellFrom(sql: SqlRunner, seat: RoomSeat, summary: Pick<RoomSummary, 'channels' | 'alerts'>, request: RoomBellRequest): Promise<RoomBell | null> {
   if (!(await bellOpenFor(sql, seat, request.env ?? process.env))) return null;
   const alerts = summary.alerts ?? [];
   const ids = (kind: RoomAlertItem['kind']) => alerts.filter((alert) => alert.kind === kind).map((alert) => alert.targetId);

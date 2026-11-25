@@ -20,9 +20,10 @@ import { requestId, seedImageAsset, studioDeps, studioFixture, viewerOf, type St
  * docs/BRAND-PROJECT-SPINE.md §5.1, §8.1, §8.4, §11-5, slice 3a (server half): the 직접 만들기 bell. Pinned:
  *  - opt-in only: the rooms summary answers every existing caller exactly as before (same JSON, same statements);
  *    asked for the bell, a project guest or an organization without 직접 만들기 open gets that same plain summary;
- *  - the number is the 알림함's own (alerts + conversations with unread messages), equal to the counted lines of the
- *    list when it is not cut; the list is newest first, cut at its named limit, and every line opens where the
- *    알림함 opens it, with the storyboard list's cover and the deliverable list's thumbnail;
+ *  - the number counts the 알림함 page's items (alert cards + conversations with an unread badge), equal to the counted
+ *    lines of the list when it is not cut (it is not the 야기 팀과 rail's message badge, which stays in the answer); the
+ *    list is newest first, cut at its named limit, and every line opens where the 알림함 opens it, with the storyboard
+ *    list's cover and the deliverable list's thumbnail; a failure in the bell's own reads gives the plain summary;
  *  - refusals are the summary's (rooms closed, sandboxed, generation-closed, outsiders, staff who are not members,
  *    made-up and other organizations); a hidden or own project leaves no line; no name or email of anyone;
  *  - marking read is the existing per channel mark: it clears that conversation's line, never an alert.
@@ -238,17 +239,22 @@ describe('opt-in only: every existing caller of the summary gets exactly what it
 /* --------------------------------------------------------- number and list */
 
 describe('the bell: one number, one list', () => {
-  it('the number is the 알림함’s (alerts + conversations with unread messages) and equals the counted lines; newest first; each line opens where the 알림함 opens it', async () => {
+  it('the number counts the 알림함 page’s items (alert cards + conversations with an unread badge) and equals the counted lines; newest first; each line opens where the 알림함 opens it', async () => {
     const w = await world();
     const summary = (await withBell()) as RoomSummaryWithBell;
     if (!summary.ok || !summary.bell) throw new Error(JSON.stringify(summary));
     const bell = summary.bell;
-    // What the 알림함 draws from the same summary: the alerts, and a badge per conversation with unread messages.
+    // What the 알림함 page (components/brand-rooms/chat/inbox.tsx) draws from the same summary: an alert card per alert
+    // ("확인할 것"), and a conversation per channel with an unread badge.
     const inbox = (summary.alerts ?? []).length + summary.channels.filter((c) => c.unread > 0).length;
     expect(bell.unread).toBe(3);
     expect(bell.unread).toBe(inbox);
     expect(bell.unread).toBe(bell.items.filter((line) => line.unread).length);
     expect(bell.more).toBe(false);
+    // Not the 야기 팀과 rail's badge: that one is the summary's `unread` (messages, no alerts), still in the same answer
+    // and unchanged. The two differ here on purpose (2 messages vs 3 lines); which one 직접 만들기 shows is an open question.
+    expect(summary.unread).toBe(2);
+    expect(summary.unread).toBe(bell.items.reduce((n, line) => n + line.unreadCount, 0));
     // The rest of the answer is the plain summary's.
     const { bell: _bell, ...rest } = summary;
     expect(JSON.stringify(rest)).toBe(JSON.stringify(await plain()));
@@ -309,6 +315,15 @@ describe('the bell: one number, one list', () => {
     expect(bell.unread).toBe(ROOM_BELL_LIMITS.items + 4);
     expect(bell.unread).toBe(summary.channels.filter((c) => c.unread > 0).length + (summary.alerts ?? []).length);
     expect(bell.items[0]!.projectTitle).toBe(`Project ${ROOM_BELL_LIMITS.items + 3}`);
+  });
+
+  it('a failure in the bell’s own reads gives the plain summary, never a failed one', async () => {
+    await world();
+    await f.sql.query('alter table brand_storyboard_frames rename to brand_storyboard_frames_gone');
+    const asked = await withBell();
+    expect(asked.ok).toBe(true);
+    expect(JSON.stringify(asked)).toBe(JSON.stringify(await plain()));
+    expect((await plain()).ok && ((await plain()) as RoomSummaryWithBell).alerts?.length).toBe(2);
   });
 
   it('marking a conversation read (the existing per channel mark) clears its line; an alert has no read mark and stays', async () => {

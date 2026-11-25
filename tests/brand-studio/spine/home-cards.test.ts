@@ -485,13 +485,18 @@ describe('project.cards: who may read (exactly project.list’s answers)', () =>
     }
   });
 
-  it('the server page helper answers what the POST answers', async () => {
+  it('the server page helper answers what the POST answers, the route’s studio flag included', async () => {
     open();
+    vi.stubEnv('BRAND_STUDIO_V2', 'on');
     await selfProject('Helper');
-    for (const viewer of [owner(), viewerOf(f.ids.guest), viewerOf(f.ids.outsider), staff()]) {
+    for (const viewer of [owner(), viewerOf(f.ids.viewer), viewerOf(f.ids.guest), viewerOf(f.ids.outsider), staff()]) {
       expect(await loadProjectCards(deps, viewer, f.orgId)).toEqual(await op(viewer, 'project.cards', { organizationId: f.orgId }));
     }
+    // app/api/brand-studio/route.ts answers this body (404) whatever the operation while studio v2 is off.
+    vi.stubEnv('BRAND_STUDIO_V2', 'off');
+    expect(await loadProjectCards(deps, owner(), f.orgId)).toEqual({ ok: false, code: 'studio_closed' });
     vi.unstubAllEnvs();
+    vi.stubEnv('BRAND_STUDIO_V2', 'on');
     expect(await loadProjectCards(deps, owner(), f.orgId)).toEqual({ ok: false, code: 'invalid' });
   });
 });
@@ -550,6 +555,9 @@ describe('the reads that now share their rules still send origin/main’s statem
     expect(recorded.texts.filter((text) => text.startsWith('select u.type'))).toEqual([ORIGIN_FILES_UNFILED]);
   });
 
+  // The stage line itself, on a seeded room, keeps origin/main's expected values in origin/main's own test
+  // (tests/brand-rooms/room/overview.test.ts "fills the stage line…", unchanged and green); the cards test above shows the
+  // batched read gives exactly what `loadRoomOverview` gives for the same rooms.
   it('the room overview: the same statements, and the same stage line as the shared rule', async () => {
     const recorded = recording();
     const room = await loadRoomOverview(recorded.sql, { organizationId: f.orgId, project: { id: f.projectId, status: 'active', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), title: 'x' }, userId: f.ids.owner });
@@ -569,16 +577,27 @@ describe('who can reach the new pieces', () => {
     });
   const sources = () => [...under('lib'), ...under('app'), ...under('components')];
   const importing = (pattern: RegExp) => sources().filter((file) => pattern.test(readFileSync(path.join(ROOT, file), 'utf8'))).sort();
+  const isComment = (line: string) => /^\s*(\/\/|\*|\/\*)/.test(line);
+  /** Files that name `name` on a line of code (not a comment line). */
+  const usingInCode = (name: string) =>
+    sources()
+      .filter((file) =>
+        readFileSync(path.join(ROOT, file), 'utf8')
+          .split('\n')
+          .some((line) => !isComment(line) && new RegExp(`\\b${name}\\b`).test(line)),
+      )
+      .sort();
 
   it('the cards are reached through the studio service only, and nothing on the team or admin side calls them', () => {
     expect(importing(/from ['"][^'"]*brand-project-files['"]/)).toEqual(['lib/brand-studio/service.ts']);
     expect(importing(/\bloadBrandProjectCards\b/)).toEqual(['components/brand-studio/api.ts', 'lib/brand-studio/brand-project-files.ts']);
     // The server page helper: only brand pages may use it (none yet; the screen half adds the home).
     expect(importing(/\bloadProjectCards\b/).filter((file) => !file.startsWith('app/(brand)/'))).toEqual(['lib/brand-studio/service.ts']);
-    // The batched stage read is the spine's; the shared rule stays in the room overview (nobody imports it).
-    const importsOf = (name: string) => new RegExp(`import\\s*(type\\s*)?\\{[^}]*\\b${name}\\b[^}]*\\}\\s*from`);
-    expect(importing(importsOf('loadRoomStages'))).toEqual(['lib/brand-studio/brand-project-files.ts']);
-    expect(importing(importsOf('roomStageOf'))).toEqual([]);
+    // The batched stage read is the spine's; the shared rule stays in the room overview. Any use counts (a named or a
+    // namespace import alike), comments aside.
+    expect(usingInCode('loadRoomStages')).toEqual(['lib/brand-rooms/overview.ts', 'lib/brand-studio/brand-project-files.ts']);
+    expect(usingInCode('roomStageOf')).toEqual(['lib/brand-rooms/overview.ts']);
+    expect(usingInCode('loadProjectCards').filter((file) => !file.startsWith('app/(brand)/'))).toEqual(['lib/brand-studio/service.ts']);
     const admin = sources().filter((file) => /^(app\/\(admin\)|lib\/admin|app\/api\/admin)/.test(file));
     for (const file of admin) expect(readFileSync(path.join(ROOT, file), 'utf8'), file).not.toMatch(/project\.cards|loadProjectCards|loadRoomStages/);
   });
