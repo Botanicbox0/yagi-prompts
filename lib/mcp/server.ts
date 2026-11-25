@@ -6,11 +6,10 @@ import type { RenderStore } from '@/lib/renders/store';
 import type { StorageDriver } from '@/lib/storage';
 import { selfPublishOpen } from '@/lib/recipes/self-publish';
 import { PlatformError } from '@/lib/creator-platform/contract';
-import { platformAccess } from '@/lib/creator-platform/runtime';
 import { IMAGE_ASPECTS, VIDEO_ASPECTS } from '@/lib/images/engines';
 import { videoEngineSpec } from '@/lib/video/models';
 import { revalidateMakerProfile } from '@/lib/cache';
-import { creativeGate } from '@/lib/makers/access';
+import { creativeGate, creativeProgramOpen } from '@/lib/makers/access';
 import { decodeBase64Media, fetchPublicMedia, MediaFetchError } from '@/lib/makers/fetch-media';
 import { makerHref, makerWorkSrc } from '@/lib/makers/links';
 import { MakerProfileError, loadMakerSettings, patchMakerProfile } from '@/lib/makers/profile';
@@ -139,7 +138,8 @@ async function refresh(deps: McpDeps) {
 }
 
 async function callTool(deps: McpDeps, name: string, args: Record<string, unknown>): Promise<unknown> {
-  const access = { creators: (await platformAccess(deps.sql)).creators };
+  // The same open rule the gate just applied (lib/makers/access.ts); the domain re-checks the active row.
+  const access = { creators: await creativeProgramOpen(deps.sql) };
   const viewer = viewerOf(deps.userId);
   const store = deps.store;
   switch (name) {
