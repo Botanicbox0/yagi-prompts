@@ -13,17 +13,38 @@ import { creativeGate, creativeProgramOpen } from '@/lib/makers/access';
 import { decodeBase64Media, fetchPublicMedia, MediaFetchError } from '@/lib/makers/fetch-media';
 import { makerHref, makerWorkSrc } from '@/lib/makers/links';
 import { MakerProfileError, loadMakerSettings, patchMakerProfile } from '@/lib/makers/profile';
-import { WorkError, deleteMakerWork, listMakerWorks, storeMakerWork } from '@/lib/makers/works';
+import { MAKER_TOKENS_MAX } from '@/lib/makers/tokens';
+import { WorkError, MAKER_WORKS_MAX, deleteMakerWork, listMakerWorks, storeMakerWork } from '@/lib/makers/works';
 import { makerStats } from '@/lib/makers/stats';
-import { MAKER_FILE_MAX_BYTES } from '@/lib/recipes/assets';
+import { MAKER_AV_FILE_MAX_BYTES, MAKER_FILE_MAX_BYTES, MAKER_FORMAT_MAX_BYTES, MAKER_REFERENCE_FILES } from '@/lib/recipes/assets';
 import { loadMakerDraft, makerAction, MAKER_TEST_RENDERS, RecipeRejected, uploadMakerFile } from '@/lib/recipes/maker';
 import { ROYALTY_DEFAULT_KRW, ROYALTY_MAX_KRW, ROYALTY_MIN_KRW } from '@/lib/recipes/pricing';
 import { INTRO_MAX, MAKER_ENGINE_IDS, MIN_STEP_PROMPT_CHARS, NOTE_MAX, OUTRO_MAX, makerEnginesFor, parseRecipe } from '@/lib/recipes/schema';
+import { GUIDE_META_MAX, GUIDE_NOTE_MAX, GUIDE_PROMPT_MAX, GUIDE_PROMPT_MIN, GUIDE_TITLE_MAX, MAX_GUIDE_CLIPS } from '@/components/recipes/guide-editor';
 import { isVideoEngine } from '@/lib/images/engines';
 import { DEFAULT_PROMPT_CHARS, SEEDANCE_25_PROMPT_CHARS, formatPromptChars, promptCharLimit } from '@/lib/engines/prompt-limits';
+import { guideTokenWarnings } from './guide-warnings';
 
 /** The step prompt rule as the guide and the tools state it — built from the constants so it cannot drift again. */
 export const MCP_PROMPT_LIMIT_TEXT = `${MIN_STEP_PROMPT_CHARS}–${formatPromptChars(DEFAULT_PROMPT_CHARS)} characters a step; a Seedance 2.5 video step takes up to ${formatPromptChars(SEEDANCE_25_PROMPT_CHARS)}. A step is one clip, so the limit is per clip, never a total: two clips have ${formatPromptChars(SEEDANCE_25_PROMPT_CHARS)} each.`;
+
+const BYTES_PER_MB = 1024 * 1024;
+const bytesToMb = (bytes: number) => Math.round((bytes / BYTES_PER_MB) * 10) / 10;
+
+export const MCP_IMAGE_FILE_MAX_MB = bytesToMb(MAKER_FILE_MAX_BYTES);
+export const MCP_AV_FILE_MAX_MB = bytesToMb(MAKER_AV_FILE_MAX_BYTES);
+export const MCP_FORMAT_MAX_MB = bytesToMb(MAKER_FORMAT_MAX_BYTES);
+
+export function formatMcpFileLimits(limits = {
+  references: MAKER_REFERENCE_FILES,
+  imageBytes: MAKER_FILE_MAX_BYTES,
+  avBytes: MAKER_AV_FILE_MAX_BYTES,
+  formatBytes: MAKER_FORMAT_MAX_BYTES,
+}): string {
+  return `${limits.references} references + 1 example; images up to ${bytesToMb(limits.imageBytes)} MB, video/audio up to ${bytesToMb(limits.avBytes)} MB (by URL), ${bytesToMb(limits.formatBytes)} MB total a template`;
+}
+
+export const MCP_FILE_LIMIT_TEXT = formatMcpFileLimits();
 
 /**
  * docs/PLATFORM-2.0.md §20.5 — the TWINGS MCP server: an AI creative's own agent (Claude, Codex,
@@ -48,18 +69,34 @@ const tool = (name: string, title: string, description: string, properties: Reco
   inputSchema: { type: 'object', properties, required, additionalProperties: false },
   annotations: { readOnlyHint: readOnly, destructiveHint: false, openWorldHint: false },
 });
-const mediaSource = {
-  url: { type: 'string', description: 'A public https URL of the image or video (e.g. a Higgsfield result). Max 4 MB.' },
-  data_base64: { type: 'string', description: 'The file as base64 (a data: URL is fine). Max ~3 MB because of the request size limit.' },
+const uploadMediaSource = {
+  url: {
+    type: 'string',
+    description: `A public https URL of the image, video or audio file. Images up to ${MCP_IMAGE_FILE_MAX_MB} MB; video/audio up to ${MCP_AV_FILE_MAX_MB} MB.`,
+  },
+  data_base64: {
+    type: 'string',
+    description: `The file as base64 (a data: URL is fine). Decoded size up to ${MCP_IMAGE_FILE_MAX_MB} MB (effectively ~3 MB over the JSON request body; use url for larger video/audio).`,
+  },
+};
+const workMediaSource = {
+  url: {
+    type: 'string',
+    description: `A public https URL of the image or video. Up to ${MCP_IMAGE_FILE_MAX_MB} MB.`,
+  },
+  data_base64: {
+    type: 'string',
+    description: `The file as base64 (a data: URL is fine). Decoded size up to ${MCP_IMAGE_FILE_MAX_MB} MB (effectively ~3 MB over the JSON request body).`,
+  },
 };
 
 export const MCP_TOOLS = [
-  tool('whoami', 'Who am I', 'Your TWINGS creative account: handle, public profile URL, whether the program is open, and your limits.', {}, [], true),
-  tool('get_recipe_guide', 'Recipe guide', 'How a TWINGS template recipe (version 2) is written: slots, steps, engines, aspects, durations, notes, disclosure and a complete example. Read this before save_template.', {}, [], true),
-  tool('validate_recipe', 'Validate a recipe', 'Checks a recipe JSON against every rule without saving it. Returns ok or the list of issues to fix.', { recipe: { type: 'object' } }, ['recipe'], true),
+  tool('whoami', 'Who am I', 'Your TWINGS creative account: handle, public profile URL, whether the program and self-publishing are open, and your limits.', {}, [], true),
+  tool('get_recipe_guide', 'Recipe guide', 'How a TWINGS template recipe (version 2) is written: slots, steps, display-only clip cards (guide[]), engines, aspects, durations, notes, file limits, disclosure and complete examples (including multi-clip). Read this before save_template.', {}, [], true),
+  tool('validate_recipe', 'Validate a recipe', 'Checks a recipe JSON against every rule without saving it. Returns ok or the list of issues to fix, plus non-blocking warnings if guide[] clip prompts use unknown {{name}} tokens.', { recipe: { type: 'object' } }, ['recipe'], true),
   tool('list_templates', 'My templates', 'Your templates (drafts, in review, published, declined) with status, review note and how many members opened each published recipe.', {}, [], true),
-  tool('get_template', 'One template', 'One of your templates with its recipe JSON, uploaded files (their ast_ ids) and test renders.', { id: str }, ['id'], true),
-  tool('save_template', 'Save a draft', 'Creates or updates a DRAFT. Omit id to create one. Returns the id and, if the recipe is not complete yet, the issues still to fix (a draft may be incomplete).', {
+  tool('get_template', 'One template', 'One of your templates with its recipe JSON, uploaded files (their ast_ ids), test renders, web editor URL (editor) and live template URL (url) when published.', { id: str }, ['id'], true),
+  tool('save_template', 'Save a draft', 'Creates or updates a DRAFT. Omit id to create one. Returns the id, the web editor URL (editor), any remaining recipe issues (a draft may be incomplete), and non-blocking warnings if guide[] uses unknown {{name}} tokens.', {
     id: { type: 'string', description: 'Draft id (uuid). Omit to create a new draft.' },
     title: { type: 'string', description: 'English title, 3–120 characters.' },
     title_ko: { type: 'string', description: 'Korean title (optional).' },
@@ -70,8 +107,11 @@ export const MCP_TOOLS = [
     royalty_krw: { type: 'integer', minimum: ROYALTY_MIN_KRW, maximum: ROYALTY_MAX_KRW },
     example_url: { type: 'string', description: 'Link to your own post showing the result (Instagram, TikTok, YouTube).' },
   }, ['title', 'recipe']),
-  tool('upload_file', 'Upload a source file', 'Uploads a reference image/video (role "reference", referenced from a creator slot by its ast_ id) or the example result (role "example") to one of your drafts.', {
-    template_id: str, role: { type: 'string', enum: ['reference', 'example'] }, ...mediaSource,
+  tool('upload_file', 'Upload a source file', 'Uploads a reference image, video or audio file (role "reference", referenced from a creator slot by its ast_ id) or the example result (role "example") to one of your drafts.', {
+    template_id: str,
+    role: { type: 'string', enum: ['reference', 'example'] },
+    contains_person: { type: 'boolean', description: 'Optional. Set true if this file shows a real person’s face (matches the web editor’s "Contains a person’s face" option; disables direct download by members even when source files are disclosed).' },
+    ...uploadMediaSource,
   }, ['template_id']),
   tool('delete_file', 'Delete a file', 'Removes one uploaded file (ast_ id) from a draft.', { template_id: str, file: str }, ['template_id', 'file']),
   tool('test_render', 'Test render', `Makes the draft's IMAGE steps once with your own saved selfie through the real pipeline (at most ${MAKER_TEST_RENDERS} per template, at TWINGS's cost). A test never makes video: video steps are skipped and made only when a buyer pays. A template with no image step to test is refused (video_test_unavailable) and no test is used.`, { template_id: str }, ['template_id']),
@@ -85,8 +125,8 @@ export const MCP_TOOLS = [
     open_to_brands: { type: 'boolean' }, public_profile: { type: 'boolean' },
   }),
   tool('list_works', 'My works', 'Your representative works on your profile.', {}, [], true),
-  tool('add_work', 'Add a work', 'Adds one representative work (image or short film) to your profile. Max 12 works.', {
-    ...mediaSource, title: str, caption: str, link: { type: 'string', description: 'https link to the original post (optional).' },
+  tool('add_work', 'Add a work', `Adds one representative work (image or short film) to your profile. Max ${MAKER_WORKS_MAX} works.`, {
+    ...workMediaSource, title: str, caption: str, link: { type: 'string', description: 'https link to the original post (optional).' },
   }),
   tool('remove_work', 'Remove a work', 'Removes one work (wrk_ id) from your profile.', { id: str }, ['id']),
   tool('get_stats', 'My stats', 'How many signed-in members opened each of your published recipes, in total and in the last 7 days.', {}, [], true),
@@ -99,16 +139,38 @@ class ToolFailure extends Error {
 export function recipeGuide() {
   return {
     summary: 'A recipe turns ONE customer selfie into a finished result. Slot "selfie" is always the customer photo; every other slot is a file YOU upload (upload_file → ast_ id). Steps run in order; a prompt refers to slots and earlier steps only as {{name}}.',
-    limits: { steps: 'image then video (max 2), or 1–10 images (a carousel)', prompt: MCP_PROMPT_LIMIT_TEXT, note: `${NOTE_MAX} characters a step`, intro: INTRO_MAX, outro: OUTRO_MAX, files: '6 references + 1 example, 4 MB each, 20 MB a template', royaltyKrw: [ROYALTY_MIN_KRW, ROYALTY_MAX_KRW], royaltyDefaultKrw: ROYALTY_DEFAULT_KRW },
+    limits: {
+      steps: 'image then video (max 2), or 1–10 images (a carousel)',
+      guideClips: MAX_GUIDE_CLIPS,
+      prompt: MCP_PROMPT_LIMIT_TEXT,
+      note: `${NOTE_MAX} characters a step`,
+      intro: INTRO_MAX,
+      outro: OUTRO_MAX,
+      files: MCP_FILE_LIMIT_TEXT,
+      royaltyKrw: [ROYALTY_MIN_KRW, ROYALTY_MAX_KRW],
+      royaltyDefaultKrw: ROYALTY_DEFAULT_KRW,
+    },
     engines: MAKER_ENGINE_IDS.map((id) => (isVideoEngine(id)
       ? { id, kind: 'video', aspects: VIDEO_ASPECTS, durationSeconds: [videoEngineSpec(id).minDurationSeconds, videoEngineSpec(id).maxDurationSeconds], resolutions: videoEngineSpec(id).resolutions, promptMaxChars: promptCharLimit(id) }
       : { id, kind: 'image', aspects: IMAGE_ASPECTS, promptMaxChars: promptCharLimit(id) })),
     imageEngines: makerEnginesFor('image'),
     videoEngines: makerEnginesFor('video'),
     publishing: 'publish_template makes the draft a live template with no studio review once: the recipe passes, an example FILE is uploaded (role "example"), and one test_render has succeeded. test_render makes the image steps only; a template with no image step to test needs an example VIDEO file instead. Price = cost floor + royalty_krw, set automatically.',
-    disclosure: 'show_prompts / show_files decide what signed-in members see on the template page. Anonymous visitors only see an outline (steps, engines, inputs) and are asked to sign in. Off by default.',
+    disclosure: 'show_prompts / show_files decide what signed-in members see on the template page. Anonymous visitors only see an outline (steps, engines, inputs, and clip card titles only) and are asked to sign in. Off by default.',
     presentation: '"make-first": example → make → how it was made. "story-first": your story and steps first.',
-    notes: 'notes.intro (shown to everyone above the outline), steps[].note (a tip under that step, members only) and notes.outro (e.g. "post yours and tag me") are display-only; no engine reads them.',
+    notes: 'notes.intro (shown to everyone above the outline), steps[].note and guide[].note (shown as a highlighted tip box ABOVE each prompt, members only — visible even when the prompt is folded) and notes.outro (e.g. "post yours and tag me") are display-only; no engine reads them.',
+    guide: {
+      summary: `Optional display-only clip cards (1–${MAX_GUIDE_CLIPS} cards) for multi-clip or beat-by-beat templates. No engine reads guide[]; it renders on the template page in the full-width "Clip by clip" section (#clips).`,
+      visibility: 'Signed-in members see every clip card (number, title, meta, tip box above the prompt, foldable prompt and copy button). Signed-out visitors see numbered titles only — never meta, prompts or tips.',
+      maxItems: MAX_GUIDE_CLIPS,
+      fields: {
+        title: `1–${GUIDE_TITLE_MAX} characters. Customer-facing clip title (shown even to signed-out visitors). Never include model names or internal procedure names.`,
+        kind: '"image" | "video"',
+        meta: `Optional, up to ${GUIDE_META_MAX} characters. Customer-facing spec line shown under the title (e.g. "Video · 4:3 · 5s"). Never include model names, engine ids, or internal workflow labels.`,
+        prompt: `${GUIDE_PROMPT_MIN}–${formatPromptChars(GUIDE_PROMPT_MAX)} characters per clip (same per-clip cap as step prompts). Use {{name}} only for declared slot names in slots and step ids in steps[].id; any other {{name}} renders wrongly on the buyer screen and triggers a non-blocking warning in validate_recipe and save_template.`,
+        note: `Optional, up to ${GUIDE_NOTE_MAX} characters. Displayed to signed-in members in a tip box ABOVE the prompt.`,
+      },
+    },
     example: {
       version: 2,
       slots: { selfie: { kind: 'image', source: 'user', required: true }, scene: { kind: 'image', source: 'creator', asset: 'ast_<32 hex from upload_file>' } },
@@ -119,6 +181,52 @@ export function recipeGuide() {
       output: { from: 'film' },
       notes: { intro: 'Two steps: a still from your selfie, then a 10-second film.', outro: 'Post yours and tag me — I repost my favourites.' },
     },
+    exampleWithClips: {
+      version: 2,
+      slots: {
+        selfie: { kind: 'image', source: 'user', required: true },
+        wardrobe: { kind: 'image', source: 'creator', asset: 'ast_<32 hex from upload_file>' },
+      },
+      steps: [
+        {
+          id: 'film',
+          kind: 'video',
+          engine: 'seedance-2.5',
+          inputs: ['selfie', 'wardrobe'],
+          prompt: 'The person in {{selfie}} walks along an evening cobblestone street wearing the coat from {{wardrobe}}, continuous steadicam movement across three beats.',
+          note: 'Front-facing selfies with clear shoulder framing transfer best into the walking cut.',
+          params: { aspect: '9:16', duration: 8, resolution: '720p' },
+        },
+      ],
+      output: { from: 'film' },
+      guide: [
+        {
+          title: 'Street arrival',
+          kind: 'video',
+          meta: 'Video · 9:16 · 3s',
+          prompt: 'Wide tracking shot as {{selfie}} steps onto the wet pavement wearing {{wardrobe}}, cool dusk light across the coat silhouette.',
+          note: 'Avoid busy street signs behind the subject so the outline stays crisp.',
+        },
+        {
+          title: 'Shoulder turn',
+          kind: 'video',
+          meta: 'Video · 9:16 · 3s',
+          prompt: 'Medium shot following {{selfie}} turning gently toward camera while the fabric of {{wardrobe}} catches warm storefront reflections.',
+          note: 'Even exposure on the face keeps skin tone steady across the turn.',
+        },
+        {
+          title: 'Closing portrait',
+          kind: 'video',
+          meta: 'Video · 9:16 · 2s',
+          prompt: 'Close portrait of {{selfie}} pausing under soft tungsten light with the collar of {{wardrobe}} framing the jawline.',
+          note: 'Look slightly past the lens on the final beat for a calmer finish.',
+        },
+      ],
+      notes: {
+        intro: 'One 8-second runway walk broken into three clip cards you can study beat by beat.',
+        outro: 'Post your version and tag me so I can share it.',
+      },
+    },
   };
 }
 
@@ -126,8 +234,8 @@ function viewerOf(userId: string): Viewer {
   return { tier: 'free', userId, email: null, isAdmin: false, locale: null };
 }
 
-async function mediaBytes(args: Record<string, unknown>): Promise<Uint8Array> {
-  if (typeof args.url === 'string' && args.url) return fetchPublicMedia(args.url, MAKER_FILE_MAX_BYTES);
+async function mediaBytes(args: Record<string, unknown>, urlMaxBytes = MAKER_FILE_MAX_BYTES): Promise<Uint8Array> {
+  if (typeof args.url === 'string' && args.url) return fetchPublicMedia(args.url, urlMaxBytes);
   if (typeof args.data_base64 === 'string' && args.data_base64) return decodeBase64Media(args.data_base64, MAKER_FILE_MAX_BYTES);
   throw new ToolFailure('media_required');
 }
@@ -149,14 +257,25 @@ async function callTool(deps: McpDeps, name: string, args: Record<string, unknow
         handle: settings?.handle ?? null, publicProfile: settings?.publicProfile ?? false,
         profileUrl: settings?.handle && settings.publicProfile ? `${deps.origin}${makerHref('en', settings.handle)}` : null,
         programOpen: access.creators, extendedProfile: settings?.extended ?? false,
+        // What publish_template will actually do: lib/recipes/maker.ts refuses a publish while the kill switch is off.
         selfPublish: selfPublishOpen(),
-        limits: { works: 12, tokens: 5, testRendersPerTemplate: MAKER_TEST_RENDERS, fileMegabytes: 4 },
+        limits: {
+          works: MAKER_WORKS_MAX,
+          tokens: MAKER_TOKENS_MAX,
+          testRendersPerTemplate: MAKER_TEST_RENDERS,
+          fileMegabytes: MCP_IMAGE_FILE_MAX_MB,
+          videoAudioFileMegabytes: MCP_AV_FILE_MAX_MB,
+          templateMegabytes: MCP_FORMAT_MAX_MB,
+          referenceFilesPerTemplate: MAKER_REFERENCE_FILES,
+        },
       };
     }
     case 'get_recipe_guide': return recipeGuide();
     case 'validate_recipe': {
       const checked = parseRecipe(args.recipe);
-      return checked.ok ? { ok: true, medium: checked.medium } : { ok: false, issues: checked.issues };
+      const warnings = guideTokenWarnings(args.recipe);
+      const extra = warnings.length ? { warnings } : {};
+      return checked.ok ? { ok: true, medium: checked.medium, ...extra } : { ok: false, issues: checked.issues, ...extra };
     }
     case 'list_templates': {
       const { rows } = await deps.sql.query<{ id: string; title: string; status: string; medium: string; review_note: string | null; updated_at: unknown; slug: string | null }>(
@@ -172,7 +291,18 @@ async function callTool(deps: McpDeps, name: string, args: Record<string, unknow
     case 'get_template': {
       const draft = await loadMakerDraft(deps.sql, viewer, String(args.id ?? ''), access);
       if (!draft) throw new ToolFailure('not_found');
-      return draft;
+      const { rows } = await deps.sql.query<{ slug: string | null }>(
+        `select p.slug from platform_formats f
+          join prompt_items p on p.id=f.template_id and p.status='published'
+          where f.id=$1 and f.user_id=$2 limit 1`,
+        [draft.id, deps.userId],
+      );
+      const slug = rows[0]?.slug ?? null;
+      return {
+        ...draft,
+        editor: `${deps.origin}/creators/workspace/formats/${draft.id}`,
+        ...(slug ? { url: `${deps.origin}/en/t/${slug}` } : {}),
+      };
     }
     case 'save_template': {
       const id = typeof args.id === 'string' && args.id ? args.id : randomUUID();
@@ -185,12 +315,32 @@ async function callTool(deps: McpDeps, name: string, args: Record<string, unknow
         royalty: typeof args.royalty_krw === 'number' ? args.royalty_krw : existing?.royaltyKrw ?? ROYALTY_DEFAULT_KRW,
       }, access);
       const checked = parseRecipe(args.recipe);
-      return { id, saved: true, complete: checked.ok, issues: checked.ok ? [] : checked.issues, editor: `${deps.origin}/creators/workspace/formats/${id}` };
+      const warnings = guideTokenWarnings(args.recipe);
+      return {
+        id,
+        saved: true,
+        complete: checked.ok,
+        issues: checked.ok ? [] : checked.issues,
+        ...(warnings.length ? { warnings } : {}),
+        editor: `${deps.origin}/creators/workspace/formats/${id}`,
+      };
     }
     case 'upload_file': {
-      const bytes = await mediaBytes(args);
-      const file = await uploadMakerFile({ sql: deps.sql, store }, viewer, { formatId: String(args.template_id ?? ''), role: args.role === 'example' ? 'example' : 'reference', bytes }, access);
-      return { file: file.id, kind: file.kind, role: file.role, bytes: file.bytes, use: file.role === 'reference' ? `Reference it from a creator slot: { "kind": "${file.kind}", "source": "creator", "asset": "${file.id}" }` : 'This is the template\'s example result.' };
+      const bytes = await mediaBytes(args, MAKER_AV_FILE_MAX_BYTES);
+      const file = await uploadMakerFile({ sql: deps.sql, store }, viewer, {
+        formatId: String(args.template_id ?? ''),
+        role: args.role === 'example' ? 'example' : 'reference',
+        bytes,
+        ...(typeof args.contains_person === 'boolean' ? { containsPerson: args.contains_person } : {}),
+      }, access);
+      return {
+        file: file.id,
+        kind: file.kind,
+        role: file.role,
+        bytes: file.bytes,
+        containsPerson: Boolean(file.containsPerson),
+        use: file.role === 'reference' ? `Reference it from a creator slot: { "kind": "${file.kind}", "source": "creator", "asset": "${file.id}" }` : 'This is the template\'s example result.',
+      };
     }
     case 'delete_file':
       return makerAction({ sql: deps.sql, store }, viewer, { action: 'deleteFile', id: args.template_id, file: args.file }, access);
@@ -263,7 +413,7 @@ async function handleOne(deps: McpDeps, message: JsonRpcRequest): Promise<JsonRp
       const protocolVersion = (MCP_PROTOCOL_VERSIONS as readonly string[]).includes(asked) ? asked : MCP_PROTOCOL_VERSIONS[0];
       return { jsonrpc: '2.0', id, result: {
         protocolVersion, capabilities: { tools: { listChanged: false } }, serverInfo: MCP_SERVER_INFO,
-        instructions: 'TWINGS turns one selfie into a finished film or photo set. You act for one AI creative. Read get_recipe_guide before writing a recipe; upload source files with upload_file and reference their ast_ ids; save_template keeps a draft; test_render and publish_template only when the creative asks. Never invent a selfie or upload faces the creative has no rights to.',
+        instructions: 'TWINGS turns one selfie into a finished film or photo set. You act for one AI creative. Read get_recipe_guide before writing a recipe; upload source files with upload_file and reference their ast_ ids; save_template keeps a draft; for multi-clip templates add display-only clip cards in recipe.guide[] (title, customer-facing meta, prompt and tip); test_render and publish_template only when the creative asks. Never invent a selfie or upload faces the creative has no rights to.',
       } };
     }
     case 'ping': return { jsonrpc: '2.0', id, result: {} };

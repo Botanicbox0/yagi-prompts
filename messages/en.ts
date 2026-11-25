@@ -382,7 +382,7 @@ export const en = {
     },
     "connect": {
       "heading": "Upload from your AI agent (MCP)",
-      "lede": "Connect TWINGS to Claude Code, Cursor or Codex and say things like “turn the Higgsfield still I just made into a TWINGS template”. Your agent can read the recipe guide, save drafts, upload source files and works, run a test render and publish.",
+      "lede": "Connect TWINGS to your AI tool to save template drafts, check clip prompts, upload source files, and manage your profile right from chat.",
       "nameLabel": "Token name",
       "namePlaceholder": "e.g. Claude on my laptop",
       "create": "Create token",
@@ -397,7 +397,20 @@ export const en = {
       "limit": "Up to 5 tokens.",
       "setupHeading": "Connect",
       "endpoint": "Server address",
-      "tools": "What your agent can do: read the recipe guide · save a draft · upload source files and works (a link or a file) · test render · publish · edit your profile · see your stats.",
+      "tools": "What your agent can do: read the guide · save and check drafts · upload source files and works · run a test render · publish · edit your profile · view stats.",
+      "step1Title": "Create a token",
+      "step1Hint": "Name the device or tool you are connecting. The token is shown only once.",
+      "step2Title": "Connect your AI tool",
+      "step2Hint": "Pick your tool, copy the snippet, and paste it into your setup.",
+      "step2TokenNote": "A token you just created is filled in automatically. For an earlier token, replace <YOUR_TOKEN>.",
+      "clientTabsLabel": "Choose your AI tool",
+      "step3Title": "Try asking",
+      "step3Hint": "Once connected, copy any request below and send it to your AI tool.",
+      "examples": {
+        "draft": "Read the TWINGS recipe guide and save a template draft using the video and clip prompts in this folder. Add a title and a tip to every clip.",
+        "check": "Check the draft I just saved and tell me anything I should fix.",
+        "list": "Show me my templates and their current status."
+      },
       "errors": {
         "invalid": "Give the token a name (up to 40 characters).",
         "limit_reached": "You already have 5 tokens. Revoke one first.",
