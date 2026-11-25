@@ -20,7 +20,14 @@ export function publicPromptText(text: string): string {
  * A public recipe's step prompts without the two blocks; the same value when no step carries one (or there are no
  * steps). Everything but the step prompts is kept as it is.
  */
-export function publicRecipeText<T extends { steps: ReadonlyArray<{ prompt: string }> | null }>(recipe: T | null): T | null {
-  if (!recipe?.steps || recipe.steps.every((step) => publicPromptText(step.prompt) === step.prompt)) return recipe;
-  return { ...recipe, steps: recipe.steps.map((step) => ({ ...step, prompt: publicPromptText(step.prompt) })) };
+export function publicRecipeText<T extends { steps: ReadonlyArray<{ prompt: string }> | null; guide?: ReadonlyArray<{ prompt: string }> | null }>(recipe: T | null): T | null {
+  if (!recipe) return recipe;
+  const stepsClean = !recipe.steps || recipe.steps.every((step) => publicPromptText(step.prompt) === step.prompt);
+  const guideClean = !recipe.guide || recipe.guide.every((step) => publicPromptText(step.prompt) === step.prompt);
+  if (stepsClean && guideClean) return recipe;
+  return {
+    ...recipe,
+    ...(recipe.steps ? { steps: recipe.steps.map((step) => ({ ...step, prompt: publicPromptText(step.prompt) })) } : {}),
+    ...(recipe.guide ? { guide: recipe.guide.map((step) => ({ ...step, prompt: publicPromptText(step.prompt) })) } : {}),
+  };
 }

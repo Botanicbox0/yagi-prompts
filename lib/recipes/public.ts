@@ -30,6 +30,7 @@ import { SELFIE_SLOT, creatorSlotNames, displayStepPrompt, parseRecipe, type Rec
 /** `pet` and `partner` are the buyer's other two photos (docs/CAST-CATEGORIES.md §3). */
 export type RecipeInput = { kind: 'selfie' } | { kind: 'pet' } | { kind: 'partner' } | { kind: 'reference'; n: number } | { kind: 'step'; n: number };
 export interface PublicRecipeStep { n: number; kind: 'image' | 'video'; engine: string; inputs: RecipeInput[]; prompt: string; note: string | null }
+export interface PublicRecipeGuideStep { n: number; title: string; kind: 'image' | 'video'; meta: string | null; prompt: string; note: string | null }
 export interface PublicRecipeFile {
   n: number;
   kind: 'image' | 'video' | 'audio';
@@ -42,6 +43,7 @@ export interface PublicRecipe {
   intro: string | null;
   outro: string | null;
   steps: PublicRecipeStep[] | null;
+  guide?: PublicRecipeGuideStep[] | null;
   files: PublicRecipeFile[] | null;
 }
 export interface PublicRecipeLabels { selfie: string; reference: string; step: string; pet?: string; partner?: string }
@@ -103,6 +105,16 @@ export async function loadPublicRecipe(sql: SqlRunner, templateId: string, label
       n: index + 1, kind: step.kind, engine: labelOf(step.engine), inputs: inputsOf(recipe, step.inputs),
       prompt: publicPromptText(displayStepPrompt(recipe, step, labels)), note: text(step.note),
     })) : null,
+    ...(disclosure.prompts && recipe.guide?.length ? {
+      guide: recipe.guide.map((item, index) => ({
+        n: index + 1,
+        title: item.title,
+        kind: item.kind,
+        meta: text(item.meta),
+        prompt: publicPromptText(displayStepPrompt(recipe, item, labels)),
+        note: text(item.note),
+      })),
+    } : {}),
     files,
   };
 }

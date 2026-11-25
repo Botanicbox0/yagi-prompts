@@ -155,6 +155,10 @@ describe('a story-first template with a public recipe', () => {
         intro: 'OPEN_INTRO',
         outro: 'OPEN_OUTRO_GUIDE',
         steps: [{ n: 1, kind: 'video', engine: 'SEEDANCE 2.5', inputs: [{ kind: 'selfie' }], prompt: `[My photo] among goldfish. ${'Shot detail. '.repeat(30)}MEMBERS_ONLY_TAIL`, note: 'OPEN_STEP_NOTE' }],
+        guide: [
+          { n: 1, title: '00 · Character Sheet', kind: 'image', meta: '16:9 · 2K', prompt: '[My photo] three-panel studio sheet.', note: 'GUIDE_TIP_0' },
+          { n: 2, title: '01 · Manhole Slide', kind: 'video', meta: '4:3 · 4s', prompt: 'CLIP_01_OPEN_PROMPT', note: null },
+        ],
         files: null,
       };
       const html = await page('ko');
@@ -163,6 +167,11 @@ describe('a story-first template with a public recipe', () => {
       expect(html).toContain('MEMBERS_ONLY_TAIL');
       expect(html).toContain('OPEN_STEP_NOTE');
       expect(html).toContain('OPEN_OUTRO_GUIDE');
+      expect(html).toContain('data-recipe-guide');
+      expect(html).toContain('data-recipe-guide-step="1"');
+      expect(html).toContain('00 · Character Sheet');
+      expect(html).toContain('CLIP_01_OPEN_PROMPT');
+      expect(html).toContain('GUIDE_TIP_0');
 
       state.recipe = { ...state.recipe, presentation: 'make-first' };
       const makeFirstHtml = await page('ko');
