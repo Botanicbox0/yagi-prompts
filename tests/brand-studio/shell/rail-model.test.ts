@@ -13,7 +13,9 @@ import {
   parseRailState,
   railActive,
   railCookieExpanded,
+  railEditorRoute,
   railItems,
+  railShownExpanded,
   toastFor,
 } from '@/components/brand-workspace/rail-model';
 
@@ -136,6 +138,68 @@ describe('order', () => {
     expect(railCookieExpanded('1')).toBe(true);
     expect(railCookieExpanded('0')).toBe(false);
     expect(railCookieExpanded(undefined)).toBe(false);
+  });
+});
+
+/**
+ * Founder request 2026-11-25: the editing studio opens with the rail folded. The new editor and the current
+ * one, whatever their query; nothing that only starts with the same letters.
+ */
+describe('the editing studio routes', () => {
+  it('matches the new editor and the current one, with or without a trailing slash', () => {
+    for (const path of ['/brand/studio/editor', '/brand/studio/editor/', '/brand/studio/compose', '/brand/studio/compose/']) {
+      expect(railEditorRoute(path), path).toBe(true);
+    }
+  });
+
+  it('ignores a query or a fragment if a caller hands the whole address', () => {
+    expect(railEditorRoute('/brand/studio/compose?classic=1')).toBe(true);
+    expect(railEditorRoute('/brand/studio/editor?organizationId=x&ws=cut')).toBe(true);
+    expect(railEditorRoute('/brand/studio/editor#clip')).toBe(true);
+    expect(railEditorRoute('/brand/studio/video?next=/brand/studio/editor')).toBe(false);
+  });
+
+  it('does not match the other studios, the studio home, or a path that merely starts with the same letters', () => {
+    for (const path of [
+      '/brand/studio',
+      '/brand/studio/',
+      '/brand/studio/video',
+      '/brand/studio/sound',
+      '/brand/studio/workflows',
+      '/brand/studio/review',
+      '/brand/studio/editorial',
+      '/brand/studio/composer',
+      '/brand/studio/compose-x',
+      '/brand/studio/editor/extra',
+      '/brand/studio/compose/abc',
+      '/brand/studio/editor//',
+      '/brand/studioeditor',
+      '/brand/studio-editor',
+      '/xbrand/studio/editor',
+      '/en/brand/studio/editor',
+      '/Brand/Studio/Editor',
+      '/brand',
+      '/brand/library',
+      '/brand/home',
+      '/',
+      '',
+    ]) {
+      expect(railEditorRoute(path), path).toBe(false);
+    }
+    expect(railEditorRoute(null)).toBe(false);
+    expect(railEditorRoute(undefined)).toBe(false);
+  });
+
+  it('shows the visit state on an editor route and the stored preference everywhere else', () => {
+    for (const path of ['/brand/studio/editor', '/brand/studio/compose']) {
+      expect(railShownExpanded({ path, preference: true, editorOpen: false }), path).toBe(false);
+      expect(railShownExpanded({ path, preference: false, editorOpen: true }), path).toBe(true);
+      expect(railShownExpanded({ path, preference: true, editorOpen: true }), path).toBe(true);
+    }
+    for (const path of ['/brand/studio', '/brand/studio/video', '/brand/library', '/brand']) {
+      expect(railShownExpanded({ path, preference: true, editorOpen: false }), path).toBe(true);
+      expect(railShownExpanded({ path, preference: false, editorOpen: true }), path).toBe(false);
+    }
   });
 });
 

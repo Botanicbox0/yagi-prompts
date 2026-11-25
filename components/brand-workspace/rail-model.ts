@@ -319,6 +319,28 @@ export function railCookieExpanded(value: string | undefined | null): boolean {
   return value === '1';
 }
 
+/**
+ * The editing studio (founder request 2026-11-25): the new editor and the current one. The rail opens folded
+ * there, whatever this browser stored. The brand host serves these paths as they are (middleware.ts rewrites
+ * nothing and brand paths carry no locale), so this is what `usePathname()` returns on brand.twings.app too.
+ */
+const RAIL_EDITOR_PATHS: ReadonlySet<string> = new Set(['/brand/studio/editor', '/brand/studio/compose']);
+
+/** True on an editing studio page: the exact path, one trailing slash allowed, any query or fragment ignored. */
+export function railEditorRoute(path: string | null | undefined): boolean {
+  if (!path) return false;
+  const bare = path.split(/[?#]/, 1)[0]!;
+  return RAIL_EDITOR_PATHS.has(bare.length > 1 && bare.endsWith('/') ? bare.slice(0, -1) : bare);
+}
+
+/**
+ * The width the rail shows. On an editing studio page: that visit's own state (`editorOpen`, folded on arrival),
+ * which is never stored. Everywhere else: the stored preference, as before.
+ */
+export function railShownExpanded(input: { path: string | null | undefined; preference: boolean; editorOpen: boolean }): boolean {
+  return railEditorRoute(input.path) ? input.editorOpen : input.preference;
+}
+
 /* ------------------------------------------------------------- jobs */
 
 export type RailJobGroup = 'image' | 'video' | 'sound';
