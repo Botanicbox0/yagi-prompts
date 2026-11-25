@@ -9,6 +9,7 @@
  */
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import { lockOrganization, requireCreate, StudioDenied, studioSeat } from '@/lib/brand-studio/access';
+import { brandProjectFiling, brandProjectForNew, withFilmBrandProjects } from '@/lib/brand-studio/brand-projects';
 import {
   clamp,
   COMPOSE_ASPECTS,
@@ -73,6 +74,8 @@ interface VideoProjectRow {
   deleted_at: Date | string | null;
   created_at: Date | string;
   updated_at: Date | string;
+  /** Migration 0194 (the brand project spine); absent before it is applied. */
+  brand_project_id?: string | null;
 }
 
 interface MediaKeyRow {
@@ -578,6 +581,7 @@ function toSummary(row: VideoProjectRow, hydratedTimeline: ComposerProject): Vid
     completedAt: iso(row.completed_at),
     createdAt: iso(row.created_at)!,
     updatedAt: iso(row.updated_at)!,
+    // Never `brandProjectId` here: it is opt-in (../brand-projects.ts withFilmBrandProjects), members' answers only.
   };
 }
 
@@ -748,10 +752,11 @@ export async function loadVideoProjects(
       };
     }
 
+    // Members only reach here (guests and non-members are refused above): the films' brand projects, opt-in.
     return {
       ok: true,
-      projects,
-      project,
+      projects: await withFilmBrandProjects(deps.sql, organizationId, projects),
+      project: project ? (await withFilmBrandProjects(deps.sql, organizationId, [project]))[0]! : null,
       canCreate: seat.canCreate,
     };
   } catch (error) {
@@ -850,9 +855,12 @@ export async function runVideoProjectOperation(
   if ((op === 'bgm.set' || op === 'sfx.add') && !brandSoundStudioOpen()) return { ok: false, code: 'invalid' };
   const input = rawInput as Record<string, unknown>;
   const organizationId = typeof input.organizationId === 'string' ? input.organizationId : '';
+  // The brand project spine (../brand-projects.ts), `create` only: closed for the organization, `brandProjectId`
+  // is not even read; open, it is judged after the seat, inside the transaction.
+  const filing = op === 'create' ? await brandProjectFiling(deps.sql, organizationId, input) : ({ open: false } as const);
 
   try {
-    return await deps.sql.transaction(async (tx) => {
+    const result = await deps.sql.transaction(async (tx): Promise<VideoProjectMutationResult> => {
       const seat = await assertSelfStudioMember(tx, viewer.userId, organizationId);
       requireCreate(seat);
 
@@ -890,8 +898,12 @@ export async function runVideoProjectOperation(
           timeline: normalizedTimeline,
           locale: input.locale,
         });
+        // The spine's project for the new film (a project that cannot take new work is `not_found`).
+        const brandProjectId = filing.open
+          ? await brandProjectForNew(tx, organizationId, { requested: filing.requested, parentOutputId: null, fill: false })
+          : null;
 
-        const inserted = existing
+        const made = existing
           ? (
               await tx.query<VideoProjectRow>(
                 `update brand_studio_video_projects
@@ -918,6 +930,15 @@ export async function runVideoProjectOperation(
                 [organizationId, title, aspect, JSON.stringify(normalizedTimeline), seat.userId, requestId],
               )
             ).rows[0]!;
+        // Written apart from the statements above, so they stay exactly as they were; only while open.
+        const inserted = filing.open
+          ? (
+              await tx.query<VideoProjectRow>(
+                'update brand_studio_video_projects set brand_project_id = $3 where id = $1 and organization_id = $2 returning *',
+                [made.id, organizationId, brandProjectId],
+              )
+            ).rows[0]!
+          : made;
 
         return {
           ok: true,
@@ -1089,6 +1110,9 @@ export async function runVideoProjectOperation(
         purgedShotSheetAssetIds,
       };
     });
+    // Members only reach here (the seat above refuses guests and non-members): the film's brand project, opt-in.
+    if (!result.ok || !result.project) return result;
+    return { ...result, project: (await withFilmBrandProjects(deps.sql, organizationId, [result.project]))[0]! };
   } catch (error) {
     if (error instanceof StudioDenied) return { ok: false, code: error.code };
     if (error instanceof BrandFeatureDenied) return { ok: false, code: 'feature_unavailable' };

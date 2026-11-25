@@ -27,6 +27,7 @@ import { jobView, openJobCount } from './repo';
 import type { JobRow, OutputRow, StudioDeps } from './types';
 import { reserveAllowance } from './usage';
 import { projectForNewJob, studioProjectsReady } from './job-projects';
+import { brandProjectFiling, brandProjectForNew } from './brand-projects';
 import { failure, guarded } from './outcome';
 
 /**
@@ -47,6 +48,9 @@ export async function createStudioJobGroup(deps: StudioDeps, viewer: Viewer, raw
   const locale = viewer.locale === 'en' ? 'en' : 'ko';
   const models = v.runs.map((run) => run.model);
   const requestIds = models.map((model) => groupRunRequestId(v.requestId, model));
+  // The brand project spine: closed for the organization, `brandProjectId` is not even read; open, it is judged
+  // after the seat, inside the transaction.
+  const filing = await brandProjectFiling(deps.sql, v.organizationId, raw);
   return guarded(() =>
     deps.sql.transaction(async (sql) => {
       const seat = await studioSeat(sql, viewer.userId, v.organizationId);
@@ -117,11 +121,15 @@ export async function createStudioJobGroup(deps: StudioDeps, viewer: Viewer, raw
       const projectId = (await studioProjectsReady(deps, sql))
         ? await projectForNewJob(sql, v.organizationId, { requested: v.projectId ?? null, parentOutputId: null, fill: false })
         : null;
+      // Every run of the group goes into the same project (a refusal rolls the whole group back).
+      const brandProjectId = filing.open
+        ? await brandProjectForNew(sql, v.organizationId, { requested: filing.requested, parentOutputId: null, fill: false })
+        : null;
       const groupId = randomUUID();
       const jobs = [];
       for (const [i, plan] of plans.entries()) {
         const grouped: JobPlan = { ...plan, params: { ...plan.params, group: { id: groupId, models: [...models] } } };
-        jobs.push(await insertJob(deps, sql, seat.userId, v.organizationId, requestIds[i]!, grouped, projectId));
+        jobs.push(await insertJob(deps, sql, seat.userId, v.organizationId, requestIds[i]!, grouped, projectId, brandProjectId));
       }
       return { ok: true as const, groupId, jobs };
     }),

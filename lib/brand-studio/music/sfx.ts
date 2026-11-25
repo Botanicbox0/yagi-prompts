@@ -14,6 +14,7 @@ import type { Viewer } from '@/lib/auth/identity';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import { assertBrandFeature } from '@/lib/brands/entitlements';
 import { lockOrganization, requireCreate, StudioDenied, studioSeat } from '@/lib/brand-studio/access';
+import { brandProjectFiling, brandProjectForNew, fileAssetWithRun, fileStudioJob } from '@/lib/brand-studio/brand-projects';
 import { COMPOSE_FINAL_RENDER_MODEL } from '@/lib/brand-studio/compose/credits';
 import type { StudioAllowanceView, StudioErrorCode } from '@/lib/brand-studio/contracts';
 import { creditsOf } from '@/lib/brand-studio/credits';
@@ -106,6 +107,8 @@ async function storeSfxAudioAsset(
   input: {
     organizationId: string;
     userId: string;
+    /** The run that made it: a new library entry takes its project (the brand project spine). */
+    jobId: string;
     durationSec: number;
     bytes?: Uint8Array;
     remoteUrl?: string;
@@ -169,6 +172,7 @@ async function storeSfxAudioAsset(
       ],
     )
   ).rows[0]!;
+  await fileAssetWithRun(sql, input.organizationId, inserted.id, input.jobId);
 
   return { assetId: inserted.id, audioUrl: deps.media.url(stored.key) };
 }
@@ -208,6 +212,9 @@ export async function generateSoundEffect(
   if (mode === 'unavailable') {
     return { ok: false, code: 'provider_unavailable' };
   }
+  // The brand project spine (../brand-projects.ts): closed for the organization, `brandProjectId` is not even read;
+  // open, it is judged after the seat, inside the transaction.
+  const filing = await brandProjectFiling(deps.sql, v.organizationId, rawInput);
 
   let reserved;
   try {
@@ -263,6 +270,10 @@ export async function generateSoundEffect(
       if (!verdict.ok) {
         return { kind: 'existing' as const, result: { ok: false as const, code: verdict.code } };
       }
+      // The spine's project, judged in this writing transaction (a refusal throws and rolls the reservation back).
+      const brandProjectId = filing.open
+        ? await brandProjectForNew(tx, v.organizationId, { requested: filing.requested, parentOutputId: null, fill: false })
+        : null;
 
       const initialParams: StoredSfxJobParams = {
         source: 'sfx',
@@ -297,6 +308,7 @@ export async function generateSoundEffect(
           ts,
         ],
       );
+      await fileStudioJob(tx, v.organizationId, inserted.rows[0]!.id, brandProjectId);
       const allowance = await loadAllowanceViewWithRefill(tx, v.organizationId, deps.env, now);
       return {
         kind: 'created' as const,
@@ -374,6 +386,7 @@ export async function generateSoundEffect(
     const asset = await storeSfxAudioAsset(tx, deps, {
       organizationId: v.organizationId,
       userId: reserved.userId,
+      jobId: reserved.jobId,
       durationSec: v.durationSec,
       bytes: synth.bytes,
       mime: 'audio/wav',
@@ -493,6 +506,7 @@ export async function getSfxJobStatus(
           const asset = await storeSfxAudioAsset(tx, deps, {
             organizationId: v.organizationId,
             userId: job.row.created_by,
+            jobId: job.row.id,
             durationSec: p.durationSec,
             remoteUrl: task.url!,
             mime: 'audio/mpeg',

@@ -12,6 +12,7 @@ import { createHash } from 'node:crypto';
 import type { Viewer } from '@/lib/auth/identity';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import { lockOrganization, requireCreate, StudioDenied, studioSeat } from '@/lib/brand-studio/access';
+import { brandProjectFiling, brandProjectForNew, fileAssetWithRun, fileStudioJob } from '@/lib/brand-studio/brand-projects';
 import { COMPOSE_FINAL_RENDER_MODEL } from '@/lib/brand-studio/compose/credits';
 import { creditsOf } from '@/lib/brand-studio/credits';
 import { thumbnailWebp } from '@/lib/brand-studio/files';
@@ -64,6 +65,8 @@ async function storeUpscaledAsset(
   input: {
     organizationId: string;
     userId: string;
+    /** The run that made it: a new library entry takes its project (the brand project spine). */
+    jobId: string;
     kind: UpscaleMediaKind;
     resolution: UpscaleResolution;
     durationSec: number;
@@ -150,6 +153,7 @@ async function storeUpscaledAsset(
       ],
     )
   ).rows[0]!;
+  await fileAssetWithRun(sql, input.organizationId, inserted.id, input.jobId);
 
   return {
     assetId: inserted.id,
@@ -198,6 +202,9 @@ export async function submitUpscaleJob(
     return { ok: false, code: 'invalid' };
   }
   const seedVr2Config = configCheck.data;
+  // The brand project spine (../brand-projects.ts): closed for the organization, `brandProjectId` is not even read;
+  // open, it is judged after the seat, inside the transaction.
+  const filing = await brandProjectFiling(deps.sql, v.organizationId, rawInput);
 
   const now = deps.now?.() ?? new Date();
   const env = options?.env ?? process.env;
@@ -319,6 +326,15 @@ export async function submitUpscaleJob(
           result: { ok: false as const, code: verdict.code },
         };
       }
+      // The spine's project, judged in this writing transaction (a refusal throws and rolls the reservation back).
+      // An upscale of an earlier result takes that result's project; of a library file or a URL, the chosen one.
+      const brandProjectId = filing.open
+        ? await brandProjectForNew(tx, v.organizationId, {
+            requested: filing.requested,
+            parentOutputId: v.assetId ? null : (v.outputId ?? null),
+            fill: false,
+          })
+        : null;
 
       const initialParams: StoredUpscaleJobParams = {
         source: 'upscale',
@@ -357,6 +373,7 @@ export async function submitUpscaleJob(
           ts,
         ],
       );
+      await fileStudioJob(tx, v.organizationId, inserted.rows[0]!.id, brandProjectId);
 
       const allowance = await loadAllowanceViewWithRefill(tx, v.organizationId, deps.env, now);
       return {
@@ -468,6 +485,7 @@ export async function submitUpscaleJob(
     const saved = await storeUpscaledAsset(tx, deps, {
       organizationId: v.organizationId,
       userId: reserved.userId,
+      jobId: reserved.jobId,
       kind: resolvedKind,
       resolution: v.resolution,
       durationSec: resolvedDurationSec,
@@ -657,6 +675,7 @@ export async function getUpscaleJobStatus(
     const saved = await storeUpscaledAsset(tx, deps, {
       organizationId: v.organizationId,
       userId: loaded.userId,
+      jobId: v.jobId,
       kind: p.kind,
       resolution: p.resolution,
       durationSec: p.durationSec,

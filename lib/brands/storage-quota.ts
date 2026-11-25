@@ -18,6 +18,7 @@ import { z } from 'zod';
 import type { Viewer } from '@/lib/auth/identity';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import type { BrandOutcome } from './workspace/types';
+import { TEAM_PROJECTS } from './project-origin';
 import {
   isOrganizationUploadApproved,
   loadMemberUploadUsage,
@@ -537,10 +538,12 @@ export async function inspectProjectOnlyRetention(
   if (await tableExists(sql, 'brand_projects')) {
     const proj = (
       await sql.query<{ active_count: number; latest_completed: Date | string | null }>(
-        `select count(*) filter (where status not in ('completed', 'cancelled'))::int as active_count,
-                max(updated_at) filter (where status = 'completed') as latest_completed
-           from brand_projects
-          where organization_id = $1`,
+        // Team projects only (lib/brands/project-origin.ts): a brand's own studio project being open, or archived
+        // (`completed`), must not hold the retention open or move its clock.
+        `select count(*) filter (where p.status not in ('completed', 'cancelled'))::int as active_count,
+                max(p.updated_at) filter (where p.status = 'completed') as latest_completed
+           from brand_projects p
+          where p.organization_id = $1 and ${TEAM_PROJECTS('p')}`,
         [organizationId],
       )
     ).rows[0];

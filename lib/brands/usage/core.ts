@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { Viewer } from '@/lib/auth/identity';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import { hasStaffReadAccess } from '@/lib/brands/workspace/staff';
+import { TEAM_PROJECTS } from '@/lib/brands/project-origin';
 import { koreaMidnight, scopeSha256 } from './schemas';
 import type { UsageFailureCode, UsageGrantState, UsageOutcome, UsageScope } from './types';
 import { usageRuntimeFromEnv, type UsageRuntime } from './runtime';
@@ -89,7 +90,8 @@ export async function readable(sql: SqlRunner, userId: string, projectId: string
   catch (error) {
     if (!(error instanceof Denied) || error.code !== 'not_found') throw error;
     if (!await hasStaffReadAccess(sql, userId, verifiedEmail)) throw error;
-    const project = (await sql.query('select * from brand_projects where id=$1', [projectId])).rows[0];
+    // Team projects only: a brand's own studio project answers like a missing one (lib/brands/project-origin.ts).
+    const project = (await sql.query(`select tp.* from brand_projects tp where tp.id=$1 and ${TEAM_PROJECTS('tp')}`, [projectId])).rows[0];
     if (!project) throw error;
     return { role: 'studio', project };
   }

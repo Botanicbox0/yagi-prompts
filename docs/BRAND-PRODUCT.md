@@ -240,4 +240,5 @@ values ('deb648e9-c2df-43d4-b2a7-7f9eff8180d9', array['generative_media','sound'
   - `BRAND_WORKSPACE_PROTOTYPE_LAYER`: 기본 **off** (`'on'`일 때만 프로젝트 화면의 프로토타입 모듈과 `/s/` 공유 데모를 로드; **off**여도 실제 납품 영상 `activeContent.mediaUrl`과 DB 메시지/결정 기반 타임코드 핀을 `RealReviewPlayer`로 인라인 재생).
   - `BRAND_ORG_INVITE_EMAIL`: 기본 **off** (`'on'`일 때 `invitation.create`가 기존 트랜잭션 메일러로 타임아웃·예외 격리 발송, 링크 복사는 항상 유지).
   - `BRAND_STUDIO_EDITOR_V2_ORGS`: `all` 또는 `*` 지정 시 전체 브랜드 허용(기존 comma-separated UUID 목록과 함께 동작).
+  - `BRAND_PROJECT_SPINE` / `BRAND_PROJECT_SPINE_ORGS`: 기본 **off**. 프로젝트 뼈대(`docs/BRAND-PROJECT-SPINE.md`, 조각 1). `on`이고 조직이 목록에 있을 때만(`all` 또는 `*` = 전체, 비어 있으면 아무도 없음) 열리며, 마이그레이션 0194가 적용되기 전에는 서버가 닫아 둔다. 조직 id는 배포 환경변수에만 둔다.
   - `agent_access` MCP 차단: `assertBrandFeature(..., 'agent_access')` 및 워크플로 허브(`agentAccessAllowed`)에서 MCP 토큰 발급·OAuth·인증·목록·폐기를 모두 차단.

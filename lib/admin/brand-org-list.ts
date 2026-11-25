@@ -16,6 +16,7 @@ import { confirmedPlanCapSql } from '@/lib/brands/billing/plan-credits';
 import type { BrandBillingMode, BrandPlanId } from '@/lib/brands/plans';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import { escapeLike, firstParam, isDbAdmin, iso } from './brand-ops-guard';
+import { TEAM_PROJECTS } from '@/lib/brands/project-origin';
 
 export const BRAND_ORG_FILTERS = [
   'all',
@@ -315,10 +316,12 @@ export async function loadBrandOrgList(
   }
 
   if (hasProjects) {
+    // Team projects only: a brand's own studio project is never counted on the team side (lib/brands/project-origin.ts).
     ctes.push(`project_agg as (
-      select organization_id, count(*)::int as project_count
-        from brand_projects
-       group by organization_id
+      select p.organization_id, count(*)::int as project_count
+        from brand_projects p
+       where ${TEAM_PROJECTS('p')}
+       group by p.organization_id
     )`);
   }
 

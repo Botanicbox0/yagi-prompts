@@ -21,6 +21,7 @@ import { roomReviewHref, type ReviewFailure } from '@/lib/brand-studio/review-co
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import type { IngestHandler, IngestResult } from './ingest';
 import { purgeStagingObject } from './staging-cleanup';
+import { TEAM_PROJECTS } from '@/lib/brands/project-origin';
 
 export const DELIVERY_LIMITS = {
   imageBytesMax: 50_000_000,
@@ -221,6 +222,7 @@ export const ingestReviewFinish: IngestHandler = async (ctx, raw) => {
 /** The organization a project belongs to (the command line names only the project). */
 export async function organizationOfProject(sql: SqlRunner, projectId: string): Promise<string | null> {
   if (!/^[0-9a-f-]{36}$/i.test(projectId)) return null;
-  const row = (await sql.query<{ organization_id: string }>('select organization_id from brand_projects where id = $1', [projectId])).rows[0];
+  // Team projects only: a brand's own studio project answers like a missing one (lib/brands/project-origin.ts).
+  const row = (await sql.query<{ organization_id: string }>(`select tp.organization_id from brand_projects tp where tp.id = $1 and ${TEAM_PROJECTS('tp')}`, [projectId])).rows[0];
   return row ? String(row.organization_id) : null;
 }

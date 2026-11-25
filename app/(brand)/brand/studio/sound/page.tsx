@@ -7,6 +7,7 @@ import { SoundStudio } from '@/components/brand-studio/sound/sound-studio';
 import { createStudioMediaStore } from '@/lib/brand-studio/media-store';
 import { soundTabParam } from '@/lib/brand-studio/sound/library';
 import { loadSoundStudio } from '@/lib/brand-studio/sound/load';
+import { memberSeesBrandProjects } from '@/lib/brand-studio/brand-projects';
 import { studioEnv } from '@/lib/brand-studio/env';
 import { soundStudioVisible } from '@/lib/brand-studio/visibility';
 import { STUDIO_LIMITS } from '@/lib/brand-studio/contracts';
@@ -58,7 +59,10 @@ export default async function StudioSoundPage({
   }
 
   const media = createStudioMediaStore();
-  const data = await loadSoundStudio(deps.sql, media, studioEnv(), choice.id, viewer.userId ?? null);
+  // `brandProjectId` on runs only for a member seen as themselves; staff browsing a brand get none.
+  const data = await loadSoundStudio(deps.sql, media, studioEnv(), choice.id, viewer.userId ?? null, {
+    member: memberSeesBrandProjects({ staff: access.staff, role: choice.role }),
+  });
   const canCreate = !access.staff && (choice.role === 'owner' || choice.role === 'editor');
 
   return (

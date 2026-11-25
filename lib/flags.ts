@@ -274,6 +274,49 @@ export function brandStudioProjectsOpen(env: Record<string, string | undefined> 
 }
 
 /**
+ * The brand project spine (docs/BRAND-PROJECT-SPINE.md §3–§4, slice 1): one project for both sides
+ * (`brand_projects.origin`), studio runs, uploads and films filed in a project (`brand_project_id`), and the
+ * three operations `project.list` / `project.create` / `project.move`. Default OFF: the master switch is open
+ * only when the server environment says exactly `BRAND_PROJECT_SPINE=on`.
+ *
+ * Which organizations it opens for: `BRAND_PROJECT_SPINE_ORGS`, a comma-separated list of organization ids
+ * (spaces around ids and empty entries ignored, ids compared without regard to case). An entry `all` (any case) or `*`, anywhere
+ * in the list, counts every organization. Unset or empty: nobody. The ids live only in the deployment's
+ * environment, never in the repository. Closed (switch off, or the organization not listed) means every screen,
+ * request and answer is as it was: the three operations answer like unknown ones, a `brandProjectId` in a
+ * request is not even looked at, and no answer carries the new fields. The server additionally keeps it closed
+ * until migration 0194's columns exist (lib/brand-studio/brand-projects.ts `brandProjectSpineOpen`), and the
+ * studio guard runs first, so a sandboxed organization gets 404 whatever this says.
+ */
+export function brandProjectSpineOn(env: Record<string, string | undefined> = process.env): boolean {
+  return env.BRAND_PROJECT_SPINE === 'on';
+}
+
+/** The organizations listed in `BRAND_PROJECT_SPINE_ORGS` (see `brandProjectSpineOn`). */
+export function brandProjectSpineOrgs(env: Record<string, string | undefined> = process.env): string[] {
+  return (env.BRAND_PROJECT_SPINE_ORGS ?? '')
+    .split(',')
+    .map((id) => id.trim())
+    .filter((id) => id !== '');
+}
+
+/**
+ * Whether the spine is switched on for this organization: `BRAND_PROJECT_SPINE=on` AND the organization listed
+ * in `BRAND_PROJECT_SPINE_ORGS` (or the list contains `all` or `*`). The environment half only; the server asks
+ * `brandProjectSpineOpen` (lib/brand-studio/brand-projects.ts), which also needs the columns.
+ */
+export function brandProjectSpineFor(
+  organizationId: string | null | undefined,
+  env: Record<string, string | undefined> = process.env,
+): boolean {
+  if (!brandProjectSpineOn(env) || !organizationId) return false;
+  // Ids compared case-insensitively on both sides (a uuid is the same uuid in either case).
+  const orgs = brandProjectSpineOrgs(env).map((entry) => entry.toLowerCase());
+  if (orgs.some((entry) => entry === '*' || entry === 'all')) return true;
+  return orgs.includes(organizationId.toLowerCase());
+}
+
+/**
  * docs/CAST-CATEGORIES.md §4 — couple templates (the buyer and one partner). Default OFF: open only
  * when the server environment says exactly `TWINGS_COUPLE_TEMPLATES=on`. Terms §5.3 say "your own
  * face only" and cannot change while Toss reviews subscription billing, so off means couples do not

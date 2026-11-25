@@ -44,6 +44,7 @@ import { postRoomEvent, type RoomEventInput, type RoomEventKind } from './events
 import { storyboardDecisionNotice, storyboardDecisionPreview, type RoomTeamNotice, type RoomTeamNotify } from './team-notice';
 import { storyboardAdminHref } from './storyboard-contracts';
 import { enqueueTeamNotice } from '@/lib/brands/team-notice-outbox';
+import { TEAM_PROJECTS } from '@/lib/brands/project-origin';
 import {
   BoardCreateSchema,
   BoardRefSchema,
@@ -402,7 +403,7 @@ function requireBrandBoard(board: BoardRow): void {
 }
 
 async function lockProject(sql: SqlRunner, organizationId: string, projectId: string): Promise<void> {
-  const row = (await sql.query('select id from brand_projects where id = $1 and organization_id = $2 for update', [projectId, organizationId])).rows[0];
+  const row = (await sql.query(`select tp.id from brand_projects tp where tp.id = $1 and tp.organization_id = $2 and ${TEAM_PROJECTS('tp')} for update`, [projectId, organizationId])).rows[0];
   if (!row) throw new StoryboardDenied('not_found');
 }
 
@@ -1073,9 +1074,10 @@ export async function staffStoryboardList(
       const projectId = filter.projectId && UUID.test(filter.projectId) ? filter.projectId : null;
       const projectRows = (
         await sql.query<{ project_id: string; project_title: string; organization_id: string; organization_name: string }>(
+          // Team projects only: a brand's own studio project is never on the team side (lib/brands/project-origin.ts).
           `select p.id as project_id, p.title as project_title, o.id as organization_id, o.name as organization_name
              from brand_projects p join brand_organizations o on o.id = p.organization_id
-            where p.status <> 'cancelled'
+            where p.status <> 'cancelled' and ${TEAM_PROJECTS('p')}
             order by o.name, p.created_at desc limit 500`,
         )
       ).rows;
@@ -1157,7 +1159,7 @@ export async function staffCreateStoryboard(
       const userId = await requireStaff(sql, viewer);
       const title = StoryboardTitle.safeParse(input.title);
       if (!title.success || !UUID.test(input.projectId ?? '')) throw new StoryboardDenied('invalid');
-      const project = (await sql.query<{ organization_id: string }>('select organization_id from brand_projects where id = $1', [input.projectId])).rows[0];
+      const project = (await sql.query<{ organization_id: string }>(`select tp.organization_id from brand_projects tp where tp.id = $1 and ${TEAM_PROJECTS('tp')}`, [input.projectId])).rows[0];
       if (!project) throw new StoryboardDenied('not_found');
       await requireOpenOrganization(sql, project.organization_id);
       const id = await insertBoard(sql, { organizationId: project.organization_id, projectId: input.projectId, title: title.data, source: 'manual' }, { userId, role: 'studio' });
@@ -1353,7 +1355,7 @@ export async function ingestPushStoryboard(
   const actor: StoryboardActor = { userId: null, role: 'studio' };
   const made = await guard(() =>
     deps.sql.transaction(async (sql) => {
-      const project = (await sql.query<{ organization_id: string }>('select organization_id from brand_projects where id = $1', [input.projectId])).rows[0];
+      const project = (await sql.query<{ organization_id: string }>(`select tp.organization_id from brand_projects tp where tp.id = $1 and ${TEAM_PROJECTS('tp')}`, [input.projectId])).rows[0];
       if (!project) throw new StoryboardDenied('not_found');
       await requireOpenOrganization(sql, project.organization_id);
       let boardId: string;

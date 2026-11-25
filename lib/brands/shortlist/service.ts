@@ -6,6 +6,7 @@ import type { SqlRunner } from '@/lib/db/sql-runner';
 import type { StorageDriver } from '@/lib/storage';
 import type { BrandFailureCode, BrandOutcome } from '@/lib/brands/workspace/types';
 import { brandLogoMime, brandProjectSeat } from '@/lib/brands/workspace/service';
+import { TEAM_PROJECTS } from '@/lib/brands/project-origin';
 import {
   SHORTLIST_AVATAR_MAX_BYTES, SHORTLIST_CRITERIA_KEYS, SHORTLIST_METRIC_KEYS, ShortlistCriteriaSaveSchema, ShortlistImportSchema,
   ShortlistChooseSchema, ShortlistPickSchema, ShortlistRemoveSchema, ShortlistShareSchema, ShortlistTriageSchema, type ShortlistChoice,
@@ -176,7 +177,7 @@ export async function importShortlist(
   if (avatars.some(Boolean) && !deps.storage) return fail('storage_unavailable');
   return run(deps.sql, async sql => {
     if (actor.kind === 'studio') await requireStudio(sql, actor.viewer.userId);
-    const project = (await sql.query('select id,organization_id,status from brand_projects where id=$1 for update', [v.projectId])).rows[0];
+    const project = (await sql.query(`select tp.id,tp.organization_id,tp.status from brand_projects tp where tp.id=$1 and ${TEAM_PROJECTS('tp')} for update`, [v.projectId])).rows[0];
     if (!project) throw new Denied('not_found');
     if (project.status === 'cancelled') throw new Denied('not_active');
     let added = 0, updated = 0;
@@ -213,7 +214,7 @@ export async function importShortlist(
         added++;
       }
     }
-    await sql.query('update brand_projects set updated_at=now() where id=$1', [v.projectId]);
+    await sql.query(`update brand_projects tp set updated_at=now() where tp.id=$1 and ${TEAM_PROJECTS('tp')}`, [v.projectId]);
     return { id: v.projectId, added, updated };
   });
 }
@@ -240,8 +241,9 @@ export async function loadStudioShortlist(deps: { sql: SqlRunner }, viewer: View
   try {
     return await deps.sql.transaction(async sql => {
       await requireStudio(sql, viewer.userId);
-      const rows = (await sql.query(`select ${COLUMNS} from brand_shortlist_candidates where project_id=$1 ${ORDER}`, [projectId])).rows;
-      const project = (await sql.query('select shortlist_criteria from brand_projects where id=$1', [projectId])).rows[0];
+      // A brand's own studio project answers like a missing one (lib/brands/project-origin.ts).
+      const project = (await sql.query(`select tp.shortlist_criteria from brand_projects tp where tp.id=$1 and ${TEAM_PROJECTS('tp')}`, [projectId])).rows[0];
+      const rows = project ? (await sql.query(`select ${COLUMNS} from brand_shortlist_candidates where project_id=$1 ${ORDER}`, [projectId])).rows : [];
       return { candidates: rows.map(studioCandidate), criteria: criteriaOf(project?.shortlist_criteria) };
     });
   } catch (error) {
@@ -285,7 +287,7 @@ export async function triageShortlist(deps: { sql: SqlRunner }, viewer: Viewer, 
   const v = parsed.data;
   return run(deps.sql, async sql => {
     await requireStudio(sql, viewer.userId);
-    const project = (await sql.query('select id from brand_projects where id=$1', [v.projectId])).rows[0];
+    const project = (await sql.query(`select tp.id from brand_projects tp where tp.id=$1 and ${TEAM_PROJECTS('tp')}`, [v.projectId])).rows[0];
     if (!project) throw new Denied('not_found');
     const all = [...v.share, ...v.exclude, ...v.wait];
     const found = (await sql.query('select id from brand_shortlist_candidates where project_id=$1 and id=any($2::uuid[]) for update', [v.projectId, all])).rows;
@@ -320,7 +322,7 @@ export async function saveShortlistCriteria(deps: { sql: SqlRunner }, viewer: Vi
   const value = Object.keys(kept).length ? JSON.stringify(kept) : null;
   return run(deps.sql, async sql => {
     await requireStudio(sql, viewer.userId);
-    const rows = (await sql.query('update brand_projects set shortlist_criteria=$2::jsonb where id=$1 returning id', [v.projectId, value])).rows;
+    const rows = (await sql.query(`update brand_projects tp set shortlist_criteria=$2::jsonb where tp.id=$1 and ${TEAM_PROJECTS('tp')} returning tp.id`, [v.projectId, value])).rows;
     if (rows.length === 0) throw new Denied('not_found');
     return { id: v.projectId };
   });

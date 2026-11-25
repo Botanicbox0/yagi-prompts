@@ -12,6 +12,7 @@ import { adjustOrganizationStorageBytes, checkStorageQuotaForUpload } from '../s
 import { isOrganizationUploadApproved } from '../upload-gate';
 import type { UploadLimitReason } from '../upload-limits-format';
 import { enqueueTeamNotice } from '../team-notice-outbox';
+import { TEAM_PROJECTS } from '../project-origin';
 import { UNKNOWN_POST_PRESENTATION } from './performance';
 import {
   BrandHttpsUrlSchema, BrandOrganizationSchema, BrandProjectSchema, BrandProjectStatusSchema, BrandContentSchema,
@@ -92,8 +93,10 @@ async function project(sql: SqlRunner, userId: string, id: string, options: { st
     if (options.write || options.comment) throw new Denied('forbidden');
     if (!await hasStaffReadAccess(sql, userId, options.staff.verifiedEmail)) throw new Denied('not_found');
   }
+  // Team projects only, for every branch (customer, studio, staff): a brand's own studio project is never opened
+  // here, and answers exactly like a missing one (lib/brands/project-origin.ts).
   const row = (await sql.query(`select p.*,o.name as organization_name from brand_projects p
-    join brand_organizations o on o.id=p.organization_id where p.id=$1 ${options.write ? 'for update of p' : 'for share of p'}`, [id])).rows[0];
+    join brand_organizations o on o.id=p.organization_id where p.id=$1 and ${TEAM_PROJECTS('p')} ${options.write ? 'for update of p' : 'for share of p'}`, [id])).rows[0];
   if (!row) throw new Denied('not_found');
   if (options.studio) { row.member_role = 'studio'; row.can_comment = true; }
   else if (options.staff) { row.member_role = 'studio'; row.can_comment = false; }
@@ -266,8 +269,9 @@ export async function loadBrandWorkspace(deps: BrandWorkspaceDeps, viewer: Viewe
     const memberships = (await sql.query(`select o.id,o.name,m.role from brand_organizations o join brand_memberships m on m.organization_id=o.id
       where m.user_id=$1 and m.status='active' and ($2::uuid is null or o.id=$2::uuid) order by o.created_at for share of m`, [viewer.userId, scope])).rows;
     if (scope !== null && memberships.length === 0 && await hasStaffReadAccess(sql, viewer.userId!, deps.verifiedEmail)) {
+      // Team projects only: a brand's own studio project is never on the team side (lib/brands/project-origin.ts).
       const all = (await sql.query(`select p.*,o.name as organization_name from brand_projects p join brand_organizations o on o.id=p.organization_id
-        where p.organization_id=$1 order by p.updated_at desc`, [scope])).rows;
+        where p.organization_id=$1 and ${TEAM_PROJECTS('p')} order by p.updated_at desc`, [scope])).rows;
       return { organizations: [], projects: await withHomeOverview(sql, all.map(summary), options.includeAllContent ? Infinity : 4) };
     }
     const projects = (await sql.query(`select p.*,o.name as organization_name from brand_projects p join brand_organizations o on o.id=p.organization_id
@@ -318,7 +322,7 @@ async function loadBrandWorkspaceChoices(deps: BrandWorkspaceDeps, viewer: Viewe
     if (await hasStaffReadAccess(sql, viewer.userId!, deps.verifiedEmail)) {
       const brands = (await sql.query('select id,name,logo_id,logo_revision from brand_organizations order by lower(name),id')).rows;
       for (const r of brands) if (!choices.some(c => c.id === r.id)) choices.push({ id: String(r.id), name: String(r.name), role: 'studio', logoUrl: logoUrl(r) });
-      const all = (await sql.query('select id,organization_id from brand_projects order by id')).rows;
+      const all = (await sql.query(`select p.id,p.organization_id from brand_projects p where ${TEAM_PROJECTS('p')} order by p.id`)).rows;
       return { choices, projectOrganizations: Object.fromEntries(all.map(r => [String(r.id), String(r.organization_id)])) };
     }
     for (const r of projects) {
@@ -332,7 +336,7 @@ export async function loadStudioWorkspace(deps: BrandWorkspaceDeps, viewer: View
   if (!uuid(viewer.userId)) return { organizations: [], projects: [] };
   try { return await deps.sql.transaction(async sql => {
     await studio(sql, viewer.userId!);
-    const rows = (await sql.query('select p.*,o.name as organization_name from brand_projects p join brand_organizations o on o.id=p.organization_id order by p.updated_at desc')).rows;
+    const rows = (await sql.query(`select p.*,o.name as organization_name from brand_projects p join brand_organizations o on o.id=p.organization_id where ${TEAM_PROJECTS('p')} order by p.updated_at desc`)).rows;
     const orgs=(await sql.query('select id,name from brand_organizations order by created_at desc')).rows;
     return { organizations: orgs.map(r=>({id:String(r.id),name:String(r.name),role:'owner' as const})), projects: await withHomeOverview(sql, rows.map(summary)) };
   }); } catch (error) { if (error instanceof Denied) return { organizations: [], projects: [] }; throw error; }
@@ -456,7 +460,7 @@ export async function attachIntakeBriefFiles(deps: BrandWorkspaceDeps, viewer: V
       const current = IntakeBriefSchema.safeParse(p.intake_brief);
       if (current.success) {
         const merged = [...new Set([...current.data.briefAttachmentIds, ...ready])].slice(0, 10);
-        await sql.query('update brand_projects set intake_brief=$2::jsonb where id=$1', [
+        await sql.query(`update brand_projects tp set intake_brief=$2::jsonb where tp.id=$1 and ${TEAM_PROJECTS('tp')}`, [
           p.id,
           JSON.stringify({ ...current.data, briefAttachmentIds: merged }),
         ]);
@@ -478,7 +482,7 @@ export async function activateBrandProject(deps: BrandWorkspaceDeps, viewer: Vie
     if (Number(p.revision) !== v.expectedRevision) throw new Denied('conflict');
     const valid = (p.status === 'requested' && ['active', 'cancelled'].includes(v.status)) || (p.status === 'active' && ['completed', 'cancelled'].includes(v.status));
     if (!valid) throw new Denied('conflict');
-    await sql.query('update brand_projects set status=$1,revision=revision+1,updated_at=now() where id=$2', [v.status, p.id]);
+    await sql.query(`update brand_projects tp set status=$1,revision=revision+1,updated_at=now() where tp.id=$2 and ${TEAM_PROJECTS('tp')}`, [v.status, p.id]);
     await event(sql, p, 'project_status_changed', randomUUID()); return { id: String(p.id) };
   });
 }
@@ -722,7 +726,7 @@ export async function setBrandProjectCover(deps: BrandWorkspaceDeps, viewer: Vie
     if (Number(p.revision) !== v.expectedRevision) throw new Denied('conflict');
     if (v.attachmentId && !(await sql.query(`select id from brand_attachments where project_id=$1 and id=$2 and status='ready'
       and access_scope='workspace' and mime=any($3::text[])`, [p.id, v.attachmentId, [...BRAND_COVER_MIMES]])).rows[0]) throw new Denied('invalid');
-    await sql.query('update brand_projects set cover_attachment_id=$1,revision=revision+1,updated_at=now() where id=$2', [v.attachmentId, p.id]);
+    await sql.query(`update brand_projects tp set cover_attachment_id=$1,revision=revision+1,updated_at=now() where tp.id=$2 and ${TEAM_PROJECTS('tp')}`, [v.attachmentId, p.id]);
     return { id: String(p.id) };
   });
 }
@@ -911,7 +915,7 @@ export type BrandInvitationAccepted = {
 };
 async function acceptedScope(sql: SqlRunner, invite: Row, roomLanding = false): Promise<BrandInvitationAccepted> {
   if (!invite.project_id) return { organizationId: String(invite.organization_id) };
-  const shared = (await sql.query('select client_visible from brand_projects where id=$1 and organization_id=$2', [invite.project_id, invite.organization_id])).rows[0]?.client_visible === true;
+  const shared = (await sql.query(`select tp.client_visible from brand_projects tp where tp.id=$1 and tp.organization_id=$2 and ${TEAM_PROJECTS('tp')}`, [invite.project_id, invite.organization_id])).rows[0]?.client_visible === true;
   const scope: BrandInvitationAccepted = { organizationId: String(invite.organization_id), projectId: String(invite.project_id), projectShared: shared };
   if (roomLanding && shared) {
     const kind = invite.target_kind === 'review' || invite.target_kind === 'storyboard' ? invite.target_kind : null;
@@ -1005,7 +1009,7 @@ export async function setBrandProjectVisibility(deps:BrandWorkspaceDeps,viewer:V
  return mutation(deps,viewer,z.object({projectId:z.uuid(),visible:z.boolean(),expectedRevision:z.number().int().nonnegative()}),input,async(sql,userId,v)=>{
   const p=await project(sql,userId,v.projectId,{studio:true,write:true});
   if(Number(p.revision)!==v.expectedRevision)throw new Denied('conflict');
-  await sql.query('update brand_projects set client_visible=$1,revision=revision+1,updated_at=now() where id=$2',[v.visible,p.id]);
+  await sql.query(`update brand_projects tp set client_visible=$1,revision=revision+1,updated_at=now() where tp.id=$2 and ${TEAM_PROJECTS('tp')}`,[v.visible,p.id]);
   return {id:String(p.id)};
  });
 }
