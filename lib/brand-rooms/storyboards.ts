@@ -747,6 +747,22 @@ async function postEvents(deps: StoryboardDeps, events: readonly RoomEventInput[
 
 /* --------------------------------------------------------------- brand reads */
 
+/**
+ * The cover each board's list item shows (`StoryboardListItem.coverUrl`, the list's own select and builder), for
+ * boards the brand may see, by id; one statement. It decides nothing about access: the caller has already seated
+ * the person and takes the ids from what that person may open (the bell's lines, lib/brand-rooms/bell.ts).
+ */
+export async function storyboardCoverUrls(sql: SqlRunner, media: StudioMediaStore, organizationId: string, boardIds: readonly string[]): Promise<Map<string, string | null>> {
+  if (boardIds.length === 0) return new Map();
+  const rows = (await sql.query<BoardRow>(`${BOARD_SELECT} and b.organization_id = $1 and b.id = any($2::uuid[]) ${BRAND_VISIBLE}`, [organizationId, [...boardIds]])).rows;
+  return new Map(
+    rows.map((row) => {
+      const item = listItem(row, media);
+      return [item.id.toLowerCase(), item.coverUrl] as const;
+    }),
+  );
+}
+
 /** `GET /api/brand-rooms/storyboards?organizationId=&projectId=` */
 export async function loadStoryboardList(deps: StoryboardDeps, viewer: Viewer, organizationId: string, projectId: string): Promise<StoryboardList | StoryboardFailure> {
   return guard(() =>

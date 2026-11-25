@@ -11,6 +11,7 @@ import {
   STUDIO_OPERATIONS,
   type StudioAssetReserved,
   type StudioAssetSaved,
+  type StudioBrandProjectCards,
   type StudioDone,
   type StudioLyricsDraft,
   type StudioMusicDesign,
@@ -88,6 +89,14 @@ const SELF_STUDIO_OPS: ReadonlySet<StudioOperation> = new Set([
   'handoff.campaign',
   'job.assign_project',
 ]);
+
+/**
+ * The 직접 만들기 home's project cards for a server page (`project.cards`, ./brand-project-files.ts): exactly what
+ * `POST /api/brand-studio` answers the same caller (spine closed for the organization: `invalid`).
+ */
+export async function loadProjectCards(deps: StudioDeps, viewer: Viewer, organizationId: string): Promise<StudioBrandProjectCards | StudioFailure> {
+  return (await runBrandProjectRead(deps, viewer, 'project.cards', { organizationId })) as StudioBrandProjectCards | StudioFailure;
+}
 
 /** One `POST /api/brand-studio` operation. Unknown names are `invalid`. */
 export async function runStudioOperation(deps: StudioDeps, viewer: Viewer, operation: unknown, input: unknown): Promise<StudioOperationResult> {

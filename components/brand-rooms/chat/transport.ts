@@ -19,6 +19,7 @@ import {
   type RoomThreadPage,
 } from "@/lib/brand-rooms/message-contracts";
 import { isUnapprovedUploadReason, type UploadLimitReason } from "@/lib/brands/upload-limits-format";
+import type { RoomSummaryWithBell } from "@/lib/brand-rooms/bell";
 
 export type Fail = { ok: false; code: RoomErrorCode | "offline"; reason?: UploadLimitReason };
 export type LoadResult = RoomStreamPage | RoomThreadPage | RoomRefPage | Fail;
@@ -80,6 +81,27 @@ function sendBytes(method: "PUT" | "POST", url: string, file: File, mime: string
     xhr.onabort = () => resolve(false);
     xhr.send(file);
   });
+}
+
+/**
+ * The bell's one read (docs/BRAND-PROJECT-SPINE.md §8.4, slice 3a; lib/brand-rooms/bell.ts): the 알림함's summary
+ * with `bell` added for a workspace member while 직접 만들기 is open. `bell` absent: this person has no bell here.
+ * A failure carries the server's code (`rooms_closed`, `not_found` and `sign_in_required` mean: stop asking on this
+ * page) or `offline`. Marking a conversation read stays `brandTransport(organizationId).read(channel, at)`.
+ */
+export async function loadRoomBell(organizationId: string, fetcher: typeof fetch = (...args) => fetch(...args)): Promise<RoomSummaryWithBell | Fail> {
+  try {
+    const response = await fetcher(`/api/brand-rooms/summary?organizationId=${encodeURIComponent(organizationId)}&bell=1`, {
+      cache: "no-store",
+      credentials: "same-origin",
+      headers: { accept: "application/json" },
+    });
+    const body = (await response.json().catch(() => null)) as Record<string, unknown> | null;
+    if (response.ok && body && body.ok === true) return body as unknown as RoomSummaryWithBell;
+    return failOf(body ?? { code: response.status === 401 ? "sign_in_required" : response.status === 404 ? "not_found" : "failed" });
+  } catch {
+    return { ok: false, code: "offline" };
+  }
 }
 
 export function brandTransport(organizationId: string): ChatTransport {
