@@ -1,6 +1,6 @@
 # 브랜드 워크스페이스: 프로젝트 뼈대
 
-> 2026-11-25 설계. 기준 커밋 `origin/main` `3d274a58`. **설계와 시안만 있고 기능은 아직 만들지 않았다.**
+> 2026-11-25 설계. 기준 커밋 `origin/main` `3d274a58`(쓰는 동안 PR #369가 들어와 `ef2163cd`가 됐다. 줄 번호는 `3d274a58` 기준이고, 인용한 파일 가운데 그 사이 바뀐 것은 `components/brand-studio/video/workspace.tsx` 하나라 그 파일의 줄 번호만 밀렸을 수 있다. 마이그레이션 번호는 그대로다). **설계와 시안만 있고 기능은 아직 만들지 않았다.**
 > 대표 지시 원문은 §1에 그대로 옮겼다. 시안 화면은 `docs/qa/brand-project-spine/`에 있다(§12).
 > 이 문서가 `docs/BRAND-STUDIO-V6-PLAN.md` §3의 "프로젝트는 `brand_studio_video_projects` 하나"와 §8-4("프로젝트 이름")를 대신한다. 구현 첫 PR에서 V6 문서의 그 두 곳에 이 문서 링크를 단다.
 
@@ -367,7 +367,7 @@ brand_announcement_dismissals (announcement_id, user_id, dismissed_at)   -- 사�
 
 - 없애지 않는다. `/s/<token>`, `brand_room_shares`, `/brand/studio/review`는 야기 팀 프로젝트의 시안 검수에 그대로 쓴다.
 - 직접 만든 파일에서는 기본 행동이 아니다. 뷰어의 `더보기`에 "외부 링크 만들기"로 남는다(owner·editor, 지금 권한 그대로).
-- `share-review-dialog.tsx`는 그 길에서 계속 쓴다. 겹침 버그는 다른 세션이 고치고 있어 이 설계는 손대지 않는다.
+- `share-review-dialog.tsx`는 그 길에서 계속 쓴다(겹침 버그는 PR #369에서 고쳐졌다). 이 설계는 그 파일을 바꾸지 않는다.
 - 보내기가 열리면 share-bridge는 "스튜디오 공유 · 검수함"을 새로 만들지 않는다. 야기 팀에 보여 주려면 야기 팀 프로젝트를 고르게 한다.
 
 ## 9. Slack 1단계 (설계만)

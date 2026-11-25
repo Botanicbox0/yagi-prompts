@@ -317,7 +317,7 @@ def viewer(invite: bool) -> str:
                   f'<div class="sp-picker-row">{avatar("이준서", "sm", "b")}<div><strong>이준서</strong> <span class="sp-muted">보기 전용</span></div><span></span></div></div>')
         typed = f'{mention(DOYUN)} 립 컬러는 이 컷이 제일 자연스러워요. 메인으로 어때요? @이<span class="sp-caret"></span>'
     acts = "".join(f'<button type="button" class="sp-act" aria-pressed="{"true" if a == T["send"] else "false"}">{a}</button>'
-                   for a in ["이미지 스튜디오로", "꾸미기", "영상 만들기", T["send"], "비슷한 항목"])
+                   for a in ["이미지 스튜디오로", "디테일 편집", "영상 만들기", T["send"], "비슷한 항목"])
     return (f'<div class="sp-scrim" data-viewer="mock"><div class="sp-viewer" role="dialog" aria-label="이미지">'
             f'<div class="sp-viewer-stage">{img("landing/cut-hands.webp")}</div>'
             f'<div class="sp-viewer-side"><div class="sp-viewer-top"><span class="sp-muted">생성 결과</span><span style="margin-left:auto"></span>'
