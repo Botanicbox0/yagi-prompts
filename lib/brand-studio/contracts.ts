@@ -678,7 +678,7 @@ export const BRAND_PROJECT_LIMITS = {
    */
   createPerDay: 20,
   /** `project.overview`: cover tiles per group (the newest image and video results; for 브랜드 자료, the newest files). */
-  overviewCovers: 4,
+  overviewCovers: 6,
   /** `project.files`: items per page (a run with all its results, a library entry or a film is one item). */
   filesPage: 40,
   /** `project.files`: the longest cursor accepted. */
