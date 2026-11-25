@@ -125,3 +125,17 @@ http_headers = { Authorization = "Bearer <YOUR_TOKEN>" }
 - **영상 테스트 렌더**: `test_render`는 이미지 단계만 실행한다. 영상 단계는 구매 시에만 생성되며, 이미지 단계가 없는 영상 전용 레시피는 `video_test_unavailable`로 거절된다(예시 영상 파일 업로드로 공개).
 - **초안 삭제**: MCP에는 초안 삭제 도구가 없다.
 - **비공개·사설망 URL 가져오기**: `upload_file`과 `add_work`의 `url`은 공개 `https` 주소만 허용하며, 사설·로컬 주소와 리다이렉트 우회는 차단된다.
+
+## 7. 블로그 글 도구 (`TWINGS_MAKER_BLOG=on`일 때 활성)
+
+`TWINGS_MAKER_BLOG=on`이면 같은 `/api/mcp` 엔드포인트에서 AI 크리에이티브 블로그 글 작성·공개 도구 6종이 추가로 열린다(스위치가 꺼져 있을 때는 `tools/list`에서 숨겨지며 호출 시 `not_open` 오류를 반환한다).
+
+| 도구 | 읽기 전용 | 역할 |
+| --- | --- | --- |
+| `get_post_guide` | ✓ | 7종 블록 스키마, 글자·용량(`POST_MAX_JSON_BYTES`)·편수(`POST_MAX_PER_MAKER`, 하루 `POST_MAX_NEW_PER_DAY`) 한도 조회 |
+| `list_posts` | ✓ | 내 블로그 글 목록(`draft` · `published` · `hidden`)과 편집·공개 주소 조회 |
+| `get_post` | ✓ | 글 1편의 전체 블록과 상태 조회 |
+| `save_post` | | 새 초안 생성 또는 기존 초안·공개 글 저장(`hidden` 상태는 잠김) |
+| `publish_post` | | `rightsConfirmed: true` 확인 및 1개 이상 블록·소유 미디어·공개 템플릿 검증 후 즉시 공개 |
+| `unpublish_post` | | 공개 중인 글을 `draft`로 되돌리기(`hidden` 상태는 잠김) |
+

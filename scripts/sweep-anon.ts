@@ -1541,6 +1541,18 @@ async function sweepMakers(): Promise<void> {
   const sitemap = await get('/sitemap.xml');
   expectPresent('the maker page is in the sitemap', sitemap.body, '/ko/makers/jun</loc>');
   expectAbsent('…a handle without one is not', sitemap.body, '/makers/hana');
+
+  // Batch 3 (`TWINGS_MAKER_BLOG`): off by default — every blog surface 404s and stays out of pages/sitemap.
+  expectEqual('maker blog list ko 404s while TWINGS_MAKER_BLOG is off', (await get('/ko/makers/jun/blog')).status, 404);
+  expectEqual('maker blog list en 404s while TWINGS_MAKER_BLOG is off', (await get('/en/makers/jun/blog')).status, 404);
+  expectEqual('maker blog post 404s while TWINGS_MAKER_BLOG is off', (await get('/ko/makers/jun/blog/any-post')).status, 404);
+  expectEqual('post access API 404s while TWINGS_MAKER_BLOG is off', (await get('/api/posts/access?handle=jun&slug=any-post')).status, 404);
+  const makerJun = await get('/ko/makers/jun');
+  expectAbsent('maker profile has no blog tabs while TWINGS_MAKER_BLOG is off', makerJun.body, 'data-maker-blog-');
+  const recipeEn = await get(`/en/t/${LOCAL_RECIPE_SLUG}`);
+  expectAbsent('template page has no blog stories while TWINGS_MAKER_BLOG is off', recipeEn.body, 'data-maker-blog-');
+  expectAbsent('template page has no original instagram section while TWINGS_MAKER_BLOG is off', recipeEn.body, 'data-template-original-instagram');
+  expectAbsent('sitemap has no maker blog URLs while TWINGS_MAKER_BLOG is off', sitemap.body, '/makers/jun/blog');
 }
 
 /** Public monthly outcomes, no per-template price table or account data. */

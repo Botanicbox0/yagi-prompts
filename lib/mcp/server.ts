@@ -24,6 +24,40 @@ import { GUIDE_META_MAX, GUIDE_NOTE_MAX, GUIDE_PROMPT_MAX, GUIDE_PROMPT_MIN, GUI
 import { isVideoEngine } from '@/lib/images/engines';
 import { DEFAULT_PROMPT_CHARS, SEEDANCE_25_PROMPT_CHARS, formatPromptChars, promptCharLimit } from '@/lib/engines/prompt-limits';
 import { guideTokenWarnings } from './guide-warnings';
+import { makerBlogOpen } from '@/lib/posts/flag';
+import { PostError } from '@/lib/posts/repo';
+import { makerBlogPostHref, postEditorHref } from '@/lib/posts/links';
+import {
+  POST_HEADING_MAX,
+  POST_HEADING_MIN,
+  POST_LIST_ITEM_MAX,
+  POST_LIST_MAX_ITEMS,
+  POST_LIST_MIN_ITEMS,
+  POST_MAX_BLOCKS,
+  POST_MAX_JSON_BYTES,
+  POST_MAX_NEW_PER_DAY,
+  POST_MAX_PER_MAKER,
+  POST_MEDIA_CAPTION_MAX,
+  POST_PROMPT_MAX,
+  POST_PROMPT_META_MAX,
+  POST_PROMPT_MIN,
+  POST_PROMPT_NOTE_MAX,
+  POST_PROMPT_TITLE_MAX,
+  POST_PROMPT_TITLE_MIN,
+  POST_SUMMARY_MAX,
+  POST_TEMPLATE_SLUG_MAX,
+  POST_TEXT_MAX,
+  POST_TEXT_MIN,
+  POST_TITLE_MAX,
+  POST_TITLE_MIN,
+} from '@/lib/posts/schema';
+import {
+  listMakerPosts,
+  loadMakerPost,
+  publishMakerPost,
+  saveMakerPost,
+  unpublishMakerPost,
+} from '@/lib/posts/service';
 
 /** The step prompt rule as the guide and the tools state it — built from the constants so it cannot drift again. */
 export const MCP_PROMPT_LIMIT_TEXT = `${MIN_STEP_PROMPT_CHARS}–${formatPromptChars(DEFAULT_PROMPT_CHARS)} characters a step; a Seedance 2.5 video step takes up to ${formatPromptChars(SEEDANCE_25_PROMPT_CHARS)}. A step is one clip, so the limit is per clip, never a total: two clips have ${formatPromptChars(SEEDANCE_25_PROMPT_CHARS)} each.`;
@@ -131,6 +165,68 @@ export const MCP_TOOLS = [
   tool('remove_work', 'Remove a work', 'Removes one work (wrk_ id) from your profile.', { id: str }, ['id']),
   tool('get_stats', 'My stats', 'How many signed-in members opened each of your published recipes, in total and in the last 7 days.', {}, [], true),
 ];
+
+export const MCP_POST_TOOLS = [
+  tool('get_post_guide', 'Post guide', 'Returns all blog post block schemas, character limits, and publishing rules derived from schema constants.', {}, [], true),
+  tool('list_posts', 'List posts', `Lists up to ${POST_MAX_PER_MAKER} of your blog posts (draft, published, or hidden) with editor and public URLs.`, {}, [], true),
+  tool('get_post', 'Get post', 'Fetches one of your blog posts (full blocks, status, and URLs) by UUID.', { id: str }, ['id'], true),
+  tool('save_post', 'Save post', 'Creates a new blog post draft or updates an existing draft/published post (hidden posts are locked).', {
+    id: { type: 'string', description: 'Existing post UUID to update; omit to create a new draft.' },
+    title: { type: 'string', description: `${POST_TITLE_MIN}–${POST_TITLE_MAX} characters.` },
+    summary: { type: ['string', 'null'], description: `Optional summary up to ${POST_SUMMARY_MAX} characters.` },
+    coverWorkId: { type: ['string', 'null'], description: 'Optional cover work id (wrk_...) or null.' },
+    blocks: {
+      type: 'array',
+      description: `Up to ${POST_MAX_BLOCKS} blocks (${POST_MAX_JSON_BYTES} bytes max). Call get_post_guide for exact block shapes.`,
+      items: { type: 'object', additionalProperties: true },
+    },
+  }, ['title', 'blocks']),
+  tool('publish_post', 'Publish post', 'Self-publishes one of your blog posts immediately after validating blocks and rights confirmation.', {
+    id: str,
+    rightsConfirmed: { type: 'boolean', description: 'Must be true to confirm rights for all content in the post.' },
+  }, ['id', 'rightsConfirmed']),
+  tool('unpublish_post', 'Unpublish post', 'Moves one of your published posts back to draft.', { id: str }, ['id']),
+];
+
+export function postGuide() {
+  return {
+    maxPostsPerMaker: POST_MAX_PER_MAKER,
+    maxNewPerDay: POST_MAX_NEW_PER_DAY,
+    maxBlocks: POST_MAX_BLOCKS,
+    maxJsonBytes: POST_MAX_JSON_BYTES,
+    selfPublish: true,
+    rightsConfirmationRequired: true,
+    limits: {
+      titleMin: POST_TITLE_MIN,
+      titleMax: POST_TITLE_MAX,
+      summaryMax: POST_SUMMARY_MAX,
+      headingMin: POST_HEADING_MIN,
+      headingMax: POST_HEADING_MAX,
+      textMin: POST_TEXT_MIN,
+      textMax: POST_TEXT_MAX,
+      listMinItems: POST_LIST_MIN_ITEMS,
+      listMaxItems: POST_LIST_MAX_ITEMS,
+      listItemMax: POST_LIST_ITEM_MAX,
+      mediaCaptionMax: POST_MEDIA_CAPTION_MAX,
+      promptTitleMin: POST_PROMPT_TITLE_MIN,
+      promptTitleMax: POST_PROMPT_TITLE_MAX,
+      promptMetaMax: POST_PROMPT_META_MAX,
+      promptMin: POST_PROMPT_MIN,
+      promptMax: POST_PROMPT_MAX,
+      promptNoteMax: POST_PROMPT_NOTE_MAX,
+      templateSlugMax: POST_TEMPLATE_SLUG_MAX,
+    },
+    blockTypes: [
+      { type: 'heading', shape: { type: 'heading', text: `${POST_HEADING_MIN}..${POST_HEADING_MAX} chars` } },
+      { type: 'text', shape: { type: 'text', text: `${POST_TEXT_MIN}..${POST_TEXT_MAX} chars plain text (no HTML)` } },
+      { type: 'list', shape: { type: 'list', items: `${POST_LIST_MIN_ITEMS}..${POST_LIST_MAX_ITEMS} items, <=${POST_LIST_ITEM_MAX} chars each` } },
+      { type: 'media', shape: { type: 'media', workId: 'wrk_<32 hex> owned in maker_works', caption: `optional <=${POST_MEDIA_CAPTION_MAX} chars` } },
+      { type: 'prompt', shape: { type: 'prompt', title: `${POST_PROMPT_TITLE_MIN}..${POST_PROMPT_TITLE_MAX}`, kind: 'image | video', meta: `optional <=${POST_PROMPT_META_MAX}`, prompt: `${POST_PROMPT_MIN}..${POST_PROMPT_MAX}`, note: `optional <=${POST_PROMPT_NOTE_MAX}` }, note: 'Gated behind member sign-in on public pages.' },
+      { type: 'template', shape: { type: 'template', slug: `published public template slug (<=${POST_TEMPLATE_SLUG_MAX})` } },
+      { type: 'instagram', shape: { type: 'instagram', url: 'https://www.instagram.com/p/<id>/ or /reel/<id>/' } },
+    ],
+  };
+}
 
 class ToolFailure extends Error {
   constructor(readonly code: string, readonly detail?: unknown) { super(code); }
@@ -382,6 +478,74 @@ async function callTool(deps: McpDeps, name: string, args: Record<string, unknow
       return { removed: true };
     case 'get_stats':
       return makerStats(deps.sql, deps.userId);
+    case 'get_post_guide':
+      if (!makerBlogOpen()) throw new PostError('not_open');
+      return postGuide();
+    case 'list_posts': {
+      const [posts, settings] = await Promise.all([
+        listMakerPosts(deps.sql, deps.userId),
+        loadMakerSettings(deps.sql, deps.userId).catch(() => null),
+      ]);
+      const handle = settings?.handle ?? null;
+      return {
+        posts: posts.map((post) => ({
+          ...post,
+          editorUrl: `${deps.origin}${postEditorHref(post.id)}`,
+          publicUrl: post.status === 'published' && handle ? `${deps.origin}${makerBlogPostHref('ko', handle, post.slug)}` : null,
+        })),
+      };
+    }
+    case 'get_post': {
+      const id = typeof args.id === 'string' ? args.id : '';
+      const [post, settings] = await Promise.all([
+        loadMakerPost(deps.sql, deps.userId, id),
+        loadMakerSettings(deps.sql, deps.userId).catch(() => null),
+      ]);
+      if (!post) throw new PostError('not_found');
+      const handle = settings?.handle ?? null;
+      return {
+        post,
+        editorUrl: `${deps.origin}${postEditorHref(post.id)}`,
+        publicUrl: post.status === 'published' && handle ? `${deps.origin}${makerBlogPostHref('ko', handle, post.slug)}` : null,
+      };
+    }
+    case 'save_post': {
+      const result = await saveMakerPost(deps.sql, deps.userId, {
+        ...(args.id !== undefined ? { id: args.id } : {}),
+        title: args.title,
+        summary: args.summary,
+        coverWorkId: args.coverWorkId,
+        blocks: args.blocks,
+      });
+      const settings = await loadMakerSettings(deps.sql, deps.userId).catch(() => null);
+      const handle = settings?.handle ?? null;
+      return {
+        created: result.created,
+        post: result.post,
+        editorUrl: `${deps.origin}${postEditorHref(result.post.id)}`,
+        publicUrl: result.post.status === 'published' && handle ? `${deps.origin}${makerBlogPostHref('ko', handle, result.post.slug)}` : null,
+      };
+    }
+    case 'publish_post': {
+      const id = typeof args.id === 'string' ? args.id : '';
+      const post = await publishMakerPost(deps.sql, deps.userId, id, {
+        rightsConfirmed: args.rightsConfirmed === true,
+      });
+      const settings = await loadMakerSettings(deps.sql, deps.userId).catch(() => null);
+      const handle = settings?.handle ?? null;
+      return {
+        post,
+        publicUrl: handle ? `${deps.origin}${makerBlogPostHref('ko', handle, post.slug)}` : null,
+      };
+    }
+    case 'unpublish_post': {
+      const id = typeof args.id === 'string' ? args.id : '';
+      const post = await unpublishMakerPost(deps.sql, deps.userId, id);
+      return {
+        post,
+        editorUrl: `${deps.origin}${postEditorHref(post.id)}`,
+      };
+    }
     default:
       throw new ToolFailure('unknown_tool');
   }
@@ -395,7 +559,15 @@ function toolResult(value: unknown, isError = false) {
 function failureOf(error: unknown): { code: string; detail?: unknown } {
   if (error instanceof RecipeRejected) return { code: 'recipe_invalid', detail: error.issues };
   if (error instanceof ToolFailure) return { code: error.code, detail: error.detail };
-  if (error instanceof PlatformError || error instanceof WorkError || error instanceof MakerProfileError || error instanceof MediaFetchError) return { code: error.code };
+  if (
+    error instanceof PlatformError ||
+    error instanceof WorkError ||
+    error instanceof MakerProfileError ||
+    error instanceof MediaFetchError ||
+    error instanceof PostError
+  ) {
+    return { code: error.code };
+  }
   return { code: 'unavailable' };
 }
 
@@ -417,10 +589,12 @@ async function handleOne(deps: McpDeps, message: JsonRpcRequest): Promise<JsonRp
       } };
     }
     case 'ping': return { jsonrpc: '2.0', id, result: {} };
-    case 'tools/list': return { jsonrpc: '2.0', id, result: { tools: MCP_TOOLS } };
+    case 'tools/list': return { jsonrpc: '2.0', id, result: { tools: makerBlogOpen() ? [...MCP_TOOLS, ...MCP_POST_TOOLS] : MCP_TOOLS } };
     case 'tools/call': {
       const name = typeof params.name === 'string' ? params.name : '';
-      if (!MCP_TOOLS.some((item) => item.name === name)) return error(-32602, `Unknown tool: ${name}`);
+      const isPostTool = MCP_POST_TOOLS.some((item) => item.name === name);
+      if (!MCP_TOOLS.some((item) => item.name === name) && !isPostTool) return error(-32602, `Unknown tool: ${name}`);
+      if (isPostTool && !makerBlogOpen()) return { jsonrpc: '2.0', id, result: toolResult({ code: 'not_open' }, true) };
       const args = (params.arguments && typeof params.arguments === 'object' && !Array.isArray(params.arguments) ? params.arguments : {}) as Record<string, unknown>;
       // Every call re-checks the gate: a token outlives a revoked creative only until its next call.
       const gate = await creativeGate(deps.sql, deps.userId);

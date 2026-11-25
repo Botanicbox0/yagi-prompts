@@ -3,6 +3,8 @@ import type { CatalogCard } from '@/lib/content/catalog';
 import { CAST_SECTIONS, cardCast, type PromptCard, type PublicMaker } from '@/lib/prompts/catalog';
 import { castRest } from '@/lib/prompts/links';
 import { makerRest } from '@/lib/makers/links';
+import type { SitemapPostEntry } from '@/lib/posts/public';
+import { makerBlogPostRest } from '@/lib/posts/links';
 import { TEMPLATE_LISTING_REST, templateRest } from '@/lib/prompts/links';
 import { LEGAL_DOCS } from '@/lib/legal/documents';
 import { legalRest } from '@/lib/legal/links';
@@ -49,6 +51,8 @@ export interface SitemapInput {
    * all; a page with no published template yet is thin, so it waits until there is one.
    */
   makers?: PublicMaker[];
+  /** Published maker blog posts (Batch 3, only when `TWINGS_MAKER_BLOG` is on). */
+  makerPosts?: SitemapPostEntry[];
   /** Real editorial dates only, keyed by locale-independent path. Omit when unknown. */
   pageModifiedAt?: Partial<Record<string, string>>;
 }
@@ -65,7 +69,7 @@ function absoluteAlternates(origin: string, rest: string): Record<string, string
 }
 
 export function buildSitemap(input: SitemapInput): MetadataRoute.Sitemap {
-  const { origin, cards, templates = [], pageModifiedAt = {}, includeCreatorProgram = false, makers = [] } = input;
+  const { origin, cards, templates = [], pageModifiedAt = {}, includeCreatorProgram = false, makers = [], makerPosts = [] } = input;
   const entries: MetadataRoute.Sitemap = [];
 
   const marketing: Array<{
@@ -146,6 +150,19 @@ export function buildSitemap(input: SitemapInput): MetadataRoute.Sitemap {
       entries.push({
         url: absolute(origin, `/${locale}${rest}`),
         ...modifiedDate(maker.latestPublishedAt),
+        changeFrequency: 'weekly',
+        priority: 0.5,
+        alternates: { languages: absoluteAlternates(origin, rest) },
+      });
+    }
+  }
+
+  for (const post of makerPosts) {
+    const rest = makerBlogPostRest(post.handle, post.slug);
+    for (const locale of LOCALES as readonly Locale[]) {
+      entries.push({
+        url: absolute(origin, `/${locale}${rest}`),
+        ...modifiedDate(post.updatedAt),
         changeFrequency: 'weekly',
         priority: 0.5,
         alternates: { languages: absoluteAlternates(origin, rest) },

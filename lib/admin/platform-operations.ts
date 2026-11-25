@@ -5,6 +5,8 @@ import { PlatformError } from '@/lib/creator-platform/contract';
 import { ok, fail } from './context';
 import { PlatformReviewInput, startReviewRenders, studioReviewFaces } from '@/lib/recipes/review';
 import { getRenderStore } from '@/lib/renders/store';
+import { PostError } from '@/lib/posts/repo';
+import { adminHidePost, adminRestorePost } from '@/lib/posts/service';
 import { siteUrl } from '@/lib/seo/site-url';
 
 type PlatformAction = z.infer<typeof PlatformAdminInput>['action'];
@@ -111,6 +113,42 @@ export const PLATFORM_OPERATIONS = {
   'community.policy': makePlatformOperation('policy'),
   'community.offer': makePlatformOperation('offer'),
   'community.offerDisable': makePlatformOperation('offerDisable'),
+  'post.hide': makePostModerationOperation('hide'),
+  'post.restore': makePostModerationOperation('restore'),
   'platform.manage': makePlatformOperation(),
   'platform.review': review,
 };
+
+function makePostModerationOperation(mode: 'hide' | 'restore'): AdminOperation<{ id: string; reason: string }> {
+  return {
+    parse(form) {
+      const id = form.get('id');
+      const reason = form.get('reason');
+      if (typeof id !== 'string' || typeof reason !== 'string') {
+        return { ok: false, detail: 'invalid post moderation input' };
+      }
+      const trimmed = reason.trim();
+      if (!id.trim() || trimmed.length < 3 || trimmed.length > 2000) {
+        return { ok: false, detail: 'invalid post moderation input' };
+      }
+      return { ok: true, value: { id: id.trim(), reason: trimmed } };
+    },
+    async run(ctx, input) {
+      try {
+        const result =
+          mode === 'hide'
+            ? await adminHidePost(ctx.sql, ctx.viewer, input)
+            : await adminRestorePost(ctx.sql, ctx.viewer, input);
+        return ok('saved', { to: '/admin/community#posts', detail: `${result.id}:${result.status}` });
+      } catch (error) {
+        if (error instanceof PostError) {
+          return fail(
+            error.code === 'forbidden' ? 'forbidden' : error.code === 'not_found' ? 'notFound' : 'invalid',
+            error.code,
+          );
+        }
+        return fail('unknown');
+      }
+    },
+  };
+}

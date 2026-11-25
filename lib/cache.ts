@@ -57,6 +57,28 @@ export function revalidateMakerProfile(handles: readonly string[]): void {
 }
 
 /**
+ * Batch 3 (`TWINGS_MAKER_BLOG`) — invalidates the blog cache tag, the maker's profile tabs,
+ * blog list/post routes, linked template story sections, and the sitemap. Existing cache helpers
+ * above stay untouched.
+ */
+export const POSTS_TAG = 'maker-posts';
+
+export function revalidateMakerPosts(
+  handle: string,
+  slug?: string,
+  templateSlugs: readonly string[] = [],
+): void {
+  revalidateTag(POSTS_TAG);
+  revalidateStaticSurfaces([
+    `/makers/${handle}`,
+    `/makers/${handle}/blog`,
+    ...(slug ? [`/makers/${handle}/blog/${slug}`] : []),
+    ...templateSlugs.map((templateSlug) => `/t/${templateSlug}`),
+  ]);
+  revalidatePath('/sitemap.xml');
+}
+
+/**
  * PLAN §14.2 — the contests listing is `[static + tag 'contests']`.
  *
  * A third tag on the same reasoning as the second: publishing a contest, approving an entry and

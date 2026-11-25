@@ -10,6 +10,8 @@ import { AdminShell, OpForm, OutcomeBanner, INPUT, BUTTON_PRIMARY } from '@/comp
 import { AdminPageHeader, FilterPills } from '@/components/admin/patterns';
 import { SocialQueue } from '@/components/admin/social-queue';
 import { RecipeReviewPanel } from '@/components/recipes/review-panel';
+import { makerBlogOpen } from '@/lib/posts/flag';
+import { makerBlogPostHref } from '@/lib/posts/links';
 import {
   COMMUNITY_SECTIONS,
   communitySectionHref,
@@ -43,6 +45,7 @@ export default async function PlatformAdminPage({
   const showIntake = section === 'all' || section === 'intake';
   const showFeedback = section === 'all' || section === 'feedback';
   const showPolicy = section === 'all' || section === 'policy';
+  const blogEnabled = makerBlogOpen();
 
   const social = showSocial ? (
     <SocialQueue copy={dict.social} locale={locale} queue={board.socialQueue} worker={board.socialWorker} />
@@ -72,6 +75,11 @@ export default async function PlatformAdminPage({
       <a href="#ratings" className="rounded-full border border-hairline px-3 py-1 font-mono text-xs hover:border-current">
         {cm.anchors.ratings}
       </a>
+      {blogEnabled ? (
+        <a href="#posts" className="rounded-full border border-hairline px-3 py-1 font-mono text-xs hover:border-current">
+          {cm.anchors.posts}
+        </a>
+      ) : null}
     </nav>
   );
 
@@ -119,6 +127,7 @@ export default async function PlatformAdminPage({
   if (!board.ready) return wrap(<p>{cm.unavailable}</p>);
 
   const { threads, messages, formats, ratings, claims, creators, offers, history, applications, notes, recipes } = board;
+  const posts = board.posts ?? [];
   const mr = dict.makerRecipe;
   const mediums = { video: mr.mediumVideo, image: mr.mediumImage, carousel: mr.mediumCarousel };
   const onboarding = applications !== null;
@@ -463,6 +472,76 @@ export default async function PlatformAdminPage({
               </section>
             ))}
           </>
+        ) : null}
+
+        {blogEnabled && (showFeedback || showPolicy) ? (
+          <section data-admin-community-posts className="space-y-4">
+            <h2 id="posts" className="scroll-mt-24 text-lg font-semibold">
+              {cm.postsPanel.heading}
+            </h2>
+            {posts.length === 0 ? (
+              <p className="text-sm opacity-65">{cm.postsPanel.empty}</p>
+            ) : (
+              posts.map((post) => {
+                const statusLabel =
+                  post.status === 'published'
+                    ? cm.postsPanel.statusPublished
+                    : post.status === 'hidden'
+                      ? cm.postsPanel.statusHidden
+                      : cm.postsPanel.statusDraft;
+                const actionOp = post.status === 'hidden' ? 'post.restore' : 'post.hide';
+                const actionLabel =
+                  post.status === 'hidden' ? cm.postsPanel.restore : cm.postsPanel.hide;
+                return (
+                  <div
+                    key={post.id}
+                    data-admin-post={post.id}
+                    data-status={post.status}
+                    className="space-y-3 rounded-xl border border-hairline p-4"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="min-w-0 space-y-1">
+                        <p className="font-medium break-words">{post.title}</p>
+                        <p className="font-mono text-xs opacity-65">
+                          {post.handle ? `@${post.handle}` : post.user_id} · {post.slug} ·{' '}
+                          {post.block_count} {cm.postsPanel.blocksUnit}
+                        </p>
+                      </div>
+                      <span className="rounded-full border border-hairline px-2.5 py-0.5 font-mono text-xs">
+                        {statusLabel}
+                      </span>
+                    </div>
+                    {post.handle && post.status === 'published' ? (
+                      <p className="text-xs">
+                        <a
+                          href={makerBlogPostHref('ko', post.handle, post.slug)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="underline underline-offset-4"
+                        >
+                          {makerBlogPostHref('ko', post.handle, post.slug)} ↗
+                        </a>
+                      </p>
+                    ) : null}
+                    {post.hidden_reason ? (
+                      <p className="rounded-lg bg-on-surface/5 px-3 py-2 text-xs">{post.hidden_reason}</p>
+                    ) : null}
+                    <OpForm
+                      op={actionOp}
+                      back="/admin/community#posts"
+                      className="flex flex-wrap items-center gap-2"
+                    >
+                      {hidden('id', post.id)}
+                      <div className="min-w-[14rem] flex-1">{reason()}</div>
+                      <button type="submit" className={BUTTON_PRIMARY}>
+                        {actionLabel}
+                      </button>
+                    </OpForm>
+                  </div>
+                );
+              })
+            )}
+          </section>
         ) : null}
 
         {showPolicy ? (

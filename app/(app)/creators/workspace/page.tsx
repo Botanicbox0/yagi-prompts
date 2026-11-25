@@ -24,6 +24,9 @@ import { listMakerTokens } from '@/lib/makers/tokens';
 import { makerStats } from '@/lib/makers/stats';
 import { requestSurface } from '@/lib/routing/request-surface';
 import { siteUrl } from '@/lib/seo/site-url';
+import { makerBlogOpen } from '@/lib/posts/flag';
+import { listMakerPostsForWorkspace } from '@/lib/posts/service';
+import { makerBlogPostHref, postEditorHref } from '@/lib/posts/links';
 
 /**
  * `/creators/workspace` — one screen per state: not applied, in review, declined, approved, revoked.
@@ -74,12 +77,17 @@ export default async function CreatorWorkspacePage({ searchParams }: { searchPar
     const makerSettings = sql ? await loadMakerSettings(sql, viewer.userId) : null;
     // docs/PLATFORM-2.0.md §20: works, agent tokens and recipe opens exist once 0065 is applied.
     const extended = !!sql && !!makerSettings?.extended;
-    const [works, tokens, stats] = extended && sql
-      ? await Promise.all([listMakerWorks(sql, viewer.userId), listMakerTokens(sql, viewer.userId), makerStats(sql, viewer.userId)])
-      : [[], [], []];
+    const blogEnabled = makerBlogOpen();
+    const [works, tokens, stats, posts] = await Promise.all([
+      extended && sql ? listMakerWorks(sql, viewer.userId) : Promise.resolve([]),
+      extended && sql ? listMakerTokens(sql, viewer.userId) : Promise.resolve([]),
+      extended && sql ? makerStats(sql, viewer.userId) : Promise.resolve([]),
+      blogEnabled && sql ? listMakerPostsForWorkspace(sql, viewer.userId) : Promise.resolve([]),
+    ]);
     // The agent setup shows this host's address (a preview deploy shows its own); outside a request, the site's.
     const origin = extended ? (await requestSurface().then((surface) => surface.origin).catch(() => null)) ?? siteUrl() : siteUrl();
     const p = t;
+    const b = dict.makerBlog;
     return shell('approved', <>
       <p className="text-sm opacity-70">{interpolate(t.approvedLine, { date: formatDate(creator.registeredAt, locale), contract: creator.contractVersion })}</p>
       {application?.status === 'approved' ? note(application.decisionNote) : null}
@@ -118,6 +126,72 @@ export default async function CreatorWorkspacePage({ searchParams }: { searchPar
           <McpConnect initial={tokens} endpoint={`${origin}/api/mcp`} locale={locale} copy={p.connect} />
         </section>
       </>}
+      {blogEnabled && (
+        <section id="blog" data-creative-blog className={`scroll-mt-24 ${PANEL}`}>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-semibold">{b.workspaceHeading}</h2>
+              <p className="mt-1 text-sm leading-relaxed opacity-70">{b.workspaceLede}</p>
+            </div>
+            <a href={postEditorHref('new')} data-creative-blog-new className={BUTTON}>
+              {b.workspaceNewCta}
+            </a>
+          </div>
+          {!posts.length ? (
+            <p className="text-sm opacity-65">{b.workspaceEmpty}</p>
+          ) : (
+            <ul className="space-y-3">
+              {posts.map((post) => {
+                const statusText =
+                  post.status === 'published'
+                    ? b.statusPublished
+                    : post.status === 'hidden'
+                      ? b.statusHidden
+                      : b.statusDraft;
+                const liveHref =
+                  post.status === 'published' && makerSettings?.handle
+                    ? makerBlogPostHref(locale, makerSettings.handle, post.slug)
+                    : null;
+                return (
+                  <li
+                    key={post.id}
+                    data-creative-blog-row={post.id}
+                    data-status={post.status}
+                    className="flex flex-wrap items-center justify-between gap-3 border-t border-hairline pt-4"
+                  >
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="break-words text-base font-semibold">{post.title}</h3>
+                        <span className="inline-flex min-h-6 items-center rounded-full border border-hairline px-2.5 text-xs">
+                          {statusText}
+                        </span>
+                      </div>
+                      <p className="text-xs opacity-60 tabular-nums">
+                        {formatDate(post.publishedAt ?? post.updatedAt, locale)}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <a href={postEditorHref(post.id)} className={BUTTON_OUTLINE}>
+                        {b.workspaceEdit}
+                      </a>
+                      {liveHref ? (
+                        <a
+                          href={liveHref}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex min-h-11 items-center px-3 text-sm underline underline-offset-4"
+                        >
+                          {b.workspaceViewLive} ↗
+                        </a>
+                      ) : null}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+      )}
       {records}
     </>);
   }

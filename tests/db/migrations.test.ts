@@ -166,6 +166,8 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
       // one $4 pack twice (M10 review R1, finding 2).
       'cookie_ledger',
       'cookie_purchase_events',
+      'creator_post_templates',
+      'creator_posts',
       'creator_subscription_key_cleanup',
       'creator_subscription_launch_evidence',
       'creator_subscription_periods',

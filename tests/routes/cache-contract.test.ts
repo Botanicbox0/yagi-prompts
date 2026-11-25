@@ -501,11 +501,31 @@ describe('campaigns route contract (docs/CAMPAIGNS.md §6)', () => {
  */
 describe('format creator program route contract', () => {
   it('gates exactly /creators/apply and /creators/workspace at the edge', () => {
-    for (const path of ['/creators/apply', '/creators/apply/', '/creators/workspace', '/creators/workspace/', '/creators/workspace/formats/new', '/creators/workspace/formats/11111111-1111-4111-8111-111111111111']) {
+    for (const path of [
+      '/creators/apply',
+      '/creators/apply/',
+      '/creators/workspace',
+      '/creators/workspace/',
+      '/creators/workspace/formats/new',
+      '/creators/workspace/formats/11111111-1111-4111-8111-111111111111',
+      '/creators/workspace/posts/new',
+      '/creators/workspace/posts/11111111-1111-4111-8111-111111111111',
+    ]) {
       expect(isCreatorProgramAppPath(path), path).toBe(true);
       expect(isAppPath(path), path).toBe(true);
     }
-    for (const path of ['/creators', '/creators/', '/ko/creators', '/en/creators/apply', '/creators/workspace/extra', '/creators/applyx', '/creators/workspace/formats/other', '/creators/workspace/formats/']) {
+    for (const path of [
+      '/creators',
+      '/creators/',
+      '/ko/creators',
+      '/en/creators/apply',
+      '/creators/workspace/extra',
+      '/creators/applyx',
+      '/creators/workspace/formats/other',
+      '/creators/workspace/formats/',
+      '/creators/workspace/posts/other',
+      '/creators/workspace/posts/',
+    ]) {
       expect(isCreatorProgramAppPath(path), path).toBe(false);
       expect(isAppPath(path), path).toBe(false);
     }
