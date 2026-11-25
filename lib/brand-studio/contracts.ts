@@ -669,7 +669,10 @@ export const BRAND_PROJECT_LIMITS = {
   listMax: 100,
   /** Ids in one `project.move` (jobs + assets + films, before the families are added). */
   moveMax: 200,
-  /** New projects per organization per rolling day, counted over every project row (the same rule as a team request). */
+  /**
+   * New projects of the brand's own (`origin = 'self'`) per organization per rolling day; team projects are not
+   * counted. A team request has its own count of 20 over team projects only (lib/brands/workspace/service.ts).
+   */
   createPerDay: 20,
 } as const;
 

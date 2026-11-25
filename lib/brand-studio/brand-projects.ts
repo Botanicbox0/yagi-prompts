@@ -368,9 +368,11 @@ export async function listBrandProjects(deps: StudioDeps, viewer: Viewer, raw: u
 /**
  * `project.create`: a project of the brand's own, by name only (§4.5). Its own insert, never the team request's
  * `createProject` (that one validates the commission form and tells the YAGI team): no event, no team notice, no
- * outbox row, no mail. The same organization lock and the same daily rule as a team request (20 project rows per
- * organization per rolling day, counted over every row; the studio's rate code `too_many_running`, as
- * `handoff.campaign` answers for the same limit). Idempotent on `requestId` per member.
+ * outbox row, no mail. The same organization lock as a team request, and a daily count of its own: 20 of the
+ * organization's own projects (`origin = 'self'`) per rolling day, team projects not counted. A team request counts
+ * team projects only (`TEAM_PROJECTS` in `createProject`), so neither side can use up the other's. Refused with the
+ * studio's rate code `too_many_running`, as `handoff.campaign` answers for the team limit. Idempotent on
+ * `requestId` per member.
  */
 export async function createSelfBrandProject(deps: StudioDeps, viewer: Viewer, raw: unknown): Promise<StudioBrandProjectCreated | StudioFailure> {
   const parsed = BrandProjectCreateSchema.safeParse(raw);
@@ -394,8 +396,12 @@ export async function createSelfBrandProject(deps: StudioDeps, viewer: Viewer, r
         return { ok: true as const, project: await oneProject(sql, deps.media, v.organizationId, prior.id) };
       }
       const today = Number(
-        (await sql.query<{ n: number }>("select count(*)::int as n from brand_projects where organization_id = $1 and created_at > now() - interval '1 day'", [v.organizationId]))
-          .rows[0]?.n ?? 0,
+        (
+          await sql.query<{ n: number }>(
+            "select count(*)::int as n from brand_projects where organization_id = $1 and origin = 'self' and created_at > now() - interval '1 day'",
+            [v.organizationId],
+          )
+        ).rows[0]?.n ?? 0,
       );
       if (today >= BRAND_PROJECT_LIMITS.createPerDay) throw new StudioDenied('too_many_running');
       const id = randomUUID();
