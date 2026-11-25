@@ -46,6 +46,10 @@ export interface HubTileProps {
    * main action is the first item of the "more" menu, as on every tile. The sheet is unchanged.
    */
   compact?: boolean;
+  soundMarker?: boolean;
+  selecting?: boolean;
+  selected?: boolean;
+  onToggleSelect?(): void;
   menuOpen: boolean;
   onMenu(open: boolean): void;
   onOpen(): void;
@@ -53,7 +57,7 @@ export interface HubTileProps {
   onAction(action: HubAction): void;
 }
 
-export function HubTile({ entry, copy, name, liked, main, more, moreLabel, compact = false, menuOpen, onMenu, onOpen, onLike, onAction }: HubTileProps) {
+export function HubTile({ entry, copy, name, liked, main, more, moreLabel, compact = false, soundMarker = false, selecting = false, selected = false, onToggleSelect, menuOpen, onMenu, onOpen, onLike, onAction }: HubTileProps) {
   // A stored size is trusted; a guessed one is corrected from the media itself once it loads.
   const [measured, setMeasured] = useState<number | null>(null);
   const [hovering, setHovering] = useState(false);
@@ -84,17 +88,26 @@ export function HubTile({ entry, copy, name, liked, main, more, moreLabel, compa
       data-asset-hub-card={entry.key}
       data-origin={entry.origin}
       data-kind={entry.kind}
+      data-asset-hub-sound={soundMarker ? "" : undefined}
+      data-selected={selecting && selected ? "" : undefined}
       data-menu-open={menuOpen ? "" : undefined}
       data-compact={compact ? "" : undefined}
       onPointerEnter={(event) => {
-        if (event.pointerType === "mouse") setHovering(true);
+        if (!selecting && event.pointerType === "mouse") setHovering(true);
       }}
       onPointerLeave={() => {
         setHovering(false);
         setPlaying(false);
       }}
     >
-      <button type="button" className={s.tileOpen} aria-label={fill(copy.item.view, { name })} onClick={onOpen} data-asset-hub-open>
+      <button
+        type="button"
+        className={s.tileOpen}
+        aria-label={fill(copy.item.view, { name })}
+        aria-pressed={selecting ? selected : undefined}
+        onClick={selecting ? onToggleSelect : onOpen}
+        data-asset-hub-open
+      >
         {entry.kind === "audio" ? (
           <span className={s.audioStage}>
             <RailIcon name="wave" />
@@ -108,7 +121,7 @@ export function HubTile({ entry, copy, name, liked, main, more, moreLabel, compa
         ) : (
           <video src={`${entry.url}#t=0.1`} muted playsInline preload="metadata" tabIndex={-1} aria-hidden="true" onLoadedMetadata={onVideoMeta} />
         )}
-        {entry.kind === "video" && hovering && (
+        {!selecting && entry.kind === "video" && hovering && (
           <video
             className={s.tileFilm}
             src={entry.url}
@@ -133,19 +146,31 @@ export function HubTile({ entry, copy, name, liked, main, more, moreLabel, compa
         </span>
       )}
 
-      <Heart liked={liked} label={fill(liked ? copy.item.unlike : copy.item.like, { name })} onPress={onLike} className={s.heart} />
-
-      <div className={s.foot}>
-        {!compact && entry.label && entry.kind !== "audio" && <p className={s.footTitle}>{entry.label}</p>}
-        <div className={s.footActions}>
-          {!compact && main && (
-            <a className={s.footMain} href={main.href} {...marker(main)}>
-              {main.label}
-            </a>
+      {selecting ? (
+        <span className={s.selectMark} data-selected={selected ? "" : undefined} aria-hidden="true">
+          {selected && (
+            <svg viewBox="0 0 12 12" focusable="false">
+              <path d="M2.4 6.2 4.9 8.7 9.6 3.5" />
+            </svg>
           )}
-          {items.length > 0 && <RailMenu open={menuOpen} label={moreLabel} items={items} onToggle={onMenu} className={s.footMore} />}
-        </div>
-      </div>
+        </span>
+      ) : (
+        <>
+          <Heart liked={liked} label={fill(liked ? copy.item.unlike : copy.item.like, { name })} onPress={onLike} className={s.heart} />
+
+          <div className={s.foot}>
+            {!compact && entry.label && entry.kind !== "audio" && <p className={s.footTitle}>{entry.label}</p>}
+            <div className={s.footActions}>
+              {!compact && main && (
+                <a className={s.footMain} href={main.href} {...marker(main)}>
+                  {main.label}
+                </a>
+              )}
+              {items.length > 0 && <RailMenu open={menuOpen} label={moreLabel} items={items} onToggle={onMenu} className={s.footMore} />}
+            </div>
+          </div>
+        </>
+      )}
     </li>
   );
 }

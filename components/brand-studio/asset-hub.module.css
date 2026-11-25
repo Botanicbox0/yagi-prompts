@@ -1122,6 +1122,69 @@
   background: var(--ys-hover);
 }
 
+.tile[data-selected] {
+  outline: 2px solid var(--ys-ink);
+  outline-offset: -2px;
+}
+
+.selectMark {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1.5px solid var(--hub-glass-line);
+  border-radius: var(--ys-r-pill);
+  background: var(--hub-glass);
+  color: var(--ys-stage);
+  pointer-events: none;
+}
+
+.selectMark[data-selected] {
+  border-color: transparent;
+  background: var(--hub-on-media);
+}
+
+.selectMark svg {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.selectBar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  padding: 10px 14px;
+  border: 1px solid var(--ys-line);
+  border-radius: 12px;
+  background: var(--ys-bg);
+}
+
+.selectBarCount {
+  margin: 0;
+  color: var(--ys-ink);
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.selectBarHint {
+  margin: 0;
+  color: var(--ys-ink-secondary);
+  font-size: 12.5px;
+}
+
 /* ---------------------------------------------------------------- narrow */
 
 @media (max-width: 720px) {
