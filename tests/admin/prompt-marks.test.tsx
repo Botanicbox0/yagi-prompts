@@ -4,6 +4,10 @@ import { loadPromptBySlug } from '@/lib/prompts/repo';
 import { TEMPLATE_KEEP_LINE_PREFIX } from '@/lib/template-director/locks';
 import { adminHarness, upload, viewerOf, type AdminHarness } from '../helpers/admin';
 import { runner } from '../helpers/pglite';
+import { renderStylingBlock } from '@/lib/template-director/styling';
+
+/** The wardrobe only, so it never meets a hair or makeup lock in a case's text (rule 3 needs some block to create). */
+const CREATE_BLOCK = renderStylingBlock([{ part: 'outfit', from: 'photo' }]);
 
 const state = vi.hoisted(() => ({ sql: null as unknown }));
 
@@ -45,11 +49,17 @@ describe('prompt.marks', () => {
   });
   afterEach(async () => harness.close());
 
+  /**
+   * A stored template with exactly `promptText`. A new person template must declare its styling (docs/PERSONAL-STUDIO.md
+   * §3.4.9, rule 3), so a text without a block is created with one and then given the text the case needs, as a
+   * template saved before the rule.
+   */
   async function template(promptText: string, slug = 'marks-test', medium: 'video' | 'image' = 'video'): Promise<string> {
+    const declared = /template styling:/i.test(promptText);
     const outcome = await harness.run('prompt.create', {
       title: slug,
       titleKo: '마크 테스트',
-      promptText,
+      promptText: declared ? promptText : `${promptText}\n\n${CREATE_BLOCK}`,
       useCase: 'brand-ad',
       textVisibility: 'public',
       models: ['seedance-2.5'],
@@ -58,7 +68,9 @@ describe('prompt.marks', () => {
       poster: upload('poster.png', 'POSTER-BYTES', 'image/png'),
     });
     expect(outcome).toMatchObject({ ok: true });
-    return (await loadPromptBySlug(sql(), slug))!.id;
+    const id = (await loadPromptBySlug(sql(), slug))!.id;
+    if (!declared) await sql().query('update prompt_items set prompt_text = $2 where id = $1', [id, promptText]);
+    return id;
   }
 
   async function keyframes(id: string): Promise<unknown> {

@@ -10,6 +10,7 @@ import { parsePromptMedia } from '@/lib/prompts/schemas';
 import { shapePromptMedia } from '@/lib/prompts/shape';
 import { adminHarness, upload, type AdminHarness } from '../helpers/admin';
 import { runner } from '../helpers/pglite';
+import { TEMPLATE_STYLING_DEFAULT_BLOCK } from '@/lib/template-director/styling';
 
 describe('poster focus values', () => {
   it('reads only a position inside the image', () => {
@@ -58,7 +59,8 @@ describe('saving the poster focus', () => {
   const authoring = {
     title: 'Focus test',
     titleKo: '위치 테스트',
-    promptText: 'A long enough prompt text for the authoring schema to accept it as a real prompt body.',
+    // A new person template declares its hair and makeup (docs/PERSONAL-STUDIO.md §3.4.9, rule 3).
+    promptText: `A long enough prompt text for the authoring schema to accept it as a real prompt body.\n\n${TEMPLATE_STYLING_DEFAULT_BLOCK}`,
     useCase: 'brand-ad',
     textVisibility: 'public',
     models: ['seedance-2.5'],

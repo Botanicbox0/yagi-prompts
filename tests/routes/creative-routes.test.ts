@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
  * the MCP endpoint needs a creative token and refuses a foreign browser origin.
  */
 
-const state = vi.hoisted(() => ({ userId: null as string | null, token: null as string | null, opens: [] as string[] }));
+const state = vi.hoisted(() => ({ userId: null as string | null, token: null as string | null, opens: [] as string[], prompt: 'MEMBER ONLY' }));
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/supabase/middleware', () => ({
   updateSession: async (_r: NextRequest, headers: Headers) => ({ user: null, response: NextResponse.next({ request: { headers } }) }),
@@ -18,7 +18,7 @@ vi.mock('@/lib/auth/dev-identity', () => ({ devIdentityUserId: () => null }));
 vi.mock('@/lib/auth/viewer', () => ({ getViewer: async () => ({ tier: state.userId ? 'free' : 'anon', userId: state.userId, email: null, isAdmin: false, locale: null }) }));
 vi.mock('@/lib/db/connect', () => ({ getSqlRunner: async () => ({ query: async () => ({ rows: [] }) }) }));
 vi.mock('@/lib/recipes/public', () => ({
-  loadPublicRecipe: async () => ({ presentation: 'make-first', intro: null, outro: null, steps: [{ n: 1, kind: 'image', engine: 'GPT IMAGE 2', inputs: [], prompt: 'MEMBER ONLY', note: null }], files: null }),
+  loadPublicRecipe: async () => ({ presentation: 'make-first', intro: null, outro: null, steps: [{ n: 1, kind: 'image', engine: 'GPT IMAGE 2', inputs: [], prompt: state.prompt, note: null }], files: null }),
   recordRecipeOpen: async (_sql: unknown, templateId: string, userId: string) => { state.opens.push(`${templateId}:${userId}`); },
 }));
 vi.mock('@/lib/prompts/repo', () => ({ loadPromptBySlug: async (_sql: unknown, slug: string) => (slug === 'neon-alley' ? { id: ID, audience: 'public', engine: 'gpt-image-2', medium: 'image' } : null) }));
@@ -77,6 +77,27 @@ describe('member-only recipe', () => {
     expect((await member.json()).recipe.steps[0].prompt).toBe('MEMBER ONLY');
     // The creative's studio counts the open — once per (template, member).
     expect(state.opens).toEqual([`${ID}:f0000000-0000-4000-8000-000000000001`]);
+  });
+
+  // docs/PERSONAL-STUDIO.md §3.3–§3.4.9: the compiler's lock and styling blocks are not part of the recipe a member reads or copies.
+  it('hands the member the step prompts without the lock and styling blocks', async () => {
+    state.userId = 'f0000000-0000-4000-8000-000000000001';
+    state.prompt = [
+      'MEMBER ONLY',
+      '',
+      'Template locks:',
+      '- Keep exactly as in the template: the product.',
+      '',
+      'Template styling:',
+      '- Styled by the template: the hairstyle — a sleek low bun.',
+    ].join('\n');
+    try {
+      const body = await (await access()).json();
+      expect(body.recipe.steps[0].prompt).toBe('MEMBER ONLY');
+      expect(JSON.stringify(body)).not.toMatch(/Template (locks|styling)|sleek low bun/);
+    } finally {
+      state.prompt = 'MEMBER ONLY';
+    }
   });
 });
 

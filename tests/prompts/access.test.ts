@@ -142,4 +142,25 @@ describe('copy endpoint authorization (§13.3-5)', () => {
       'not_found',
     );
   });
+
+  // docs/PERSONAL-STUDIO.md §3.3–§3.4.9: the compiler's two blocks are never copy a reader is handed.
+  it('copies the text without the lock and styling blocks; the stored text keeps them', async () => {
+    const id = await idOf('skate-park-golden-hour');
+    const before = (await loadPromptBySlug(harness.sql, 'skate-park-golden-hour'))!.promptText;
+    const blocks = 'Template locks:\n- Keep exactly as in the template: the product.\n\nTemplate styling:\n- Taken from the photo: the hairstyle.';
+    await harness.sql.query('update prompt_items set prompt_text = $2 where id = $1', [id, `${before}\n\n${blocks}`]);
+    try {
+      const decision = await authorizePromptCopy(harness.sql, viewerOf('free'), id);
+      expect(decision.status).toBe('ok');
+      if (decision.status !== 'ok') return;
+      expect(decision.text).toBe(before.trim());
+      expect(decision.text).not.toMatch(/Template (locks|styling):|Keep exactly as in the template|Taken from the photo/);
+      expect((await loadPromptBySlug(harness.sql, 'skate-park-golden-hour'))!.promptText).toBe(`${before}\n\n${blocks}`);
+    } finally {
+      await harness.sql.query('update prompt_items set prompt_text = $2 where id = $1', [id, before]);
+    }
+    // Without blocks: byte for byte.
+    const plain = await authorizePromptCopy(harness.sql, viewerOf('free'), id);
+    expect(plain.status === 'ok' && plain.text).toBe(before);
+  });
 });

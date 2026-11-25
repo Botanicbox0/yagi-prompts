@@ -133,4 +133,16 @@ describe('a story-first template with a public recipe', () => {
     expect(html).not.toContain('data-template-recipe-actions');
     expect(html).not.toContain('id="recipe"');
   });
+
+  // docs/PERSONAL-STUDIO.md §3.3–§3.4.9: the teaser shows the `[BGM …]` tail of step 1, where a declared template's
+  // lock and styling blocks sit; neither is customer copy.
+  it('shows the recipe teaser without the lock and styling blocks', async () => {
+    const blocks = ['Template locks:', '- Keep exactly as in the template: the product.', '', 'Template styling:', '- Styled by the template: the hairstyle — a sleek low bun.'].join('\n');
+    state.recipe = { ...state.recipe!, steps: [{ ...state.recipe!.steps![0]!, prompt: `${state.recipe!.steps![0]!.prompt}\n[BGM soft piano]\n\n${blocks}` }] };
+    for (const locale of ['ko', 'en'] as const) {
+      const html = await page(locale);
+      expect(html).toContain('[BGM soft piano]');
+      expect(html).not.toMatch(/Template (locks|styling):|Keep exactly as in the template|Styled by the template|sleek low bun/);
+    }
+  });
 });

@@ -16,6 +16,14 @@ import {
 } from '@/lib/template-director/locks';
 import { adminHarness, upload, type AdminHarness } from '../helpers/admin';
 import { runner } from '../helpers/pglite';
+import { TEMPLATE_STYLING_DEFAULT_BLOCK, renderStylingBlock } from '@/lib/template-director/styling';
+
+/**
+ * A new person template declares its hair and makeup (docs/PERSONAL-STUDIO.md §3.4.9, rule 3). The wardrobe-only block
+ * never meets the hair lock of `VALID`; `DECLARED` is a text with no lock block that a create accepts.
+ */
+const CREATE_BLOCK = renderStylingBlock([{ part: 'outfit', from: 'photo' }]);
+const DECLARED = (text: string) => `${text}\n\n${CREATE_BLOCK}`;
 
 const state = vi.hoisted(() => ({ sql: null as unknown }));
 
@@ -82,15 +90,15 @@ describe('prompt.create and prompt.update check the lock block', () => {
     expect(await loadPromptBySlug(sql(), 'lock-test')).toBeNull();
   });
 
-  it('saves a valid block and a prompt with no block exactly as written', async () => {
-    expect(await harness.run('prompt.create', authoring(VALID))).toMatchObject({ ok: true, code: 'published' });
-    expect((await loadPromptBySlug(sql(), 'lock-test'))!.promptText).toBe(VALID);
-    expect(await harness.run('prompt.create', { ...authoring(BASE), title: 'Plain test' })).toMatchObject({ ok: true, code: 'published' });
-    expect((await loadPromptBySlug(sql(), 'plain-test'))!.promptText).toBe(BASE);
+  it('saves a valid block and a prompt with no lock block exactly as written', async () => {
+    expect(await harness.run('prompt.create', authoring(DECLARED(VALID)))).toMatchObject({ ok: true, code: 'published' });
+    expect((await loadPromptBySlug(sql(), 'lock-test'))!.promptText).toBe(DECLARED(VALID));
+    expect(await harness.run('prompt.create', { ...authoring(DECLARED(BASE)), title: 'Plain test' })).toMatchObject({ ok: true, code: 'published' });
+    expect((await loadPromptBySlug(sql(), 'plain-test'))!.promptText).toBe(DECLARED(BASE));
   });
 
   it('refuses both kinds on update and keeps the saved text; a valid edit saves', async () => {
-    await harness.run('prompt.create', authoring(BASE));
+    expect(await harness.run('prompt.create', authoring(DECLARED(BASE)))).toMatchObject({ ok: true });
     const row = (await loadPromptBySlug(sql(), 'lock-test'))!;
     const edit = (promptText: string) => ({
       id: row.id,
@@ -111,14 +119,16 @@ describe('prompt.create and prompt.update check the lock block', () => {
     const typo = await harness.run('prompt.update', edit(TYPO));
     expect(typo).toMatchObject({ ok: false, code: 'invalid' });
     expect(typo.detail).toMatch(/^promptText: template locks: line 3 header_typo/);
-    expect((await loadPromptBySlug(sql(), 'lock-test'))!.promptText).toBe(BASE);
+    expect((await loadPromptBySlug(sql(), 'lock-test'))!.promptText).toBe(DECLARED(BASE));
 
+    // An update is never refused for a missing styling block (rule 3 asks on create only).
     expect(await harness.run('prompt.update', edit(VALID))).toMatchObject({ ok: true, code: 'saved' });
     expect((await loadPromptBySlug(sql(), 'lock-test'))!.promptText).toBe(VALID);
   });
 
   it('checks every frame prompt of an image set the same way', async () => {
-    const photo = (n: number) => `Image 1 is the person. Keep their face. Frame ${n}, a quiet studio portrait.`;
+    const plain = (n: number) => `Image 1 is the person. Keep their face. Frame ${n}, a quiet studio portrait.`;
+    const photo = (n: number) => `${plain(n)}\n\n${TEMPLATE_STYLING_DEFAULT_BLOCK}`;
     const set = (frame1Prompt: string) => ({
       title: 'Three Quiet Portraits',
       titleKo: '조용한 초상 세 컷',
@@ -136,12 +146,12 @@ describe('prompt.create and prompt.update check the lock block', () => {
       frame1: upload('two.webp', 'TWO', 'image/webp'),
       frame2: upload('three.webp', 'THREE', 'image/webp'),
     });
-    const refused = await harness.run('prompt.createSet', set(`${photo(2)}\n\nTemplate lock:\n${KEEP}the wardrobe.`));
+    const refused = await harness.run('prompt.createSet', set(`${plain(2)}\n\nTemplate lock:\n${KEEP}the wardrobe.`));
     expect(refused).toMatchObject({ ok: false, code: 'invalid' });
     expect(refused.detail).toContain('frame 2: template locks: line 3 header_typo, line 4 lock_lines_without_header');
     expect(await loadPromptBySlug(sql(), 'three-quiet-portraits')).toBeNull();
 
-    expect(await harness.run('prompt.createSet', set(`${photo(2)}\n\nTemplate locks:\n${KEEP}the wardrobe.`))).toMatchObject({ ok: true });
+    expect(await harness.run('prompt.createSet', set(`${plain(2)}\n\nTemplate locks:\n${KEEP}the wardrobe.\n\n${TEMPLATE_STYLING_DEFAULT_BLOCK}`))).toMatchObject({ ok: true });
   });
 });
 
@@ -157,11 +167,12 @@ describe('the template page says what a saved block locks', () => {
     await harness.close();
   });
 
+  /** A stored template with exactly `promptText`: created with a styling block (rule 3), then given the case's text. */
   async function created(promptText: string, title = 'Lock page'): Promise<string> {
     const outcome = await harness.run('prompt.create', {
       title,
       titleKo: '잠금 페이지',
-      promptText,
+      promptText: DECLARED(promptText),
       useCase: 'brand-ad',
       textVisibility: 'public',
       models: ['seedance-2.5'],
@@ -169,7 +180,9 @@ describe('the template page says what a saved block locks', () => {
     });
     expect(outcome).toMatchObject({ ok: true });
     const slug = title.toLowerCase().replace(/ /g, '-');
-    return (await loadPromptBySlug(sql(), slug))!.id;
+    const id = (await loadPromptBySlug(sql(), slug))!.id;
+    await sql().query('update prompt_items set prompt_text = $2 where id = $1', [id, promptText]);
+    return id;
   }
 
   async function render(id: string, query: Record<string, string> = {}) {

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { prerender } from 'react-dom/static';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadPromptBySlug } from '@/lib/prompts/repo';
-import { loadPromptCatalog } from '@/lib/prompts/catalog';
+import { loadPromptCatalog, toPromptCard } from '@/lib/prompts/catalog';
 import { parseRecipe, type Recipe } from '@/lib/recipes/schema';
 import { renderLockBlock } from '@/lib/template-director/locks';
 import { checkStylingBlock, renderStylingBlock } from '@/lib/template-director/styling';
@@ -37,6 +37,11 @@ const STYLING = renderStylingBlock([
   { part: 'makeup', from: 'template', note: 'soft rosy cheeks.' },
 ]);
 const HAIR_ONLY = renderStylingBlock([{ part: 'hair', from: 'template', note: 'a sleek low bun.' }]);
+/**
+ * A block a new person template can be created with (rule 3: it must declare its styling); the fixture then sets the
+ * text the case needs. The wardrobe only, so it never meets a hair or makeup lock in a case's text.
+ */
+const CREATE_BLOCK = renderStylingBlock([{ part: 'outfit', from: 'photo' }]);
 
 const carousel = (prompts: [string, string]): Recipe => ({
   version: 2,
@@ -56,20 +61,27 @@ describe('prompt.declareStyling', () => {
   });
   afterEach(async () => harness.close());
 
-  async function template(promptText: string, slug = 'styling-test', medium: 'video' | 'image' = 'video'): Promise<string> {
+  /**
+   * A stored template with exactly `promptText`. A new person template must declare its styling (rule 3), so the row
+   * is created with the default block and then given the text the case needs, as a template saved before the rule.
+   */
+  async function template(promptText: string, slug = 'styling-test', medium: 'video' | 'image' = 'video', cast?: 'pet'): Promise<string> {
     const outcome = await harness.run('prompt.create', {
       title: slug,
       titleKo: '스타일 테스트',
-      promptText,
+      promptText: /template styling:/i.test(promptText) ? promptText : `${promptText}\n\n${CREATE_BLOCK}`,
       useCase: 'brand-ad',
       textVisibility: 'public',
       models: ['seedance-2.5'],
       medium,
+      ...(cast ? { cast } : {}),
       ...(medium === 'video' ? { runtimeSeconds: 10 } : {}),
       poster: upload('poster.png', 'POSTER-BYTES', 'image/png'),
     });
     expect(outcome).toMatchObject({ ok: true });
-    return (await loadPromptBySlug(sql(), slug))!.id;
+    const id = (await loadPromptBySlug(sql(), slug))!.id;
+    await sql().query('update prompt_items set prompt_text = $2 where id = $1', [id, promptText]);
+    return id;
   }
 
   async function stored(id: string): Promise<{ promptText: string; recipe: Recipe | null }> {
@@ -158,6 +170,26 @@ describe('prompt.declareStyling', () => {
     }
     expect((await stored(plain)).promptText).toBe(BASE);
     expect(checkStylingBlock((await stored(plain)).promptText).state).toBe('none');
+  });
+
+  it('a pet template: the cast is read from `cast_kind` like the card, so declaring is refused and nothing is written', async () => {
+    const id = await template(BASE, 'styling-pet', 'video', 'pet');
+    expect((await loadPromptBySlug(sql(), 'styling-pet'))!.cast).toBe('pet');
+    const before = await stored(id);
+    const refused = await harness.run('prompt.declareStyling', { id, block: STYLING });
+    expect(refused).toMatchObject({ ok: false, code: 'invalid' });
+    expect(refused.detail).toContain('pet template');
+    expect(await stored(id)).toEqual(before);
+    expect(await audits(id)).toHaveLength(0);
+
+    // The card agrees: a pet template claims nothing, even with a block written by hand.
+    await sql().query('update prompt_items set prompt_text = $2 where id = $1', [id, `${BASE}\n\n${STYLING}`]);
+    const card = toPromptCard((await loadPromptBySlug(sql(), 'styling-pet'))!, { publicUrl: () => null });
+    expect(card.cast).toBe('pet');
+    expect(card.styling).toBeUndefined();
+    // Removing it is allowed (nothing is offered either way).
+    expect(await harness.run('prompt.declareStyling', { id, block: '' })).toMatchObject({ ok: true });
+    expect((await stored(id)).promptText).toBe(BASE);
   });
 
   it("refuses to rewrite a creative's recipe (their format keeps it), and is for admins only", async () => {

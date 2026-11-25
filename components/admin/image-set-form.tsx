@@ -22,7 +22,8 @@ import { put, sha256Hex, STAGING_URL_PATH, UploadRefused } from '@/components/ad
 export type ImageSetLabels = Record<
   | 'engine' | 'aspect' | 'frames' | 'dropZone' | 'promptHint' | 'frameLabel' | 'thumbnail' | 'moveUp' | 'moveDown' | 'remove' | 'promptLabel'
   | 'publish' | 'errCount' | 'errTitles' | 'errImage' | 'errAspect' | 'errPromptShort' | 'errPromptLong' | 'errNoPhoto' | 'errOtherReference' | 'errBraces'
-  | 'errManifest' | 'errFile' | 'uploading' | 'done' | 'failed' | 'invalid' | 'upload' | 'session' | 'uncertain' | 'retained' | 'publishing',
+  | 'errManifest' | 'errFile' | 'uploading' | 'done' | 'failed' | 'invalid' | 'upload' | 'session' | 'uncertain' | 'retained' | 'publishing'
+  | 'stylingRequired',
   string
 >;
 
@@ -303,7 +304,11 @@ export function ImageSetFields({
         return;
       }
       if (result.ok === false) {
-        const lead = result.code === 'upload' || result.code === 'storage' ? labels.upload : result.code === 'invalid' ? labels.invalid : labels.uncertain;
+        const lead = result.code === 'upload' || result.code === 'storage' ? labels.upload
+          : result.code === 'invalid' ? labels.invalid
+            // docs/PERSONAL-STUDIO.md §3.4.9, rule 3: the detail names the frames without a styling block.
+            : result.code === 'stylingRequired' ? labels.stylingRequired
+              : labels.uncertain;
         showError(result.detail ? `${lead} (${result.detail})` : lead);
       } else showError(labels.uncertain);
     } catch {
