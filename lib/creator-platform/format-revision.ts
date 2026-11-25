@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import type { SqlRunner } from '@/lib/db/sql-runner';
+import { toTemplateCast } from '@/lib/prompts/schemas';
 import { quoteRecipeBase, quoteRecipeByResolution } from '@/lib/recipes/pricing';
 import { MAX_STEP_PROMPT_CHARS, legacyPromptText, parseRecipe, type Recipe } from '@/lib/recipes/schema';
 import { templateCardStyling, templateCompileSource } from '@/lib/template-director/compile-prompts';
@@ -251,7 +252,7 @@ function compiledPromptRefusal(label: string, text: string): Extract<RevisionRes
   return null;
 }
 
-type PromptRowState = { slug: string; prompt_text: string; recipe: unknown; cast: string | null; price_krw: number; price_1080_krw: number | null; rest: unknown };
+type PromptRowState = { slug: string; prompt_text: string; recipe: unknown; cast_kind: string | null; price_krw: number; price_1080_krw: number | null; rest: unknown };
 
 /**
  * `format.reviseRecipe` — see the module comment. `actorId` is the admin (the dispatcher has checked `isAdmin`). Every
@@ -268,7 +269,7 @@ export async function reviseFormatRecipe(sql: SqlRunner, actorId: string | null,
     return await sql.transaction(async (tx): Promise<RevisionResult> => {
       // 1. The template and its format, locked; the owner's payout held for the transaction.
       const { rows } = await tx.query<PromptRowState>(
-        `select slug, prompt_text, to_jsonb(p.*)->'recipe' as recipe, to_jsonb(p.*)->>'cast' as cast,
+        `select slug, prompt_text, to_jsonb(p.*)->'recipe' as recipe, to_jsonb(p.*)->>'cast_kind' as cast_kind,
                 price_krw, to_jsonb(p.*)->'price_1080_krw' as price_1080_krw,
                 to_jsonb(p.*) - 'recipe' - 'prompt_text' - 'updated_at' as rest
            from prompt_items p where id = $1 for update`,
@@ -309,7 +310,8 @@ export async function reviseFormatRecipe(sql: SqlRunner, actorId: string | null,
       const promptText = legacyPromptText(recipe);
 
       // 4. Every prompt the compile reads: lock and styling blocks that read, and a styling the card can show.
-      const cast = row.cast === 'pet' || row.cast === 'couple' ? row.cast : 'solo';
+      // The cast is the `cast_kind` column (0078; `cast` is a reserved word), read as `prompt.declareStyling` reads it.
+      const cast = toTemplateCast(row.cast_kind);
       const compiled = templateCompileSource({ promptText, recipe: next, recipeReady: true });
       for (const prompt of compiled.prompts) {
         const refused = compiledPromptRefusal(`step ${prompt.stepId ?? 'main'}`, prompt.text);

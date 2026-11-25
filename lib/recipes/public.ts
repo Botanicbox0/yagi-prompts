@@ -1,6 +1,6 @@
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import { engineLabel, isEngineId } from '@/lib/images/engines';
-import { withoutTemplateDeclarations } from '@/lib/template-director/declaration-display';
+import { publicPromptText } from '@/lib/template-director/public-text';
 import { parseDisclosure, parsePresentation, recipeSchemaReady, type Presentation } from './repo';
 import { SELFIE_SLOT, creatorSlotNames, displayStepPrompt, parseRecipe, type Recipe } from './schema';
 
@@ -21,8 +21,10 @@ import { SELFIE_SLOT, creatorSlotNames, displayStepPrompt, parseRecipe, type Rec
  * `disclosure.prompts` on, and never with files: studio-held references stay private.
  *
  * Every shown prompt — and so the teaser and the members' "프롬프트 복사" text, both built from it — goes
- * without its `Template styling:` / `Template locks:` blocks (`withoutTemplateDeclarations`): those are the
- * studio compiler's instructions, not the recipe. The stored recipe and what the compiler reads keep them.
+ * without its `Template styling:` / `Template locks:` blocks (`publicPromptText`, the one helper for every
+ * customer-visible prompt): those are the studio compiler's instructions, not the recipe. The stored recipe and
+ * what the compiler reads keep them. The routes' `publicRecipeText` pass over this projection then finds nothing
+ * left to take out and hands back the same object, so the text is transformed exactly once.
  */
 
 /** `pet` and `partner` are the buyer's other two photos (docs/CAST-CATEGORIES.md §3). */
@@ -99,7 +101,7 @@ export async function loadPublicRecipe(sql: SqlRunner, templateId: string, label
     outro: disclosure.prompts ? text(recipe.notes?.outro) : null,
     steps: disclosure.prompts ? recipe.steps.map((step, index) => ({
       n: index + 1, kind: step.kind, engine: labelOf(step.engine), inputs: inputsOf(recipe, step.inputs),
-      prompt: withoutTemplateDeclarations(displayStepPrompt(recipe, step, labels)), note: text(step.note),
+      prompt: publicPromptText(displayStepPrompt(recipe, step, labels)), note: text(step.note),
     })) : null,
     files,
   };

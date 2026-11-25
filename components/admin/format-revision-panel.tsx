@@ -5,6 +5,7 @@ import type { Dictionary } from '@/lib/i18n/dictionaries';
 import { formatDate, interpolate } from '@/lib/i18n/format';
 import type { Locale } from '@/lib/i18n/config';
 import { MAX_STEP_PROMPT_CHARS } from '@/lib/recipes/schema';
+import { lockRefusalLines } from '@/lib/template-director/locks';
 
 /**
  * docs/CREATOR-PLATFORM.md "Recipe revisions of the studio's own formats (2026-11-25)" — the admin template page's
@@ -43,15 +44,31 @@ export function FormatRevisionPanel({
   const refusal = readRevisionRefusal(detail);
   const refusals = c.refusals as Readonly<Record<string, string>>;
   const sentence = refusal ? interpolate(refusals[refusal.code] ?? c.refusals.input, { detail: refusal.detail }) : null;
+  // A lock or styling block refusal carries the same `<field>: template locks|styling: line N <kind> — "…"` detail the
+  // template saves and `prompt.declareStyling` return (`step film: template styling: line 4 photo_clause …`), so it is
+  // said with the same sentences the template page uses for them.
+  const blockLines = refusal && (refusal.code === 'locks' || refusal.code === 'styling') ? lockRefusalLines(refusal.detail, dict.admin) : null;
 
   return (
     <Panel title={c.heading}>
       <div data-format-revision-panel className="flex flex-col gap-3">
         <p className="font-mono text-[0.72rem] opacity-70">{c.lede}</p>
         {sentence && (
-          <p data-format-revision-refusal={refusal!.code} role="status" className="font-mono text-[0.75rem]">
-            {sentence}
-          </p>
+          <div data-format-revision-refusal={refusal!.code} role="status" className="font-mono text-[0.75rem]">
+            {blockLines ? (
+              <>
+                <p className="font-medium">{blockLines.title}</p>
+                <ul className="mt-1.5 list-disc pl-5">
+                  {blockLines.items.map((item, index) => (
+                    <li key={`${index}-${item}`}>{item}</li>
+                  ))}
+                </ul>
+                {blockLines.text && <p className="mt-1.5 opacity-70">{blockLines.text}</p>}
+              </>
+            ) : (
+              <p>{sentence}</p>
+            )}
+          </div>
         )}
         {!view.schemaReady ? (
           <p data-format-revision-schema-missing className="font-mono text-[0.75rem]">

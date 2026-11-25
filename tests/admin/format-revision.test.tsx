@@ -229,6 +229,38 @@ describe('format.reviseRecipe', () => {
     expect(await audits(f)).toHaveLength(0);
   });
 
+  it('a styled line whose description follows the photo is refused with the same detail prompt.declareStyling gives (#361 rule)', async () => {
+    const f = await residueFormat();
+    const clause = ['Template styling:', '- Styled by the template: the hairstyle — a sleek low bun, colour as in the photo.'].join('\n');
+    const revised = await harness.run('format.reviseRecipe', {
+      id: f.templateId, reviewedSha256: recipeSha256(f.recipe), reason: 'Photo clause in a styled line',
+      recipe: JSON.stringify(filmRecipe(`${FIXTURE_FILM_PROMPT}\n\n${clause}`)),
+    });
+    expect(revised).toMatchObject({ ok: false, code: 'invalid' });
+    expect(revised.detail).toMatch(/^formatRevision:styling step film: template styling: line \d+ photo_clause — "/);
+    expect((await stored(f)).recipe).toEqual(f.recipe);
+
+    // The studio's own tool for a studio original refuses the same block with the same problem and the same quoted line.
+    const original = randomUUID();
+    await sql().query(
+      `insert into prompt_items (id, slug, source, status, models, title, prompt_text, text_visibility, use_case, featured, medium)
+       values ($1, 'studio-original-clause', 'yagi', 'pending', '{seedance-2.5}', 'Studio original', $2, 'hidden', '{}', false, 'video')`,
+      [original, FIXTURE_FILM_PROMPT.replace('{{selfie}}', '@image1')],
+    );
+    const declared = await harness.run('prompt.declareStyling', { id: original, block: clause });
+    expect(declared.detail).toMatch(/^declareStyling: block: template styling: line 2 photo_clause — "/);
+    const quoted = (detail: string | undefined) => detail!.slice(detail!.indexOf(' photo_clause — '));
+    expect(quoted(revised.detail)).toBe(quoted(declared.detail));
+
+    // The panel says it in the admin's language, with the template page's sentences for that problem.
+    state.sql = sql();
+    const html = await page(f.templateId, { err: 'invalid', detail: revised.detail! });
+    expect(html).toContain('data-format-revision-refusal="styling"');
+    const a = getDictionary('ko').admin;
+    expect(html).toContain(a.stylingRefused);
+    expect(html).toContain(a.stylingProblemPhotoClause.split('{line}')[1]!.slice(0, 20));
+  });
+
   it('asserts the price floors and never revises under an order that has not taken its recipe snapshot', async () => {
     const f = await residueFormat();
     const reviewed = recipeSha256(f.recipe);
