@@ -126,7 +126,7 @@ export default async function AdminPromptNewPage({ searchParams }: { searchParam
           invalid: a.errInvalid, upload: a.mediaUploadFailed, session: a.mediaUploadSession,
           uncertain: a.promptPublishUncertain, retained: a.promptInputsRetained, publishing: a.promptPublishing,
           draftRestored: a.promptDraftRestored, draftDiscard: a.promptDraftDiscard, draftSavedAt: a.promptDraftSavedAt,
-          lockCopy: lockRefusalCopy(a),
+          lockCopy: lockRefusalCopy(a), lengthCopy: a.promptLengthRefusal,
           stylingRequired: a.errStylingRequired, stylingExample: TEMPLATE_STYLING_DEFAULT_BLOCK,
         }}>
         <OpForm op="prompt.create" back={ADMIN_PROMPT_NEW_PATH} className="flex flex-col gap-4">

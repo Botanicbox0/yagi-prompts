@@ -15,6 +15,7 @@ import {
 import { renderHref } from '@/lib/renders/share';
 import { getRenderStore } from '@/lib/renders/store';
 import { parseDirectorSpecInput } from '@/lib/template-director/schema';
+import { ORDER_EDIT_REFUSAL_STATUS, orderEditRefusal } from '@/lib/prompts/edits-closed';
 import { parseSelectedFrames } from '@/lib/twings/selective-frames';
 
 export const dynamic = 'force-dynamic';
@@ -81,6 +82,11 @@ export async function POST(request: Request): Promise<NextResponse> {
     return json({ ok: false, code: 'bad_request' }, 400);
   }
 
+  // Founder 2026-11-25 — an edit the template cannot take (no room at all, or this one too long) is refused before any credit is spent.
+  const directorSpec = parseDirectorSpecInput(form.get('directorSpec'));
+  const editRefusal = await orderEditRefusal(sql, form, directorSpec);
+  if (editRefusal) return json({ ok: false, code: editRefusal }, ORDER_EDIT_REFUSAL_STATUS[editRefusal]);
+
   const photo = form.get('photo');
   const rawLocale = form.get('locale');
   const requestId = String(form.get('requestId') ?? '');
@@ -120,7 +126,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     holdForIdentity: form.get('hold') === '1',
     resolution: typeof form.get('resolution') === 'string' ? String(form.get('resolution')) : null,
     selectedFrames: parseSelectedFrames(form.get('selectedFrames')),
-    directorSpec: parseDirectorSpecInput(form.get('directorSpec')),
+    directorSpec,
   });
 
   if (!outcome.ok) {

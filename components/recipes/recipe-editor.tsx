@@ -4,7 +4,8 @@ import type { Dictionary } from '@/messages/en';
 import { interpolate } from '@/lib/i18n/format';
 import { isRoyalty, quoteRecipeBase, ROYALTY_DEFAULT_KRW, ROYALTY_MAX_KRW, ROYALTY_STEP_KRW } from '@/lib/recipes/pricing';
 import { makeEarning } from '@/lib/twings/template-price';
-import { exportRecipe, INTRO_MAX, MAX_RECIPE_STEPS, MAX_STEP_PROMPT_CHARS, NOTE_MAX, OUTRO_MAX, PARTNER_SLOT, parseRecipe, PET_SLOT, recipeMedium, SELFIE_SLOT, type Recipe, type RecipeIssue } from '@/lib/recipes/schema';
+import { engineStepPrompt, exportRecipe, INTRO_MAX, MAX_RECIPE_BYTES, MAX_RECIPE_STEPS, NOTE_MAX, OUTRO_MAX, PARTNER_SLOT, parseRecipe, PET_SLOT, recipeMedium, SELFIE_SLOT, type Recipe, type RecipeIssue } from '@/lib/recipes/schema';
+import { promptCharLimit, verifiedPromptCharLimit } from '@/lib/engines/prompt-limits';
 import { BUTTON, BUTTON_OUTLINE, FIELD, HINT, PANEL } from '@/components/creators/styles';
 import { KeyframePicker } from './keyframe-picker';
 import type { VideoKeyframe } from '@/lib/prompts/keyframes';
@@ -201,7 +202,7 @@ export function RecipeEditor({ copy, formatId, draft, engines, aspects, hasSelfi
   async function importJson(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = '';
-    if (!file || file.size > 24_000) { if (file) setNotice({ tone: 'error', text: copy.importFailed }); return; }
+    if (!file || file.size > MAX_RECIPE_BYTES) { if (file) setNotice({ tone: 'error', text: copy.importFailed }); return; }
     const loaded = fromRecipe(await file.text(), files, label);
     if (!loaded) { setNotice({ tone: 'error', text: copy.importFailed }); return; }
     setMedium(loaded.medium); setSteps(loaded.steps); setNotes(loaded.notes); setCast(loaded.cast);
@@ -329,6 +330,9 @@ export function RecipeEditor({ copy, formatId, draft, engines, aspects, hasSelfi
             const engine = options.find((e) => e.id === step.engine) ?? options[0]!;
             const durations = Array.from({ length: (engine.maxDuration ?? 15) - (engine.minDuration ?? 4) + 1 }, (_, i) => (engine.minDuration ?? 4) + i);
             const removable = (medium === 'carousel' && steps.length > 1) || (medium === 'video' && step.kind === 'image');
+            // One step is one clip, held to its own engine's limit; a longer text stays as written and is flagged.
+            const limit = promptCharLimit(step.engine), written = sentLength(recipe, index), over = written > limit;
+            const count = (n: number) => n.toLocaleString(locale === 'ko' ? 'ko-KR' : 'en-US');
             return <div key={index} data-recipe-step={`step${index + 1}`} data-step-kind={step.kind} className="space-y-3 border-t border-hairline pt-4 first:border-t-0 first:pt-0">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <h3 className="font-semibold">{interpolate(copy.stepLabel, { n: String(index + 1) })} · {step.kind === 'image' ? copy.stepImage : copy.stepVideo}</h3>
@@ -348,7 +352,8 @@ export function RecipeEditor({ copy, formatId, draft, engines, aspects, hasSelfi
                   {[...castTokens(cast, label), ...references.map((_, i) => label.reference(i + 1)), ...steps.slice(0, index).filter((s) => s.kind === 'image').map((_, i) => label.step(i + 1))].map((token) =>
                     <button key={token} type="button" data-insert-token={token} onClick={() => insert(index, token)} className="inline-flex min-h-9 items-center rounded-full border border-hairline px-3 text-xs">{token}</button>)}
                 </div>
-                <textarea ref={(node) => { textareas.current[index] = node; }} value={step.text} onChange={(e) => update(index, { text: e.target.value })} rows={6} maxLength={MAX_STEP_PROMPT_CHARS} aria-label={`${interpolate(copy.stepLabel, { n: String(index + 1) })} ${copy.prompt}`} className={FIELD} autoComplete="off" spellCheck={false} />
+                <textarea ref={(node) => { textareas.current[index] = node; }} value={step.text} onChange={(e) => update(index, { text: e.target.value })} rows={6} maxLength={limit} aria-invalid={over ? true : undefined} aria-label={`${interpolate(copy.stepLabel, { n: String(index + 1) })} ${copy.prompt}`} className={FIELD} autoComplete="off" spellCheck={false} />
+                <span data-recipe-prompt-count={written} data-recipe-prompt-limit={limit} data-over={over ? 'true' : undefined} className={`${HINT} tabular-nums${over ? ' text-accent' : ''}`}>{interpolate(copy.promptCount, { n: count(written), max: count(limit) })}</span>
                 <span className={HINT}>{copy.promptHint}</span>
               </div>
               <label className="block text-sm" data-recipe-step-note={index + 1}>{copy.note}
@@ -526,6 +531,22 @@ export function toRecipe(steps: StepState[], medium: EditorMedium, references: E
   const intro = notes?.intro.trim(), outro = notes?.outro.trim();
   const written = intro || outro ? { notes: { ...(intro ? { intro } : {}), ...(outro ? { outro } : {}) } } : {};
   return { version: 2, slots, steps: built, output, ...written } as unknown as Recipe;
+}
+
+/**
+ * A step's length as the recipe rules count it: on an engine with a verified limit (Seedance 2.5), as the engine reads
+ * it, its person line included (founder 2026-11-25); elsewhere as written.
+ */
+function sentLength(recipe: Recipe, index: number): number {
+  const step = recipe.steps[index];
+  if (!step) return 0;
+  const written = step.prompt.trim();
+  if (verifiedPromptCharLimit(step.engine) === null) return written.length;
+  try {
+    return engineStepPrompt(recipe, { ...step, prompt: written }).length;
+  } catch {
+    return written.length;
+  }
 }
 
 /** A stored or imported recipe → editor state, naming each maker file by its place in this draft's files. */

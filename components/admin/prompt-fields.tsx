@@ -5,6 +5,7 @@ import { formatKrw, suggestedKrw } from '@/lib/twings/products';
 import { costFloor } from '@/lib/twings/cost-model';
 import { baseKrw, makeEarning, providerKrw } from '@/lib/twings/template-price';
 import { videoModelForEngine } from '@/lib/video/models';
+import { formatPromptChars } from '@/lib/engines/prompt-limits';
 import { PROMPT_TEXT_MAX, PROMPT_TEXT_MIN, TEMPLATE_CASTS, TEMPLATE_MEDIA } from '@/lib/prompts/schemas';
 import { promptHref } from '@/lib/prompts/links';
 import {
@@ -589,11 +590,14 @@ export function PromptCard({
   dict,
   href,
   locale,
+  overLimit,
 }: {
   row: PromptRow;
   dict: Dict;
   href: string;
   locale: string;
+  /** Founder 2026-11-25: the limit a clip of this published template is over (lib/prompts/prompt-length.ts). */
+  overLimit?: number;
 }) {
   const a = dict.admin;
   const media = parsePromptMedia(row.media);
@@ -647,6 +651,11 @@ export function PromptCard({
             {row.engine ? ` · ${row.engine}` : ''}
           </span>
           {row.featured && <span className="text-accent font-semibold">★</span>}
+          {overLimit !== undefined && (
+            <span data-prompt-over-limit-chip={overLimit} className="rounded-full border border-current px-2 py-0.5 text-accent">
+              {interpolate(a.promptOverLimitMarker, { max: formatPromptChars(overLimit) })}
+            </span>
+          )}
         </div>
 
         <a

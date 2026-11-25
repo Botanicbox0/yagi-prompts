@@ -6,7 +6,8 @@ import { estimateImageUsd, IMAGE_ENGINES, isImageAspect, type ImageAspect, type 
 import { centsForKrw } from '@/lib/recipes/pricing';
 import { baseKrw } from '@/lib/twings/template-price';
 import { loadTemplateRecipe, recipeSchemaReady } from '@/lib/recipes/repo';
-import { engineStepPrompt, isMakerEngine, isStudioRecipeEngine, legacyPromptText, MAX_RECIPE_STEPS, MAX_STEP_PROMPT_CHARS, parseRecipe, SELFIE_SLOT, setFrameStepPrompt, setPromptTooLong, type Recipe } from '@/lib/recipes/schema';
+import { engineStepPrompt, isMakerEngine, isStudioRecipeEngine, legacyPromptText, MAX_RECIPE_STEPS, parseRecipe, SELFIE_SLOT, setFrameStepPrompt, setPromptTooLong, type Recipe } from '@/lib/recipes/schema';
+import { promptCharLimit } from '@/lib/engines/prompt-limits';
 import type { StorageDriver } from '@/lib/storage';
 import { promptStagingKey, publishPromptMedia, sha256Hex } from './media';
 import { insertPrompt, slugExists } from './repo';
@@ -160,7 +161,7 @@ export function buildImageTemplateSet(rawDescriptor: unknown, frames: readonly I
     if (issue === 'no_photo') errors.push(`${frame.key}: the prompt never names the photo as "Image 1"`);
     if (issue === 'other_reference') errors.push(`${frame.key}: the prompt names a reference a set does not carry`);
     if (issue === 'braces') errors.push(`${frame.key}: the prompt contains "{{" or "}}"`);
-    if (setPromptTooLong(frame.promptText)) errors.push(`${frame.key}: the prompt is over ${MAX_STEP_PROMPT_CHARS} characters`);
+    if (setPromptTooLong(frame.promptText, frame.engine)) errors.push(`${frame.key}: the prompt is over ${promptCharLimit(frame.engine)} characters`);
   }
   if (errors.length > 0 || !first) return { ok: false, errors };
 

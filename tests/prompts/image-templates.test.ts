@@ -15,7 +15,9 @@ import { publishPromptMedia } from '@/lib/prompts/media';
 import { loadPromptBySlug } from '@/lib/prompts/repo';
 import { parsePromptMedia } from '@/lib/prompts/schemas';
 import { loadTemplateRecipe } from '@/lib/recipes/repo';
-import { engineStepPrompt, MAX_STEP_PROMPT_CHARS, outputSteps, parseRecipe, setPromptTooLong } from '@/lib/recipes/schema';
+import { engineStepPrompt, outputSteps, parseRecipe, setPromptTooLong } from '@/lib/recipes/schema';
+// An image set renders on image engines, which keep the default prompt limit (Seedance 2.5's 15,000 is video only).
+import { DEFAULT_PROMPT_CHARS as IMAGE_PROMPT_CHARS } from '@/lib/engines/prompt-limits';
 import { emptyPromptHarness, type PromptHarness } from '../helpers/prompts';
 
 /**
@@ -112,7 +114,7 @@ describe('an image set', () => {
   it('takes ten frames at the longest prompt a frame may have, in Korean', () => {
     const longest = (n: number) => {
       const start = `Image 1 컷 ${n} `;
-      return `${start}${'가'.repeat(MAX_STEP_PROMPT_CHARS - '{{selfie}} 컷 10 '.length)}`.trim();
+      return `${start}${'가'.repeat(IMAGE_PROMPT_CHARS - '{{selfie}} 컷 10 '.length)}`.trim();
     };
     const built = buildImageTemplateSet(SET, frames(Array.from({ length: 10 }, (_, i) => entry(i + 1, {
       file_name: i === 1 ? SET.thumbnail : `shot_${i + 1}.png`,
@@ -124,15 +126,15 @@ describe('an image set', () => {
   });
 
   it('names the frame whose prompt is over the limit', () => {
-    const over = `Image 1 ${'가'.repeat(MAX_STEP_PROMPT_CHARS)}`;
+    const over = `Image 1 ${'가'.repeat(IMAGE_PROMPT_CHARS)}`;
     const built = buildImageTemplateSet(SET, frames([entry(1), entry(2, { prompt: over })]));
     expect(built.ok).toBe(false);
-    if (!built.ok) expect(built.errors.join('\n')).toContain(`bridal-02-shot: the prompt is over ${MAX_STEP_PROMPT_CHARS} characters`);
+    if (!built.ok) expect(built.errors.join('\n')).toContain(`bridal-02-shot: the prompt is over ${IMAGE_PROMPT_CHARS} characters`);
   });
 
   it('counts a frame the way the recipe stores it, with the photo as its token', () => {
-    expect(setPromptTooLong(`Image 1 ${'x'.repeat(MAX_STEP_PROMPT_CHARS - '{{selfie}} '.length)}`)).toBe(false);
-    expect(setPromptTooLong(`Image 1 ${'x'.repeat(MAX_STEP_PROMPT_CHARS - '{{selfie}} '.length + 1)}`)).toBe(true);
+    expect(setPromptTooLong(`Image 1 ${'x'.repeat(IMAGE_PROMPT_CHARS - '{{selfie}} '.length)}`)).toBe(false);
+    expect(setPromptTooLong(`Image 1 ${'x'.repeat(IMAGE_PROMPT_CHARS - '{{selfie}} '.length + 1)}`)).toBe(true);
   });
 
   it('refuses a set it could not make faithfully', () => {

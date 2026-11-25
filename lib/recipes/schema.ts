@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { IMAGE_ASPECTS, IMAGE_ENGINES, VIDEO_ASPECTS, engineProvider, isEngineId, isImageEngine, isVideoEngine, normalizeLegacyEngineId, type EngineId } from '@/lib/images/engines';
 import { videoEngineSpec } from '@/lib/video/models';
+import { MAX_ENGINE_PROMPT_CHARS, promptCharLimit, verifiedPromptCharLimit } from '@/lib/engines/prompt-limits';
 
 /**
  * Recipe v2 — a maker template as steps and slots (docs/PLATFORM-2.0.md §7.3).
@@ -20,20 +21,15 @@ export const RECIPE_VERSION = 2;
 /** Ten since 2026-11-02 (founder): render_job_outputs must accept it first (0072). */
 export const MAX_RECIPE_STEPS = 10;
 export const MAX_STEP_INPUTS = 6;
-/** 4,000 bytes a frame, the room six frames had in 24,000. */
-export const MAX_RECIPE_BYTES = 40_000;
 /**
- * One step's prompt. 8,000 characters since 2026-10-29: a creative's published Seedance 2.5 film
- * prompt runs ~7,900 (timed shots, look, audio, exclusions), and the recipe page promises the exact
- * prompt behind the post — a shortened copy would not be that.
+ * The most one step's prompt may hold on any engine: 15,000 characters, Seedance 2.5's limit PER CLIP (founder,
+ * 2026-11-25). Each step is then held to its own engine's limit (`promptCharLimit`, lib/engines/prompt-limits.ts):
+ * 15,000 on Seedance 2.5, 8,000 elsewhere (every step's cap since 2026-10-29). A step is one generation, so the rule
+ * is per step, never a total: a film of two clips has 15,000 for each. The recipe page promises the exact prompt
+ * behind the post — a shortened copy would not be that.
  */
-export const MAX_STEP_PROMPT_CHARS = 8000;
-/**
- * The studio's own recipes (the image-set form, the import script): room for every step at its
- * prompt limit in Korean, 3 bytes a character, plus the recipe's structure. Slack 1793592561.362499:
- * a set whose frames were each within their limit was refused whole at the maker's 40,000.
- */
-export const MAX_STUDIO_RECIPE_BYTES = 256_000;
+export const MAX_STEP_PROMPT_CHARS = MAX_ENGINE_PROMPT_CHARS;
+export const MIN_STEP_PROMPT_CHARS = 10;
 export const SELFIE_SLOT = 'selfie';
 
 const NAME = /^[a-z][a-z0-9_]{0,23}$/;
@@ -97,7 +93,7 @@ const SlotRole = z.enum(RECIPE_SLOT_ROLES).optional();
 const UserSlot = z.object({ kind: z.literal('image'), source: z.literal('user'), required: z.boolean(), role: SlotRole }).strict();
 const CreatorSlot = z.object({ kind: z.enum(['image', 'video', 'audio']), source: z.literal('creator'), asset: z.string().regex(ASSET_HANDLE), role: SlotRole }).strict();
 const Slot = z.discriminatedUnion('source', [UserSlot, CreatorSlot]);
-const Prompt = z.string().trim().min(10).max(MAX_STEP_PROMPT_CHARS);
+const Prompt = z.string().trim().min(MIN_STEP_PROMPT_CHARS).max(MAX_STEP_PROMPT_CHARS);
 /**
  * docs/PLATFORM-2.0.md §20.3 — what the creative says around the prompts, the way a tutorial post
  * does (an intro, a tip under a step, "post yours and tag me"). Display only: no engine ever reads
@@ -106,6 +102,17 @@ const Prompt = z.string().trim().min(10).max(MAX_STEP_PROMPT_CHARS);
 export const NOTE_MAX = 800;
 export const INTRO_MAX = 1200;
 export const OUTRO_MAX = 600;
+/**
+ * A recipe's size in UTF-8 bytes of its JSON (`Buffer.byteLength`, the unit it always had). Room for the largest
+ * recipe the rules allow: every step at the largest prompt limit and every note full, in Korean at 3 bytes a
+ * character (15,000 Korean characters are 45,000 bytes), plus 16,000 bytes for slots, ids, engines, params and an
+ * export's indent. Makers and the studio get the same room since 2026-11-25 (it was 40,000 and 256,000): a recipe
+ * whose steps are each within their limit is never refused for its size (Slack 1793592561.362499).
+ */
+const RECIPE_TEXT_BYTES = 3 * (MAX_RECIPE_STEPS * (MAX_STEP_PROMPT_CHARS + NOTE_MAX) + INTRO_MAX + OUTRO_MAX);
+export const MAX_RECIPE_BYTES = RECIPE_TEXT_BYTES + 16_000;
+/** The studio's own recipes (the image-set form, the import script). */
+export const MAX_STUDIO_RECIPE_BYTES = MAX_RECIPE_BYTES;
 const Note = z.string().trim().max(NOTE_MAX).optional();
 const Notes = z.object({ intro: z.string().trim().max(INTRO_MAX).optional(), outro: z.string().trim().max(OUTRO_MAX).optional() }).strict();
 const ImageStep = z.object({
@@ -256,8 +263,9 @@ export function setFrameStepPrompt(prompt: string): string {
   return prompt.replace(/\bImage 1\b/g, `{{${SELFIE_SLOT}}}`);
 }
 
-export function setPromptTooLong(prompt: string): boolean {
-  return setFrameStepPrompt(prompt).trim().length > MAX_STEP_PROMPT_CHARS;
+/** A set frame's words over its (image) engine's limit, counted the way the recipe stores them. */
+export function setPromptTooLong(prompt: string, engine: string | null = null): boolean {
+  return setFrameStepPrompt(prompt).trim().length > promptCharLimit(engine);
 }
 
 export interface ParseRecipeOptions {
@@ -331,6 +339,8 @@ export function parseRecipe(raw: unknown, options: ParseRecipeOptions = {}): Rec
     if (seen.has(step.id)) issues.push({ code: 'duplicate_step', step: step.id });
     if (!isMakerEngine(step.engine) && !(options.studio && isStudioRecipeEngine(step.engine))) issues.push({ code: 'engine', step: step.id });
     else if (step.kind === 'image' ? !isImageEngine(step.engine) : !isVideoEngine(step.engine)) issues.push({ code: 'engine_kind', step: step.id });
+    // One step is one generation (one clip): its prompt is held to its own engine's limit, never a recipe total.
+    if (step.prompt.length > promptCharLimit(step.engine)) issues.push({ code: 'shape', step: step.id });
     if (new Set(step.inputs).size !== step.inputs.length) issues.push({ code: 'unknown_input', step: step.id });
     let images = 0;
     for (const input of step.inputs) {
@@ -367,6 +377,13 @@ export function parseRecipe(raw: unknown, options: ParseRecipeOptions = {}): Rec
     }
     seen.set(step.id, step);
   });
+  // Founder 2026-11-25: on an engine with a verified limit a step is also counted as the engine reads it (its person
+  // line included, lib/engines/prompt-limits.ts), so a step written at exactly 15,000 cannot go out longer.
+  for (const step of recipe.steps) {
+    const limit = verifiedPromptCharLimit(step.engine);
+    const flagged = issues.some((issue) => issue.code === 'shape' && issue.step === step.id);
+    if (limit !== null && !flagged && engineStepPrompt(recipe, step).length > limit) issues.push({ code: 'shape', step: step.id });
+  }
   const personSlotSet = personSlots(recipe);
   for (const [name] of slots) if (!used.has(name)) issues.push(personSlotSet.has(name) ? { code: 'no_identity' } : { code: 'unused_slot', slot: name });
 

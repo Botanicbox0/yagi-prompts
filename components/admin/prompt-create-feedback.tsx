@@ -10,6 +10,7 @@ import {
   type PromptDraft,
 } from '@/lib/admin/prompt-draft';
 import { lockRefusalLines, type LockRefusalCopy, type LockRefusalLines } from '@/lib/template-director/locks';
+import { promptLengthRefusalText } from '@/components/admin/prompt-length-status';
 
 type Labels = {
   useCase: string;
@@ -28,6 +29,8 @@ type Labels = {
   /** docs/PERSONAL-STUDIO.md §3.4.9, rule 3: a person template without a styling block, and the block to copy. */
   stylingRequired?: string;
   stylingExample?: string;
+  /** The sentence a clip-length refusal is said in (`admin.promptLengthRefusal`). */
+  lengthCopy?: string;
 };
 
 /**
@@ -46,6 +49,9 @@ export function refusalMessage(
   if (result.code === 'stylingRequired') {
     return { message: labels.stylingRequired ?? labels.invalid, lock: null, example: labels.stylingExample ?? null };
   }
+  // Founder 2026-11-25: a clip over its length limit, said as on the template's page.
+  const length = result.field === 'promptText' && labels.lengthCopy ? promptLengthRefusalText(result.detail, labels.lengthCopy) : null;
+  if (length !== null) return { message: length, lock: null };
   const message =
     result.field === 'useCase' ? labels.useCase
       : result.field === 'poster' ? labels.poster

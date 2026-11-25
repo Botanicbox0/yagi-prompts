@@ -63,7 +63,8 @@ async function readPromptCatalog(): Promise<PromptCatalog> {
 /** 2026-11-15 (`v15-rule-prices`): five creative templates moved to their rule price in the database (founder: no raise on company templates), `lens-portal-tutu` runtime 17 → 15 s. */
 /** 2026-11-24 (`v16-template-styling`): `PromptCard.styling` (docs/PERSONAL-STUDIO.md §3.4.9, S2), read from the prompts the compile reads. */
 /** 2026-11-25 (`v17-template-look`): `PromptCard.look` (docs/PERSONAL-STUDIO.md §3.4.10), only while `TWINGS_TEMPLATE_LOOK=on` (part of the key). */
-export const PROMPT_CATALOG_CACHE_VERSION = 'v17-template-look';
+/** 2026-11-25 (`v18-edits-closed`): `PromptCard.editsClosed`, a template whose text leaves no room for a buyer's edits (lib/prompts/prompt-length.ts). */
+export const PROMPT_CATALOG_CACHE_VERSION = 'v18-edits-closed';
 
 /** The cache key: every input that changes the projection's shape, so a flag flip never serves the other shape. */
 export function promptCatalogCacheKey(): string[] {

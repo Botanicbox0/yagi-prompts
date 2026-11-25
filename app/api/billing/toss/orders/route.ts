@@ -9,6 +9,7 @@ import { createTossOrder } from '@/lib/billing/toss-service';
 import { canStartRender } from '@/lib/renders/service';
 import { bindOrderPhotos, orderPhotos, type OrderPhotosFailure } from '@/lib/renders/cast-form';
 import { parseDirectorSpecInput } from '@/lib/template-director/schema';
+import { ORDER_EDIT_REFUSAL_STATUS, orderEditRefusal } from '@/lib/prompts/edits-closed';
 import { parseSelectedFrames } from '@/lib/twings/selective-frames';
 
 /**
@@ -42,6 +43,10 @@ export async function POST(request: Request) {
     const deps = await getTossContext();
     if (!deps) return json({ ok: false, code: 'unavailable' }, 503);
     const form = await request.formData();
+    // Founder 2026-11-25 — an edit the template cannot take (no room at all, or this one too long): no order, nothing charged.
+    const directorSpec = parseDirectorSpecInput(form.get('directorSpec'));
+    const editRefusal = await orderEditRefusal(deps.sql, form, directorSpec);
+    if (editRefusal) return json({ ok: false, code: editRefusal }, ORDER_EDIT_REFUSAL_STATUS[editRefusal]);
     // docs/CAST-CATEGORIES.md §3: which photo the order carries — the saved selfie (solo, couple,
     // person + pet) or the pet (pet-only) — and the second photo, if the template takes one.
     // A solo template keeps exactly the old rule: the saved selfie or `selfie_required`.
@@ -58,7 +63,7 @@ export async function POST(request: Request) {
       ...(photos.selfieId ? { selfieId: photos.selfieId } : {}),
       photo: photos.photo,
       selectedFrames: parseSelectedFrames(form.get('selectedFrames')),
-      directorSpec: parseDirectorSpecInput(form.get('directorSpec')),
+      directorSpec,
     });
     if (result.ok && photos.templateId) {
       await bindOrderPhotos(deps.sql, deps.store, { orderId: result.order.id, userId: viewer.userId, templateId: photos.templateId, extras: photos.extras, partnerConsent: photos.partnerConsent, now: new Date(), ...(photos.partnerCheck ? { partnerCheck: photos.partnerCheck } : {}) });

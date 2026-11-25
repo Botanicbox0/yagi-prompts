@@ -10,6 +10,7 @@ import { dispatchAdmin, outcomeUrl } from '@/lib/admin/dispatch';
 import { BACK_FIELD, OP_FIELD, str } from '@/lib/admin/form';
 import { resolveRequestUrl } from '@/lib/routing/surfaces';
 import { readLockBlockRefusal } from '@/lib/template-director/locks';
+import { readPromptLengthRefusal } from '@/lib/engines/prompt-limits';
 
 /**
  * `POST /admin/do` — the one admin mutation door, as a ROUTE rather than a server action.
@@ -79,7 +80,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const field = outcome.ok ? undefined : outcome.detail?.split(':')[0];
     // docs/PERSONAL-STUDIO.md §3.3 (C3): the lock-block refusal is the one detail this answer carries. It is the
     // operation's own fixed-prefix sentence (lines and kinds), recognised by `readLockBlockRefusal`; nothing else is echoed.
-    const lock = !outcome.ok && outcome.code === 'invalid' && readLockBlockRefusal(outcome.detail ?? '')?.field === 'promptText';
+    // Founder 2026-11-25: so is the clip-length refusal (field, clip number and two lengths; lib/prompts/prompt-length.ts).
+    const lock = !outcome.ok && outcome.code === 'invalid' && (readLockBlockRefusal(outcome.detail ?? '')?.field === 'promptText'
+      || (Boolean(outcome.detail?.startsWith('promptText: prompt length: ')) && readPromptLengthRefusal(outcome.detail) !== null));
     // docs/PERSONAL-STUDIO.md §3.4.9, rule 3: a person template without a styling block; the form says it with the example.
     const styling = !outcome.ok && outcome.code === 'stylingRequired';
     return NextResponse.json(outcome.ok

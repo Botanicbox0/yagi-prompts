@@ -40,6 +40,8 @@ import { recipeSchemaReady } from '@/lib/recipes/repo';
 import { TemplateStylingPanel } from '@/components/admin/template-styling-panel';
 import { FormatRevisionPanel } from '@/components/admin/format-revision-panel';
 import { loadFormatRevisionView } from '@/lib/creator-platform/format-revision';
+import { PromptLengthRefusalNote, PromptLengthStatus } from '@/components/admin/prompt-length-status';
+import { templateClipLengths, templateEditHeadroom } from '@/lib/prompts/prompt-length';
 
 /**
  * `/admin/prompts/{id}` — one prompt, everything you can do to it (2026-08-15).
@@ -252,6 +254,10 @@ export default async function AdminPromptItemPage({
   // docs/CREATOR-PLATFORM.md (2026-11-25): the audited recipe text revision — only for an accepted format the studio's
   // own company-payout account owns (null for every other template, a creative's format included).
   const revisionView = sql === null || row.audience === 'brand' ? null : await loadFormatRevisionView(sql, row.id);
+  // Founder 2026-11-25: the same prompts, each against its clip's limit (Seedance 2.5: 15,000 characters per clip).
+  const lengthSource = { promptText: row.promptText, ...stylingSource, medium: row.medium, engine: row.engine, runtimeSeconds: row.runtimeSeconds };
+  const clips = templateClipLengths(lengthSource);
+  const headroom = templateEditHeadroom({ ...lengthSource, cast: row.cast });
 
   // docs/PERSONAL-STUDIO.md §3.4.4 (T1a): a film whose saved prompt declares parts gets the marks editor (a short
   // description and an example-video range per part, `prompt.marks`) under the editor, with the same lock line.
@@ -298,8 +304,10 @@ export default async function AdminPromptItemPage({
       {banner}
       {/* docs/PERSONAL-STUDIO.md §3.3 (C3): a save refused for its lock block, in sentences. */}
       {one(query, 'err') === 'invalid' && <LockBlockRefusalNote detail={one(query, 'detail')} dict={dict} />}
+      {one(query, 'err') === 'invalid' && <PromptLengthRefusalNote detail={one(query, 'detail')} dict={dict} />}
 
       <TemplateSpecSummaryCard row={row} dict={dict} />
+      <PromptLengthStatus clips={clips} headroom={headroom} dict={dict} />
 
     {/* Quick actions FIRST (2026-09-03): they were the last thing on the page, under a
         12-row textarea and two 10-row ones. Feature / open / archive are one press each. */}

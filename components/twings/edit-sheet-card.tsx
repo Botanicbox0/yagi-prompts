@@ -159,7 +159,9 @@ export type SheetNoticeKey =
   /** docs/PERSONAL-STUDIO.md §3.3 — the turn asked to change a fixed part: nothing else changed. */
   | 'refusedLocked'
   /** The turn changed something, and its part about a fixed part was left out. */
-  | 'updatedLocked';
+  | 'updatedLocked'
+  /** Founder 2026-11-25 — the edit would not fit the clip: nothing changed. */
+  | 'tooLong';
 
 /**
  * The live line under the card: always dictionary copy (the studio's own reply is not shown — it repeats the request
@@ -220,6 +222,8 @@ export function readSheetTurnAnswer(input: {
   if (input.status === 429 || body?.code === 'rate_limited') return kept('rateLimited');
   // docs/PERSONAL-STUDIO.md §3.3 — a photo for a reference the template closed (the screen hides those pickers).
   if (body?.code === 'locked_slot_photo') return kept('refusedLocked');
+  // Founder 2026-11-25 — the edit would not fit the template's clip: the sheet stays as it was.
+  if (body?.code === 'too_long') return kept('tooLong');
   if (input.status < 200 || input.status >= 300 || body?.ok !== true) return kept('retry');
   const turn = body.turn && typeof body.turn === 'object' ? (body.turn as Record<string, unknown>) : null;
   if (!turn || !turn.sheet || typeof turn.sheet !== 'object') return kept('retry');
