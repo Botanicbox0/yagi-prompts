@@ -15,6 +15,7 @@ import {
 import { renderHref } from '@/lib/renders/share';
 import { getRenderStore } from '@/lib/renders/store';
 import { parseDirectorSpecInput } from '@/lib/template-director/schema';
+import { ordersEditOnClosedTemplate } from '@/lib/prompts/edits-closed';
 import { parseSelectedFrames } from '@/lib/twings/selective-frames';
 
 export const dynamic = 'force-dynamic';
@@ -81,6 +82,10 @@ export async function POST(request: Request): Promise<NextResponse> {
     return json({ ok: false, code: 'bad_request' }, 400);
   }
 
+  // Founder 2026-11-25 — a template with no room for edits refuses a request carrying one, before any credit is spent.
+  const directorSpec = parseDirectorSpecInput(form.get('directorSpec'));
+  if (await ordersEditOnClosedTemplate(sql, form, directorSpec)) return json({ ok: false, code: 'edits_closed' }, 409);
+
   const photo = form.get('photo');
   const rawLocale = form.get('locale');
   const requestId = String(form.get('requestId') ?? '');
@@ -120,7 +125,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     holdForIdentity: form.get('hold') === '1',
     resolution: typeof form.get('resolution') === 'string' ? String(form.get('resolution')) : null,
     selectedFrames: parseSelectedFrames(form.get('selectedFrames')),
-    directorSpec: parseDirectorSpecInput(form.get('directorSpec')),
+    directorSpec,
   });
 
   if (!outcome.ok) {

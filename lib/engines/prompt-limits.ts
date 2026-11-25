@@ -54,6 +54,36 @@ export function formatPromptChars(n: number): string {
   return n.toLocaleString('en-US');
 }
 
+/**
+ * The characters a clip's compiled text leaves for a buyer's edits on this engine (its verified limit less the length
+ * of the text the personal compile receives), or null when the engine has no verified limit.
+ */
+export function editHeadroom(engine: string | null | undefined, compiledSourceLength: number): number | null {
+  const limit = verifiedPromptCharLimit(engine);
+  return limit === null ? null : limit - compiledSourceLength;
+}
+
+/**
+ * Below this headroom a template takes no change requests (founder 2026-11-25: a paid edit must never be dropped).
+ * It is the most the deterministic compile can add for the fullest edit the caps allow, measured on a short base with
+ * the template's styling block, both parts kept as the buyer's own, the three reference photos and BGM:
+ *   chips path (TWINGS_PERSONAL_EDIT_SHEET off, today's production): 4,990 solo, 5,193 couple — hair 400 + makeup
+ *     400 + outfit 600 + prop 400 overrides, 4 shot edits of 500, 12 exclusions of 120, plus headers, reference lines,
+ *     own-style rules, the audio and skin contracts;
+ *   sheet path (flag on): 3,466 solo — 6 change lines, 6 keep and 4 exclude lines of 120, plus the same additions.
+ * Rounded up to 5,200 so either path fits (tests/template-director/edit-headroom.test.ts re-measures both).
+ */
+export const EDIT_HEADROOM_MIN_CHARS = 5_200;
+
+/** One clip's room for edits (lib/prompts/prompt-length.ts `templateEditHeadroom`). */
+export interface ClipHeadroom {
+  clip: number;
+  stepId: string | null;
+  /** The length of the text the personal compile receives for this clip (the render's identity line included). */
+  compiledChars: number;
+  headroom: number;
+}
+
 /** One clip of a template (a prompt the compile reads) and how long it is against its limit (lib/prompts/prompt-length.ts). */
 export interface ClipLength {
   /** 1-based, in the order the compile reads them. */

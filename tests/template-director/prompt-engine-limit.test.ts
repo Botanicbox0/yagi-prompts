@@ -11,7 +11,7 @@ import { SEEDANCE_25_PROMPT_CHARS } from '@/lib/engines/prompt-limits';
 /**
  * Founder, 2026-11-25: Seedance 2.5 takes up to 15,000 characters per clip. What the personal compile hands over for a
  * clip must fit: a rewrite over the limit counts as a failed verification (retry, then the fallback), and a fallback
- * that still does not fit gives the template's own text back unchanged, with one warning. Never cut, never without its
+ * that still does not fit gives the template's own text back whole (`over_limit`), with one warning. Never cut, never without its
  * lock block. Filler text only (the repo is public).
  */
 
@@ -53,7 +53,7 @@ const overWarnings = (warn: { mock: { calls: unknown[][] } }) => warn.mock.calls
 afterEach(() => vi.restoreAllMocks());
 
 describe('the personal compile fits the clip it is for', () => {
-  it('a 14,900-character template whose customised text would pass 15,000 goes unchanged, whole, with its blocks', async () => {
+  it('a 14,900-character template whose customised text would pass 15,000 goes whole with its blocks (over_limit)', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const template = base(14_900);
     expect(template).toHaveLength(14_900);
@@ -66,7 +66,7 @@ describe('the personal compile fits the clip it is for', () => {
     for (const engine of [{ engine: 'seedance-2.5' }, {}]) {
       warn.mockClear();
       const result = await compileDirectorPromptDetailed(input(template, engine), { env: {} });
-      expect(result).toEqual({ prompt: template, path: 'unchanged' });
+      expect(result).toEqual({ prompt: template, path: 'over_limit' });
       expect(result.prompt).toContain(LOCKS);
       expect(result.prompt).toContain(STYLING);
       expect(overWarnings(warn)).toHaveLength(1);
@@ -96,13 +96,13 @@ describe('the personal compile fits the clip it is for', () => {
     expect(result.prompt.length).toBeLessThanOrEqual(SEEDANCE_25_PROMPT_CHARS);
   });
 
-  it('gives the template back unchanged when neither the rewrite nor the fallback fits', async () => {
+  it('gives the template back whole (over_limit) when neither the rewrite nor the fallback fits', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const template = base(14_900);
     const fetchMock = vi.fn(async () => geminiJson(rewrite(SEEDANCE_25_PROMPT_CHARS + 200)));
     const result = await compileDirectorPromptDetailed(input(template), { env: KEY, fetch: fetchMock as unknown as typeof fetch });
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(result).toEqual({ prompt: template, path: 'unchanged' });
+    expect(result).toEqual({ prompt: template, path: 'over_limit' });
     expect(overWarnings(warn)).toHaveLength(1);
   });
 

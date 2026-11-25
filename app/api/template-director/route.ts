@@ -4,6 +4,7 @@ import { getSqlRunner } from '@/lib/db/connect';
 import { personalEditSheetOpen } from '@/lib/flags';
 import { isLocale } from '@/lib/i18n/config';
 import { loadPromptBySlug } from '@/lib/prompts/repo';
+import { promptRowEditsClosed } from '@/lib/prompts/edits-closed';
 import {
   DIRECTOR_DEFAULT_REFERENCE_MESSAGE_EN,
   DIRECTOR_DEFAULT_REFERENCE_MESSAGE_KO,
@@ -94,6 +95,8 @@ export async function POST(request: Request): Promise<NextResponse> {
   if (!template || template.status !== 'published' || template.audience === 'brand') {
     return json({ ok: false, code: 'not_found' }, 404);
   }
+  // Founder 2026-11-25 — a template with no room for edits takes no change requests (its page shows no director).
+  if (await promptRowEditsClosed(sql, template)) return json({ ok: false, code: 'edits_closed' }, 409);
 
   // docs/PERSONAL-STUDIO.md §3.3 — the template's own locks, read from its prompt. Without a `Template locks:` block
   // this is NO_LOCKS and every branch below that uses it is skipped: the turn and the answer are exactly as before.

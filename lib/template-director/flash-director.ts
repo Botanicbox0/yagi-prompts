@@ -762,6 +762,24 @@ const STAGE2_TEMPLATE_LOCKS_LINE =
   'TEMPLATE LOCKS: basePrompt carries the template\'s own `Template locks:` block (its lines are in `templateLocks`). Copy that block into the prompt unchanged, word for word; a template lock wins over every edit, note, sheet line and audio rule above, so a locked part is never changed, replaced, removed or excluded. Each lock governs only its own part. A locked shot keeps its action, framing, camera, timing, order, product and every other detail exactly as written, with one exception: a wardrobe, makeup or hair change the customer made (allowed because that part is not itself locked) applies to the person in EVERY shot, locked shots included, so the person never changes look mid-video; in a locked shot rewrite only the words that describe that styling and leave every other word of the shot as written.';
 
 /**
+ * Founder 2026-11-25 (Seedance 2.5: 15,000 characters per clip) — appended to the Stage-2 doctrine, before the output
+ * contract, only when the request carries `promptBudgetChars`. Server-only, like the doctrine.
+ */
+export const stage2BudgetLine = (budget: number): string =>
+  `LENGTH: the whole rewrittenPrompt must be at most ${budget} characters (promptBudgetChars), because the video engine takes no more. Stay within it by tightening wording only; never drop a shot, a timing, a camera move, wardrobe, the audio rule or the identity rules.`;
+
+/**
+ * Founder 2026-11-25 — the Stage-2 budget line above is sent only when the base is over this share of the engine's
+ * limit; a shorter base gets exactly the request it got before (the no-locks / no-styling parity goldens).
+ */
+export const DIRECTOR_BUDGET_FROM_SHARE = 0.8 as const;
+/**
+ * What the server may add after the model, kept out of the budget: the skin and audio contracts the sanitizer appends
+ * when a rewrite dropped them. Measured at most 664 characters (a couple, ambient sound); 700 keeps room.
+ */
+export const DIRECTOR_BUDGET_MARGIN_CHARS = 700 as const;
+
+/**
  * docs/PERSONAL-STUDIO.md §3.4.9 — appended to the Stage-2 doctrine only when the payload carries `templateStyling`
  * (the base prompt's `Template styling:` block styles a part that is neither locked nor changed by the customer).
  * Without it the doctrine (items 1 and 4) can switch a template-styled hairstyle to the photo's whenever the buyer
@@ -1232,6 +1250,8 @@ export function createFlashTemplateDirector(
       // keep or hand to the photo. Names, uses and the template's own lines; the own rule travels in the intent/sheet.
       const sentStyling = input.styling?.length ? input.styling : null;
       if (sentStyling) payload.templateStyling = sentStyling.map((s) => ({ part: s.part, use: s.use, line: s.line }));
+      // Founder 2026-11-25 — only for a base near the engine's limit: the most the whole rewritten prompt may hold.
+      if (input.budgetChars !== undefined) payload.promptBudgetChars = input.budgetChars;
       const parts: Array<Record<string, unknown>> = [
         {
           text: JSON.stringify(payload)
@@ -1240,8 +1260,11 @@ export function createFlashTemplateDirector(
 
       const doctrine = input.sheet ? `${STAGE2_VIDEO_CREATOR_DOCTRINE}\n${STAGE2_EDIT_SHEET_ADDENDUM}` : STAGE2_VIDEO_CREATOR_DOCTRINE;
       const withLocks = sentLocks ? `${doctrine}\n${STAGE2_TEMPLATE_LOCKS_LINE}` : doctrine;
-      // The output contract is always the last line, after the sheet addendum, the lock line and the styling line.
-      const system = `${sentStyling ? `${withLocks}\n${STAGE2_TEMPLATE_STYLING_LINE}` : withLocks}\n${STAGE2_OUTPUT_CONTRACT_LINE}`;
+      // The output contract is always the last line, after the sheet addendum, the lock line, the styling line and the
+      // budget line.
+      const withStyling = sentStyling ? `${withLocks}\n${STAGE2_TEMPLATE_STYLING_LINE}` : withLocks;
+      const withBudget = input.budgetChars !== undefined ? `${withStyling}\n${stage2BudgetLine(input.budgetChars)}` : withStyling;
+      const system = `${withBudget}\n${STAGE2_OUTPUT_CONTRACT_LINE}`;
       const raw = await callGeminiStructuredJson(
         config,
         fetchImpl,
@@ -1992,11 +2015,15 @@ function applyDeterministicChips(input: DeterministicInput, locks: TemplateLocks
   return hasPerson ? appendPersonalSkinContract(combined, input.cast ?? 'solo') : combined;
 }
 
-export type DirectorCompilePath = 'unchanged' | 'rewrite' | 'deterministic' | 'deterministic_fallback';
+export type DirectorCompilePath = 'unchanged' | 'rewrite' | 'deterministic' | 'deterministic_fallback' | 'over_limit';
 
 export interface DirectorCompileResult {
   prompt: string;
-  /** Which way the prompt was built; `deterministic_fallback` = the Gemini rewrite failed twice. */
+  /**
+   * Which way the prompt was built; `deterministic_fallback` = the Gemini rewrite failed twice; `over_limit` = every
+   * way of applying the edits came out longer than the engine takes, so the prompt is the template's own text, whole
+   * (founder 2026-11-25; never cut). `unchanged` means only that nothing was asked.
+   */
   path: DirectorCompilePath;
   /** Present (true) only when the prompt was built from the edit sheet (docs/PERSONAL-STUDIO.md §2.3). */
   sheet?: true;
@@ -2088,13 +2115,13 @@ export async function compileDirectorPromptDetailed(
   },
   deps: { env?: Record<string, string | undefined>; fetch?: typeof fetch } = {}
 ): Promise<DirectorCompileResult> {
-  // A customised prompt longer than the engine takes is never cut: the template's own text goes unchanged, with one
-  // warning. Its lock and styling blocks are in that text, so neither is ever dropped.
+  // A customised prompt longer than the engine takes is never cut: the template's own text goes whole, the result says
+  // `over_limit`, with one warning. Its lock and styling blocks are in that text, so neither is ever dropped.
   const limit = compiledPromptLimit(rawInput);
   const fits = (text: string): boolean => limit === null || text.length <= limit;
   const overLimit = (text: string): DirectorCompileResult => {
     console.warn(DIRECTOR_OVER_ENGINE_LIMIT_LOG_TAG, { engine: rawInput.engine ?? null, chars: text.length });
-    return { prompt: rawInput.basePrompt, path: 'unchanged' };
+    return { prompt: rawInput.basePrompt, path: 'over_limit' };
   };
   // docs/PERSONAL-STUDIO.md §3.3 — the template's locks come from its own prompt text. A base prompt without the
   // `Template locks:` header gives NO_LOCKS, and every branch below that reads `locks` checks `locks.any` first.
@@ -2200,6 +2227,12 @@ export async function compileDirectorPromptDetailed(
   if (locks.any) rewriteInput.locks = lockLines(locks);
   // docs/PERSONAL-STUDIO.md §3.4.9 — and its styled parts only when its styling block styles one the rewrite must handle.
   if (uses.length > 0) rewriteInput.styling = uses;
+  // Founder 2026-11-25 — near the engine's limit the rewrite is told its budget: the limit less what the server puts back
+  // after it (the lock and styling blocks, an own part's rule) and what the sanitizer may add. A shorter base: as before.
+  if (limit !== null && input.basePrompt.length > DIRECTOR_BUDGET_FROM_SHARE * limit) {
+    const reattached = (locks.any ? locks.block.length : 0) + (styling.any ? styling.block.length : 0) + own.reduce((n, o) => n + o.rule.length + 1, 0);
+    rewriteInput.budgetChars = Math.max(0, limit - reattached - DIRECTOR_BUDGET_MARGIN_CHARS);
+  }
 
   let lastError: unknown = null;
   for (let attempt = 1; attempt <= DIRECTOR_REWRITE_MAX_ATTEMPTS; attempt += 1) {

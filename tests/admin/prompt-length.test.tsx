@@ -112,6 +112,16 @@ describe('the 15,000-character gate on admin templates', () => {
     expect(over).toContain(interpolate(a.promptOverEngineLimit, { max: '15,000' }));
   });
 
+  it('shows the room each clip leaves for edits, and says when a template takes no change requests', async () => {
+    const roomy = await page(await created('Roomy walk', fill(9_000)));
+    expect(roomy).toMatch(/수정 여유 5,[0-9]{3}자/);
+    expect(roomy).not.toContain('data-prompt-edits-closed');
+    const full = await page(await created('Full walk', fill(14_879)));
+    expect(full).toMatch(/수정 여유 [0-9]{1,3}자/);
+    expect(full).toContain('data-prompt-edits-closed');
+    expect(full).toContain(interpolate(a.promptEditsClosed, { min: '5,200' }));
+  });
+
   it('lets an older over-limit template be shortened, never lengthened, and keeps it on sale untouched', async () => {
     const id = await legacy('Old long', 20_000);
     expect((await textOf(id)).status).toBe('published');

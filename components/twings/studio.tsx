@@ -167,6 +167,11 @@ export interface StudioLive {
    * viewer picked the other one. Handed in only with `TWINGS_TEMPLATE_LOOK=on`; never blocks the button.
    */
   templateLook?: { look: TemplateLook; note: string };
+  /**
+   * Founder 2026-11-25 — the template's text leaves no room for edits (`PromptCard.editsClosed`): this one line stands
+   * where the director panel would be, and the parts card offers no own-style choice. Absent = exactly as before.
+   */
+  editsClosed?: string;
   labels: {
     badge: string;
     /** Operators render for real without a charge (founder, 2026-09-10). */
@@ -1032,7 +1037,10 @@ export function TwingsStudio({
               />}
               {monthly && subscription?.planId === 'premium' && !editorAvailable && subscriptionCopy && <p className="mt-5 text-sm leading-relaxed opacity-65">{editing ? subscriptionCopy.studioTemplateEditsUnavailable : subscriptionCopy.studioPreparingEdits}</p>}
               {monthly && !editorOpen && (edit.editText || edit.references.length > 0) && subscriptionCopy && <button type="button" className="mt-3 self-start text-sm underline underline-offset-4" onClick={() => { setEdit({ editText: '', references: [], referencesConsent: false }); subscriptionRequestId.current = null; }}>{subscriptionCopy.studioRemoveChanges}</button>}
-              {!editorOpen && (
+              {!editorOpen && live.editsClosed && (
+                <p data-edits-closed className="mt-5 text-sm leading-relaxed opacity-70">{live.editsClosed}</p>
+              )}
+              {!editorOpen && !live.editsClosed && (
                 <TemplateDirectorPanel
                   locale={live.locale}
                   templateId={chosen?.id ?? live.template}
@@ -1068,10 +1076,10 @@ export function TwingsStudio({
                   all={live.parts.all}
                   copy={live.parts.copy}
                   choices={styleChoices}
-                  {...(monthly ? {} : { onChoose: (part: OwnStylePart, choice: StyleChoice) => setStyleChoices((current) => ({ ...current, [part]: choice })) })}
+                  {...(monthly || live.editsClosed ? {} : { onChoose: (part: OwnStylePart, choice: StyleChoice) => setStyleChoices((current) => ({ ...current, [part]: choice })) })}
                   overridden={overriddenParts}
                   outfitPhoto={{
-                    open: !editorOpen && !locksFromPublic(live.locks).refs.includes('look_ref'),
+                    open: !editorOpen && !live.editsClosed && !locksFromPublic(live.locks).refs.includes('look_ref'),
                     attached: Boolean(directorDraft.slotFiles.look_ref),
                     onAdd: () => setOutfitPhotoRequest((n) => n + 1),
                   }}

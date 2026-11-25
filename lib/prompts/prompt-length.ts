@@ -1,6 +1,17 @@
-import { promptLengthRefusalDetail, templatePromptCharLimit, verifiedPromptCharLimit, type ClipLength } from '@/lib/engines/prompt-limits';
+import {
+  EDIT_HEADROOM_MIN_CHARS,
+  editHeadroom,
+  promptLengthRefusalDetail,
+  templatePromptCharLimit,
+  verifiedPromptCharLimit,
+  type ClipHeadroom,
+  type ClipLength,
+} from '@/lib/engines/prompt-limits';
 import type { SqlRunner } from '@/lib/db/sql-runner';
+import type { TemplateCast, TemplateMedium } from '@/lib/prompts/schemas';
+import { buildRenderPrompt } from '@/lib/renders/prompt';
 import { templateCompileSource, type CompileSourceInput } from '@/lib/template-director/compile-prompts';
+import { videoModelForEngine } from '@/lib/video/models';
 
 /**
  * Founder, 2026-11-25: Seedance 2.5 takes up to 15,000 characters PER CLIP, and a template over that is not acceptable
@@ -38,6 +49,35 @@ export function templateClipLengths(input: TemplateLengthInput): ClipLength[] {
 }
 
 export const overLimitClips = (clips: readonly ClipLength[]): ClipLength[] => clips.filter((c) => c.chars > c.limit);
+
+export type { ClipHeadroom };
+
+/**
+ * Founder 2026-11-25: a buyer's paid edit must never be dropped for length. Each clip's room for edits, measured on the
+ * text the personal compile actually receives: a plain template's text as the render pass hands it over (with the
+ * identity line it adds when the text does not name the photo), or a recipe step as the engine reads it
+ * (`engineStepPrompt`, with its person line). Only clips on an engine with a verified limit.
+ */
+export function templateEditHeadroom(input: TemplateLengthInput & { cast?: TemplateCast | null }): ClipHeadroom[] {
+  const source = templateCompileSource(input);
+  if (source.kind === 'text') {
+    if (input.medium !== 'video') return [];
+    const model = videoModelForEngine(input.engine, input.runtimeSeconds ?? 0).model;
+    const compiled = buildRenderPrompt({ promptText: input.promptText, medium: input.medium as TemplateMedium, hasPhoto: true, cast: input.cast ?? 'solo' }).text;
+    const headroom = editHeadroom(model, compiled.length);
+    return headroom === null ? [] : [{ clip: 1, stepId: null, compiledChars: compiled.length, headroom }];
+  }
+  return source.prompts.flatMap((prompt, index) => {
+    const step = source.recipe.steps.find((s) => s.id === prompt.stepId);
+    const headroom = step ? editHeadroom(step.engine, prompt.text.length) : null;
+    return step && headroom !== null ? [{ clip: index + 1, stepId: step.id, compiledChars: prompt.text.length, headroom }] : [];
+  });
+}
+
+/** A template whose clips leave less room than the fullest edit can take: it takes no change requests. */
+export function templateEditsClosed(input: TemplateLengthInput & { cast?: TemplateCast | null }): boolean {
+  return templateEditHeadroom(input).some((clip) => clip.headroom < EDIT_HEADROOM_MIN_CHARS);
+}
 
 /** The first clip over its limit, as a refusal detail; null when every clip fits. */
 export function promptLengthRefusal(field: string, input: TemplateLengthInput): string | null {

@@ -11,6 +11,7 @@ import { recipeSchemaReady } from '@/lib/recipes/repo';
 import { parseTemplateLocks, publicLocks, type PublicTemplateLocks } from '@/lib/template-director/locks';
 import type { PublicTemplateStyling } from '@/lib/template-director/styling';
 import { templateCardStyling } from '@/lib/template-director/compile-prompts';
+import { templateEditsClosed } from '@/lib/prompts/prompt-length';
 import { templateLookOpen } from '@/lib/flags';
 import type { TemplateLook } from '@/lib/template-look/look';
 
@@ -108,6 +109,12 @@ export interface PromptCard {
    * styling, so every other card is exactly as before. Names only: never the block or a line's words.
    */
   styling?: PublicTemplateStyling;
+  /**
+   * Founder 2026-11-25 — the template's text leaves too little room for a buyer's edits on its engine (Seedance 2.5:
+   * 15,000 characters per clip; lib/prompts/prompt-length.ts `templateEditsClosed`), so it takes no change requests:
+   * the page shows one line instead of the edit panel. Present ONLY then; every other card is exactly as before.
+   */
+  editsClosed?: true;
   /**
    * docs/PERSONAL-STUDIO.md §3.4.10 — the style the template is written for (0190), present ONLY when it is one style
    * ('female' / 'male') and `TWINGS_TEMPLATE_LOOK=on`; absent = for anyone, so every card is exactly as before while
@@ -257,6 +264,15 @@ export function toPromptCard(
     recipeReady: recipes.has(row.id),
     cast: row.cast,
   });
+  const editsClosed = templateEditsClosed({
+    promptText: row.promptText,
+    recipe: recipes.get(row.id) ?? null,
+    recipeReady: recipes.has(row.id),
+    medium: row.medium,
+    engine: row.engine,
+    runtimeSeconds: row.runtimeSeconds,
+    cast: row.cast,
+  });
   return {
     id: row.id,
     slug: row.slug,
@@ -287,6 +303,7 @@ export function toPromptCard(
     recipeOpen: openRecipes.has(row.id),
     ...(locks ? { locks } : {}),
     ...(styling ? { styling } : {}),
+    ...(editsClosed ? { editsClosed: true as const } : {}),
     // The row carries `look` only while the switch is on (lib/prompts/repo.ts `columns()`); re-checked here so a card
     // built from a stale row never shows a style the switch hides.
     ...(row.look && templateLookOpen() ? { look: row.look } : {}),
@@ -306,7 +323,11 @@ async function loadStylingRecipes(sql: SqlRunner): Promise<Map<string, unknown>>
     `select p.id, to_jsonb(p.*)->'recipe' as recipe from prompt_items p
       where p.status = 'published' and p.audience = 'public' and to_jsonb(p.*)->'recipe' is not null
         and jsonb_typeof(to_jsonb(p.*)->'recipe') = 'object'
-        and ((to_jsonb(p.*)->'recipe')::text ilike '%template styling:%' or p.prompt_text ilike '%template styling:%')`,
+        and ((to_jsonb(p.*)->'recipe')::text ilike '%template styling:%' or p.prompt_text ilike '%template styling:%'
+          -- Founder 2026-11-25: and a recipe long enough that a step may leave too little room for edits (a step needs
+          -- 9,800+ characters for that: 15,000 less the 5,200 an edit may take). Neither mentions a styling block
+          -- here, so the card's styling reads the same either way.
+          or char_length((to_jsonb(p.*)->'recipe')::text) > 9000)`,
   );
   return new Map(rows.map((row) => [row.id, row.recipe]));
 }
