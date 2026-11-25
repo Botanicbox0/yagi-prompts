@@ -34,6 +34,7 @@ import { jobSoftDeleteReady, jobView, openJobCount, readyAsset, readyOutput } fr
 import type { EnhanceInput, JobRow, OutputRow, StudioDeps } from './types';
 import { loadAllowance, reserveAllowance } from './usage';
 import { projectForNewJob, studioProjectsReady } from './job-projects';
+import { brandProjectFiling, brandProjectForNew, fileStudioJob } from './brand-projects';
 import { failure, guarded } from './outcome';
 import { createMusicJob } from './sound/music-jobs';
 import { renderPresetPrompt, type StudioJobPreset } from './workflows/presets';
@@ -84,7 +85,16 @@ export function takeFreeIntelSlot(key: string, maxPerWindow: number, nowMs: numb
   return true;
 }
 
-export async function insertJob(deps: StudioDeps, sql: StudioDeps['sql'], userId: string, organizationId: string, requestId: string, plan: JobPlan, projectId: string | null = null) {
+export async function insertJob(
+  deps: StudioDeps,
+  sql: StudioDeps['sql'],
+  userId: string,
+  organizationId: string,
+  requestId: string,
+  plan: JobPlan,
+  projectId: string | null = null,
+  brandProjectId: string | null = null,
+) {
   // A free lane now means the job starts `queued`; `held` only while every lane is full.
   const lane = await routeJob(sql, {
     organizationId,
@@ -114,6 +124,11 @@ export async function insertJob(deps: StudioDeps, sql: StudioDeps['sql'], userId
   if (projectId) {
     await sql.query('update brand_studio_jobs set project_id = $2 where id = $1', [job.id, projectId]);
     job.project_id = projectId;
+  }
+  // The brand project spine (./brand-projects.ts), the same way: apart from the insert, only when there is one.
+  if (brandProjectId) {
+    await fileStudioJob(sql, organizationId, job.id, brandProjectId);
+    job.brand_project_id = brandProjectId;
   }
   const outputs = (
     await sql.query<OutputRow>(
@@ -153,6 +168,9 @@ export async function createStudioJob(deps: StudioDeps, viewer: Viewer, raw: unk
   const locale = localeOf(viewer);
   // "빈 곳 채우기" runs exist only while its flag is on.
   if (v.kind === 'region_edit' && v.purpose && !deps.env.outpaint) return failure('feature_unavailable');
+  // The brand project spine: closed for the organization, `brandProjectId` is not even read; open, its value is
+  // judged only after the seat, inside the transaction (`brandProjectForNew`).
+  const filing = await brandProjectFiling(deps.sql, v.organizationId, raw);
   return guarded(() =>
     deps.sql.transaction(async (sql) => {
       const seat = await studioSeat(sql, viewer.userId, v.organizationId);
@@ -189,7 +207,16 @@ export async function createStudioJob(deps: StudioDeps, viewer: Viewer, raw: unk
             fill: plan.params.purpose === 'fill',
           })
         : null;
-      return { ok: true as const, job: await insertJob(deps, sql, seat.userId, v.organizationId, v.requestId, plan, projectId) };
+      // Same place and same rule for the spine's project (a refusal here rolls the whole transaction back,
+      // reservation included, as the `projectId` check above does).
+      const brandProjectId = filing.open
+        ? await brandProjectForNew(sql, v.organizationId, {
+            requested: filing.requested,
+            parentOutputId: plan.parentOutputId,
+            fill: plan.params.purpose === 'fill',
+          })
+        : null;
+      return { ok: true as const, job: await insertJob(deps, sql, seat.userId, v.organizationId, v.requestId, plan, projectId, brandProjectId) };
     }),
   );
 }

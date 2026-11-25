@@ -33,6 +33,7 @@ import { requireCreate, StudioDenied, studioSeat, type StudioSeat } from './acce
 import type { StudioMediaStore } from './media-store';
 import { publicNotesOnly, teamNotesReady } from './review-visibility';
 import { assetFpsReady, recordAssetFps, storableFps } from './asset-fps';
+import { TEAM_PROJECTS } from '@/lib/brands/project-origin';
 import {
   CommentAddSchema,
   CommentRefSchema,
@@ -1426,7 +1427,8 @@ export async function staffDeliveryGate(sql: SqlRunner, actor: DeliveryActor, or
   if (!(await roomReviewReady(sql))) throw new ReviewDenied('provider_unavailable');
   await openOrganization(sql, organizationId);
   if (!UUID.test(projectId)) throw new ReviewDenied('invalid');
-  const project = (await sql.query('select id from brand_projects where id = $1 and organization_id = $2', [projectId, organizationId])).rows[0];
+  // Team projects only: a brand's own studio project answers like a missing one (lib/brands/project-origin.ts).
+  const project = (await sql.query(`select tp.id from brand_projects tp where tp.id = $1 and tp.organization_id = $2 and ${TEAM_PROJECTS('tp')}`, [projectId, organizationId])).rows[0];
   if (!project) throw new ReviewDenied('not_found');
 }
 
@@ -1454,9 +1456,10 @@ export async function staffDeliveryProjects(deps: ReviewDeps, viewer: Viewer): P
       await requireStaff(sql, viewer);
       const rows = (
         await sql.query<{ project_id: string; project_title: string; organization_id: string; organization_name: string }>(
+          // Team projects only: a brand's own studio project is never on the team side (lib/brands/project-origin.ts).
           `select p.id as project_id, p.title as project_title, o.id as organization_id, o.name as organization_name
              from brand_projects p join brand_organizations o on o.id = p.organization_id
-            where p.status <> 'cancelled'
+            where p.status <> 'cancelled' and ${TEAM_PROJECTS('p')}
             order by o.name, p.created_at desc limit 500`,
         )
       ).rows;

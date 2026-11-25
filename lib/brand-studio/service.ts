@@ -25,8 +25,10 @@ import {
   type StudioReviseMarkRead,
   type StudioRevisePlan,
   type StudioState,
+  type StudioStateScope,
 } from './contracts';
 import { studioSeat } from './access';
+import { isBrandProjectOperation, runBrandProjectOperation, stateScopeFilter, withBrandProjects, type BrandProjectOperationResult } from './brand-projects';
 import { loadOrganizationStorageSummary, toStudioStorageQuotaView } from '@/lib/brands/storage-quota';
 import { assetFromOutput, completeStudioAsset, deleteStudioAsset, deleteStudioOutput, reserveStudioAsset, updateStudioAsset } from './assets';
 import { handoffToCampaign } from './handoff';
@@ -50,6 +52,7 @@ export function isStudioOperation(value: unknown): value is StudioOperation {
 }
 
 export type StudioOperationResult =
+  | BrandProjectOperationResult
   | StudioFailure
   | StudioJobCreated
   | StudioJobGroupCreated
@@ -79,6 +82,9 @@ const SELF_STUDIO_OPS: ReadonlySet<StudioOperation> = new Set([
 
 /** One `POST /api/brand-studio` operation. Unknown names are `invalid`. */
 export async function runStudioOperation(deps: StudioDeps, viewer: Viewer, operation: unknown, input: unknown): Promise<StudioOperationResult> {
+  // The brand project spine (./brand-projects.ts): closed for the organization, these answer exactly like an
+  // unknown name; open, each runs the studio gate itself inside its own transaction.
+  if (isBrandProjectOperation(operation)) return runBrandProjectOperation(deps, viewer, operation, input);
   if (!isStudioOperation(operation)) return failure('invalid');
   // The gate before any input detail is judged: a closed organization gets the same 404 whatever it sent.
   const organizationId = (input as { organizationId?: unknown } | null)?.organizationId;
@@ -90,10 +96,18 @@ export async function runStudioOperation(deps: StudioDeps, viewer: Viewer, opera
   );
   if ('ok' in gate) return gate;
   switch (operation) {
-    case 'job.create':
-      return createStudioJob(deps, viewer, input);
-    case 'job.create_group':
-      return createStudioJobGroup(deps, viewer, input);
+    // The create answers go to the member who made the run (owners and editors): `brandProjectId` is added here,
+    // opt-in, never by `createStudioJob` itself (MCP and workflows call that directly and get nothing).
+    case 'job.create': {
+      const made = await createStudioJob(deps, viewer, input);
+      if (!made.ok || !('job' in made)) return made;
+      return { ...made, job: (await withBrandProjects(deps.sql, organizationId, [made.job]))[0]! };
+    }
+    case 'job.create_group': {
+      const made = await createStudioJobGroup(deps, viewer, input);
+      if (!made.ok) return made;
+      return { ...made, jobs: await withBrandProjects(deps.sql, organizationId, made.jobs) };
+    }
     case 'job.cancel':
       return cancelStudioJob(deps, viewer, input);
     case 'prompt.enhance':
@@ -134,28 +148,41 @@ export async function runStudioOperation(deps: StudioDeps, viewer: Viewer, opera
   }
 }
 
-/** `GET /api/brand-studio?organizationId=…` */
-export async function loadStudioState(deps: StudioDeps, viewer: Viewer, organizationId: string): Promise<StudioState | StudioFailure> {
+/**
+ * `GET /api/brand-studio?organizationId=…` (`&brandProject=<id>|unfiled`). The optional scope exists only while
+ * the brand project spine is open for the organization and only for its members: it narrows the runs to one
+ * selectable project (`not_found` otherwise) or to the unfiled ones. A project guest's answer, and every answer
+ * while the spine is closed, is exactly today's (the scope is ignored and no run carries `brandProjectId`).
+ */
+export async function loadStudioState(
+  deps: StudioDeps,
+  viewer: Viewer,
+  organizationId: string,
+  options: { scope?: StudioStateScope } = {},
+): Promise<StudioState | StudioFailure> {
   return guarded(() =>
     deps.sql.transaction(async (sql) => {
       const seat = await studioSeat(sql, viewer.userId, organizationId);
+      const scope = await stateScopeFilter(sql, seat, options.scope);
       const now = deps.now?.() ?? new Date();
       const [allowance, storageSummary, assets, jobs, campaigns] = [
         await loadAllowance(sql, organizationId, deps.env, now),
         await loadOrganizationStorageSummary(sql, organizationId, now),
         await assetsOf(sql, organizationId),
-        await jobsOfStudioState(sql, organizationId),
+        scope ? await jobsOfStudioState(sql, organizationId, 60, scope) : await jobsOfStudioState(sql, organizationId),
         await campaignsOf(sql, organizationId),
       ];
       // Runs can belong to a project only with the flag on and migration 0091 applied. A run whose project
       // was deleted or archived reads as being in no project (the row keeps its id).
       const projects = (await studioProjectsReady(deps, sql)) ? await liveProjectsOf(sql, organizationId) : null;
       const live = new Set(projects?.map((project) => project.id));
-      const views = (await viewsOf(sql, jobs, deps.media)).map((view) => {
+      const built = (await viewsOf(sql, jobs, deps.media)).map((view) => {
         if (!view.projectId || live.has(view.projectId)) return view;
         const { projectId: _gone, ...rest } = view;
         return rest;
       });
+      // `brandProjectId` is opt-in, for members only (a project guest's answer stays exactly today's).
+      const views = seat.role === 'guest' ? built : await withBrandProjects(sql, organizationId, built);
       return {
         ok: true as const,
         canCreate: seat.canCreate,
@@ -180,11 +207,12 @@ export async function pollStudioJobs(deps: StudioDeps, viewer: Viewer, organizat
   const ids = [...new Set(jobIds.filter((id) => /^[0-9a-f-]{36}$/i.test(id)))].slice(0, 50);
   return guarded(() =>
     deps.sql.transaction(async (sql) => {
-      await studioSeat(sql, viewer.userId, organizationId, { requireSelfStudio: true });
+      const seat = await studioSeat(sql, viewer.userId, organizationId, { requireSelfStudio: true });
       const jobs = await jobsByIds(sql, organizationId, ids);
+      const views = await viewsOf(sql, jobs, deps.media);
       return {
         ok: true as const,
-        jobs: await viewsOf(sql, jobs, deps.media),
+        jobs: seat.role === 'guest' ? views : await withBrandProjects(sql, organizationId, views),
         allowance: await loadAllowanceViewWithRefill(sql, organizationId, deps.env, deps.now?.() ?? new Date()),
       };
     }),

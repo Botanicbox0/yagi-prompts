@@ -29,6 +29,7 @@ import { STAGING_BUCKET, type StorageDriver } from '@/lib/storage';
 import { adminUrl } from '@/lib/seo/site-url';
 import { featureDenied, isSandboxedClientOrganization } from '@/lib/brands/features';
 import { enqueueTeamNotice } from '@/lib/brands/team-notice-outbox';
+import { TEAM_PROJECTS } from '@/lib/brands/project-origin';
 import { loadFeaturePolicies } from '@/lib/brands/entitlements';
 import {
   adjustOrganizationStorageBytes,
@@ -1692,7 +1693,7 @@ export async function staffProjectDesk(deps: Pick<RoomMessageDeps, 'sql'>, viewe
                   (select count(*)::int from brand_room_messages m0
                     where m0.organization_id = p.organization_id and m0.channel = p.id::text and ${teamWaiting('m0')}) as team_unread,
                   ${teamAckColumns('p.organization_id', 'p.id::text')}
-             from brand_projects p where p.id = $1 and p.organization_id = $2`,
+             from brand_projects p where p.id = $1 and p.organization_id = $2 and ${TEAM_PROJECTS('p')}`,
           [reader.projectId, reader.organizationId],
         )
       ).rows[0];

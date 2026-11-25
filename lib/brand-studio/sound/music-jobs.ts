@@ -28,6 +28,7 @@ import { failure, guarded } from '../outcome';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import { FREE_INTEL_LIMITS, takeFreeIntelSlot } from '../jobs';
 import { jobView, openJobCount } from '../repo';
+import { brandProjectFiling, brandProjectForNew, fileStudioJob, hasBrandProjectField, withoutBrandProjectField } from '../brand-projects';
 import type { JobRow, OutputRow, StudioDeps, StudioJobParams } from '../types';
 import { usageKrw } from '../usage-rate';
 import { loadAllowance, reserveAllowance } from '../usage';
@@ -263,7 +264,13 @@ export function planMusic(
  */
 export async function createMusicJob(deps: StudioDeps, viewer: Viewer, raw: unknown): Promise<StudioJobCreated | MusicJobBlocked | StudioFailure> {
   if (!deps.env.soundStudio) return failure('invalid');
-  const parsed = MusicJobCreateSchema.safeParse(raw);
+  // The brand project spine (../brand-projects.ts). This request shape is strict: closed for the organization, a
+  // `brandProjectId` stays in and is refused like any unknown field (today's answer); open, it is taken off here
+  // and judged after the seat. Anyone the seat refuses while carrying it gets today's answer (`invalid`), so a
+  // request tells nobody outside the workspace whether the spine is open.
+  const filing = await brandProjectFiling(deps.sql, (raw as { organizationId?: unknown } | null)?.organizationId, raw);
+  const carried = filing.open && hasBrandProjectField(raw);
+  const parsed = MusicJobCreateSchema.safeParse(filing.open ? withoutBrandProjectField(raw) : raw);
   if (!parsed.success) return failure('invalid');
   const asked = parsed.data;
   const locale: 'ko' | 'en' = viewer.locale === 'en' ? 'en' : 'ko';
@@ -272,7 +279,7 @@ export async function createMusicJob(deps: StudioDeps, viewer: Viewer, raw: unkn
   const record = (field: MusicBlockRecord['field'], check: MusicBlockRecord['check']) =>
     logMusicBlock(deps.log, { organizationId: org, userId: viewer.userId, field, check, lyrics: field === 'lyrics' ? asked.lyrics : null }, now);
 
-  const gate = async (sql: SqlRunner) => {
+  const seated = async (sql: SqlRunner) => {
     const seat = await studioSeat(sql, viewer.userId, org, { requireSelfStudio: true });
     if (seat.role === 'guest') throw new StudioDenied('not_found');
     try {
@@ -283,6 +290,14 @@ export async function createMusicJob(deps: StudioDeps, viewer: Viewer, raw: unkn
     }
     requireCreate(seat);
     return seat;
+  };
+  const gate = async (sql: SqlRunner) => {
+    try {
+      return await seated(sql);
+    } catch (error) {
+      if (carried && error instanceof StudioDenied) throw new StudioDenied('invalid');
+      throw error;
+    }
   };
   const priorRun = async (sql: SqlRunner, userId: string | null) => {
     const prior = (
@@ -329,6 +344,9 @@ export async function createMusicJob(deps: StudioDeps, viewer: Viewer, raw: unkn
       if (allowance.capKrw <= 0) throw new StudioDenied('allowance_closed');
       if (allowance.usedKrw + Math.max(0, plan.estimateKrw) > allowance.capKrw) throw new StudioDenied('allowance_exhausted');
       if ((await openJobCount(sql, org)) >= STUDIO_LIMITS.openJobsPerOrganization) throw new StudioDenied('too_many_running');
+      // A malformed value or a project that cannot take new work is refused before the paid lyrics judgment (and
+      // judged again when reserving).
+      if (filing.open) await brandProjectForNew(sql, org, { requested: filing.requested, parentOutputId: null, fill: false });
       return { ready: true as const, v, plan };
     }),
   );
@@ -370,6 +388,8 @@ export async function createMusicJob(deps: StudioDeps, viewer: Viewer, raw: unkn
       if ((await openJobCount(sql, org)) >= STUDIO_LIMITS.openJobsPerOrganization) throw new StudioDenied('too_many_running');
       const verdict = await reserveAllowance(sql, org, plan.estimateKrw, deps.env, deps.now?.() ?? new Date());
       if (!verdict.ok) throw new StudioDenied(verdict.code);
+      // The spine's project, judged in the writing transaction (a refusal rolls the reservation back).
+      const brandProjectId = filing.open ? await brandProjectForNew(sql, org, { requested: filing.requested, parentOutputId: null, fill: false }) : null;
       const lane = await routeJob(sql, {
         organizationId: org,
         model: plan.engine.model,
@@ -403,6 +423,10 @@ export async function createMusicJob(deps: StudioDeps, viewer: Viewer, raw: unkn
           ],
         )
       ).rows[0]!;
+      if (brandProjectId) {
+        await fileStudioJob(sql, org, job.id, brandProjectId);
+        job.brand_project_id = brandProjectId;
+      }
       // One slot: the engine answers one request with one or more versions; finishing adds a row per version.
       const outputs = (
         await sql.query<OutputRow>(

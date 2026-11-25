@@ -23,6 +23,7 @@
 import { z } from 'zod';
 import type { Viewer } from '@/lib/auth/identity';
 import { lockOrganization, requireCreate, StudioDenied, studioSeat } from '@/lib/brand-studio/access';
+import { brandProjectFiling, brandProjectForNew, fileStudioJob } from '@/lib/brand-studio/brand-projects';
 import type { StudioAllowanceView, StudioErrorCode } from '@/lib/brand-studio/contracts';
 import { creditsOf } from '@/lib/brand-studio/credits';
 import { callGeminiJson, studioGeminiConfig } from '@/lib/brand-studio/enhancer/gemini';
@@ -388,6 +389,9 @@ export async function runComposeOperation(
     const parsed = RenderReserveInputSchema.safeParse(input);
     if (!parsed.success) return { ok: false, code: 'invalid' };
     const v = parsed.data;
+    // The brand project spine (../brand-projects.ts): closed for the organization, `brandProjectId` is not even
+    // read; open, it is judged after the seat, inside the transaction.
+    const filing = await brandProjectFiling(deps.sql, v.organizationId, input);
 
     try {
       return await deps.sql.transaction(async (tx) => {
@@ -418,6 +422,10 @@ export async function runComposeOperation(
           return { ok: false as const, code: 'conflict' as const };
         }
 
+        // The spine's project, judged in this writing transaction (a refusal throws and nothing is recorded).
+        const brandProjectId = filing.open
+          ? await brandProjectForNew(tx, v.organizationId, { requested: filing.requested, parentOutputId: null, fill: false })
+          : null;
         // Free export: no allowance check or reservation, just the 0-KRW row (one per request id).
         const ts = now.toISOString();
         const params = JSON.stringify({
@@ -435,6 +443,7 @@ export async function runComposeOperation(
            ) returning id`,
           [v.organizationId, seat.userId, v.requestId, COMPOSE_FINAL_RENDER_MODEL, params, ts],
         );
+        await fileStudioJob(tx, v.organizationId, inserted.rows[0]!.id, brandProjectId);
 
         const updated = await loadAllowance(tx, v.organizationId, deps.env, now);
         return {

@@ -28,6 +28,7 @@ import { brandSiteUrl } from '@/lib/seo/site-url';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { BRAND_INVITES_PER_DAY, storeInvitation } from '@/lib/brands/workspace/service';
 import { RoomDenied, requireRoomProject, roomSeat, type RoomSeat } from './access';
+import { TEAM_PROJECTS } from '@/lib/brands/project-origin';
 import {
   ROOM_INVITE_LIMITS,
   ROOM_PEOPLE_OPERATIONS,
@@ -185,7 +186,7 @@ export async function staffProjectGuests(
     deps.sql.transaction(async (sql) => {
       const admin = (await sql.query<{ is_admin: boolean }>('select is_admin from profiles where id = $1', [viewer.userId])).rows[0];
       if (admin?.is_admin !== true) throw new InviteDenied('forbidden');
-      const project = (await sql.query('select id from brand_projects where id = $1 and organization_id = $2', [scope.projectId, scope.organizationId])).rows[0];
+      const project = (await sql.query(`select tp.id from brand_projects tp where tp.id = $1 and tp.organization_id = $2 and ${TEAM_PROJECTS('tp')}`, [scope.projectId, scope.organizationId])).rows[0];
       if (!project) throw new InviteDenied('not_found');
       const list = await accessLists(sql, scope.organizationId, scope.projectId);
       return { ok: true as const, guests: list.guests, pending: list.pending };

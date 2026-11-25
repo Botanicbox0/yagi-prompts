@@ -11,6 +11,7 @@ import type { CreatorCampaign } from "@/lib/campaigns/service";
 import { audienceOf, campaignAccess as audienceAccessFor } from "@/lib/influencers/visibility";
 import { influencersOpen } from "@/lib/influencers/rules";
 import { designatedInvitesReady, inviteCap, POOL_MEMBER_SQL } from "@/lib/brands/creator-pool";
+import { TEAM_PROJECTS } from "@/lib/brands/project-origin";
 
 type Row = Record<string, unknown>;
 export type CollaborationCode =
@@ -168,7 +169,8 @@ async function projectAccess(
 ) {
   const p = (
     await sql.query<Row>(
-      `select * from brand_projects where id=$1 ${lock ? "for share" : ""}`,
+      // Team projects only, the studio branch included (lib/brands/project-origin.ts).
+      `select tp.* from brand_projects tp where tp.id=$1 and ${TEAM_PROJECTS("tp")} ${lock ? "for share" : ""}`,
       [projectId],
     )
   ).rows[0];

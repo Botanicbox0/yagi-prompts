@@ -317,6 +317,8 @@ export interface JobRow {
   deleted_at?: Date | string | null;
   /** The project this run belongs to (migration 0091); absent before it is applied. */
   project_id?: string | null;
+  /** The brand project this run is filed in (migration 0194, the spine); absent before it is applied, null = 미분류. */
+  brand_project_id?: string | null;
   enhance: boolean;
   params: StudioJobParams;
   refs: StudioReference[];

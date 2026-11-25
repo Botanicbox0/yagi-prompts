@@ -649,6 +649,81 @@ export const JobRefSchema = z.object({ organizationId: Id, jobId: Id });
 /** `job.assign_project`: put a run (and everything made from it) in a project; `null` takes it out. */
 export const JobAssignProjectSchema = z.object({ organizationId: Id, jobId: Id, projectId: Id.nullable() });
 
+/* ------------------------------------------------- the brand project spine */
+
+/**
+ * The brand project spine (docs/BRAND-PROJECT-SPINE.md §3–§4; `BRAND_PROJECT_SPINE` + `BRAND_PROJECT_SPINE_ORGS`,
+ * migration 0194; lib/brand-studio/brand-projects.ts). A project is a `brand_projects` row: one the customer made
+ * here (`origin: 'self'`) or one the YAGI team runs with them (`origin: 'team'`). Studio runs, uploads and films
+ * can be filed in one (`brand_project_id`; none = 미분류). While the spine is closed for an organization these
+ * operations answer exactly like an unknown operation (`{ ok: false, code: 'invalid' }`, HTTP 400), and the
+ * `brandProjectId` request field below is not even looked at.
+ */
+export const BRAND_PROJECT_OPERATIONS = ['project.list', 'project.create', 'project.move'] as const;
+export type BrandProjectOperation = (typeof BRAND_PROJECT_OPERATIONS)[number];
+
+export const BRAND_PROJECT_LIMITS = {
+  /** A project name, after trimming (a team project's own rule stays 3–120). */
+  titleMax: 120,
+  /** `project.list` answers at most this many projects. */
+  listMax: 100,
+  /** Ids in one `project.move` (jobs + assets + films, before the families are added). */
+  moveMax: 200,
+  /** New projects per organization per rolling day, counted over every project row (the same rule as a team request). */
+  createPerDay: 20,
+} as const;
+
+/** `project.list`: the projects new work can be filed in, most recent activity first. */
+export const BrandProjectListSchema = z.object({ organizationId: Id });
+export type BrandProjectListInput = z.input<typeof BrandProjectListSchema>;
+
+/** `project.create`: a project of one's own, by name only. Idempotent on `requestId` (same member, same key = same project). */
+export const BrandProjectCreateSchema = z.object({
+  organizationId: Id,
+  requestId: RequestId,
+  title: z.string().trim().min(1).max(BRAND_PROJECT_LIMITS.titleMax),
+});
+export type BrandProjectCreateInput = z.input<typeof BrandProjectCreateSchema>;
+
+/**
+ * `project.move`: file runs, uploads and films in a project, or take them out (`projectId: null` = 미분류).
+ * A run moves with its whole family (what it was made from and what was made from it). One to 200 ids in all.
+ * `preview: true` writes nothing and answers what would move.
+ */
+export const BrandProjectMoveSchema = z
+  .object({
+    organizationId: Id,
+    projectId: Id.nullable(),
+    jobIds: z.array(Id).max(BRAND_PROJECT_LIMITS.moveMax).optional(),
+    assetIds: z.array(Id).max(BRAND_PROJECT_LIMITS.moveMax).optional(),
+    filmIds: z.array(Id).max(BRAND_PROJECT_LIMITS.moveMax).optional(),
+    preview: z.boolean().optional(),
+  })
+  .refine(
+    (v) => {
+      const n = (v.jobIds?.length ?? 0) + (v.assetIds?.length ?? 0) + (v.filmIds?.length ?? 0);
+      return n >= 1 && n <= BRAND_PROJECT_LIMITS.moveMax;
+    },
+    { error: 'one to 200 ids' },
+  );
+export type BrandProjectMoveInput = z.input<typeof BrandProjectMoveSchema>;
+
+/**
+ * The field a request may carry to file what it makes in a project (spine open only; closed, it is not read).
+ * Accepted by `job.create` (every kind, music included), `job.create_group`, `asset.reserve`, the films'
+ * `create` (`/api/brand-studio/video-projects`), the post-production `music.generate`, `sfx.generate` and
+ * `upscale.submit`, and the compose `render.reserve`. Absent or null = nothing chosen (미분류). A run made from
+ * an earlier result (a new version, a 1080p finish, a partial edit of a result, an upscale of a result) always
+ * takes that result's project, whatever this says; an internal fill run never has one. A project that cannot
+ * take new work answers `not_found`.
+ */
+export interface BrandProjectFilingInput {
+  brandProjectId?: string | null;
+}
+
+/** The studio state load's optional scope (spine open; members only): one project's runs, or the unfiled ones. */
+export type StudioStateScope = { kind: 'project'; brandProjectId: string } | { kind: 'unfiled' };
+
 /** Save a result into the library. Same bytes twice returns the existing asset. */
 export const AssetFromOutputSchema = z.object({
   organizationId: Id,
@@ -800,6 +875,12 @@ export interface StudioJobView {
   parentOutputId: string | null;
   /** The project this run belongs to. Present only while `BRAND_STUDIO_PROJECTS` is on and the run has one. */
   projectId?: string;
+  /**
+   * The brand project this run is filed in (null = 미분류). Present only while the brand project spine is open
+   * for the organization (`BRAND_PROJECT_SPINE`, migration 0194) and never for a project guest; absent, the
+   * answer is exactly what it was before the spine.
+   */
+  brandProjectId?: string | null;
   /** For a region edit of a library picture: that picture (an edit of a result uses `parentOutputId`). */
   parentAssetId: string | null;
   /** Region edit only: the box that was changed, so the same edit can be set up again. */
@@ -932,6 +1013,42 @@ export interface StudioState {
 export interface StudioProjectRef {
   id: string;
   title: string;
+}
+
+/** One project in `project.list` (and the answer of `project.create`). */
+export interface StudioBrandProject {
+  id: string;
+  title: string;
+  /** `self`: made by the brand in the studio. `team`: run with the YAGI team. */
+  origin: 'team' | 'self';
+  /** ISO time: the later of the project's own last change and its newest run (internal fill runs aside). */
+  lastActivityAt: string;
+  /**
+   * The newest image or video result filed in it, as the wall shows a result (`url`, `thumbUrl`, the same media
+   * addresses as `StudioOutputView`). Absent when nothing is filed yet.
+   */
+  cover?: { kind: 'image' | 'video'; url: string; thumbUrl: string | null };
+}
+
+/** `project.list`: at most `BRAND_PROJECT_LIMITS.listMax`, most recent activity first. */
+export interface StudioBrandProjectList {
+  ok: true;
+  projects: StudioBrandProject[];
+}
+
+/** `project.create`: the project (the same one again for a repeated `requestId`). */
+export interface StudioBrandProjectCreated {
+  ok: true;
+  project: StudioBrandProject;
+}
+
+/** `project.move`: the ids now in `projectId` (null = 미분류), families included; with `preview`, what would move. */
+export interface StudioBrandProjectMoved {
+  ok: true;
+  projectId: string | null;
+  jobIds: string[];
+  assetIds: string[];
+  filmIds: string[];
 }
 
 /** `job.assign_project`: every run that moved (the run and its family) and where they are now. */

@@ -5,6 +5,7 @@
 import { clarifiedOf } from './revision/clarify';
 import { cleanSheet } from './revision/sheet';
 import { brandStudioProjectsOpen } from '@/lib/flags';
+import { UNFILED_RUNS } from './brand-projects';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import type {
   StudioAssetView,
@@ -145,6 +146,7 @@ export function jobView(row: JobRow, outputs: OutputRow[], media: StudioMediaSto
     // Only while `BRAND_STUDIO_PROJECTS` is on (read from the server environment here, because every answer
     // that carries a run is built by this function): with the flag off the answer has the keys it always had.
     ...(row.project_id && brandStudioProjectsOpen() ? { projectId: row.project_id } : {}),
+    // Never `brandProjectId` here: it is opt-in, added only to members' answers (./brand-projects.ts withBrandProjects).
     parentAssetId: row.kind === 'region_edit' ? (p.source?.assetId ?? null) : null,
     box: row.kind === 'region_edit' ? (p.box ?? null) : null,
     ...(row.kind === 'region_edit' && p.purpose === 'fill' ? { purpose: 'fill' as const } : {}),
@@ -264,21 +266,32 @@ export async function jobsOf(sql: SqlRunner, organizationId: string, limit = 60)
 /**
  * R-08: Loads the newest `perMediumLimit` image-family jobs AND newest `perMediumLimit` video-family
  * jobs so a burst of image generations never evicts video studio history (and vice versa).
+ *
+ * `scope` (the brand project spine, already judged by `stateScopeFilter` in ./brand-projects.ts): one project's
+ * runs, or with `brandProjectId: null` the unfiled ones (not filed, or filed in a project that can no longer take
+ * new work). Without it the queries are exactly today's.
  */
-export async function jobsOfStudioState(sql: SqlRunner, organizationId: string, perMediumLimit = 60): Promise<JobRow[]> {
+export async function jobsOfStudioState(
+  sql: SqlRunner,
+  organizationId: string,
+  perMediumLimit = 60,
+  scope?: { brandProjectId: string | null },
+): Promise<JobRow[]> {
   const live = await notRemoved(sql);
+  const filed = scope ? (scope.brandProjectId ? 'and brand_project_id = $3' : `and ${UNFILED_RUNS('brand_studio_jobs')}`) : '';
+  const params = scope?.brandProjectId ? [organizationId, perMediumLimit, scope.brandProjectId] : [organizationId, perMediumLimit];
   const [imageJobs, videoJobs] = await Promise.all([
     sql.query<JobRow>(
       `select * from brand_studio_jobs
-        where organization_id = $1 and kind in ('image', 'region_edit') and ${NOT_FILL} ${live}
+        where organization_id = $1 and kind in ('image', 'region_edit') and ${NOT_FILL} ${live}${filed ? ` ${filed}` : ''}
         order by created_at desc, id limit $2`,
-      [organizationId, perMediumLimit],
+      params,
     ),
     sql.query<JobRow>(
       `select * from brand_studio_jobs
-        where organization_id = $1 and kind in ('video', 'video_remix', 'video_final') and model <> 'compose-1080p' ${live}
+        where organization_id = $1 and kind in ('video', 'video_remix', 'video_final') and model <> 'compose-1080p' ${live}${filed ? ` ${filed}` : ''}
         order by created_at desc, id limit $2`,
-      [organizationId, perMediumLimit],
+      params,
     ),
   ]);
   return [...imageJobs.rows, ...videoJobs.rows].sort((a, b) => {

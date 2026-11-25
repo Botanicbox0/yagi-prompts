@@ -10,12 +10,13 @@ import { studioLog, studioRuntimeDeps } from '@/lib/brand-studio/runtime';
 import { loadStudioState, pollStudioJobs, runStudioOperation } from '@/lib/brand-studio/service';
 import type { StudioDeps } from '@/lib/brand-studio/types';
 import { studioJson, studioStatus } from '@/lib/brand-studio/http';
+import { studioStateScopeOf } from '@/lib/brand-studio/brand-projects';
 
 /**
  * Brand studio v2 API (docs/BRAND-STUDIO-V2.md). Checks, in order: the flag (`studio_closed`, 404),
  * sign-in, then inside the service: membership -> Morphic hardline + feature policy (404) -> role.
  *
- *   GET  ?organizationId=…           the studio state
+ *   GET  ?organizationId=…           the studio state (`&brandProject=<id>|unfiled` while the project spine is open)
  *   GET  ?organizationId=…&jobs=a,b  the board's poll; open jobs are moved forward after the answer
  *   POST { operation, input }        one of STUDIO_OPERATIONS
  */
@@ -54,7 +55,9 @@ export async function GET(request: NextRequest) {
       advanceLater(deps, result.jobs.filter((j) => STUDIO_JOB_OPEN_STATUSES.includes(j.status)).map((j) => j.id));
       return studioJson(result);
     }
-    const result = await loadStudioState(deps, viewer, organizationId);
+    // `&brandProject=<id>|unfiled`: the brand project spine's scope; ignored while it is closed (and for guests).
+    const scope = studioStateScopeOf(request.nextUrl.searchParams.get('brandProject'));
+    const result = scope ? await loadStudioState(deps, viewer, organizationId, { scope }) : await loadStudioState(deps, viewer, organizationId);
     return studioJson(result, result.ok ? 200 : studioStatus(result.code));
   } catch (error) {
     studioLog('studio_get_failed', { message: error instanceof Error ? error.message.slice(0, 200) : 'unknown' });

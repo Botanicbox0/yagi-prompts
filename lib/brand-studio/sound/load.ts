@@ -10,6 +10,7 @@ import { assetView, assetsOf, viewsOf } from '../repo';
 import type { AssetRow, JobRow } from '../types';
 import { allowanceViewWithRefill } from '../allowance-refill';
 import { loadAllowance } from '../usage';
+import { withBrandProjects } from '../brand-projects';
 import { mergeTracks, musicTracks, soundTracks, type SoundTrackView } from './library';
 import { soundVideos, type SoundVideoView } from './video-fit';
 
@@ -71,15 +72,21 @@ export interface SoundStudioData {
   videos: SoundVideoView[];
 }
 
-/** Everything the page renders first: the list (made versions and files), the runs still going, the credits. */
+/**
+ * Everything the page renders first: the list (made versions and files), the runs still going, the credits.
+ * `options.member`: the page is seen by a workspace member as themselves (`memberSeesBrandProjects`); only then do
+ * the runs carry `brandProjectId` (the brand project spine, opt-in). Staff who open a brand they are not a member
+ * of get none.
+ */
 export async function loadSoundStudio(
   sql: SqlRunner,
   media: StudioMediaStore,
   env: StudioEnv,
   organizationId: string,
   userId: string | null,
+  options: { member?: boolean } = {},
 ): Promise<SoundStudioData> {
-  const [files, jobs, allowance, likes, videos] = await Promise.all([
+  const [files, listed, allowance, likes, videos] = await Promise.all([
     loadSoundTracks(sql, media, organizationId, userId),
     loadMusicJobs(sql, media, organizationId),
     loadAllowance(sql, organizationId, env),
@@ -91,6 +98,7 @@ export async function loadSoundStudio(
       : Promise.resolve({ rows: [] as Array<{ output_id: string }> }),
     loadSoundVideos(sql, media, organizationId),
   ]);
+  const jobs = options.member === true ? await withBrandProjects(sql, organizationId, listed) : listed;
   const made = musicTracks(organizationId, jobs, likes.rows.map((row) => `o:${row.output_id}`));
   return { tracks: mergeTracks(made, files), jobs, allowance: await allowanceViewWithRefill(sql, organizationId, allowance), videos };
 }

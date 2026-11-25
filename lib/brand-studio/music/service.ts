@@ -28,6 +28,7 @@ import {
   type AbcScoreValidationReport,
 } from '@/lib/brands/sound/music-studio';
 import { lockOrganization, requireCreate, StudioDenied, studioSeat } from '@/lib/brand-studio/access';
+import { brandProjectFiling, brandProjectForNew, fileAssetWithRun, fileStudioJob } from '@/lib/brand-studio/brand-projects';
 import { COMPOSE_FINAL_RENDER_MODEL } from '@/lib/brand-studio/compose/credits';
 import { creditsOf } from '@/lib/brand-studio/credits';
 import { readyAsset } from '@/lib/brand-studio/repo';
@@ -83,6 +84,8 @@ async function storeGeneratedMusicAsset(
   input: {
     organizationId: string;
     userId: string;
+    /** The run that made it: a new library entry takes its project (the brand project spine). */
+    jobId: string;
     bpm: number;
     durationSec: number;
     commercialAllowed: boolean;
@@ -162,6 +165,7 @@ async function storeGeneratedMusicAsset(
       ],
     )
   ).rows[0]!;
+  await fileAssetWithRun(sql, input.organizationId, inserted.id, input.jobId);
 
   return {
     assetId: inserted.id,
@@ -210,6 +214,9 @@ export async function generateReferenceMusic(
     return { ok: false, code: 'invalid' };
   }
   const v = parsed.data;
+  // The brand project spine (../brand-projects.ts): closed for the organization, `brandProjectId` is not even read;
+  // open, it is judged after the seat, inside the transaction.
+  const filing = await brandProjectFiling(deps.sql, v.organizationId, rawInput);
 
   const now = deps.now?.() ?? new Date();
   const env = options?.env ?? process.env;
@@ -379,6 +386,10 @@ export async function generateReferenceMusic(
           result: { ok: false as const, code: verdict.code },
         };
       }
+      // The spine's project, judged in this writing transaction (a refusal throws and rolls the reservation back).
+      const brandProjectId = filing.open
+        ? await brandProjectForNew(tx, v.organizationId, { requested: filing.requested, parentOutputId: null, fill: false })
+        : null;
 
       const initialGate = validateAudioLicenseGate([
         {
@@ -432,6 +443,7 @@ export async function generateReferenceMusic(
           ts,
         ],
       );
+      await fileStudioJob(tx, v.organizationId, inserted.rows[0]!.id, brandProjectId);
 
       const allowance = await loadAllowanceViewWithRefill(tx, v.organizationId, deps.env, now);
       return {
@@ -572,6 +584,7 @@ export async function generateReferenceMusic(
     const saved = await storeGeneratedMusicAsset(tx, deps, {
       organizationId: v.organizationId,
       userId: reserved.userId,
+      jobId: reserved.jobId,
       bpm,
       durationSec,
       commercialAllowed,
@@ -798,6 +811,7 @@ export async function getMusicJobStatus(
     const saved = await storeGeneratedMusicAsset(tx, deps, {
       organizationId: v.organizationId,
       userId: loaded.userId,
+      jobId: v.jobId,
       bpm: p.bpm,
       durationSec: p.durationSec,
       commercialAllowed: p.commercialAllowed,

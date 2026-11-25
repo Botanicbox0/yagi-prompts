@@ -30,6 +30,7 @@ import {
   type StudioFailure,
 } from './contracts';
 import { lockOrganization, requireCreate, studioSeat, StudioDenied } from './access';
+import { brandProjectFiling, brandProjectForNew, fileAssetWithRun, fileStudioAsset } from './brand-projects';
 import { bytesLimit, checkUpload, imageInfo, kindOfMime, sha256Hex, thumbnailWebp, videoFrameRate, videoInfo } from './files';
 import { recordAssetFps } from './asset-fps';
 import { scheduleRoleCheck } from './asset-role';
@@ -62,6 +63,9 @@ export async function reserveStudioAsset(deps: StudioDeps, viewer: Viewer, raw: 
   const kind = kindOfMime(v.mime);
   if (!kind) return failure('unsupported_file');
   if (v.sizeBytes > bytesLimit(kind)) return failure('file_too_large');
+  // The brand project spine (./brand-projects.ts): closed for the organization, `brandProjectId` is not even read;
+  // open, it is judged after the seat, inside the transaction.
+  const filing = await brandProjectFiling(deps.sql, v.organizationId, raw);
   const reserved = await guarded(() =>
     deps.sql.transaction(async (sql) => {
       requireCreate(await studioSeat(sql, viewer.userId, v.organizationId));
@@ -77,6 +81,10 @@ export async function reserveStudioAsset(deps: StudioDeps, viewer: Viewer, raw: 
         const quota = await checkStorageQuotaForUpload(sql, v.organizationId, v.sizeBytes, undefined, 1);
         if (!quota.allowed) throw new StudioDenied('storage_quota_exceeded', quota.reason);
       }
+      // The spine's project (a project that cannot take new work is `not_found`), judged in this transaction.
+      const brandProjectId = filing.open
+        ? await brandProjectForNew(sql, v.organizationId, { requested: filing.requested, parentOutputId: null, fill: false })
+        : null;
       const id = randomUUID();
       const key = `brand-studio/${v.organizationId}/${id}`;
       await sql.query(
@@ -85,6 +93,7 @@ export async function reserveStudioAsset(deps: StudioDeps, viewer: Viewer, raw: 
         // A category the uploader chose is theirs: the upload check (asset-role.ts) never touches it.
         [id, v.organizationId, kind, v.role ?? null, v.role ? 'user' : null, v.name, v.mime, v.sizeBytes, key, viewer.userId, v.requestId],
       );
+      await fileStudioAsset(sql, v.organizationId, id, brandProjectId);
       await adjustOrganizationStorageBytes(sql, v.organizationId, v.sizeBytes);
       return { id, key, pending: true };
     }),
@@ -289,6 +298,8 @@ export async function assetFromOutput(deps: StudioDeps, viewer: Viewer, raw: unk
         )
       ).rows[0]!;
       await sql.query('update brand_studio_outputs set saved_asset_id = $2 where id = $1', [output.id, asset.id]);
+      // A new library entry made from a result takes the project of the run that made it (spine open only).
+      await fileAssetWithRun(sql, v.organizationId, asset.id, output.job_id);
       return asset;
     }),
   );

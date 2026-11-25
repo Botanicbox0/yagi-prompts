@@ -25,6 +25,11 @@ export interface VideoProjectSummary {
   completedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  /**
+   * The brand project this film is filed in (null = 미분류). Present only while the brand project spine is open
+   * for the organization (`BRAND_PROJECT_SPINE`, migration 0194); absent, the answer is exactly as before.
+   */
+  brandProjectId?: string | null;
 }
 
 export interface VideoProjectDetail extends VideoProjectSummary {

@@ -21,6 +21,23 @@ import { loadAllowance } from '../brand-studio/usage';
 import type { SqlRunner } from '../db/sql-runner';
 import { brandWorkspaceApprovalOpen } from '../flags';
 import { hasWorkspaceApproval, loadWorkspaceApprovalSchemaReady } from './billing/workspace-approval-schema';
+import { spineColumnsReady, TEAM_PROJECTS } from './project-origin';
+
+/** Check 4 again, team projects only (migration 0194 applied; see `isOrganizationUploadApproved`). */
+async function staffTeamProject(sql: SqlRunner, organizationId: string): Promise<boolean> {
+  return (
+    (
+      await sql.query(
+        `select 1
+           from brand_projects bp
+           join profiles p on p.id = bp.created_by
+          where bp.organization_id = $1 and p.is_admin = true and ${TEAM_PROJECTS('bp')}
+          limit 1`,
+        [organizationId],
+      )
+    ).rows.length > 0
+  );
+}
 import {
   isUnapprovedUploadReason,
   UNAPPROVED_UPLOAD_MAX_FILES,
@@ -244,7 +261,11 @@ export async function isOrganizationUploadApproved(
         [organizationId],
       )
     ).rows[0];
-    if (staffProject) return true;
+    // A commissioned project only (lib/brands/project-origin.ts): a studio project a team account made for itself in
+    // a brand's workspace approves nothing, whether the spine is switched on or not. The statement above stays exactly
+    // origin/main's (tests/brands/workspace-approval-parity.test.ts pins it); only when it finds a row and migration
+    // 0194 is in does a second statement ask the same question of team projects alone.
+    if (staffProject && (!(await spineColumnsReady(sql)) || (await staffTeamProject(sql, organizationId)))) return true;
   }
   if (await tableExists(sql, 'brand_contract_documents')) {
     const staffContract = (

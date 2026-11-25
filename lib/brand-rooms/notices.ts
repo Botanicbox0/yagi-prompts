@@ -41,6 +41,7 @@ import { sheet, sheetText, type SheetArgs } from '@/lib/notify/sheet';
 import { ROOM_EMAIL_SCOPE, unsubscribePath } from '@/lib/notify/unsubscribe';
 import { brandSiteUrl, siteUrl } from '@/lib/seo/site-url';
 import { roomAudience } from './access';
+import { TEAM_PROJECTS } from '@/lib/brands/project-origin';
 import type { RoomEventKind } from './events';
 
 /* ------------------------------------------------------------------ rules (§2.1) */
@@ -627,7 +628,9 @@ async function loadFacts(sql: SqlRunner, rows: readonly NoticeRow[]): Promise<Fa
   }
   const projects = new Map<string, string>();
   if (projectIds.length) {
-    for (const p of (await sql.query<{ id: string; title: string }>('select id::text as id, title from brand_projects where id = any($1::uuid[])', [projectIds])).rows) {
+    // Team projects only (lib/brands/project-origin.ts). The ids come from notice rows, written only after the
+    // audience check (client_visible), so a brand's own project is never among them; the predicate is a belt.
+    for (const p of (await sql.query<{ id: string; title: string }>(`select tp.id::text as id, tp.title from brand_projects tp where tp.id = any($1::uuid[]) and ${TEAM_PROJECTS('tp')}`, [projectIds])).rows) {
       projects.set(String(p.id).toLowerCase(), String(p.title));
     }
   }

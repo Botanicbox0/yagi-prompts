@@ -5,6 +5,7 @@ import type { Viewer } from "@/lib/auth/identity";
 import type { SqlRunner } from "@/lib/db/sql-runner";
 import { loadPromptById, type PromptRow } from "@/lib/prompts/repo";
 import { hasStaffReadAccess } from "@/lib/brands/workspace/staff";
+import { TEAM_PROJECTS } from "@/lib/brands/project-origin";
 import { assertBrandFeature, BrandFeatureDenied } from "@/lib/brands/entitlements";
 
 export interface ProductionDeps {
@@ -134,7 +135,7 @@ export async function createProductionContract(
     const user = await actor(sql, viewer, true);
     const p = (
       await sql.query(
-        "select id from brand_projects where id=$1 and organization_id=$2 for share",
+        `select tp.id from brand_projects tp where tp.id=$1 and tp.organization_id=$2 and ${TEAM_PROJECTS("tp")} for share`,
         [v.projectId, v.organizationId],
       )
     ).rows[0];
