@@ -325,6 +325,7 @@
 }
 .sp-loose-thumbs {
   display: flex;
+  flex: none;
   gap: 6px;
 }
 .sp-loose-thumbs img {
@@ -1089,4 +1090,235 @@
   .sp-note-links {
     display: none;
   }
+}
+
+/* ================================================================== v2 (founder feedback 2026-11-25) */
+
+/* ------------------------------------------------------------------ the bell: last item at the right end of the page's top row */
+.sp-bell-wrap {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  margin-left: 4px;
+}
+.bw-main a.sp-bell,
+.sp-bell {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--ys-panel);
+  box-shadow: var(--ys-card);
+  color: var(--ys-ink);
+}
+.sp-bell .sp-ico {
+  width: 18px;
+  height: 18px;
+}
+.sp-bell[aria-expanded='true'] {
+  background: var(--ys-hover);
+}
+.sp-bell-count {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  display: grid;
+  place-items: center;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--ys-ink);
+  box-shadow: 0 0 0 2px var(--ys-canvas);
+  color: #09090b;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.sp-bell-editor .sp-bell {
+  width: 34px;
+  height: 34px;
+}
+.sp-pinned {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sp-bell-pop {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 50;
+  width: 400px;
+  padding: 6px;
+  border-radius: 16px;
+  background: var(--ys-glass);
+  backdrop-filter: blur(20px) saturate(160%);
+  box-shadow: var(--ys-float);
+  color: var(--ys-ink);
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.5;
+  letter-spacing: -0.015em;
+  text-align: left;
+  word-break: keep-all;
+}
+.sp-bell-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px 10px;
+}
+.sp-bell-head strong {
+  font-size: 15px;
+  font-weight: 600;
+}
+.sp-bell-head .sp-link {
+  margin-left: auto;
+}
+.sp-bell-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.sp-bell-item {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+  padding: 9px 10px;
+  border-radius: 12px;
+}
+.sp-bell-list li:first-child .sp-bell-item {
+  background: var(--ys-hover);
+}
+.sp-bell-item img {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  object-fit: cover;
+}
+.sp-bell-who {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.sp-bell-who strong {
+  font-size: 15px;
+  font-weight: 600;
+}
+.sp-bell-who .sp-muted {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sp-bell-who .sp-count {
+  height: 18px;
+  font-size: 11.5px;
+}
+.sp-bell-text p {
+  display: -webkit-box;
+  margin: 1px 0 0;
+  overflow: hidden;
+  color: var(--ys-ink-secondary);
+  font-size: 12.5px;
+  line-height: 18px;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.sp-bell-side {
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+  padding-top: 2px;
+}
+.bw-main a.sp-bell-all,
+.sp-bell-all {
+  display: block;
+  margin-top: 4px;
+  padding: 10px;
+  border-top: 1px solid var(--ys-hairline);
+  font-size: 12.5px;
+  font-weight: 600;
+  text-align: center;
+}
+
+/* ------------------------------------------------------------------ home is the project list */
+.sp-home-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 36px;
+}
+.sp-home-top > h1 {
+  margin: 0;
+}
+.sp-home-top + .sp-news {
+  margin-top: 8px;
+}
+.sp-home-extra > .sp-section:first-child {
+  margin-top: 26px;
+}
+.sp-views {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 999px;
+  background: var(--ys-panel);
+}
+.sp-views button {
+  padding: 3px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--ys-ink-secondary);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 18px;
+}
+.sp-views button[aria-pressed='true'] {
+  background: var(--ys-active-bg);
+  color: var(--ys-active-fg);
+}
+.sp-section-head {
+  align-items: center;
+}
+.sp-section-side {
+  align-items: center;
+}
+.sp-hintline .sp-section-side {
+  margin-left: 0;
+}
+
+/* ------------------------------------------------------------------ rail variant D2: a quiet secondary group under "+ 만들기" */
+.sp-rail-secondary {
+  margin-top: 10px !important;
+  padding-top: 10px !important;
+  border-top: 1px solid var(--ys-hairline);
+}
+.sp-rail-secondary .bw-rail-item {
+  min-height: 32px;
+  color: var(--ys-ink-secondary);
+  font-size: 12.5px;
+}
+.sp-rail-secondary .sp-rail-count {
+  min-width: 18px;
+  height: 18px;
+  font-size: 11.5px;
+}
+
+/* ------------------------------------------------------------------ mock note positions */
+.sp-note[data-pos='d2'] {
+  top: 632px;
+}
+.sp-note[data-pos='panel'] {
+  top: 404px;
+  right: 40px;
+  left: auto;
+  width: 292px;
 }

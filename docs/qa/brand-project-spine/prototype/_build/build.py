@@ -17,8 +17,14 @@ HERE = pathlib.Path(__file__).parent
 OUT = HERE.parent
 R = "../../../../public/reel/"
 
-SHELL_RAW = (HERE / "shell.html").read_text(encoding="utf-8")
-HTML_TAG, SHELL = SHELL_RAW.split("\n", 1)
+def load_shell(name: str) -> tuple[str, str]:
+    raw = (HERE / name).read_text(encoding="utf-8").replace("\r\n", "\n")
+    tag, body = raw.split("\n", 1)
+    return tag, body
+
+
+HTML_TAG, SHELL = load_shell("shell.html")                  # the real rail, expanded (7 rows, as on production)
+_, SHELL_COLLAPSED = load_shell("shell-collapsed.html")     # the real rail as the editing studio opens it
 
 
 def frag(name: str) -> str:
@@ -33,6 +39,7 @@ PLAY = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 1.8v8.4L10 6z"><
 SEARCH = '<svg class="sp-ico" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.2"></circle><path d="M10.2 10.2 13 13"></path></svg>'
 PLUS = '<svg class="sp-ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3.5v9M3.5 8h9"></path></svg>'
 CHECK = '<svg class="sp-ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.5 6.6 11.5 12.5 4.8"></path></svg>'
+BELL = '<svg class="sp-ico" viewBox="0 0 20 20" aria-hidden="true"><path d="M5.2 8.4a4.8 4.8 0 0 1 9.6 0c0 3.9 1.6 5 1.6 5H3.6s1.6-1.1 1.6-5zM8.3 15.8a1.8 1.8 0 0 0 3.4 0"></path></svg>'
 FOLDER0 = '<svg class="sp-ico" viewBox="0 0 16 16" aria-hidden="true"><rect x="2.5" y="2.5" width="11" height="11" rx="2.5" stroke-dasharray="2 2"></rect></svg>'
 
 # ---------------------------------------------------------------- wording (candidates; 대표 확인 대기)
@@ -42,10 +49,16 @@ T = {
     "news_cta": "자세히 보기",
     "save_to": "저장 위치",
     "unfiled": "미분류",
-    "check_label": "확인할 것",
-    "team_label": "야기 팀과",
-    "projects_title": "진행 중인 프로젝트",
-    "projects_all": "전체 프로젝트",
+    "projects_title": "프로젝트",
+    "view_active": "진행 중",
+    "view_all": "전체",
+    "team_new": "야기 팀에 의뢰하기",
+    "notif": "알림",
+    "notif_all": "전체",
+    "notif_mentions": "멘션",
+    "notif_read_all": "모두 읽음 처리",
+    "notif_see_all": "모두 보기",
+    "inbox": "알림함",
     "project_new": "새 프로젝트 만들기",
     "unfiled_say": "프로젝트 없이 만든 파일 14개",
     "unfiled_cta": "프로젝트로 옮기기",
@@ -82,7 +95,7 @@ SEOA, DOYUN, HARIN = "김서아", "박도윤", "이하린"
 
 
 def img(path: str, alt: str = "") -> str:
-    return f'<img src="{R}{path}" alt="{alt}" decoding="async">'
+    return f'<img src="{R}{path}" alt="{alt}">'
 
 
 def tile(path: str, ratio: float, badge: str = "", href: str = "viewer-send.html", picked: bool = False) -> str:
@@ -107,27 +120,55 @@ def avatar(name: str, size: str = "", tone: str = "") -> str:
     return f'<span class="sp-avatar"{s}{t} aria-hidden="true">{name[0]}</span>'
 
 
-def note(built: str) -> str:
-    screens = [("home.html", "홈"), ("home-empty.html", "프로젝트 없는 홈"), ("project.html", "프로젝트"), ("assets.html", "에셋"),
-               ("viewer-send.html", "보내기"), ("project-talk.html", "대화"), ("inbox.html", "알림함"), ("studio-picker.html", "프로젝트 고르기")]
+def note(built: str, pos: str = "") -> str:
+    screens = [("home.html", "홈"), ("home-banner.html", "소식 배너"), ("home-empty.html", "프로젝트 없는 홈"), ("home-bell.html", "알림"),
+               ("home-d2.html", "레일 D2"), ("project.html", "프로젝트"), ("assets.html", "에셋"), ("viewer-send.html", "보내기"),
+               ("project-talk.html", "대화"), ("inbox.html", "알림함"), ("studio-picker.html", "프로젝트 고르기"), ("editor-bell.html", "편집")]
     links = " · ".join(f'<a class="sp-link" href="{h}">{n}</a>' for h, n in screens)
-    return (f'<aside class="sp-note" data-mock-note="true"><strong>시안(목업)입니다</strong>'
+    where = f' data-pos="{pos}"' if pos else ""
+    return (f'<aside class="sp-note" data-mock-note="true"{where}><strong>시안(목업)입니다</strong>'
             f'<span>눌러도 실제로 동작하지 않습니다. 이름·사진·숫자는 모두 예시입니다.</span>'
             f'<span><b>만들어야 하는 것</b> {built}</span><span class="sp-note-links">{links}</span></aside>')
 
 
-def page(name: str, title: str, rail: str, main: str, built: str, overlay: str = "") -> None:
-    shell = SHELL.replace("{{MAIN}}", main)
-    shell = shell.replace(f'data-rail-item="{rail}"', f'data-rail-item="{rail}" aria-current="page"', 1)
+def bell(pop: str = "", count: int = 2, extra: str = "") -> str:
+    """The bell: one per page, the last item at the right end of the page's top row."""
+    n = f'<span class="sp-bell-count">{count}</span>' if count else ""
+    open_ = "true" if pop else "false"
+    cls = f"sp-bell-wrap {extra}".strip()
+    return (f'<span class="{cls}" data-bell="true"><a class="sp-bell sp-plain" href="home-bell.html" role="button" aria-label="{T["notif"]} {count}건" '
+            f'aria-expanded="{open_}">{BELL}{n}</a>{pop}</span>')
+
+
+def rail_d2(shell: str) -> str:
+    """Variant D2: a quiet secondary group under "+ 만들기" for things that are not making work."""
+    icon = frag("rail-inbox-icon")
+    group = (f'<ul class="bw-rail-list sp-rail-secondary" data-rail-group="secondary"><li class="bw-rail-row">'
+             f'<a href="inbox.html" class="bw-rail-item" data-nav-group="secondary" data-rail-item="inbox" data-rail-tip="{T["inbox"]}">'
+             f'{icon}<span class="bw-rail-label">{T["inbox"]}</span><span class="sp-rail-count" aria-label="새 알림 2">2</span></a></li></ul>')
+    a = shell.index('<div class="bw-rail-create"')
+    b = shell.index("</div>", shell.index("</button>", a)) + len("</div>")
+    return shell[:b] + group + shell[b:]
+
+
+def page(name: str, title: str, rail: str, main: str, built: str, overlay: str = "", shell: str = "wide", variant: str = "d1") -> None:
+    body = SHELL_COLLAPSED if shell == "collapsed" else SHELL
+    if variant == "d2":
+        body = rail_d2(body)
+    body = body.replace("{{MAIN}}", main)
+    if rail:
+        assert f'data-rail-item="{rail}"' in body, rail
+        body = body.replace(f'data-rail-item="{rail}"', f'data-rail-item="{rail}" aria-current="page"', 1)
+    pos = "panel" if shell == "collapsed" else ("d2" if variant == "d2" else "")
     html = (f"<!doctype html>\n{HTML_TAG}\n<head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
             f"<meta name=\"robots\" content=\"noindex\"><title>{title} · 프로젝트 뼈대 시안</title>"
             f"<link rel=\"stylesheet\" href=\"spine-app.css\"><link rel=\"stylesheet\" href=\"spine-proto.css\"></head>\n"
-            f"<body>{shell}{overlay}{note(built)}</body></html>\n")
-    (OUT / f"{name}.html").write_text(html, encoding="utf-8")
+            f"<body>{body}{overlay}{note(built, pos)}</body></html>\n")
+    (OUT / f"{name}.html").write_text(html, encoding="utf-8", newline="\n")
 
 
 # ---------------------------------------------------------------- shared pieces
-def news(variant: str = "banner") -> str:
+def news(variant: str = "line") -> str:
     v = ' data-variant="line"' if variant == "line" else ""
     return (f'<section class="sp-news"{v} data-news-slot="true" aria-label="{T["news_kicker"]}">'
             f'<div class="sp-news-media">{img("landing/cut-pump.webp")}</div>'
@@ -144,24 +185,27 @@ def home_prompt() -> str:
     return f.replace("</fieldset>", "</fieldset>" + chip, 1)
 
 
-def line(title: str, project: str, meta: str, href: str = "inbox.html") -> str:
-    proj = f'<span class="home_lineProject__VZkE_">{project}</span>' if project else ""
-    return (f'<li><a href="{href}" class="home_line__hZp4_"><span class="home_lineTitle__OeyZ6">{title}</span>'
-            f'<span class="home_lineMeta__zUlxD">{proj}<span>{meta}</span></span>{ARROW}</a></li>')
+def bell_item(thumb: str, who: str, project: str, text: str, time: str, unread: bool, tag: str = "") -> str:
+    dot = '<span class="sp-unread" aria-label="읽지 않음"></span>' if unread else ""
+    t = f'<span class="sp-count">{tag}</span>' if tag else ""
+    return (f'<li><a class="sp-bell-item sp-plain" href="inbox.html">{thumb}<div class="sp-bell-text"><div class="sp-bell-who"><strong>{who}</strong>'
+            f'<span class="sp-muted"> · {project}</span>{t}</div><p>{text}</p></div>'
+            f'<div class="sp-bell-side"><time class="sp-muted sp-num">{time}</time>{dot}</div></a></li>')
 
 
-def home_lines(with_share: bool = True) -> str:
-    check = ""
-    if with_share:
-        rows = line(f"{DOYUN} 님이 이미지를 보냈습니다", P1, "“립 컬러는 이 컷이 제일 자연스러워요.”")
-        rows += line(f"{HARIN} 님이 영상을 보냈습니다", P2, "“룩 3번 초안이에요. 걸음 속도 봐 주세요.”")
-        rows += line(f"{P3} 시안 v2", "", "야기 팀이 올린 시안 · 확인 대기", "project.html")
-        check = (f'<div class="home_lineGroup__Ttnzc"><h2 class="home_lineLabel__nfhJS"><span>{T["check_label"]}</span><span class="home_count__wbf21">3</span></h2>'
-                 f'<ul class="home_lineRows__gKN42">{rows}</ul></div>')
-    return (f'<div class="home_lines__VSvH4" data-home-lines="true">{check}'
-            f'<div class="home_lineGroup__Ttnzc"><h2 class="home_lineLabel__nfhJS"><span>{T["team_label"]}</span></h2>'
-            f'<div class="home_teamRow__TXxva"><span class="home_teamSay__zrVBj">요청 사항을 적어 야기 팀에 제작을 맡겨요.</span>'
-            f'<a href="#" class="home_textLink__tWsT1 home_rowAction__bixcW">새 프로젝트 의뢰</a></div></div></div>')
+def bell_pop() -> str:
+    items = "".join([
+        bell_item(img("landing/cut-hands.webp"), SEOA, P1, "립 컬러는 이 컷이 제일 자연스러워요. 메인으로 어때요?", "오후 2:31", True, T["notif_mentions"]),
+        bell_item(img("landing/look-street.webp"), HARIN, P2, "룩 3번 초안이에요. 걸음 속도 봐 주세요.", "오전 11:02", True, T["notif_mentions"]),
+        bell_item(img("landing/c-skin-ours.webp"), "야기 팀", P3, "시안 v2를 올렸습니다.", "어제", False),
+        bell_item(img("landing/cut-scent.webp"), DOYUN, P1, "답글: 좋아요. 배경만 조금 더 밝게 한 버전도 볼 수 있을까요?", "어제", False),
+    ])
+    return (f'<div class="sp-bell-pop" role="dialog" aria-label="{T["notif"]}" data-bell-pop="mock">'
+            f'<div class="sp-bell-head"><strong>{T["notif"]}</strong><div class="sp-views">'
+            f'<button type="button" aria-pressed="true">{T["notif_all"]}</button><button type="button" aria-pressed="false">{T["notif_mentions"]} <span class="sp-num">2</span></button></div>'
+            f'<button type="button" class="sp-link">{T["notif_read_all"]}</button></div>'
+            f'<ul class="sp-bell-list">{items}</ul>'
+            f'<a class="sp-bell-all sp-plain" href="inbox.html">{T["notif_see_all"]}</a></div>')
 
 
 def card(title: str, covers: list[str], meta: str, activity: str, pill: str = "") -> str:
@@ -169,6 +213,11 @@ def card(title: str, covers: list[str], meta: str, activity: str, pill: str = ""
     return (f'<li><a class="sp-card sp-plain" href="project.html"><div class="sp-cover">{"".join(img(c) for c in covers)}</div>'
             f'<div class="sp-card-text"><div class="sp-card-title"><span>{title}</span>{p}</div>'
             f'<div class="sp-card-meta">{meta}</div><div class="sp-card-meta">{activity}</div></div></a></li>')
+
+
+def project_actions() -> str:
+    return (f'<div class="sp-section-side"><a class="sp-link" href="#">{T["team_new"]}</a>'
+            f'<a class="bs-btn sp-plain" data-variant="soft" data-size="sm" href="studio-picker.html">{PLUS}<span>{T["project_new"]}</span></a></div>')
 
 
 def project_cards() -> str:
@@ -186,9 +235,10 @@ def project_cards() -> str:
         card("12월 매장 포스터", ["brands/tea-editorial.jpg", "brands/slot-4-color-french-cobalt.jpg", "brands/slot-1-subject-editorial.jpg"], "이미지 12 · 영상 1",
              f"11월 18일 · {HARIN} 님이 영상을 추가했습니다"),
     ])
+    views = (f'<div class="sp-views" role="group"><button type="button" aria-pressed="true">{T["view_active"]} <span class="sp-num">6</span></button>'
+             f'<button type="button" aria-pressed="false">{T["view_all"]} <span class="sp-num">9</span></button></div>')
     return (f'<section class="sp-section" data-home-projects="true"><div class="sp-section-head"><h2 class="sp-section-title">{T["projects_title"]}</h2>'
-            f'<div class="sp-section-side"><a class="sp-link" href="studio-picker.html">{T["project_new"]}</a><a class="sp-link" href="project.html">{T["projects_all"]}</a></div></div>'
-            f'<ul class="sp-cards">{cards}</ul></section>')
+            f'{views}{project_actions()}</div><ul class="sp-cards" data-home-cards="true">{cards}</ul></section>')
 
 
 def loose_row() -> str:
@@ -198,29 +248,31 @@ def loose_row() -> str:
             f'<a class="sp-link" href="assets.html">{T["unfiled_cta"]}</a></div>')
 
 
-def home_main(body: str, state: str) -> str:
+def home_main(body: str, state: str, pop: str = "") -> str:
     return (f'<div class="home_home__zbhkq" data-workspace-home="mock" data-home-mode="make" data-home-state="{state}">'
-            f'<h1 class="home_name__5Ztwq">루미에르 코스메틱 작업공간</h1>{body}</div>')
+            f'<div class="sp-home-top"><h1 class="home_name__5Ztwq">루미에르 코스메틱 작업공간</h1>{bell(pop)}</div>{body}</div>')
 
 
-# ---------------------------------------------------------------- (a) home, (a′) news as one line, (b) no project yet
-HOME_BUILT = "프로젝트 카드 조회, 소식 칸과 관리 화면, 받은 공유 줄, 미분류 줄. 입력창과 레일은 지금 화면 그대로입니다."
-page("home", "홈", "home",
-     home_main(news() + home_prompt() + home_lines() + f'<div class="sp-home-extra">{project_cards()}{loose_row()}</div>', "projects"), HOME_BUILT)
-page("home-line", "홈 (소식 한 줄형)", "home",
-     home_main(news("line") + home_prompt() + home_lines() + f'<div class="sp-home-extra">{project_cards()}{loose_row()}</div>', "projects"), HOME_BUILT)
+# ---------------------------------------------------------------- (a) home = the project list; news as one line by default
+HOME_BUILT = "프로젝트 카드 조회, 소식 칸과 관리 화면, 미분류 줄, 오른쪽 위 알림. 입력창과 레일은 지금 화면 그대로입니다."
+home_body = lambda n: n + home_prompt() + f'<div class="sp-home-extra">{project_cards()}{loose_row()}</div>'  # noqa: E731
+page("home", "홈", "home", home_main(home_body(news()), "projects"), HOME_BUILT)
+page("home-banner", "홈 (소식 배너형)", "home", home_main(home_body(news("banner")), "projects"), HOME_BUILT)
+page("home-bell", "홈 (알림 열림)", "home", home_main(home_body(news()), "projects", bell_pop()),
+     "알림 목록(프로젝트·썸네일·보낸 사람·글·시각), 전체/멘션 보기, 읽음 처리, ‘모두 보기’로 알림함 열기.")
+page("home-d2", "홈 (레일 D2)", "home", home_main(home_body(news()), "projects"),
+     "레일의 ‘만들기’ 아래 보조 묶음과 그 안의 ‘알림함’ 줄. 나머지는 D1과 같습니다.", variant="d2")
 
 recent = wall([
     [("landing/cut-pump.webp", 1.79, ""), ("landing/look-knit.webp", 0.667, ""), ("landing/cut-cheek.webp", 1.79, "0:05")],
     [("landing/look-street.webp", 0.667, ""), ("landing/cut-hands.webp", 1.79, ""), ("landing/c-skin-wide.webp", 0.75, ""), ("landing/grid-5.webp", 1.0, "")],
 ])
-empty_body = (news() + home_prompt() + home_lines(False)
-              + f'<div class="sp-home-extra"><div class="sp-hintline"><p>{T["empty_say"]}</p>'
-              f'<a class="bs-btn sp-plain" data-variant="soft" data-size="sm" href="studio-picker.html">{PLUS}<span>{T["project_new"]}</span></a></div>'
+empty_body = (news() + home_prompt()
+              + f'<div class="sp-home-extra"><div class="sp-hintline"><p>{T["empty_say"]}</p>{project_actions()}</div>'
               f'<section class="sp-section" style="margin-top:28px"><div class="sp-section-head"><h2 class="sp-section-title">{T["recent"]}</h2>'
               f'<div class="sp-section-side"><a class="sp-link" href="assets.html">{T["all_assets"]}</a></div></div>{recent}</section></div>')
 page("home-empty", "홈 (프로젝트 없음)", "home", home_main(empty_body, "no-project"),
-     "프로젝트가 없을 때의 안내 줄과 ‘새 프로젝트’. 최근 작업물 벽은 지금 화면과 같습니다(미분류 파일).")
+     "프로젝트가 없을 때의 안내 줄과 ‘새 프로젝트 만들기’. 최근 작업물 벽은 지금 화면과 같습니다(미분류 파일).")
 
 
 # ---------------------------------------------------------------- (c) project page
@@ -236,7 +288,7 @@ def seg(tabs: list[tuple[str, str, str, bool]]) -> str:
 def project_head(active: str) -> str:
     people = "".join(avatar(n, tone=t) for n, t in [(SEOA, ""), (DOYUN, "b"), (HARIN, ""), ("최", "b")])
     tabs = seg([(T["tab_files"], "42", "project.html", active == "files"), (T["tab_films"], "2", "project.html", False), (T["tab_talk"], "3", "project-talk.html", active == "talk")])
-    return (f'<div class="sp-crumb"><a class="sp-plain" href="home.html">프로젝트</a><span>/</span><span>직접 만들기</span></div>'
+    return (f'<div class="sp-home-top"><div class="sp-crumb"><a class="sp-plain" href="home.html">홈</a><span>/</span><span>직접 만들기</span></div>{bell()}</div>'
             f'<div class="sp-page-head"><div><h1 class="sp-h1">{P1}</h1><div class="sp-muted sp-num">멤버 4명 · 마지막 작업 2시간 전</div></div>'
             f'<div class="sp-head-actions"><div class="sp-people">{people}</div>'
             f'<button type="button" class="bs-btn" data-variant="soft" data-size="sm">{T["to_team"]}</button>'
@@ -267,7 +319,7 @@ project_files = (f'<div class="sp-page" data-project-page="mock">{project_head("
                  + kind("이미지", "24", images) + kind("영상", "6", videos) + kind(T["tab_films"], "2", films, more=False)
                  + kind("사운드", "2", sounds, more=False) + kind("올린 자료", "10", uploads) + "</div>")
 PROJECT_BUILT = "프로젝트 페이지 전체(종류별 파일, 편집본, 대화 탭), 사운드가 프로젝트에 담기는 것, 편집본 서버 저장, ‘야기 팀에 맡기기’."
-page("project", P1, "projects", project_files, PROJECT_BUILT)
+page("project", P1, "home", project_files, PROJECT_BUILT)
 
 
 # ---------------------------------------------------------------- conversation with the share card
@@ -300,7 +352,7 @@ talk = (f'<div class="sp-page" data-project-page="mock">{project_head("talk")}'
         f'<div class="sp-lane"><span class="sp-count">우리 팀</span><span class="sp-lane-note">{T["lane_note"]}</span></div>'
         f'<div class="sp-thread"><div class="sp-day">오늘</div>{older_thread}{share_thread}</div>'
         f'<div style="max-width:760px;margin-top:28px">{frag("composer").replace("일반 문의에 메시지 남기기", "메시지 남기기. @로 멤버를 부릅니다")}</div></div>')
-page("project-talk", f"{P1} · 대화", "projects", talk,
+page("project-talk", f"{P1} · 대화", "home", talk,
      "파일에 붙는 대화 카드, 프로젝트 대화의 ‘우리 팀’ 구분, 답글. 입력창 모양은 지금 대화 화면 그대로입니다.")
 
 
@@ -333,8 +385,8 @@ def viewer(invite: bool) -> str:
 
 
 VIEWER_BUILT = "‘보내기’ 전체(@멤버 고르기, 파일에 붙는 대화, 알림), ‘초대하고 보내기’, 파일의 프로젝트 옮기기. 지금의 ‘검수 · 공유’를 이 자리에서 바꿉니다."
-page("viewer-send", "보내기", "projects", project_files, VIEWER_BUILT, viewer(False))
-page("viewer-invite", "초대하고 보내기", "projects", project_files, VIEWER_BUILT, viewer(True))
+page("viewer-send", "보내기", "home", project_files, VIEWER_BUILT, viewer(False))
+page("viewer-invite", "초대하고 보내기", "home", project_files, VIEWER_BUILT, viewer(True))
 
 
 # ---------------------------------------------------------------- (f) 알림함
@@ -370,12 +422,12 @@ inbox = (f'<div class="brc-inbox" data-view="channel" data-room-inbox="true" sty
          f'<div class="brc-inbox-pane"><section class="brc-channel" data-layout="fill">'
          f'<div class="brc-channel-head"><div class="brc-channel-title"><div class="brc-pane-head"><div class="sp-pane-file">{img("landing/cut-hands.webp")}'
          f'<div class="brc-pane-title"><h2>{P1}</h2><p>{SEOA} 님이 보낸 파일입니다. 멤버만 볼 수 있는 대화입니다.</p></div></div></div></div>'
-         f'<div class="brc-pinned"><a class="brc-chip sp-plain" href="viewer-send.html"><span>{T["open_file"]}</span></a></div></div>'
+         f'<div class="brc-pinned sp-pinned"><a class="brc-chip sp-plain" href="viewer-send.html"><span>{T["open_file"]}</span></a>{bell(count=0)}</div></div>'
          f'<div class="brc-channel-body"><div class="brc-stream-col"><div class="brc-scroll"><div class="brc-stream sp-pane-pad" role="log">'
          f'<div class="sp-thread"><div class="sp-day">오늘</div>{inbox_thread}</div></div></div>'
          f'{frag("composer").replace("일반 문의에 메시지 남기기", T["reply_ph"])}</div></div></section></div></div>')
-page("inbox", "알림함", "inbox", inbox,
-     "받은 공유가 알림함에 썸네일·보낸 사람·프로젝트와 함께 뜨는 것, 읽음 표시, 직접 만들기 레일의 ‘알림함’ 줄. 알림함의 틀은 지금 화면 그대로입니다.")
+page("inbox", "알림함", "", inbox,
+     "받은 공유가 알림함에 썸네일·보낸 사람·프로젝트와 함께 뜨는 것, 읽음 표시. 오른쪽 위 알림의 ‘모두 보기’로 여는 화면입니다. 알림함의 틀은 지금 화면 그대로입니다.")
 
 
 # ---------------------------------------------------------------- (g) studio head: project picker
@@ -395,8 +447,18 @@ pop = (f'<div class="sp-pop" role="listbox" data-project-picker="mock"><div clas
        + f'<p class="sp-pop-foot">{T["pop_foot"]}</p></div>')
 chip = (f'<div class="sp-proj"><button type="button" class="sp-proj-chip" aria-haspopup="listbox" aria-expanded="true">'
         f'{img("landing/cut-hands.webp")}<span>{P1}</span>{CHEV}</button>{pop}</div>')
-head = frag("studio-head").replace("</h1>", "</h1>" + chip, 1).replace("30,000", "24,360")
-head = head.replace('<h1 class="bs-title">', '<div style="display:flex;align-items:center"><h1 class="bs-title">', 1).replace("</h1>" + chip, "</h1>" + chip + "</div>", 1)
+chip_closed = (f'<div class="sp-proj"><button type="button" class="sp-proj-chip" aria-haspopup="listbox" aria-expanded="false">'
+               f'{img("landing/cut-hands.webp")}<span>{P1}</span>{CHEV}</button></div>')
+
+
+def studio_head(c: str) -> str:
+    h = frag("studio-head").replace("30,000", "24,360")
+    h = h.replace('<h1 class="bs-title">', '<div style="display:flex;align-items:center"><h1 class="bs-title">', 1).replace("</h1>", "</h1>" + c + "</div>", 1)
+    assert h.rstrip().endswith("</div></header>")
+    return h.rstrip()[: -len("</div></header>")] + bell() + "</div></header>"
+
+
+head = studio_head(chip)
 studio_wall = wall([
     [("landing/cut-hands.webp", 1.79, ""), ("landing/grid-4.webp", 1.0, ""), ("landing/cut-beads.webp", 1.79, "")],
     [("landing/grid-5.webp", 1.0, ""), ("landing/cut-mark.webp", 1.79, ""), ("landing/highteen-product.webp", 0.75, ""), ("landing/grid-1.webp", 1.0, "")],
@@ -405,6 +467,9 @@ studio = (f'<div class="bs-page" data-brand-studio-v2="true" data-studio-tab="cr
           f'<div class="bs-studio" data-studio-mode="image" data-studio-phase="ready" data-studio-can-create=""><div class="bs-main">'
           f'<section class="bs-wall" data-studio-board="true" data-state="ready"><div class="sp-studio-wall">{studio_wall}</div></section>'
           f'{frag("studio-dock")}</div></div></div>')
+studio_plain = studio.replace(head, studio_head(chip_closed))
+page("studio-bell", "이미지 스튜디오 · 알림 자리", "image", studio_plain,
+     "머리말 오른쪽 끝의 알림과 제목 옆 프로젝트 칩. 남은 크레딧·버튼·입력창은 지금 화면 그대로입니다.")
 page("studio-picker", "이미지 스튜디오 · 프로젝트 고르기", "image", studio,
      "스튜디오 머리말의 프로젝트 칩과 목록(네 스튜디오 공통), 고른 프로젝트에 자동 저장, 미분류. 입력창과 머리말은 지금 화면 그대로입니다.")
 
@@ -452,7 +517,16 @@ tabs_inner = "".join(
     for label, n, on in [(T["by_project"], "4", True), (T["brand_material"], "9", False), (T["unfiled"], "14", False), (T["all_files"], "", False)])
 assets = frag("assets-main").replace("{{TABS}}", tabs_inner).replace("{{GROUPS}}", groups)
 assets = assets.replace(">오디오<", ">사운드<")
+up = re.search(r'<button[^>]*data-asset-hub-upload="true"[^>]*>[^<]*</button>', assets)
+assets = assets.replace(up.group(0), up.group(0) + bell(), 1)
 page("assets", "에셋", "assets", assets,
      "프로젝트별·브랜드 자료·미분류로 다시 묶기, 사운드가 에셋에 보이는 것, ‘프로젝트로 옮기기’. 머리말과 필터는 지금 화면 그대로입니다.")
 
+# ---------------------------------------------------------------- editing studio: the real screen (local sample film) with the bell
+editor = frag("editor-main").replace("{{BELL}}", bell(extra="sp-bell-editor"))
+page("editor-bell", "편집 스튜디오 · 알림 자리", "compose", editor,
+     "‘내보내기’ 오른쪽의 알림 하나. 편집 스튜디오는 지금 화면 그대로입니다(로컬의 예시 필름).", shell="collapsed")
+
+for old in ["home-line.html"]:
+    (OUT / old).unlink(missing_ok=True)
 print("built", sorted(p.name for p in OUT.glob("*.html")))
