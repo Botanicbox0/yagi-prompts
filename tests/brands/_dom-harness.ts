@@ -213,11 +213,15 @@ function matchesAtom(el: FakeElement, atom: string): boolean {
       continue;
     }
     if (rest.startsWith('[')) {
-      const attr = /^\[([^\]=]+)(?:="([^"]*)")?\]/.exec(rest);
+      // `[name]`, `[name="v"]` and the prefix form `[name^="v"]` (menus collect `[role^="menuitem"]`).
+      const attr = /^\[([^\]=^]+)(?:(\^?=)"([^"]*)")?\]/.exec(rest);
       if (!attr) return false;
-      const [, name, val] = attr;
+      const [, name, op, val] = attr;
       if (!el.hasAttribute(name!)) return false;
-      if (val !== undefined && el.getAttribute(name!) !== val) return false;
+      if (val !== undefined) {
+        const actual = el.getAttribute(name!) ?? '';
+        if (op === '^=' ? !actual.startsWith(val) : actual !== val) return false;
+      }
       rest = rest.slice(attr[0].length);
       continue;
     }

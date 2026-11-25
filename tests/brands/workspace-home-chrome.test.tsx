@@ -41,6 +41,8 @@ const rail = (c: BrandWorkspaceChoice, homeLabel: string | null = ko.brandHome.n
       rooms
       roomsCopy={ko.roomsShell.nav}
       homeLabel={homeLabel ?? undefined}
+      // As the layout hands it over with studio v2 (docs/BRAND-STUDIO-V3.md §3.1).
+      workspaceMenu={{ identity: b.identity, roles: b.roles, language: ko.nav.localeToggle, signOut: b.signOut }}
     />,
   );
 
@@ -65,6 +67,10 @@ describe('the rail Home entry', () => {
     expect(modeSwitch).toBeGreaterThan(-1);
     expect(home).toBeGreaterThan(modeSwitch);
     expect(home).toBeLessThan(html.indexOf('data-rail-item="image"'));
+    // The brand block (and its menu) is the rail's first row, above the switch and Home.
+    const block = html.indexOf(`data-rail-workspace="${ORG}"`);
+    expect(block).toBeGreaterThan(-1);
+    expect(block).toBeLessThan(modeSwitch);
     expect(html).toMatch(/href="\/brand\/home\?organizationId=a0000000-0000-4000-8000-00000000000a"[^>]*data-rail-item="home"[^>]*aria-current="page"/);
     // The phone sheet (rendered only once opened) carries it too; the logo is the other way home on a phone.
   });
@@ -79,6 +85,7 @@ describe('the rail Home entry', () => {
     expect(html).toContain('data-brand-layout-mode="sidebar"');
     expect(html).not.toContain('data-rail-item="home"');
     expect(html).not.toContain('/brand/home');
+    expect(html).not.toContain('data-rail-workspace');
     expect(html).toBe(rail(c, null));
   });
 });

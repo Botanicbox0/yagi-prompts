@@ -34,7 +34,9 @@ const labels = {
 };
 const scopeOf = (choice: BrandWorkspaceChoice): BrandWorkspaceScope => ({ choices: [choice], projectOrganizations: {} });
 const rooms = getDictionary('ko').roomsShell.nav;
-const render = (choice: BrandWorkspaceChoice | null, rail: { studioV2?: boolean; withShell?: boolean; rooms?: boolean } = {}) =>
+/** The rail's workspace menu words, as app/(brand)/layout.tsx hands them over while studio v2 is on (§3.1). */
+const workspaceMenu = { identity: b.identity, roles: b.roles, language: getDictionary('ko').nav.localeToggle, signOut: b.signOut };
+const render = (choice: BrandWorkspaceChoice | null, rail: { studioV2?: boolean; withShell?: boolean; rooms?: boolean; menu?: boolean } = {}) =>
   renderToStaticMarkup(
     <WorkspaceNavigation
       {...labels}
@@ -45,12 +47,16 @@ const render = (choice: BrandWorkspaceChoice | null, rail: { studioV2?: boolean;
       // Project rooms (docs/BRAND-ROOMS.md §2): the room words travel only with the flag.
       rooms={rail.rooms}
       roomsCopy={rail.rooms ? rooms : undefined}
+      // Like the layout: the menu words travel with studio v2 unless a test asks for the rail without them.
+      workspaceMenu={rail.studioV2 && rail.menu !== false ? workspaceMenu : undefined}
     />,
   );
 
 /** Markers only the rail renders. */
 const RAIL_ONLY = [
   'data-brand-layout-mode="rail"',
+  // The rail's brand block and its menu (docs/BRAND-STUDIO-V3.md §3.1).
+  'data-rail-workspace',
   'data-rail-create',
   'data-rail-credits',
   'data-rail-toggle',
@@ -113,18 +119,33 @@ describe('the rail', () => {
     const html = render(owner, { studioV2: true });
     expect(html).toContain('data-brand-layout-mode="rail"');
     expect(html).toContain('data-rail-expanded="false"');
-    for (const href of ['/brand/studio', '/brand/studio/video', '/brand', '/brand/creators', '/brand/library', '/brand/members', '/brand/settings']) {
+    for (const href of ['/brand/studio', '/brand/studio/video', '/brand', '/brand/creators', '/brand/library']) {
       expect(html, href).toContain(`href="${href}?organizationId=${OWNER}"`);
     }
     expect(html).not.toContain('/brand/studio/review');
     expect(html).not.toContain('/brand/identity');
-    for (const word of [shell.rail.image, shell.rail.video, shell.rail.campaigns, shell.rail.assets, shell.rail.team, shell.rail.settings]) {
+    for (const word of [shell.rail.image, shell.rail.video, shell.rail.campaigns, shell.rail.assets]) {
       expect(html).toContain(word);
     }
+    // §3.1: 팀 · 설정 moved from the foot into the brand block's menu, which is not in the markup until it opens.
+    expect(html).toContain(`data-rail-workspace="${OWNER}"`);
+    expect(html).not.toContain('data-rail-group="utility"');
+    expect(html).not.toContain('data-rail-order');
     expect(html).toContain('data-rail-create');
     expect(html).toContain('data-rail-toggle');
     expect(html).toContain('data-rail-tabs');
     expect(html).toContain(`aria-label="${shell.rail.label}"`);
+  });
+
+  it('keeps 팀 and 설정 as rows at the foot when the layout gives no menu words', () => {
+    const html = render(owner, { studioV2: true, menu: false });
+    expect(html).toContain('data-brand-layout-mode="rail"');
+    expect(html).not.toContain('data-rail-workspace');
+    expect(html).toContain('data-rail-group="utility"');
+    for (const href of ['/brand/members', '/brand/settings']) {
+      expect(html, href).toContain(`href="${href}?organizationId=${OWNER}"`);
+    }
+    for (const word of [shell.rail.team, shell.rail.settings]) expect(html).toContain(word);
   });
 
   it("keeps 'topbar' when the flag is off or the copy is missing, and for signed-out visitors", () => {
@@ -148,17 +169,21 @@ describe('the rail', () => {
   });
 
   it('opens "+" for owners and editors only, and the studio items never for a campaign-only guest', () => {
-    const viewer = render({ ...owner, role: 'viewer' }, { studioV2: true });
-    expect(viewer).toContain('data-brand-layout-mode="rail"');
-    expect(viewer).toContain('data-rail-item="image"');
-    expect(viewer).not.toContain('data-rail-create');
-    expect(viewer).not.toContain('/brand/members');
-    expect(render({ ...owner, role: 'editor' }, { studioV2: true })).toContain('data-rail-create');
-    const guest = render({ ...owner, role: 'guest' }, { studioV2: true });
-    expect(guest).toContain('data-brand-layout-mode="rail"');
-    expect(guest).not.toContain('/brand/studio');
-    expect(guest).not.toContain('data-rail-create');
-    expect(guest).not.toContain('/brand/settings');
+    // With and without the menu words: the rows (no menu) show exactly what the role may open, and the
+    // menu takes the same list (tests/brand-studio/shell/rail-workspace-nav.test.tsx opens it per role).
+    for (const menu of [true, false]) {
+      const viewer = render({ ...owner, role: 'viewer' }, { studioV2: true, menu });
+      expect(viewer).toContain('data-brand-layout-mode="rail"');
+      expect(viewer).toContain('data-rail-item="image"');
+      expect(viewer).not.toContain('data-rail-create');
+      expect(viewer).not.toContain('/brand/members');
+      expect(render({ ...owner, role: 'editor' }, { studioV2: true, menu })).toContain('data-rail-create');
+      const guest = render({ ...owner, role: 'guest' }, { studioV2: true, menu });
+      expect(guest).toContain('data-brand-layout-mode="rail"');
+      expect(guest).not.toContain('/brand/studio');
+      expect(guest).not.toContain('data-rail-create');
+      expect(guest).not.toContain('/brand/settings');
+    }
   });
 
   it('renders expanded on the server when the layout says so', () => {

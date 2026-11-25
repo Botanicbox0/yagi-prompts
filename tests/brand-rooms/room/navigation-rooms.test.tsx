@@ -36,6 +36,8 @@ const labels = {
   creators: b.creatorPool.nav,
 };
 const scopeOf = (choice: BrandWorkspaceChoice): BrandWorkspaceScope => ({ choices: [choice], projectOrganizations: {} });
+/** The rail's workspace menu words, handed over by the layout with studio v2 (docs/BRAND-STUDIO-V3.md §3.1). */
+const workspaceMenu = { identity: b.identity, roles: b.roles, language: ko.nav.localeToggle, signOut: b.signOut };
 type Opts = { studioV2?: boolean; withShell?: boolean; rooms?: boolean; withRooms?: boolean };
 const render = (choice: BrandWorkspaceChoice | null, o: Opts = {}) =>
   renderToStaticMarkup(
@@ -47,6 +49,7 @@ const render = (choice: BrandWorkspaceChoice | null, o: Opts = {}) =>
       locale="ko"
       rooms={o.rooms}
       roomsCopy={o.withRooms === false ? undefined : nav}
+      workspaceMenu={o.studioV2 ? workspaceMenu : undefined}
     />,
   );
 
@@ -62,6 +65,7 @@ const renderWithMemory = (choice: BrandWorkspaceChoice, memory: Record<string, '
       rooms
       roomsCopy={nav}
       railModes={memory}
+      workspaceMenu={workspaceMenu}
     />,
   );
 
@@ -132,6 +136,10 @@ describe('the two-mode rail (founder 2026-11-20, components/brand-workspace/rail
     const at = html.indexOf('data-rail-mode-switch="rail"');
     expect(at).toBeGreaterThan(-1);
     expect(at).toBeLessThan(html.indexOf('data-rail-item='));
+    // §3.1: the rail's own brand block is the row above the switch.
+    const block = html.indexOf(`data-rail-workspace="${OWNER}"`);
+    expect(block).toBeGreaterThan(-1);
+    expect(block).toBeLessThan(at);
     expect(html).toMatch(new RegExp(`role="radiogroup" aria-label="${nav.mode}"`));
     expect(html).toMatch(/role="radio" aria-checked="true" tabindex="0"[^>]*data-rail-mode-option="make"/);
     expect(html).toMatch(/role="radio" aria-checked="false" tabindex="-1"[^>]*data-rail-mode-option="team"/);
