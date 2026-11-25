@@ -13,6 +13,7 @@ import type { RefSource } from "./refs";
 import { createPollLoop, type PollLoop } from "./poller";
 import { handleNotFoundForOpenProject } from "./project-chip/model";
 import { STUDIO_JOB_SETTLED, STUDIO_JOB_STARTED, announce } from "./seams";
+import { createStartedRuns } from "./started-runs";
 import { initialStore, isOpen, studioReducer, type StudioAction, type StudioStore } from "./store";
 
 export type FilmState = { status: "loading" } | { status: "done"; sheet: FilmSheet | null };
@@ -161,6 +162,9 @@ export function useStudio({
     scope: scopeParam,
   });
   const loadSeqRef = useRef(0);
+  // The runs this page started (./started-runs.ts): bookkeeping only, it sends nothing.
+  const [started] = useState(createStartedRuns);
+  const wasStartedHere = started.has;
 
   const load = useCallback(async () => {
     const seq = ++loadSeqRef.current;
@@ -232,10 +236,13 @@ export function useStudio({
 
   // Another screen started a run (the reverse panel, a partial edit elsewhere): read the board again.
   useEffect(() => {
-    const reload = () => void load();
+    const reload = (event: Event) => {
+      started.markAnnounced((event as CustomEvent).detail);
+      void load();
+    };
     window.addEventListener(STUDIO_JOB_STARTED, reload);
     return () => window.removeEventListener(STUDIO_JOB_STARTED, reload);
-  }, [load]);
+  }, [load, started]);
 
   const createJob = useCallback(
     async (input: StudioJobCreate) => {
@@ -245,6 +252,7 @@ export function useStudio({
         : jobInputForProject(input, intoProject.current);
       const result = await api.call("job.create", body);
       if (!isFailure(result)) {
+        started.markJobs([result.job]);
         dispatch({ type: "jobAdded", job: result.job });
         return result;
       }
@@ -262,7 +270,7 @@ export function useStudio({
       }
       return result;
     },
-    [api, spineActive],
+    [api, spineActive, started],
   );
 
   /** One request on several image models: every run lands on the wall at once, or none does. */
@@ -276,6 +284,7 @@ export function useStudio({
           : input;
       const result = await api.call("job.create_group", body);
       if (!isFailure(result)) {
+        started.markJobs(result.jobs);
         for (const job of result.jobs) dispatch({ type: "jobAdded", job });
         return result;
       }
@@ -293,7 +302,7 @@ export function useStudio({
       }
       return result;
     },
-    [api, spineActive],
+    [api, spineActive, started],
   );
 
   /** Put a run (and everything made from it) in a project, or take it out with `null`. */
@@ -519,7 +528,7 @@ export function useStudio({
     [api, refreshSilently, spineActive],
   );
 
-  return { store, load, createJob, createGroup, assignProject, createProject, cancelJob, saveOutput, deleteOutput, deleteJob, removeJobs, moveToBrandProject, updateAsset, deleteAsset, onSourceDeleted, handoff, enhancePrompt, planRevision, talkRevision, readMark, films, analyzeFilm, uploads, upload };
+  return { store, load, wasStartedHere, createJob, createGroup, assignProject, createProject, cancelJob, saveOutput, deleteOutput, deleteJob, removeJobs, moveToBrandProject, updateAsset, deleteAsset, onSourceDeleted, handoff, enhancePrompt, planRevision, talkRevision, readMark, films, analyzeFilm, uploads, upload };
 }
 
 /**
