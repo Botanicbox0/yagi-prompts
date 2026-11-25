@@ -31,6 +31,7 @@ import { PAYOUT_OPERATIONS } from './payout-operations';
 import { BILLING_PAYMENT_OPERATIONS } from './billing-payment-operations';
 import { SUPPORT_OPERATIONS } from './support-operations';
 import { ADULT_CONFIRMATION_OPERATIONS } from './adult-confirmation-operations';
+import { BRAND_NEWS_OPERATIONS } from './brand-news-operations';
 
 export type { BlockDraftInput };
 
@@ -106,6 +107,8 @@ export const ADMIN_OPERATIONS = {
   ...ACCOUNT_DELETION_OPERATIONS,
   // docs/PERSONAL-STUDIO.md §6.1 — correct a stored 19+ answer's birth year (audited).
   ...ADULT_CONFIRMATION_OPERATIONS,
+  // docs/BRAND-PROJECT-SPINE.md §6 (slice 3b) — the home's news slot: save a draft, publish (ends the live one), end. Behind BRAND_NEWS.
+  ...BRAND_NEWS_OPERATIONS,
 };
 
 export type AdminOperationName = keyof typeof ADMIN_OPERATIONS;
