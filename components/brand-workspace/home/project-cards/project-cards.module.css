@@ -1,0 +1,377 @@
+/*
+ * Project cards block and 미분류 row for the 직접 만들기 home (docs/BRAND-PROJECT-SPINE.md §5).
+ * Workspace tokens only (--ys-*); matches the home's type scale (15px titles/rows, 12.5px labels/meta)
+ * and tabular numerals. Cards are unboxed: pictures are the card with three lines underneath.
+ */
+
+.topRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-width: 0;
+  min-height: 36px;
+  margin-bottom: 12px;
+}
+
+.topRow > h1 {
+  margin: 0;
+}
+
+.section {
+  min-width: 0;
+  margin-top: 36px;
+}
+
+.sectionHead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.sectionTitle {
+  margin: 0;
+  color: var(--ys-ink-secondary);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 20px;
+  letter-spacing: -0.01em;
+}
+
+.sectionActions {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-left: auto;
+}
+
+:global(.bw-main) a.textAction.textAction,
+.textAction {
+  padding-block: 2px;
+  color: var(--ys-ink);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 20px;
+  text-decoration: underline;
+  text-decoration-color: var(--ys-line-strong);
+  text-underline-offset: 4px;
+  white-space: nowrap;
+}
+
+:global(.bw-main) a.textAction.textAction:hover,
+.textAction:hover {
+  color: var(--ys-ink);
+  text-decoration-color: var(--ys-ink);
+}
+
+.textAction:focus-visible {
+  outline: 2px solid var(--ys-focus);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.plusIcon {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 30px 20px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (min-width: 1800px) {
+  .cards {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.cards > li {
+  min-width: 0;
+}
+
+:global(.bw-main) a.card.card,
+:global(.bw-main) a.card.card:hover,
+.card,
+.card:hover {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  color: var(--ys-ink);
+  text-decoration: none;
+}
+
+.card:focus-visible {
+  outline: 2px solid var(--ys-focus);
+  outline-offset: 4px;
+  border-radius: 16px;
+}
+
+.cover {
+  position: relative;
+  display: grid;
+  gap: 3px;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  border-radius: 16px;
+  background: var(--ys-surface);
+}
+
+.cover:not([data-cover-layout='empty'])::after {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px var(--ys-hairline);
+  content: '';
+  pointer-events: none;
+  transition: box-shadow 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.card:hover .cover:not([data-cover-layout='empty'])::after {
+  box-shadow: inset 0 0 0 1px var(--ys-line-strong);
+}
+
+.cover[data-cover-layout='empty'],
+.cover[data-cover-layout='one'] {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.cover[data-cover-layout='two'] {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.cover[data-cover-layout='three'] {
+  grid-template-columns: 2fr 1fr;
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.cover[data-cover-layout='three'] > :first-child {
+  grid-row: 1 / span 2;
+}
+
+.coverImage {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  object-fit: cover;
+  object-position: 50% 22%;
+}
+
+.dialogFieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.cover img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  object-fit: cover;
+  object-position: 50% 22%;
+}
+
+.coverEmpty {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--ys-surface);
+}
+
+.coverVideo {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--ys-surface);
+  color: var(--ys-ink-secondary);
+}
+
+.coverVideo video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+.coverVideo svg {
+  width: 22px;
+  height: 22px;
+  fill: currentColor;
+}
+
+.cardText {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.cardTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.cardTitle {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ys-ink);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 22px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:global(.bw-main) a.card:hover .cardTitle,
+.card:hover .cardTitle {
+  color: var(--ys-ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ys-line-strong);
+  text-underline-offset: 4px;
+}
+
+.cardUnread {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--ys-panel);
+  color: var(--ys-ink);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.cardMeta {
+  overflow: hidden;
+  color: var(--ys-ink-secondary);
+  font-size: 12.5px;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.moreRow {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+.unfiled {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 34px;
+  padding: 12px 0;
+  border-top: 1px solid var(--ys-hairline);
+  border-bottom: 1px solid var(--ys-hairline);
+}
+
+.unfiledLabel {
+  flex: none;
+  width: 168px;
+  color: var(--ys-ink-secondary);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.unfiledThumbs {
+  display: flex;
+  flex: none;
+  gap: 6px;
+}
+
+.unfiledThumb {
+  display: block;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  background: var(--ys-surface);
+  object-fit: cover;
+}
+
+.unfiledVideo {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--ys-surface);
+  color: var(--ys-ink-secondary);
+}
+
+.unfiledVideo video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+.unfiledVideo svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+}
+
+.unfiledSay {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 15px;
+  line-height: 22px;
+  font-variant-numeric: tabular-nums;
+}
+
+.guideLine {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 28px;
+  padding: 12px 0;
+  border-top: 1px solid var(--ys-hairline);
+  border-bottom: 1px solid var(--ys-hairline);
+}
+
+.guideText {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-size: 15px;
+  line-height: 22px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cover:not([data-cover-layout='empty'])::after {
+    transition: none;
+  }
+}

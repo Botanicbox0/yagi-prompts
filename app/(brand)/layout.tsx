@@ -17,6 +17,9 @@ import { RAIL_COOKIE, railCookieExpanded } from "@/components/brand-workspace/ra
 import { RAIL_MODE_COOKIE, parseRailModeCookie } from "@/components/brand-workspace/rail-mode";
 import { WorkspaceLanguage } from '@/components/brand-workspace/language';
 import { WorkspaceNavigation } from '@/components/brand-workspace/navigation';
+import { BellProvider } from '@/components/brand-workspace/bell/provider';
+import { pickBellCopy } from '@/components/brand-workspace/bell/model';
+import { brandProjectSpineOpen, memberSeesBrandProjects } from '@/lib/brand-studio/brand-projects';
 import { studioCopyAllowed } from "@/lib/brand-studio/visibility";
 import { WorkspaceIdentity } from '@/components/brand-workspace/identity';
 import { BrandErrorCopyProvider } from '@/components/brand-workspace/error-copy';
@@ -72,21 +75,17 @@ export default async function BrandLayout({
   // An account with no brand at all gets no tabs (each could only say "no brand yet"), unless a campaign it
   // accepted is waiting for the studio to share it: that account keeps the bar it has today.
   const pendingShare=Boolean(sql&&scope&&scope.choices.length===0&&await countPendingSharedCampaigns({sql},viewer).catch(()=>0)>0);
-  return (
-    <html lang={locale} className={fontVariables} data-brand-workspace>
-      <head>
-        <link rel="stylesheet" href="/fonts/geist/geist.css" />
-        <link
-          rel="stylesheet"
-          href="/fonts/pretendard/pretendard-dynamic-subset.css"
-        />
-        <link
-          rel="stylesheet"
-          href="/fonts/pretendard/pretendard-hangul-mono.css"
-        />
-      </head>
-      <body>
-        <a href="#main" className="bw-skip-link" data-skip-link>{b.skipToContent}</a>
+  const bellCandidates: string[] =
+    sql && scope && studioV2 && rooms
+      ? (
+          await Promise.all(
+            scope.choices
+              .filter((c) => memberSeesBrandProjects({ staff: c.role === 'studio', role: c.role }))
+              .map(async (c): Promise<string | null> => ((await brandProjectSpineOpen(sql, c.id).catch(() => false)) ? c.id : null)),
+          ).catch((): Array<string | null> => [])
+        ).filter((id): id is string => typeof id === 'string')
+      : [];
+  const shell = (
         <div className="bw-shell">
           <aside className="bw-sidebar">
             <Suspense fallback={null}>
@@ -120,6 +119,31 @@ export default async function BrandLayout({
             </main>
           </div>
         </div>
+  );
+  const bellLocale = locale === 'en' ? 'en' : 'ko';
+  const bellCopy = bellCandidates.length > 0 && scope ? pickBellCopy(d) : undefined;
+  return (
+    <html lang={locale} className={fontVariables} data-brand-workspace>
+      <head>
+        <link rel="stylesheet" href="/fonts/geist/geist.css" />
+        <link
+          rel="stylesheet"
+          href="/fonts/pretendard/pretendard-dynamic-subset.css"
+        />
+        <link
+          rel="stylesheet"
+          href="/fonts/pretendard/pretendard-hangul-mono.css"
+        />
+      </head>
+      <body>
+        <a href="#main" className="bw-skip-link" data-skip-link>{b.skipToContent}</a>
+        {bellCandidates.length > 0 && scope ? (
+          <BellProvider candidates={bellCandidates} scope={scope} railModes={railModes} rooms={rooms} bellCopy={bellCopy} locale={bellLocale}>
+            {shell}
+          </BellProvider>
+        ) : (
+          shell
+        )}
         {scope&&<Suspense fallback={null}><WorkspaceSupport scope={scope} b={b} locale={locale}/></Suspense>}
         <WorkspaceSpotlight />
         {roomPush&&<RegisterServiceWorker />}

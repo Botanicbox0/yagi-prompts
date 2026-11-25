@@ -32,6 +32,7 @@ import type { StudioLocale } from "./copy";
 import { ProjectChip, ProjectGoneNotice, ProjectSpineProvider } from "./project-chip";
 // Imported here, not through the client module: a server component cannot read a class map a client module exports.
 import projectChipStyles from "./project-chip/project-chip.module.css";
+import { WorkspaceBell } from "@/components/brand-workspace/bell";
 import { StudioApp } from "./studio-app";
 
 export type StudioTab = "create" | "formats";
@@ -69,6 +70,7 @@ export async function brandStudioV2(input: StudioV2Input): Promise<ReactElement>
           <a className="bs-btn" data-variant="ghost" data-size="sm" href={scopedHref("/brand/studio", choice)} data-studio-back>
             {copy.formats.back}
           </a>
+          <WorkspaceBell />
         </header>
         {formats}
       </div>
@@ -103,6 +105,7 @@ export async function brandStudioV2(input: StudioV2Input): Promise<ReactElement>
         )}
         {/* The credits line and the phone's library button are placed here by the studio (studio-app.tsx). */}
         <div className="bs-head-slot" data-studio-head-slot />
+        <WorkspaceBell />
       </header>
       {spine ? <ProjectGoneNotice /> : null}
       <StudioApp
