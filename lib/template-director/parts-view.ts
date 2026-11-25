@@ -179,6 +179,8 @@ export interface TemplatePartsCopy {
   outfitPhoto: string;
   outfitPhotoCta: string;
   outfitAttached: string;
+  /** Founder 2026-11-25 — under a "내 사진 그대로" option that would not fit the template's clip. */
+  tooLong?: string;
 }
 
 /** One row of the make card's parts card: a part, its state, the admin's descriptions, and whether the buyer chooses it. */

@@ -19,8 +19,12 @@ import { makerStats } from '@/lib/makers/stats';
 import { MAKER_FILE_MAX_BYTES } from '@/lib/recipes/assets';
 import { loadMakerDraft, makerAction, MAKER_TEST_RENDERS, RecipeRejected, uploadMakerFile } from '@/lib/recipes/maker';
 import { ROYALTY_DEFAULT_KRW, ROYALTY_MAX_KRW, ROYALTY_MIN_KRW } from '@/lib/recipes/pricing';
-import { INTRO_MAX, MAKER_ENGINE_IDS, NOTE_MAX, OUTRO_MAX, makerEnginesFor, parseRecipe } from '@/lib/recipes/schema';
+import { INTRO_MAX, MAKER_ENGINE_IDS, MIN_STEP_PROMPT_CHARS, NOTE_MAX, OUTRO_MAX, makerEnginesFor, parseRecipe } from '@/lib/recipes/schema';
 import { isVideoEngine } from '@/lib/images/engines';
+import { DEFAULT_PROMPT_CHARS, SEEDANCE_25_PROMPT_CHARS, formatPromptChars, promptCharLimit } from '@/lib/engines/prompt-limits';
+
+/** The step prompt rule as the guide and the tools state it — built from the constants so it cannot drift again. */
+export const MCP_PROMPT_LIMIT_TEXT = `${MIN_STEP_PROMPT_CHARS}–${formatPromptChars(DEFAULT_PROMPT_CHARS)} characters a step; a Seedance 2.5 video step takes up to ${formatPromptChars(SEEDANCE_25_PROMPT_CHARS)}. A step is one clip, so the limit is per clip, never a total: two clips have ${formatPromptChars(SEEDANCE_25_PROMPT_CHARS)} each.`;
 
 /**
  * docs/PLATFORM-2.0.md §20.5 — the TWINGS MCP server: an AI creative's own agent (Claude, Codex,
@@ -60,7 +64,7 @@ export const MCP_TOOLS = [
     id: { type: 'string', description: 'Draft id (uuid). Omit to create a new draft.' },
     title: { type: 'string', description: 'English title, 3–120 characters.' },
     title_ko: { type: 'string', description: 'Korean title (optional).' },
-    recipe: { type: 'object', description: 'Recipe v2 JSON — see get_recipe_guide.' },
+    recipe: { type: 'object', description: `Recipe v2 JSON — see get_recipe_guide. Step prompts: ${MCP_PROMPT_LIMIT_TEXT}` },
     show_prompts: { type: 'boolean', description: 'Show your prompts to signed-in members on the template page (default false).' },
     show_files: { type: 'boolean', description: 'Let signed-in members view and download your source files (default false).' },
     presentation: { type: 'string', enum: ['make-first', 'story-first'] },
@@ -93,13 +97,13 @@ class ToolFailure extends Error {
   constructor(readonly code: string, readonly detail?: unknown) { super(code); }
 }
 
-function guide() {
+export function recipeGuide() {
   return {
     summary: 'A recipe turns ONE customer selfie into a finished result. Slot "selfie" is always the customer photo; every other slot is a file YOU upload (upload_file → ast_ id). Steps run in order; a prompt refers to slots and earlier steps only as {{name}}.',
-    limits: { steps: 'image then video (max 2), or 1–10 images (a carousel)', prompt: '10–4000 characters', note: `${NOTE_MAX} characters a step`, intro: INTRO_MAX, outro: OUTRO_MAX, files: '6 references + 1 example, 4 MB each, 20 MB a template', royaltyKrw: [ROYALTY_MIN_KRW, ROYALTY_MAX_KRW], royaltyDefaultKrw: ROYALTY_DEFAULT_KRW },
+    limits: { steps: 'image then video (max 2), or 1–10 images (a carousel)', prompt: MCP_PROMPT_LIMIT_TEXT, note: `${NOTE_MAX} characters a step`, intro: INTRO_MAX, outro: OUTRO_MAX, files: '6 references + 1 example, 4 MB each, 20 MB a template', royaltyKrw: [ROYALTY_MIN_KRW, ROYALTY_MAX_KRW], royaltyDefaultKrw: ROYALTY_DEFAULT_KRW },
     engines: MAKER_ENGINE_IDS.map((id) => (isVideoEngine(id)
-      ? { id, kind: 'video', aspects: VIDEO_ASPECTS, durationSeconds: [videoEngineSpec(id).minDurationSeconds, videoEngineSpec(id).maxDurationSeconds], resolutions: videoEngineSpec(id).resolutions }
-      : { id, kind: 'image', aspects: IMAGE_ASPECTS })),
+      ? { id, kind: 'video', aspects: VIDEO_ASPECTS, durationSeconds: [videoEngineSpec(id).minDurationSeconds, videoEngineSpec(id).maxDurationSeconds], resolutions: videoEngineSpec(id).resolutions, promptMaxChars: promptCharLimit(id) }
+      : { id, kind: 'image', aspects: IMAGE_ASPECTS, promptMaxChars: promptCharLimit(id) })),
     imageEngines: makerEnginesFor('image'),
     videoEngines: makerEnginesFor('video'),
     publishing: 'publish_template makes the draft a live template with no studio review once: the recipe passes, an example FILE is uploaded (role "example"), and one test_render has succeeded. test_render makes the image steps only; a template with no image step to test needs an example VIDEO file instead. Price = cost floor + royalty_krw, set automatically.',
@@ -149,7 +153,7 @@ async function callTool(deps: McpDeps, name: string, args: Record<string, unknow
         limits: { works: 12, tokens: 5, testRendersPerTemplate: MAKER_TEST_RENDERS, fileMegabytes: 4 },
       };
     }
-    case 'get_recipe_guide': return guide();
+    case 'get_recipe_guide': return recipeGuide();
     case 'validate_recipe': {
       const checked = parseRecipe(args.recipe);
       return checked.ok ? { ok: true, medium: checked.medium } : { ok: false, issues: checked.issues };

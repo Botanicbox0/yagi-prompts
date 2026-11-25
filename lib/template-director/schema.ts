@@ -500,6 +500,12 @@ export interface DirectorRewriteInput {
    * at least one: then the payload carries `templateStyling` and the doctrine one more line.
    */
   styling?: TemplateStylingUse[];
+  /**
+   * Founder 2026-11-25 (Seedance 2.5: 15,000 characters per clip) — the most characters the whole rewritten prompt may
+   * have. Present only for a base near the engine's limit (`compileDirectorPromptDetailed`): then the payload carries
+   * `promptBudgetChars` and the doctrine one more line. Absent = the wire body is exactly as before.
+   */
+  budgetChars?: number;
 }
 
 /** docs/PERSONAL-STUDIO.md §3.4.9 — the parts of a template's styling a buyer may keep as their own. */

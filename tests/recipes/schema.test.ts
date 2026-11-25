@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { needsIdentity } from '@/lib/identity/service';
 import {
-  MAKER_ENGINE_IDS, MAX_STEP_PROMPT_CHARS, displayStepPrompt, engineStepPrompt, exportRecipe, identityPath, legacyPromptText, parseRecipe,
+  MAKER_ENGINE_IDS, MAX_RECIPE_BYTES, MAX_STUDIO_RECIPE_BYTES, displayStepPrompt, engineStepPrompt, exportRecipe, identityPath, legacyPromptText, parseRecipe,
   personInputs, primaryStep, promptTokens, recipeAssets, recipeMedium, recipeNeedsIdentity, type Recipe, type RecipeIssueCode,
 } from '@/lib/recipes/schema';
 import { isRoyalty, quoteRecipe, ROYALTY_DEFAULT_KRW } from '@/lib/recipes/pricing';
+import { DEFAULT_PROMPT_CHARS } from '@/lib/engines/prompt-limits';
 
 /** docs/PLATFORM-2.0.md §7.3 — the recipe rules, as accepted and refused examples. */
 
@@ -104,7 +105,7 @@ describe('recipe v2 schema — refused', () => {
     ['version 1', mutate(single('image'), (r) => { r.version = 1; }), 'shape'],
     ['an image aspect a film uses', mutate(single('image'), (r) => { r.steps[0].params.aspect = '4:3'; }), 'shape'],
     ['not JSON', '{"version":2,', 'shape'],
-    ['too large', JSON.stringify(mutate(single('image'), (r) => { r.steps[0].prompt = `{{selfie}} ${'x'.repeat(50_000)}`; })), 'too_large'],
+    ['too large', JSON.stringify(mutate(single('image'), (r) => { r.steps[0].prompt = `{{selfie}} ${'x'.repeat(MAX_RECIPE_BYTES)}`; })), 'too_large'],
   ])('%s', (_name, raw, code) => {
     expect(codes(raw)).toContain(code);
   });
@@ -113,21 +114,20 @@ describe('recipe v2 schema — refused', () => {
 describe('recipe size', () => {
   const big = () => mutate(carousel(10), (r) => { for (const step of r.steps) step.prompt = `{{selfie}} ${'가'.repeat(2000)}`; });
 
-  it('keeps the maker limit', () => {
-    expect(codes(big())).toContain('too_large');
-    expect(codes(JSON.stringify(big()))).toContain('too_large');
+  // 2026-11-25: makers get the studio's room — a recipe whose steps are each within their limit is never too large.
+  it('gives makers and the studio room for every frame its prompt limit allows', () => {
+    for (const studio of [false, true]) {
+      expect(parseRecipe(big(), { studio }).ok).toBe(true);
+      expect(parseRecipe(JSON.stringify(big()), { studio }).ok).toBe(true);
+      const longest = mutate(carousel(10), (r) => { for (const step of r.steps) step.prompt = `{{selfie}} ${'가'.repeat(DEFAULT_PROMPT_CHARS - 11)}`; });
+      expect(parseRecipe(longest, { studio }).ok).toBe(true);
+    }
   });
 
-  it('gives the studio room for every frame its prompt limit allows', () => {
-    expect(parseRecipe(big(), { studio: true }).ok).toBe(true);
-    expect(parseRecipe(JSON.stringify(big()), { studio: true }).ok).toBe(true);
-    const longest = mutate(carousel(10), (r) => { for (const step of r.steps) step.prompt = `{{selfie}} ${'가'.repeat(MAX_STEP_PROMPT_CHARS - 11)}`; });
-    expect(parseRecipe(longest, { studio: true }).ok).toBe(true);
-  });
-
-  it('still bounds the studio', () => {
-    const huge = mutate(single('image'), (r) => { r.steps[0].prompt = `{{selfie}} ${'가'.repeat(100_000)}`; });
+  it('still bounds both', () => {
+    const huge = mutate(single('image'), (r) => { r.steps[0].prompt = `{{selfie}} ${'가'.repeat(Math.ceil(MAX_STUDIO_RECIPE_BYTES / 3))}`; });
     expect((parseRecipe(huge, { studio: true }) as { ok: false; issues: Array<{ code: string }> }).issues.map((issue) => issue.code)).toContain('too_large');
+    expect(codes(huge)).toContain('too_large');
   });
 });
 

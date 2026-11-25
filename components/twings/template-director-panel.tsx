@@ -987,6 +987,7 @@ export function TemplateDirectorPanel({
           const payload = (await res.json().catch(() => null)) as {
             ok?: boolean;
             code?: string;
+            message?: string;
             turn?: {
               approved?: boolean;
               replyKo?: string;
@@ -994,6 +995,12 @@ export function TemplateDirectorPanel({
               lockedHit?: boolean;
             };
           } | null;
+          // Founder 2026-11-25 — the edit would not fit the template's clip: no chip is added, the server's line shows.
+          if (payload?.code === 'too_long') {
+            setTurnAccepted(false);
+            if (typeof payload.message === 'string') setAssistantMessage(payload.message);
+            return;
+          }
           // docs/PERSONAL-STUDIO.md §3.3 — a request that touched a fixed part answers in dictionary words (the reply
           // may still name the part it left out), and a refused one adds no chip of its own.
           if (activeLocks && lockWords && payload?.code === 'locked_slot_photo') {

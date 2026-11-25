@@ -21,8 +21,10 @@ const cached = unstable_cache(
   // v5 (2026-11-11, docs/CAST-CATEGORIES.md): the pet and partner photos have their own labels.
   // v6 (2026-11-25, docs/CREATOR-PLATFORM.md): shown prompts go without their `Template styling:` / `Template locks:`
   // blocks; a v5 entry still carries them.
-  // v7 (2026-11-25): optional clip-by-clip production guide cards on public studio recipes.
-  ['public-recipe-v7', resolveRuntimeMode()],
+  // v7 (2026-11-25): a Seedance 2.5 step may run to 15,000 characters (lib/engines/prompt-limits.ts); a v6 entry
+  // holds `null` for such a recipe, like v2 did for 8,000.
+  // v8 (2026-11-25): optional clip-by-clip production guide cards on public studio recipes.
+  ['public-recipe-v8', resolveRuntimeMode()],
   { tags: ['prompts'], revalidate: 3600 },
 );
 

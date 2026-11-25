@@ -38,10 +38,12 @@ export interface TemplatePartsCardProps {
   overridden?: readonly string[];
   /** The outfit-photo slot of the edit panel: open on this template, already holding a photo, and how to reach it. */
   outfitPhoto?: { open: boolean; attached: boolean; onAdd?: () => void };
+  /** Founder 2026-11-25 — parts whose "내 사진 그대로" would not fit the template's clip: that option is disabled. */
+  mineBlocked?: readonly OwnStylePart[];
   disabled?: boolean;
 }
 
-export function TemplatePartsCard({ rows, all = false, copy, choices, onChoose, overridden = [], outfitPhoto, disabled = false }: TemplatePartsCardProps) {
+export function TemplatePartsCard({ rows, all = false, copy, choices, onChoose, overridden = [], outfitPhoto, mineBlocked = [], disabled = false }: TemplatePartsCardProps) {
   const baseId = useId();
   if (!all && rows.length === 0) return null;
   const stateWord = (state: PartState): string => (state === 'locked' ? copy.locked : state === 'styled' ? copy.styled : copy.photo);
@@ -68,12 +70,15 @@ export function TemplatePartsCard({ rows, all = false, copy, choices, onChoose, 
               note = isOverridden ? copy.overridden : chosen === 'mine' && choosable ? (part === 'hair' ? copy.mineHair : copy.mineMakeup) : copy.templateNote;
             } else if (outfit?.attached) note = copy.outfitAttached;
             else if (row.state === 'styled' && isOverridden) note = copy.overridden;
+            const blocked = choosable && part !== null && mineBlocked.includes(part) && chosen !== 'mine';
+            if (blocked && copy.tooLong) note = copy.tooLong;
             return (
               <li
                 key={row.key}
                 data-template-part={row.key}
                 data-part-state={row.state}
                 {...(choosable ? { 'data-part-choice': isOverridden ? 'overridden' : chosen } : {})}
+                {...(blocked ? { 'data-style-blocked': part } : {})}
                 className={ROW}
               >
                 <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
@@ -101,6 +106,7 @@ export function TemplatePartsCard({ rows, all = false, copy, choices, onChoose, 
                               name={`${baseId}-${part}`}
                               value={value}
                               checked={on}
+                              disabled={value === 'mine' && blocked}
                               onChange={() => onChoose?.(part, value)}
                               className="sr-only"
                             />

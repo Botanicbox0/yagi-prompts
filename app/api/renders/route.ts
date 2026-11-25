@@ -11,6 +11,7 @@ import { readSavedSelfie } from '@/lib/identity/selfie-service';
 import { castFormPhotos } from '@/lib/renders/cast-form';
 import { recordAdultAnswerFromForm } from '@/lib/account/adult-confirmation';
 import { parseDirectorSpecInput } from '@/lib/template-director/schema';
+import { ORDER_EDIT_REFUSAL_STATUS, orderEditRefusal } from '@/lib/prompts/edits-closed';
 import { parseSelectedFrames } from '@/lib/twings/selective-frames';
 
 /**
@@ -78,6 +79,10 @@ export async function POST(request: Request): Promise<NextResponse> {
   } catch {
     return json({ ok: false, code: 'bad_request' }, 400);
   }
+  // Founder 2026-11-25 — an edit the template cannot take (no room at all, or this one too long) is refused before anything is read or made.
+  const directorSpec = parseDirectorSpecInput(form.get('directorSpec'));
+  const editRefusal = await orderEditRefusal(sql, form, directorSpec);
+  if (editRefusal) return json({ ok: false, code: editRefusal }, ORDER_EDIT_REFUSAL_STATUS[editRefusal]);
   const photo = form.get('photo');
   const rawLocale = form.get('locale');
   const store = await getRenderStore();
@@ -105,7 +110,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     // Read only on an operator's free render; a paid render takes the order's own value.
     resolution: typeof form.get('resolution') === 'string' ? String(form.get('resolution')) : null,
     selectedFrames: parseSelectedFrames(form.get('selectedFrames')),
-    directorSpec: parseDirectorSpecInput(form.get('directorSpec')),
+    directorSpec,
   });
   if (!outcome.ok) return json(outcome, STATUS[outcome.code]);
 

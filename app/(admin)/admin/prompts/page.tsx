@@ -3,6 +3,8 @@ import { getSqlRunner } from '@/lib/db/connect';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { getLocaleFromHeaders } from '@/lib/i18n/server';
 import { loadAllPrompts, type PromptRow } from '@/lib/prompts/repo';
+import { loadOverLimitTemplates } from '@/lib/prompts/prompt-length';
+import { recipeSchemaReady } from '@/lib/recipes/repo';
 import {
   ADMIN_PROMPTS_PATH,
   ADMIN_PROMPT_NEW_PATH,
@@ -91,6 +93,9 @@ export default async function AdminPromptsPage({
   const a = dict.admin;
   const c = dict.adminConsole;
   const rows: PromptRow[] = sql === null ? [] : await loadAllPrompts(sql);
+  // Founder 2026-11-25: published templates with a Seedance 2.5 clip over 15,000 characters, found from lengths only.
+  // A marker, not the gate: if the lengths cannot be read the list shows without it.
+  const overLimit = sql === null ? new Map<string, number>() : await recipeSchemaReady(sql).then((ready) => loadOverLimitTemplates(sql, ready)).catch(() => new Map<string, number>());
 
   const rawTab = one(params, 'tab');
   const tab: Tab = isTab(rawTab) ? rawTab : 'all';
@@ -235,7 +240,7 @@ export default async function AdminPromptsPage({
       ) : (
         <ul className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {shown.map((row) => (
-            <PromptCard key={row.id} row={row} dict={dict} href={adminPromptPath(row.id)} locale={locale} />
+            <PromptCard key={row.id} row={row} dict={dict} href={adminPromptPath(row.id)} locale={locale} {...(overLimit.has(row.id) ? { overLimit: overLimit.get(row.id)! } : {})} />
           ))}
         </ul>
       )}

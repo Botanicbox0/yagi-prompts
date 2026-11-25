@@ -1286,6 +1286,7 @@ export const en = {
     engine: 'Engine',
     prompt: 'Prompt',
     promptHint: 'The buttons insert at the cursor. You never need an engine’s own syntax such as @image1.',
+    promptCount: '{n} / {max} characters',
     insert: 'Insert',
     selfieLabel: 'My photo',
     petLabel: 'Pet photo',
@@ -3937,6 +3938,8 @@ export const en = {
     },
     notForSale: "Coming soon",
     notForSaleBody: "Generation is not available for this template yet. You can browse its sample results.",
+    // Founder 2026-11-25 — a template whose text leaves no room for edits. Provisional: founder confirms the wording.
+    editsClosed: "This template is at full length, so it can't take change requests.",
     closedBrowseVideoCta: "Browse other video templates",
     closedBrowseImageCta: "Browse other image templates",
     makeCta: 'Make it with your photo',
@@ -4246,6 +4249,8 @@ export const en = {
         partner_minor: 'The person who appears with you must be an adult too.',
         partner_screen: 'A photo of a screen or a printed picture cannot be used.',
         partner_check_unavailable: 'We could not check the photo. Upload it again in a moment.',
+        edits_closed: "This template is at full length, so it can't take change requests.",
+        edit_too_long: "That's more than this template can hold. Please shorten your changes.",
         generic: 'Could not start. Try again in a moment.',
       },
     },
@@ -5857,6 +5862,13 @@ export const en = {
     templateStylingStyled: '{part} template',
     templateStylingPhoto: '{part} photo',
     templateStylingMalformed: 'The styling block cannot be read. A save refuses it, and buyers see nothing.',
+    promptOverEngineLimit: 'This prompt is over {max} characters. Seedance 2.5 takes up to {max} characters per clip.',
+    promptLengthLine: 'Prompt length {chars} / {max} characters',
+    promptLengthClip: 'Clip {n}',
+    promptLengthRefusal: 'The prompt for clip {n} is {chars} characters. Seedance 2.5 takes up to {max} characters per clip. Shorten it and save again.',
+    promptOverLimitMarker: 'Over {max} characters',
+    promptHeadroom: '{n} characters left for edits',
+    promptEditsClosed: 'Fewer than {min} characters are left for edits, so buyers cannot send change requests. The template page shows one line instead of the edit panel.',
     templateStylingHeading: 'Template styling (hair and makeup choice)',
     templateStylingNone: 'No styling declared. Buyer screens are unchanged.',
     templateStylingShown: 'Buyers see: {parts}',
@@ -6245,6 +6257,8 @@ export const en = {
     },
     /** Live line when a request asked to change only fixed parts: nothing was added. */
     refusedLocked: "That part is fixed and can't be changed.",
+    /** Founder 2026-11-25 — an edit that would not fit the clip (Seedance 2.5: 15,000 characters). Provisional. */
+    tooLong: "That's more than this template can hold. Please shorten your changes.",
     /** Live line when a request was added but the part of it about fixed parts was left out. */
     updatedLocked: 'Added what can be changed. Fixed parts stay as they are.',
     /** Example in the request box on a template with fixed parts: a change it allows (an expression), nothing fixed. */

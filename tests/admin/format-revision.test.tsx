@@ -3,7 +3,7 @@ import { prerender } from 'react-dom/static';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { loadFormatRevisionView, recipeSha256, reviseFormatRecipe } from '@/lib/creator-platform/format-revision';
-import { legacyPromptText, parseRecipe, type Recipe } from '@/lib/recipes/schema';
+import { MAX_RECIPE_BYTES, MAX_STUDIO_RECIPE_BYTES, legacyPromptText, parseRecipe, type Recipe } from '@/lib/recipes/schema';
 import { templateCardStyling } from '@/lib/template-director/compile-prompts';
 import { renderLockBlock } from '@/lib/template-director/locks';
 import { renderStylingBlock } from '@/lib/template-director/styling';
@@ -219,13 +219,12 @@ describe('format.reviseRecipe', () => {
     const whole = carouselRecipe([`Frame one of {{selfie}} by a window.\n\n${STYLING}`, `Frame two of {{selfie}} on a stool.\n\n${STYLING}`]);
     expect(await harness.run('format.reviseRecipe', { id: set.templateId, reviewedSha256: recipeSha256(set.recipe), reason, recipe: JSON.stringify(whole) })).toMatchObject({ ok: true });
 
-    // Within the studio's byte limit but over the maker's: the template page's reader would drop it — refused.
-    const long = await seedFormatTemplate(sql(), { recipe: carouselRecipe(Array.from({ length: 6 }, (_, i) => `Frame ${i + 1} of {{selfie}} in soft light.`)), priceKrw: 19_900 });
+    // 2026-11-25 (Seedance 2.5: 15,000 characters per clip): makers and the studio share one byte cap, sized for every
+    // step at its limit, so a recipe the studio takes is never dropped by the maker's reader for its size.
     const huge = carouselRecipe(Array.from({ length: 6 }, (_, i) => `Frame ${i + 1} of {{selfie}} in soft light. ${'Calm detail. '.repeat(540)}`.slice(0, 7000).trim()), { studioOnly: true });
     expect(parseRecipe(huge, { studio: true }).ok).toBe(true);
-    expect(parseRecipe(huge).ok).toBe(false);
-    const tooLarge = await harness.run('format.reviseRecipe', { id: long.templateId, reviewedSha256: recipeSha256(long.recipe), reason, recipe: JSON.stringify(huge) });
-    expect(tooLarge.detail).toBe('formatRevision:recipe_maker too_large');
+    expect(parseRecipe(huge).ok).toBe(true);
+    expect(MAX_RECIPE_BYTES).toBe(MAX_STUDIO_RECIPE_BYTES);
     expect(await audits(f)).toHaveLength(0);
   });
 
