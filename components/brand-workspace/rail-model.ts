@@ -39,6 +39,27 @@ export const RAIL_GROUP: Readonly<Record<RailItemId, RailGroupId>> = {
   creators: 'team',
 };
 
+/**
+ * The rail's two bands of rows (founder 2026-11-25, docs/BRAND-STUDIO-V3.md §3.1): the screens a person works
+ * in sit above a thin divider; what is opened now and then sits under it, one step quieter. Only 워크플로우
+ * for now. A row never crosses the divider, whatever an older saved order says.
+ */
+export type RailTier = 'main' | 'lower';
+const RAIL_LOWER: ReadonlySet<RailItemId> = new Set<RailItemId>(['workflows']);
+export function railTier(id: RailItemId): RailTier {
+  return RAIL_LOWER.has(id) ? 'lower' : 'main';
+}
+
+/** The rows in the order the wide rail shows them: everything above the divider, then what is under it. */
+export function railShownOrder(items: readonly RailItemId[]): RailItemId[] {
+  return [...items.filter((id) => railTier(id) === 'main'), ...items.filter((id) => railTier(id) === 'lower')];
+}
+
+/** A list of rows as the rail draws it: above the divider, under it. Each keeps the list's own order. */
+export function railTiers(items: readonly RailItemId[]): Record<RailTier, RailItemId[]> {
+  return { main: items.filter((id) => railTier(id) === 'main'), lower: items.filter((id) => railTier(id) === 'lower') };
+}
+
 /** localStorage: `{ expanded: boolean }`. */
 export const RAIL_STORAGE_KEY = 'twings_brand_rail_v1';
 /** Mirror of the expanded state the layout reads, so the first paint already has the right width. */
@@ -63,7 +84,7 @@ export const RAIL_HREF: Readonly<Record<RailItemId, string>> = {
 };
 
 /** 18px stroke icons on a 20-unit grid. */
-export const RAIL_ICON: Readonly<Record<RailItemId | 'team' | 'billing' | 'settings' | 'create' | 'more' | 'toggle' | 'commission', string>> = {
+export const RAIL_ICON: Readonly<Record<RailItemId | 'team' | 'billing' | 'settings' | 'more' | 'toggle' | 'commission', string>> = {
   messages: 'M3.5 4.5h10v7.5H8l-3 2.5v-2.5H3.5z M13.5 7.5h3v7H15v2l-2.6-2H9.5v-2.5',
   commission: 'M4 4.5h9.5l2.5 2.5v8.5H4z M7 9h6M7 12h4 M13.5 4.5V7H16',
   compose: 'M3.5 5.5h5v9h-5z M11.5 5.5h5v9h-5z M8.5 10h3',
@@ -80,7 +101,6 @@ export const RAIL_ICON: Readonly<Record<RailItemId | 'team' | 'billing' | 'setti
   team: 'M2.5 16.5v-1.5a5.5 5.5 0 0 1 11 0v1.5M5 6.5a3 3 0 1 0 6 0 3 3 0 1 0-6 0M16 11v5M13.5 13.5h5',
   billing: 'M4.5 4.5h11v12l-2-1.3-1.75 1.3-1.75-1.3-1.75 1.3-1.75-1.3-2 1.3z M7.5 8.5h5M7.5 11.5h3.5',
   settings: 'M4 5.5h12M4 10h12M4 14.5h12M7.5 3.5v4M12.5 8v4M8.5 12.5v4',
-  create: 'M10 4.5v11M4.5 10h11',
   more: 'M4.5 10h.1M10 10h.1M15.5 10h.1',
   toggle: 'M3.5 4h13v12h-13z M8 4v12 M11.5 8l2 2-2 2',
 };
@@ -105,6 +125,8 @@ export interface RailVisibility {
 /**
  * Default order (§3): 이미지 스튜디오 · 영상 스튜디오 · (사운드 스튜디오) · 편집 스튜디오 · 워크플로우 · 캠페인 · 크리에이터 · 에셋.
  * With rooms (묶음 E, docs/BRAND-PROJECTS-E.md): 이미지 스튜디오 · 영상 스튜디오 · 편집 스튜디오 · 워크플로우 · 에셋 | 프로젝트 · 알림함.
+ * The wide rail draws 워크플로우 under its divider (`railTiers`); this list, the saved order and the phone
+ * bar keep it where it always was.
  * A project-only org (`studioShowroom` without `studio`) has the same order; it opens on 야기 팀과 (rail-mode.ts).
  */
 export function railItems(visible: RailVisibility): RailItemId[] {
@@ -217,6 +239,34 @@ export function dropItem(items: readonly RailItemId[], source: RailItemId, targe
   return next;
 }
 
+/**
+ * `list` after moving `id` by one place among the rows of its own band. The other band's rows keep their
+ * places in the list, so the saved order stays one flat list. Unchanged at either end of the band.
+ */
+export function moveInTier(list: readonly RailItemId[], id: RailItemId, direction: -1 | 1): RailItemId[] {
+  const tier = railTier(id);
+  const moved = moveItem(
+    list.filter((item) => railTier(item) === tier),
+    id,
+    direction,
+  );
+  let at = 0;
+  return list.map((item) => (railTier(item) === tier ? moved[at++]! : item));
+}
+
+/** `list` after dropping `source` where `target` is; null when they sit on different sides of the divider. */
+export function dropInTier(list: readonly RailItemId[], source: RailItemId, target: RailItemId): RailItemId[] | null {
+  const tier = railTier(source);
+  if (tier !== railTier(target)) return null;
+  const dropped = dropItem(
+    list.filter((item) => railTier(item) === tier),
+    source,
+    target,
+  );
+  let at = 0;
+  return list.map((item) => (railTier(item) === tier ? dropped[at++]! : item));
+}
+
 /* ------------------------------------------------------------- groups (project rooms) */
 
 export interface RailGroups {
@@ -241,18 +291,22 @@ export function groupItems(items: readonly RailItemId[], order: readonly string[
   };
 }
 
-/** The whole saved order after moving `id` by one place within its group. Unchanged at the group's ends. */
+/**
+ * The whole saved order after moving `id` by one place within its group, among the rows of its own band
+ * (above or under the divider). Unchanged at the band's ends.
+ */
 export function moveInGroup(groups: RailGroups, id: RailItemId, direction: -1 | 1): RailItemId[] {
   const group = RAIL_GROUP[id];
-  const moved = moveItem(groups[group], id, direction);
+  const moved = moveInTier(groups[group], id, direction);
   return group === 'make' ? [...moved, ...groups.team] : [...groups.make, ...moved];
 }
 
-/** The whole saved order after dropping `source` on `target`; null when they sit in different groups. */
+/** The whole saved order after dropping `source` on `target`; null when they sit in different groups or bands. */
 export function dropInGroup(groups: RailGroups, source: RailItemId, target: RailItemId): RailItemId[] | null {
   const group = RAIL_GROUP[source];
   if (group !== RAIL_GROUP[target]) return null;
-  const dropped = dropItem(groups[group], source, target);
+  const dropped = dropInTier(groups[group], source, target);
+  if (!dropped) return null;
   return group === 'make' ? [...dropped, ...groups.team] : [...groups.make, ...dropped];
 }
 
@@ -264,9 +318,10 @@ export interface RailCreateLink {
 }
 
 /**
- * The "+" menu. Without rooms: 이미지 만들기 · 영상 만들기 · 참고 영상으로 만들기 · 편집 스튜디오 · 캠페인 의뢰. With rooms the
+ * The phone sheet's shortcuts (the wide rail has had no "+" button since 2026-11-25: its rows are the way
+ * in). Without rooms: 이미지 만들기 · 영상 만들기 · 참고 영상으로 만들기 · 편집 스튜디오 · 캠페인 의뢰. With rooms the
  * request is what the brand hands to the YAGI team, so it leaves the list and becomes the last entry,
- * 야기 팀에 의뢰하기 (`commission`), which the menu shows under a divider.
+ * 야기 팀에 의뢰하기 (`commission`).
  */
 export function railCreateLinks(rooms: boolean, studio = true): RailCreateLink[] {
   const make: RailCreateLink[] = studio

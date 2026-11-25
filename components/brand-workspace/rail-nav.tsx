@@ -52,11 +52,11 @@ import {
   RAIL_ICON,
   RAIL_STORAGE_KEY,
   dropInGroup,
-  dropItem,
+  dropInTier,
   groupItems,
   groupedTabIds,
   moveInGroup,
-  moveItem,
+  moveInTier,
   orderItems,
   parseOrder,
   parseRailState,
@@ -65,6 +65,9 @@ import {
   railEditorRoute,
   railItems,
   railShownExpanded,
+  railShownOrder,
+  railTier,
+  railTiers,
   type RailCreateKey,
   type RailItemId,
 } from './rail-model';
@@ -84,7 +87,7 @@ export interface RailNavigationProps {
   team: boolean;
   billing?: boolean;
   settings: boolean;
-  /** Owners and editors: the "+" create button and its menu. */
+  /** Owners and editors: the phone sheet's shortcuts. (The wide rail has no "+" button: its rows are the way in.) */
   canCreate: boolean;
   copy: StudioShellCopy;
   locale: 'ko' | 'en';
@@ -93,8 +96,8 @@ export interface RailNavigationProps {
   scope: (path: string) => string;
   /**
    * Project rooms are open for this brand (docs/BRAND-ROOMS.md §2): the rail has two modes, 직접 만들기 and
-   * 야기 팀과 (rail-mode.ts), with a switch when the brand has both; 알림함 appears with its unread badge, and
-   * 야기 팀과 gets 새 프로젝트 의뢰. Needs `roomsCopy`; without both the rail is exactly the ungrouped one.
+   * 야기 팀과 (rail-mode.ts), with a switch when the brand has both; 알림함 appears with its unread badge.
+   * Needs `roomsCopy`; without both the rail is exactly the ungrouped one.
    */
   rooms?: boolean;
   roomsCopy?: RoomsShellCopy['nav'];
@@ -193,15 +196,11 @@ export function RailNavigation(props: RailNavigationProps) {
   const [reordering, setReordering] = useState(false);
   const [dragged, setDragged] = useState<RailItemId | null>(null);
   const [dragOver, setDragOver] = useState<RailItemId | null>(null);
-  const [createAt, setCreateAt] = useState<{ top: number; left: number } | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [tip, setTip] = useState<Tip | null>(null);
-  const createButton = useRef<HTMLButtonElement>(null);
-  const createMenu = useRef<HTMLDivElement>(null);
   const reorderDone = useRef<HTMLButtonElement>(null);
   const moreButton = useRef<HTMLButtonElement>(null);
   const sheet = useRef<HTMLDivElement>(null);
-  const menuId = useId();
   const sheetId = useId();
   const sheetTitleId = useId();
   const modeButtons = useRef<Partial<Record<RailMode, HTMLButtonElement | null>>>({});
@@ -351,34 +350,7 @@ export function RailNavigation(props: RailNavigationProps) {
     if (expanded) setTip(null);
   }, [expanded]);
 
-  /* ---------------------------------------------------------- create menu */
-  const openCreate = () => {
-    const rect = createButton.current?.getBoundingClientRect();
-    if (!rect) return;
-    setTip(null);
-    setCreateAt({ top: Math.max(12, Math.min(rect.top - 8, window.innerHeight - 280)), left: rect.right + 12 });
-  };
-  const closeCreate = useCallback((returnFocus: boolean) => {
-    setCreateAt(null);
-    if (returnFocus) createButton.current?.focus();
-  }, []);
-  useEffect(() => {
-    if (!createAt) return;
-    createMenu.current?.querySelector<HTMLElement>('a')?.focus();
-    const away = (event: PointerEvent) => {
-      const target = event.target as Node | null;
-      if (target && (createMenu.current?.contains(target) || createButton.current?.contains(target))) return;
-      closeCreate(false);
-    };
-    const resize = () => closeCreate(false);
-    document.addEventListener('pointerdown', away);
-    window.addEventListener('resize', resize);
-    return () => {
-      document.removeEventListener('pointerdown', away);
-      window.removeEventListener('resize', resize);
-    };
-  }, [createAt, closeCreate]);
-
+  /* ---------------------------------------------------------- phone sheet shortcuts */
   const createText: Record<RailCreateKey, string> = {
     image: copy.create.image,
     video: copy.create.video,
@@ -388,8 +360,7 @@ export function RailNavigation(props: RailNavigationProps) {
     commission: nav?.commission ?? '',
   };
   const allCreateLinks = railCreateLinks(nav !== null, studio).map((link) => ({ ...link, text: createText[link.key] }));
-  // With rooms the request sits below a divider as 새 프로젝트 의뢰 (unless studio is closed, where it is the sole entry).
-  // In a mode, "+" belongs to 직접 만들기 and 새 프로젝트 의뢰 to 야기 팀과: neither shows on the other side.
+  // In a mode, the making shortcuts belong to 직접 만들기 and 새 프로젝트 의뢰 to 야기 팀과: neither shows on the other side.
   const createLinks = mode === 'team' ? [] : allCreateLinks.filter((link) => link.key !== 'commission');
   const commissionLink = mode === 'make' ? null : (allCreateLinks.find((link) => link.key === 'commission') ?? null);
 
@@ -423,12 +394,7 @@ export function RailNavigation(props: RailNavigationProps) {
   };
 
   const navKeys = (event: KeyboardEvent<HTMLElement>) => {
-    if (event.key !== 'Escape') return;
-    if (tip) setTip(null);
-    if (createAt) {
-      event.stopPropagation();
-      closeCreate(true);
-    }
+    if (event.key === 'Escape' && tip) setTip(null);
   };
 
   /* ---------------------------------------------------------- drag (exists in every mode) */
@@ -449,16 +415,13 @@ export function RailNavigation(props: RailNavigationProps) {
     const source = dragged ?? (Object.keys(RAIL_HREF) as RailItemId[]).find((id) => RAIL_HREF[id] === href) ?? null;
     setDragged(null);
     if (!source || source === target) return;
-    if (groups) {
-      // A drop on the other group is no move at all: items stay in their own group.
-      const next = dropInGroup(groups, source, target);
-      if (next) saveOrder(next);
-      return;
-    }
-    saveOrder(dropItem(items, source, target));
+    // A drop on the other group, or across the divider, is no move at all: a row stays where it belongs.
+    const next = groups ? dropInGroup(groups, source, target) : dropInTier(items, source, target);
+    if (next) saveOrder(next);
   };
-  const move = (id: RailItemId, direction: -1 | 1) => saveOrder(groups ? moveInGroup(groups, id, direction) : moveItem(items, id, direction));
-  const canDropOn = (id: RailItemId) => Boolean(dragged && dragged !== id && (!groups || RAIL_GROUP[dragged] === RAIL_GROUP[id]));
+  const move = (id: RailItemId, direction: -1 | 1) => saveOrder(groups ? moveInGroup(groups, id, direction) : moveInTier(items, id, direction));
+  const canDropOn = (id: RailItemId) =>
+    Boolean(dragged && dragged !== id && railTier(dragged) === railTier(id) && (!groups || RAIL_GROUP[dragged] === RAIL_GROUP[id]));
 
   const utilities: Array<{ key: 'team' | 'billing' | 'settings'; href: string; shown: boolean }> = [
     { key: 'team', href: '/brand/members', shown: props.team },
@@ -523,8 +486,13 @@ export function RailNavigation(props: RailNavigationProps) {
       ].slice(0, 4);
   const sheetIds = items.filter((id) => !tabIds.includes(id));
 
-  // In a mode, the arrows move an item among its own group; 에셋 listed on 야기 팀과 stays where it is there.
-  const ownList = (id: RailItemId): readonly RailItemId[] => (groups && mode ? groups[RAIL_GROUP[id]] : items);
+  // The wide rail's two bands: the working screens, then (under a thin divider) what is opened now and then.
+  // The phone bar and sheet above keep the one list. 야기 팀과 has no lower band.
+  const bands = railTiers(items);
+  // The arrows move a row among its own group's rows on its own side of the divider; 에셋 listed on 야기 팀과
+  // stays where it is there.
+  const ownList = (id: RailItemId): readonly RailItemId[] =>
+    (groups && mode ? groups[RAIL_GROUP[id]] : items).filter((other) => railTier(other) === railTier(id));
   const row = (id: RailItemId) => {
     const list = ownList(id);
     const index = list.indexOf(id);
@@ -532,7 +500,8 @@ export function RailNavigation(props: RailNavigationProps) {
     return (
     <li key={id} className="bw-rail-row" data-drag-over={dragOver === id ? 'true' : undefined}>
       {itemLink(id)}
-      {reordering && expanded && !guest ? (
+      {/* A row alone in its band (워크플로우 under the divider, for now) has nowhere to go: no arrows. */}
+      {reordering && expanded && !guest && list.length > 1 ? (
         <span className="bw-rail-move" role="group" aria-label={label(id)}>
           <button
             type="button"
@@ -581,7 +550,6 @@ export function RailNavigation(props: RailNavigationProps) {
     if (next === mode) return;
     setTip(null);
     setReordering(false);
-    setCreateAt(null);
     writeMode(organizationId, next);
     setModeMemory((memory) => parseRailModeCookie(rememberRailMode(memory, organizationId, next)));
     // The page's content may depend on the mode too (the home): its root carries the marker.
@@ -591,7 +559,9 @@ export function RailNavigation(props: RailNavigationProps) {
     } catch {
       // no document: nothing to refresh
     }
-    const effect = railModeSwitchEffect({ path, next, items: railModeItems(groups, next), hrefOf: (id) => scope(RAIL_HREF[id]), pageFollowsMode });
+    // The side's first page is its rail's first row: rows above the divider come before the ones under it,
+    // whatever an older saved order put first.
+    const effect = railModeSwitchEffect({ path, next, items: railShownOrder(railModeItems(groups, next)), hrefOf: (id) => scope(RAIL_HREF[id]), pageFollowsMode });
     // Same page, new content: the server tree is fetched again with the cookie just written. The rail and
     // the switch stay mounted, so focus stays where it is.
     if (effect.kind === 'refresh') router.refresh();
@@ -701,8 +671,17 @@ export function RailNavigation(props: RailNavigationProps) {
           </ul>
         ) : null}
         <ul className="bw-rail-list" data-rail-group="primary">
-          {items.map((id) => row(id))}
+          {bands.main.map((id) => row(id))}
         </ul>
+        {bands.lower.length > 0 ? (
+          <>
+            {/* A plain rule between two lists: read as a separator, never a stop for Tab. */}
+            {bands.main.length > 0 || props.home ? <hr className="bw-rail-divider" data-rail-divider /> : null}
+            <ul className="bw-rail-list" data-rail-group="lower">
+              {bands.lower.map((id) => row(id))}
+            </ul>
+          </>
+        ) : null}
 
         {/* 순서 편집 starts in the workspace menu (or, with no menu, from this row); while it is on, this row ends it. */}
         {expanded && items.length > 1 && (reordering || !props.workspace) ? (
@@ -725,39 +704,6 @@ export function RailNavigation(props: RailNavigationProps) {
                 {copy.rail.reorderReset}
               </button>
             ) : null}
-          </div>
-        ) : null}
-
-        {canCreate && mode === 'team' && commissionLink ? (
-          <div className="bw-rail-create" data-rail-create="team">
-            <a
-              href={scope(commissionLink.href)}
-              className="bw-rail-create-button"
-              data-rail-create-link={commissionLink.key}
-              data-rail-tip={commissionLink.text}
-            >
-              <span className="bw-rail-create-mark" aria-hidden="true">
-                <Icon d={RAIL_ICON.create} />
-              </span>
-              <span className="bw-rail-label">{commissionLink.text}</span>
-            </a>
-          </div>
-        ) : canCreate && (createLinks.length > 0 || commissionLink) ? (
-          <div className="bw-rail-create" data-rail-create>
-            <button
-              ref={createButton}
-              type="button"
-              className="bw-rail-create-button"
-              aria-expanded={createAt !== null}
-              aria-controls={createAt ? menuId : undefined}
-              data-rail-tip={copy.create.button}
-              onClick={() => (createAt ? closeCreate(false) : openCreate())}
-            >
-              <span className="bw-rail-create-mark" aria-hidden="true">
-                <Icon d={RAIL_ICON.create} />
-              </span>
-              <span className="bw-rail-label">{copy.create.button}</span>
-            </button>
           </div>
         ) : null}
 
@@ -824,48 +770,6 @@ export function RailNavigation(props: RailNavigationProps) {
           {copy.rail.collapse}
         </span>
       </button>
-
-      {createAt ? (
-        <div
-          ref={createMenu}
-          id={menuId}
-          className="bw-rail-create-menu"
-          data-rail-create-menu
-          role="group"
-          aria-label={copy.create.menu}
-          style={{ top: createAt.top, left: createAt.left }}
-          onKeyDown={(event) => {
-            if (event.key === 'Escape') {
-              event.stopPropagation();
-              closeCreate(true);
-            }
-          }}
-          onBlur={(event) => {
-            // Keyboard focus left the menu (Tab past the last link): fold it.
-            const next = event.relatedTarget as Node | null;
-            if (next && !event.currentTarget.contains(next) && next !== createButton.current) closeCreate(false);
-          }}
-        >
-          <p className="bw-rail-create-title" aria-hidden="true">
-            {copy.create.menu}
-          </p>
-          {createLinks.map((link) => (
-            <a key={link.key} href={scope(link.href)} data-rail-create-link={link.key}>
-              <Icon d={link.icon} />
-              <span>{link.text}</span>
-            </a>
-          ))}
-          {commissionLink ? (
-            <>
-              {createLinks.length > 0 ? <hr className="bw-rail-create-divider" /> : null}
-              <a href={scope(commissionLink.href)} data-rail-create-link={commissionLink.key}>
-                <Icon d={commissionLink.icon} />
-                <span>{commissionLink.text}</span>
-              </a>
-            </>
-          ) : null}
-        </div>
-      ) : null}
 
       <div className="bw-rail-tabs" data-rail-tabs>
         <ul>

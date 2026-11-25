@@ -146,10 +146,15 @@ describe('RailNavigation with the workspace block', () => {
     expect(attr(toggle(rail({ initialExpanded: false })), 'title')).toBeNull();
   });
 
-  it('draws "+" with the outlined mark, never the old filled disc', () => {
-    const html = rail({ workspace });
-    expect(html).toContain('bw-rail-create-mark');
-    expect(html).not.toContain('bw-rail-create-disc');
+  it('draws no "+" at all (2026-11-25): no button, mark, old disc or menu, with or without create rights', () => {
+    for (const canCreate of [true, false]) {
+      for (const initialExpanded of [true, false]) {
+        const html = rail({ workspace, canCreate, initialExpanded });
+        const at = `canCreate ${canCreate} expanded ${initialExpanded}`;
+        expect(html, at).not.toContain('data-rail-create');
+        for (const name of ['bw-rail-create-button', 'bw-rail-create-mark', 'bw-rail-create-disc', 'bw-rail-create-menu']) expect(html, `${at} ${name}`).not.toContain(name);
+      }
+    }
   });
 
   it('makes the credits line a link to the scoped 플랜 및 청구 for a role with billing', () => {

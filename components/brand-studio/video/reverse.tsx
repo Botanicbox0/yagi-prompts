@@ -90,7 +90,7 @@ export function ReversePanel({ organizationId, locale, copy, video: t, initialOp
   const [uploading, setUploading] = useState<"video" | ChangeSlot | null>(null);
   const press = useRef<{ fingerprint: string; id: string } | null>(null);
 
-  // Opened from anywhere on the page: the start card, the explainer, the rail's "+" menu, the dock.
+  // Opened from anywhere on the page: the prompt bar with a video in it, a result's "reuse this setting".
   useEffect(() => {
     const onOpen = (event: Event) => {
       const detail = (event as CustomEvent<unknown>).detail;

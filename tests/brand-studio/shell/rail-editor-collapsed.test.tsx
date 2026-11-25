@@ -99,8 +99,9 @@ describe('the first render (the server markup)', () => {
       expect(attr(toggle, 'data-rail-tip'), path).toBe(shell.rail.expand);
       // The folded credits line carries its tooltip, as on any folded rail.
       expect(attr(tagWith(html, 'data-rail-credits'), 'data-rail-tip'), path).not.toBeNull();
-      // Nothing else of the rail changes: the same items, the same order.
-      expect([...html.matchAll(/data-rail-item="([^"]+)"/g)].map((m) => m[1])).toEqual(['image', 'video', 'compose', 'workflows', 'campaigns', 'assets']);
+      // Nothing else of the rail changes: the same items, the same order (워크플로우 under the divider since 2026-11-25).
+      expect([...html.matchAll(/data-rail-item="([^"]+)"/g)].map((m) => m[1])).toEqual(['image', 'video', 'compose', 'campaigns', 'assets', 'workflows']);
+      expect(html).toContain('data-rail-divider');
     }
   });
 
