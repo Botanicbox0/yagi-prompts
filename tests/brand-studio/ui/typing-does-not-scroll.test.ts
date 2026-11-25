@@ -40,10 +40,22 @@ describe('typing in the prompt bar does not scroll the page', () => {
     const margins = all.filter((rule) => /scroll-margin-bottom\s*:[^;]*--bs-dock-h/.test(rule.body));
     expect(margins.length).toBeGreaterThan(0);
     for (const rule of margins) {
-      expect(rule.selector).toMatch(/\.bs-wall/);
-      // Not the bar, its field, or anything unscoped (a bare `*` would bring the loop back for sticky parts).
-      expect(rule.selector).not.toMatch(/\.bs-dock|\.bs-prompt|data-studio-dock\]\s*\*/);
-      expect(rule.selector).not.toMatch(/^(html[^ ]*\s+)?\*$/);
+      for (const selector of rule.selector.split(',').map((part) => part.trim())) {
+        // Only what scrolls under the bar: the wall's content and the video guide's.
+        expect(selector).toMatch(/^(\.bs-wall|\[data-video-guide\])\s/);
+        // Not the bar, its field, or anything unscoped (a bare `*` would bring the loop back for sticky parts).
+        expect(selector).not.toMatch(/\.bs-dock|\.bs-prompt|data-studio-dock/);
+      }
     }
+  });
+
+  it('keeps the one sticky thing inside the wall above the margin, so focusing it never scrolls', () => {
+    // `.bs-selection` is sticky inside the wall and so carries the margin too. It can only meet it while it
+    // sits higher above the window's bottom than the margin asks (bar height + 24).
+    const margin = all.find((rule) => /scroll-margin-bottom\s*:[^;]*--bs-dock-h/.test(rule.body))!;
+    const marginPx = Number(/--bs-dock-h, 0px\) \+ (\d+)px/.exec(margin.body)![1]);
+    const selection = all.find((rule) => rule.selector === '.bs-selection' && /position:\s*sticky/.test(rule.body))!;
+    const bottomPx = Number(/bottom:\s*calc\(var\(--bs-dock-h, 0px\) \+ (\d+)px\)/.exec(selection.body)![1]);
+    expect(bottomPx).toBeGreaterThan(marginPx);
   });
 });
