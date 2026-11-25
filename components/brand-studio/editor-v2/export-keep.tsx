@@ -6,7 +6,7 @@ import { exportSaveFailureLine, openExportReview, saveExportedFilm } from '@/com
 import { ShareReviewDialog, useShareReviewEvent, type ShareReviewTarget } from '@/components/brand-studio/share-review-dialog';
 import type { StudioAssetView } from '@/lib/brand-studio/contracts';
 import type { StudioComposeCopy } from '@/messages/studio-compose';
-import { exportJobSnapshot, exportedFile, type ExportJob } from './export-job';
+import { exportJobSnapshot, exportedBrandProjectId, exportedFile, type ExportJob } from './export-job';
 import styles from './editor-v2.module.css';
 
 /**
@@ -46,6 +46,8 @@ export interface KeepOptions {
   copy: ExportKeepCopy;
   /** Told about the new asset once it is saved (the editor lists it among its clips). */
   onSaved?: (asset: StudioAssetView) => void;
+  /** Optional brand project captured when the export started (H2). */
+  brandProjectId?: string | null;
 }
 
 type KeepState = { phase: 'saving' } | { phase: 'saved'; assetId: string; line: string | null } | { phase: 'failed'; code: string; line: string };
@@ -87,7 +89,12 @@ export async function keepExport(of: ExportJob, options: KeepOptions, action: 's
   const file = exportedFile(of);
   if (!file) return;
   put(of, { phase: 'saving' });
-  const saved = await saveExportedFilm(createStudioApi({ organizationId: options.organizationId }), file);
+  const studioApi = createStudioApi({ organizationId: options.organizationId });
+  const brandProjectId = options.brandProjectId ?? exportedBrandProjectId(of);
+  const uploadClient = brandProjectId
+    ? { upload: (f: Parameters<typeof studioApi.upload>[0], opts: Parameters<typeof studioApi.upload>[1] = {}) => studioApi.upload(f, { ...opts, brandProjectId }) }
+    : studioApi;
+  const saved = await saveExportedFilm(uploadClient, file);
   if (!saved.ok) {
     const { copy } = options;
     put(of, { phase: 'failed', code: saved.code ?? 'failed', line: saved.code === 'file_too_large' ? copy.fileTooLarge : exportSaveFailureLine(copy.status, saved.code) });

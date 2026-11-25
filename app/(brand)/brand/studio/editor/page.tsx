@@ -1,11 +1,13 @@
 import { notFound } from 'next/navigation';
 import { EditorV2 } from '@/components/brand-studio/editor-v2/editor-v2';
+import { ProjectSpineProvider } from '@/components/brand-studio/project-chip';
 import { studioUploadErrorLine } from '@/components/brand-studio/copy';
 import { studioRouteContext } from '@/components/brand-studio/route-context';
 import { exportAutoDownload, exportPathOverride } from '@/lib/brand-studio/editor-v2/decode-plan';
 import { EDITOR_WORKSPACES, type EditorWorkspace } from '@/lib/brand-studio/editor-v2/model';
 import { EDITOR_ASSET_LIMIT, assetRecordOf, editorSources } from '@/lib/brand-studio/editor-v2/sources';
 import { createStudioMediaStore } from '@/lib/brand-studio/media-store';
+import { loadStudioSpine } from '@/lib/brand-studio/open-project-server';
 import { assetView, assetsOf, jobsOf, viewsOf } from '@/lib/brand-studio/repo';
 import { scopedHref } from '@/lib/brands/workspace/selection';
 import { brandStudioEditorV2DefaultFor, brandStudioEditorV2Open, brandWorkspacePrototypeLayerOpen } from '@/lib/flags';
@@ -36,7 +38,7 @@ const first = (value: string | string[] | undefined) => (Array.isArray(value) ? 
 export default async function StudioEditorV2Page({
   searchParams,
 }: {
-  searchParams: Promise<{ organizationId?: string | string[]; sample?: string | string[]; ws?: string | string[]; exportPath?: string | string[]; exportDownload?: string | string[] }>;
+  searchParams: Promise<{ organizationId?: string | string[]; sample?: string | string[]; ws?: string | string[]; exportPath?: string | string[]; exportDownload?: string | string[]; project?: string | string[] }>;
 }) {
   const params = await searchParams;
   const ctx = await studioRouteContext(params.organizationId);
@@ -65,7 +67,17 @@ export default async function StudioEditorV2Page({
 
   const { deps } = ctx;
   const media = createStudioMediaStore();
-  const [rawAssets, rawJobs] = await Promise.all([assetsOf(deps.sql, choice.id, 200), jobsOf(deps.sql, choice.id, 60)]);
+  const [rawAssets, rawJobs, spine] = await Promise.all([
+    assetsOf(deps.sql, choice.id, 200),
+    jobsOf(deps.sql, choice.id, 60),
+    loadStudioSpine({
+      sql: deps.sql,
+      viewer: ctx.viewer,
+      organizationId: choice.id,
+      seat: { staff: access.staff, role: choice.role },
+      queryProject: params.project,
+    }),
+  ]);
   const assets = rawAssets.filter((asset) => asset.kind === 'video').map((asset) => assetView(asset, media));
   const jobs = await viewsOf(deps.sql, rawJobs, media);
   const videoOutputs = jobs.flatMap((job) =>
@@ -87,7 +99,7 @@ export default async function StudioEditorV2Page({
     locale: ctx.locale,
   };
 
-  return (
+  const editor = (
     <EditorV2
       copy={dict.studioEditor}
       currentEditorHref={currentEditorHref}
@@ -106,6 +118,15 @@ export default async function StudioEditorV2Page({
         gradeNames: { presets: dict.studioCompose.colorGrade.presets, reference: dict.studioCompose.colorGrade.activeRef },
       }}
       keep={keep}
+      {...(spine ? { spine } : {})}
     />
+  );
+
+  return spine ? (
+    <ProjectSpineProvider organizationId={choice.id} locale={ctx.locale} copy={dict.projectSpine} initial={spine}>
+      {editor}
+    </ProjectSpineProvider>
+  ) : (
+    editor
   );
 }

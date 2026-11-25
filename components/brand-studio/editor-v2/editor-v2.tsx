@@ -2,10 +2,12 @@
 
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { fill } from '@/components/brand-studio/copy';
+import { ProjectChip, ProjectGoneNotice, useProjectSpine } from '@/components/brand-studio/project-chip';
 import type { ExportPathOverride } from '@/lib/brand-studio/editor-v2/decode-plan';
 import { EDITOR_WORKSPACES, type EditorWorkspace } from '@/lib/brand-studio/editor-v2/model';
 import { filmHasSpeedTheOldEditorChanges } from '@/lib/brand-studio/editor-v2/stored';
 import { actionFor, bindingFromEvent, formatBinding, typingTarget } from '@/lib/brand-studio/editor-v2/shortcuts';
+import { brandProjectIdOf, type StudioSpineProps } from '@/lib/brand-studio/open-project';
 import type { StudioEditorCopy } from '@/messages/studio-editor';
 import { Assistant } from './assistant';
 import { ExportShareHost, shareWindowOpen, type ExportKeepCopy } from './export-keep';
@@ -33,6 +35,8 @@ export interface EditorV2Props {
    * window's language (export-keep.tsx). The page passes them for the organization's own film only.
    */
   keep?: { copy: ExportKeepCopy; locale: 'ko' | 'en' } | null;
+  /** Brand project spine prop (real film only, present when `BRAND_PROJECT_SPINE` is open for a member). */
+  spine?: StudioSpineProps | null;
 }
 
 /**
@@ -46,7 +50,11 @@ export interface EditorV2Props {
  * the cuts back (V1). Only cutting is real there; colour, sound and captions are locked and say so.
  * Without it, it runs the sample film and keeps everything in memory.
  */
-export function EditorV2({ copy, currentEditorHref, initialWorkspace, exportPath = null, autoDownload = true, real, keep = null }: EditorV2Props) {
+export function EditorV2({ copy, currentEditorHref, initialWorkspace, exportPath = null, autoDownload = true, real, keep = null, spine = null }: EditorV2Props) {
+  const spineCtx = useProjectSpine();
+  const spineOpen = real ? (spineCtx?.open ?? spine?.open ?? undefined) : undefined;
+  const spineActive = Boolean(spineOpen);
+  const openBrandProjectId = spineOpen ? brandProjectIdOf(spineOpen) : undefined;
   const api = useEditor(copy, { real, initialWorkspace });
   // "에셋에 저장" and "검수 · 공유" are for people who may change the organization's own film; the review share
   // window is titled by the film's name, as the header shows it. Anyone else gets neither, nor the window's host.
@@ -98,6 +106,7 @@ export function EditorV2({ copy, currentEditorHref, initialWorkspace, exportPath
           {real ? (
             <>
               <h1>{fill(copy.real.filmName, { name: real.organizationName })}</h1>
+              {spineActive ? <ProjectChip /> : null}
               {api.readOnly ? (
                 <HeaderNotice state="read-only" full={copy.real.readOnly} short={copy.real.readOnlyShort} />
               ) : api.storageOk ? (
@@ -159,6 +168,7 @@ export function EditorV2({ copy, currentEditorHref, initialWorkspace, exportPath
           </button>
         </div>
       </header>
+      {spineActive ? <ProjectGoneNotice /> : null}
 
       <Materials api={api} />
       <Preview api={api} />
@@ -181,7 +191,15 @@ export function EditorV2({ copy, currentEditorHref, initialWorkspace, exportPath
           </button>
         </div>
       )}
-      {api.exportOpen && <ExportSheet api={api} exportPath={exportPath} autoDownload={autoDownload} keep={exportKeep} />}
+      {api.exportOpen && (
+        <ExportSheet
+          api={api}
+          exportPath={exportPath}
+          autoDownload={autoDownload}
+          keep={exportKeep}
+          {...(openBrandProjectId ? { brandProjectId: openBrandProjectId } : {})}
+        />
+      )}
       {real && keep && exportKeep && <ExportShareHost organizationId={real.organizationId} locale={keep.locale} />}
       {api.shortcutsOpen && <ShortcutsPanel api={api} />}
       {api.toast && <p className={styles.toast} role="status" data-editor-toast>{api.toast}</p>}

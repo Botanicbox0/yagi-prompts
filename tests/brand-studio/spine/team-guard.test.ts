@@ -121,7 +121,7 @@ const FILES: Record<string, Use[]> = {
     ['from brand_projects p where', 'c', 'loadBrandWorkspaceChoices, the staff branch: project -> organization map'],
     ['from brand_projects p join brand_organizations o', 'c', 'loadStudioWorkspace (staff): every project'],
     ['select id from brand_projects where organization_id=$1 and created_by=$2 and request_id=$3', 'e', 'a team request replayed by its own key; self rows use namespaced derived keys'],
-    ['select count(*)::int as n from brand_projects where organization_id=$1', 'e', "a team request's daily budget: shared with self projects on purpose (§4.5), the brand's own limit, nothing reaches the team side"],
+    ['select count(*)::int as n from brand_projects p where organization_id=$1', 'c', "a team request's daily budget (20): team projects only; the brand's own projects have their own count (§4.5, lib/brand-studio/brand-projects.ts)"],
     ['insert into brand_projects(', 'e', "inserts a team request (origin defaults to 'team')"],
     ['update brand_projects set intake_brief', 'e', 'the row just inserted in the same call'],
     ['update brand_projects set client_visible=false where id=$1', 'e', 'the row just inserted (a staff-made team project)'],

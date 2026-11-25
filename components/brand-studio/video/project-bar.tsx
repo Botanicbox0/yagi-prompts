@@ -4,8 +4,103 @@ import { useEffect, useRef, useState, type FocusEvent } from "react";
 import { fill as interpolate } from "@/components/brand-studio/copy";
 import type { VideoProjectStatus, VideoProjectSummary } from "@/lib/brand-studio/video-projects";
 import type { StudioVideoCopy } from "@/messages/studio-video";
+import type { ProjectSpineCopy } from "../project-chip";
 import type { SequenceRailHeight } from "./sequence-rail";
 import w from "./video-workspace.module.css";
+
+/**
+ * While the brand project spine is open (§4.5), `VideoProjectBar` switches its noun from "프로젝트"/"project"
+ * to "편집본"/"edit" using the parallel `film*` keys in `projectSpine`, leaving all other strings unchanged.
+ */
+export function filmBarCopy(
+  base: StudioVideoCopy["workspace"]["projects"],
+  spineCopy: ProjectSpineCopy,
+): StudioVideoCopy["workspace"]["projects"] {
+  return {
+    ...base,
+    myProjects: spineCopy.filmMyProjects,
+    newProject: spineCopy.filmNewProject,
+    untitled: spineCopy.filmUntitled,
+    renameLabel: spineCopy.filmRenameLabel,
+    renamePlaceholder: spineCopy.filmRenamePlaceholder,
+    completeProject: spineCopy.filmCompleteProject,
+    reopenProject: spineCopy.filmReopenProject,
+    deleteProject: spineCopy.filmDeleteProject,
+    sendToProject: spineCopy.filmSendToProject,
+    sendToProjectPick: spineCopy.filmSendToProjectPick,
+    sentToProject: spineCopy.filmSentToProject,
+    emptyList: spineCopy.filmEmptyList,
+    projectCompletedNotice: spineCopy.filmCompletedNotice,
+  };
+}
+
+export interface VideoProjectMenuProps {
+  canEdit: boolean;
+  projectId: string | null;
+  projects: VideoProjectSummary[];
+  copy: StudioVideoCopy["workspace"]["projects"];
+  onSelectProject(projectId: string): void;
+  onStartNewProject(): void;
+  onDeleteProject(): void;
+}
+
+export function VideoProjectMenu({
+  canEdit,
+  projectId,
+  projects,
+  copy,
+  onSelectProject,
+  onStartNewProject,
+  onDeleteProject,
+}: VideoProjectMenuProps) {
+  return (
+    <div className={w.projectMenu} role="menu" data-video-project-menu>
+      <div className={w.projectMenuHead}>
+        <span>{copy.myProjects}</span>
+        {canEdit && (
+          <button type="button" className={w.projectNewBtn} onClick={onStartNewProject} data-video-project-new>
+            {copy.newProject}
+          </button>
+        )}
+      </div>
+
+      {projects.length === 0 ? (
+        <p className={w.projectEmptyNote}>{copy.emptyList}</p>
+      ) : (
+        <ul className={w.projectList}>
+          {projects.map((p) => {
+            const active = p.id === projectId;
+            return (
+              <li key={p.id}>
+                <button
+                  type="button"
+                  className={w.projectItemBtn}
+                  data-active={active ? "" : undefined}
+                  onClick={() => onSelectProject(p.id)}
+                  data-video-project-option={p.id}
+                >
+                  <span className={w.projectItemTitle}>{p.title}</span>
+                  <span className={w.projectItemMeta}>
+                    {p.status === "completed" ? `${copy.completedBadge} · ` : ""}
+                    {interpolate(copy.meta, { clips: p.clipCount, seconds: p.durationSec })}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      {canEdit && projectId && (
+        <div className={w.projectMenuFoot}>
+          <button type="button" className={w.projectFootBtn} onClick={onDeleteProject} data-video-project-delete>
+            {copy.deleteProject}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export interface VideoProjectBarProps {
   canEdit: boolean;
@@ -139,70 +234,24 @@ export function VideoProjectBar({
           </button>
 
           {menuOpen && (
-            <div className={w.projectMenu} role="menu" data-video-project-menu>
-              <div className={w.projectMenuHead}>
-                <span>{copy.myProjects}</span>
-                {canEdit && (
-                  <button
-                    type="button"
-                    className={w.projectNewBtn}
-                    onClick={() => {
-                      setMenuOpen(false);
-                      onStartNewProject();
-                    }}
-                    data-video-project-new
-                  >
-                    {copy.newProject}
-                  </button>
-                )}
-              </div>
-
-              {projects.length === 0 ? (
-                <p className={w.projectEmptyNote}>{copy.emptyList}</p>
-              ) : (
-                <ul className={w.projectList}>
-                  {projects.map((p) => {
-                    const active = p.id === projectId;
-                    return (
-                      <li key={p.id}>
-                        <button
-                          type="button"
-                          className={w.projectItemBtn}
-                          data-active={active ? "" : undefined}
-                          onClick={() => {
-                            setMenuOpen(false);
-                            onSelectProject(p.id);
-                          }}
-                          data-video-project-option={p.id}
-                        >
-                          <span className={w.projectItemTitle}>{p.title}</span>
-                          <span className={w.projectItemMeta}>
-                            {p.status === "completed" ? `${copy.completedBadge} · ` : ""}
-                            {interpolate(copy.meta, { clips: p.clipCount, seconds: p.durationSec })}
-                          </span>
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-
-              {canEdit && projectId && (
-                <div className={w.projectMenuFoot}>
-                  <button
-                    type="button"
-                    className={w.projectFootBtn}
-                    onClick={() => {
-                      setMenuOpen(false);
-                      onDeleteProject();
-                    }}
-                    data-video-project-delete
-                  >
-                    {copy.deleteProject}
-                  </button>
-                </div>
-              )}
-            </div>
+            <VideoProjectMenu
+              canEdit={canEdit}
+              projectId={projectId}
+              projects={projects}
+              copy={copy}
+              onSelectProject={(id) => {
+                setMenuOpen(false);
+                onSelectProject(id);
+              }}
+              onStartNewProject={() => {
+                setMenuOpen(false);
+                onStartNewProject();
+              }}
+              onDeleteProject={() => {
+                setMenuOpen(false);
+                onDeleteProject();
+              }}
+            />
           )}
         </div>
 

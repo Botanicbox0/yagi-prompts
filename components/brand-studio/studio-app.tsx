@@ -10,6 +10,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom";
 import { extractClipboardImages, isEditableTextTarget, prepareClipboardUploadFiles } from "@/lib/brand-studio/clipboard-image";
 import type { StudioAssetView, StudioJobView, StudioOutputView, StudioState } from "@/lib/brand-studio/contracts";
+import { brandProjectIdOf, type StudioSpineProps } from "@/lib/brand-studio/open-project";
 import { REGION_V2_MODEL, regionV2Models, type StudioMedium } from "@/lib/brand-studio/models";
 import type { BillingPlanCatalogueItem } from "@/lib/brands/billing-ui";
 import type { BrandBillingCopy } from "@/messages/brand-billing";
@@ -33,6 +34,7 @@ import { libraryKey, type LayerEditorProps, type LayerEditorRegionPreset } from 
 import { fillSourcesToDelete, findOutput, listedJobs } from "./store";
 import { designedSentence, useDock } from "./use-dock";
 import { useStudio } from "./use-studio";
+import { MoveToProjectDialog, useProjectSpine } from "./project-chip";
 import { ImageProjectBar } from "./video/project-bar";
 import { sourceOf, useViewer } from "./use-viewer";
 import { Viewer, canRerun, itemKey, type ViewerItem } from "./viewer";
@@ -67,6 +69,8 @@ export interface StudioAppProps {
   projectsCopy?: Dictionary["studioVideo"]["workspace"]["projects"];
   /** Server-loaded state; without it the screen loads its own on mount. */
   initialState?: StudioState | null;
+  /** Brand project spine prop (present only when `BRAND_PROJECT_SPINE` is open for this org and viewer is a member). */
+  spine?: StudioSpineProps | null;
   /** Tests inject a client; the screen otherwise talks to `/api/brand-studio`. */
   api?: StudioApi;
 }
@@ -206,10 +210,20 @@ export function recentPictures(jobs: readonly StudioJobView[], assets: readonly 
   return out;
 }
 
-export function StudioApp({ organizationId, organizationName, locale, copy, billingCopy, planCatalogue, mode, libraryCopy, layersCopy, videoCopy, projectsCopy, initialState = null, api }: StudioAppProps) {
+export function StudioApp({ organizationId, organizationName, locale, copy, billingCopy, planCatalogue, mode, libraryCopy, layersCopy, videoCopy, projectsCopy, initialState = null, spine = null, api }: StudioAppProps) {
+  const spineCtx = useProjectSpine();
+  const spineOpen = spineCtx?.open ?? spine?.open ?? undefined;
+  const spineActive = Boolean(spineOpen);
   // The project new pictures go into. Null (no project) is the default and an ordinary state.
   const [projectChoice, setProjectChoice] = useState<string | null>(null);
-  const studio = useStudio({ organizationId, initialState, api, projectId: mode === "image" ? projectChoice : null });
+  const [moveRequest, setMoveRequest] = useState<{ jobIds: string[]; opener: HTMLElement | null } | null>(null);
+  const studio = useStudio({
+    organizationId,
+    initialState,
+    api,
+    projectId: mode === "image" && !spineActive ? projectChoice : null,
+    ...(spineOpen ? { spineOpen, onProjectGone: spineCtx?.markProjectGone } : {}),
+  });
   const dock = useDock({
     studio,
     copy,
@@ -218,6 +232,7 @@ export function StudioApp({ organizationId, organizationName, locale, copy, bill
     mode,
     // The workspace home's hand-off (prefill.ts): only where this member has an open prompt bar.
     prefill: { ready: Boolean(studio.store.state), canCreate: Boolean(studio.store.state?.canCreate) && (studio.store.state?.allowance.capKrw ?? 0) > 0 },
+    ...(spineActive ? { brandProjectId: brandProjectIdOf(spineOpen) } : {}),
   });
   const library = useStudioLibrary(organizationId);
   const state = studio.store.state;
@@ -239,13 +254,14 @@ export function StudioApp({ organizationId, organizationName, locale, copy, bill
   }, [allAssets, setTray]);
   const canCreate = state?.canCreate ?? false;
   // Present only while runs can belong to a project (flag on, migration applied) and on the image screen.
-  const projects = mode === "image" && projectsCopy ? state?.projects : undefined;
+  // Suppressed while the brand project spine is active (the header chip replaces the old bar).
+  const projects = mode === "image" && projectsCopy && !spineActive ? state?.projects : undefined;
   const activeProject = projects?.find((project) => project.id === projectChoice) ?? null;
   useEffect(() => {
-    if (mode !== "image") return;
+    if (mode !== "image" || spineActive) return;
     const fromUrl = new URLSearchParams(window.location.search).get("project");
     if (fromUrl) setProjectChoice(fromUrl);
-  }, [mode]);
+  }, [mode, spineActive]);
   useEffect(() => {
     // A project that was deleted elsewhere (or a stale link) quietly falls back to no project.
     if (projects && projectChoice && !projects.some((project) => project.id === projectChoice)) setProjectChoice(null);
@@ -583,7 +599,10 @@ export function StudioApp({ organizationId, organizationName, locale, copy, bill
           const problem = uploadProblem(file);
           if (problem) return say(studioUploadErrorLine(copy, problem));
           const result = await studio.upload(file);
-          if (isFailure(result)) return say(studioUploadErrorLine(copy, result.code, result.reason));
+          if (isFailure(result)) {
+            if ((result as { projectGone?: boolean }).projectGone) return;
+            return say(studioUploadErrorLine(copy, result.code, result.reason));
+          }
           if (attach) dock.attach(trayItemFromAsset(result.asset));
         }),
       );
@@ -622,8 +641,13 @@ export function StudioApp({ organizationId, organizationName, locale, copy, bill
           continue;
         }
         const result = await studio.upload(file);
-        if (isFailure(result)) setStatus(studioUploadErrorLine(copy, result.code, result.reason));
-        else added.push(trayItemFromAsset(result.asset));
+        if (isFailure(result)) {
+          if (!(result as { projectGone?: boolean }).projectGone) {
+            setStatus(studioUploadErrorLine(copy, result.code, result.reason));
+          }
+        } else {
+          added.push(trayItemFromAsset(result.asset));
+        }
       }
       return added;
     },
@@ -885,6 +909,7 @@ export function StudioApp({ organizationId, organizationName, locale, copy, bill
             onCancel={(job) => void cancel(job)}
             canRemove={canCreate && Boolean(state.canRemoveRuns)}
             onRemove={(job) => studio.deleteJob(job.id).then((result) => setStatus(isFailure(result) ? copy.gallery.removeFailedError : null))}
+            {...(spineActive && spineCtx?.canCreate ? { onMoveJobs: (ids: string[], opener?: HTMLElement | null) => setMoveRequest({ jobIds: ids, opener: opener ?? null }) } : {})}
             onNotice={setStatus}
             empty={empty}
           />
@@ -1077,6 +1102,9 @@ export function StudioApp({ organizationId, organizationName, locale, copy, bill
                         const file = await dataUrlToPngFile(editorState.base.url, "blank-canvas.png");
                         const uploaded = await studio.upload(file);
                         if (isFailure(uploaded)) {
+                          if ((uploaded as { projectGone?: boolean }).projectGone) {
+                            return { ok: false, message: "" };
+                          }
                           return { ok: false, message: studioUploadErrorLine(copy, uploaded.code, uploaded.reason) };
                         }
                         blankUploadedAssetRef.current[effectiveSource.assetId] = uploaded.asset.id;
@@ -1103,10 +1131,14 @@ export function StudioApp({ organizationId, organizationName, locale, copy, bill
                       ...(regionV2 ? { v2: true } : {}),
                     });
                     const result = await studio.createJob(body);
-                    const line = isFailure(result) ? errorLine(copy, result.code, state?.allowance.window, state?.allowance.refill) : null;
+                    const projectGone = isFailure(result) && Boolean((result as { projectGone?: boolean }).projectGone);
+                    const line =
+                      isFailure(result) && !projectGone
+                        ? errorLine(copy, result.code, state?.allowance.window, state?.allowance.refill)
+                        : null;
                     if (!internal) onRegionSending({ done: key, line });
                     if (isFailure(result)) {
-                      return { ok: false, message: line ?? errorLine(copy, "failed") };
+                      return { ok: false, message: projectGone ? "" : (line ?? errorLine(copy, "failed")) };
                     }
                     return { ok: true, job: result.job };
                   },
@@ -1149,6 +1181,22 @@ export function StudioApp({ organizationId, organizationName, locale, copy, bill
           }}
           onClose={() => setEditorState(null)}
           copy={layersCopy}
+        />
+      )}
+      {moveRequest && spineCtx && (
+        <MoveToProjectDialog
+          projects={spineCtx.projects}
+          currentScope={spineCtx.open}
+          jobIds={moveRequest.jobIds}
+          locale={locale}
+          copy={spineCtx.copy}
+          returnFocus={() => moveRequest.opener}
+          onMove={studio.moveToBrandProject}
+          onMoved={({ toast, removedJobIds }) => {
+            if (removedJobIds.length) studio.removeJobs(removedJobIds);
+            setStatus(toast);
+          }}
+          onClose={() => setMoveRequest(null)}
         />
       )}
     </div>

@@ -167,7 +167,7 @@
 
 작성 시점 `origin/main`의 가장 높은 번호는 `0193`이다(`0192_core_format_revision` · `0193_glue_format_revision`). 구현 PR을 열기 직전에 다시 확인한다.
 
-**조각 1: `0194_core_brand_project_spine.sql` + `0195_glue_brand_project_spine.sql`: 클라우드 적용 필요**
+**조각 1: `0194_core_brand_project_spine.sql` + `0195_glue_brand_project_spine.sql`: 2026-11-25 운영 적용 완료(PR #373, 원장은 `supabase/README.md` "운영 적용 이력")**
 
 ```sql
 -- core 0194 (요지)
@@ -201,7 +201,7 @@ alter table brand_studio_video_projects  add column if not exists brand_project_
 
 - **보이는 곳:** 네 스튜디오의 머리말, 제목 바로 옆의 칩 하나(시안 05, 14). 홈의 입력창에는 "저장 위치" 칩으로 같은 것이 보인다. 지금은 스튜디오마다 머리말이 따로라(`components/brand-studio/v2-page.tsx:71-75`, `app/(brand)/brand/studio/video/page.tsx:91-121`, `sound/sound-studio.tsx:458`, `editor-v2/editor-v2.tsx:95`) 칩 컴포넌트 하나를 네 곳에 건다. `ImageProjectBar`·`VideoProjectBar`(`components/brand-studio/video/project-bar.tsx`)는 스위치가 켜지면 그리지 않는다.
 - **주소:** `?project=<brand_projects.id>`가 그 화면의 기준이다. 영상 스튜디오에서는 지금 `?project=`가 편집본 id라서 `?film=<id>`로 옮기고, 옛 주소는 편집본 id로 읽히면 `film`으로 바꿔 준다.
-- **기억:** 쿠키 `twings_brand_project`(조직별 맵, `twings_brand_mode`와 같은 모양)에 마지막으로 고른 값을 둔다. 주소에 없으면 쿠키를 읽어 서버가 처음부터 맞는 칩을 그린다. "미분류"를 고른 것도 값으로 기억한다(그래야 직전 프로젝트로 되돌아가지 않는다). 브라우저·조직 단위다.
+- **기억:** 쿠키 `twings_brand_project`(조직별 맵, `twings_brand_mode`와 같은 모양)에 마지막으로 고른 값을 둔다. 주소에 없으면 쿠키를 읽어 서버가 처음부터 맞는 칩을 그린다. "미분류"를 고른 것도 값으로 기억한다(그래야 직전 프로젝트로 되돌아가지 않는다). 브라우저·조직 단위다. 주소(`?project=`)로 연 프로젝트도 그 순간 기억한다(조각 1b에서 정함): 공유받은 링크로 들어온 뒤 레일로 다른 스튜디오에 가도 같은 프로젝트가 유지된다. 없어진 프로젝트를 가리키는 주소는 기억을 건드리지 않는다.
 - 기억한 프로젝트가 보관·삭제됐으면 미분류로 돌아가고 한 줄로 알린다.
 
 ### 4.2 새 결과가 들어가는 곳
@@ -238,7 +238,7 @@ alter table brand_studio_video_projects  add column if not exists brand_project_
 | 6 이상 | 같음 | 위에 검색, 최근 6개, 홈으로 가는 "전체 보기" 링크 |
 
 - 야기 팀 프로젝트는 보조 줄에 "야기 팀과"가 붙는다.
-- 새 프로젝트는 이름만 받는다(1–120자). `origin='self'`, `status='active'`, `client_visible=false`로 만들고 바로 고른다. 넣는 함수는 따로 두되(§3.4) 지금의 조직당 하루 20개 한도(`lib/brands/workspace/service.ts:395-396`, share-bridge가 만든 행도 센다)와 같은 규칙으로 센다.
+- 새 프로젝트는 이름만 받는다(1–120자). `origin='self'`, `status='active'`, `client_visible=false`로 만들고 바로 고른다. 넣는 함수는 따로 두고(§3.4) 하루 한도도 따로 센다. 직접 만든 프로젝트는 조직당 하루 20개를 직접 만든 것(`origin='self'`)끼리만 센다. 야기 팀 의뢰(`createProject`, `lib/brands/workspace/service.ts`)는 지금처럼 조직당 하루 20개지만 야기 팀 프로젝트만 센다(`TEAM_PROJECTS`. share-bridge가 만든 행도 팀 행이라 센다). 한쪽을 다 써도 다른 쪽은 막히지 않는다(`tests/brand-studio/spine/daily-limit.test.ts`).
 
 ## 5. 홈 (직접 만들기): 홈이 곧 프로젝트 목록
 

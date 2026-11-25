@@ -235,10 +235,11 @@ describe('project.create', () => {
     expect(await op(owner(), 'project.create', { organizationId: f.orgId, requestId: 'short', title: 'Spring' })).toEqual({ ok: false, code: 'invalid' });
   });
 
-  it('counts 20 a day over every project row, as a team request does, and refuses the next with the studio’s rate code', async () => {
-    // The fixture already has one team project made today.
-    for (let i = 0; i < 18; i += 1) await selfProject(`P${i}`);
+  it('counts 20 of the brand’s own projects a day, team projects not included, and refuses the next with the studio’s rate code', async () => {
+    // The fixture already has one team project made today; one more here. Neither counts against own projects
+    // (tests/brand-studio/spine/daily-limit.test.ts: each side has its own count).
     await teamProject();
+    for (let i = 0; i < 20; i += 1) await selfProject(`P${i}`);
     const before = await tableCounts();
     expect(await op(owner(), 'project.create', { organizationId: f.orgId, requestId: requestId(), title: 'One too many' })).toEqual({ ok: false, code: 'too_many_running' });
     expect(await tableCounts()).toEqual(before);

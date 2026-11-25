@@ -396,7 +396,8 @@ async function createProject(deps: BrandWorkspaceDeps, viewer: Viewer, input: un
     if(managed) await studio(sql,userId); else await member(sql, userId, v.organizationId, true);
     const existing = (await sql.query<{ id: string }>('select id from brand_projects where organization_id=$1 and created_by=$2 and request_id=$3', [v.organizationId, userId, v.requestId])).rows[0];
     if (existing) return { id: existing.id };
-    const count = (await sql.query<{ n: number }>("select count(*)::int as n from brand_projects where organization_id=$1 and created_at>now()-interval '1 day'", [v.organizationId])).rows[0]!.n;
+    // Team projects only: a brand's own projects (lib/brand-studio/brand-projects.ts) have their own count of 20.
+    const count = (await sql.query<{ n: number }>(`select count(*)::int as n from brand_projects p where organization_id=$1 and created_at>now()-interval '1 day' and ${TEAM_PROJECTS('p')}`, [v.organizationId])).rows[0]!.n;
     if (count >= 20) throw new Denied('rate_limited');
     const id = randomUUID();
     // A wizard brief: the columns follow the validated terms, whatever else the client sent.

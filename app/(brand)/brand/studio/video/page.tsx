@@ -7,7 +7,24 @@ import { StudioShowroom } from "@/components/brand-studio/studio-showroom";
 import { studioShowroomVisible, studioV2Visible } from "@/lib/brand-studio/visibility";
 import { hasProductionContracts } from "@/components/brand-studio/video/contracts-link";
 import { studioEnv } from "@/lib/brand-studio/env";
+import { createStudioMediaStore } from "@/lib/brand-studio/media-store";
+import {
+  resolveVideoPageSpine,
+  resolveVideoStudioAddress,
+  scopeOfOpenProject,
+  searchParamEntries,
+  type StudioSpineProps,
+  type VideoStudioFilmLookup,
+} from "@/lib/brand-studio/open-project";
+import { loadStudioSpine } from "@/lib/brand-studio/open-project-server";
+import { studioRuntimeDeps } from "@/lib/brand-studio/runtime";
+import { loadStudioState } from "@/lib/brand-studio/service";
+import { loadVideoProjects, type VideoProjectDetail, type VideoProjectSummary } from "@/lib/brand-studio/video-projects";
+import type { StudioState } from "@/lib/brand-studio/contracts";
 import { billingPlanCatalogue } from "@/lib/brands/billing-page-data";
+import { ProjectChip, ProjectGoneNotice, ProjectSpineProvider } from "@/components/brand-studio/project-chip";
+// Imported here, not through the client module: a server component cannot read a class map a client module exports.
+import projectChipStyles from "@/components/brand-studio/project-chip/project-chip.module.css";
 import { VideoStudioWorkspace } from "@/components/brand-studio/video/workspace";
 import s from "@/components/brand-studio/video/video.module.css";
 import { scopedHref } from "@/lib/brands/workspace/selection";
@@ -52,6 +69,7 @@ export default async function StudioVideoPage({
     view?: string | string[];
     tab?: string | string[];
     project?: string | string[];
+    film?: string | string[];
   }>;
 }) {
   const params = await searchParams;
@@ -84,12 +102,113 @@ export default async function StudioVideoPage({
   const contracts = await hasProductionContracts(ctx.deps.sql, choice.id);
   const asset = first(params.asset);
   const projectParam = first(params.project);
+  const filmParam = first(params.film);
   const opensEdit = !opensReverse && (first(params.tab) === "edit" || first(params.start) === "edit");
 
-  return (
+  const spine = await loadStudioSpine({
+    sql: ctx.deps.sql,
+    viewer: ctx.viewer,
+    organizationId: choice.id,
+    seat: { staff: access.staff, role: choice.role },
+    queryProject: params.project,
+  });
+
+  let effectiveSpine: StudioSpineProps | null = null;
+  let initialState: StudioState | null | undefined;
+  let initialProjects: VideoProjectSummary[] | undefined;
+  let initialProjectDetail: VideoProjectDetail | null | undefined;
+  let initialProjectId = projectParam && UUID.test(projectParam) ? projectParam : null;
+
+  if (spine) {
+    const media = createStudioMediaStore();
+    let validFilmId = filmParam && UUID.test(filmParam) ? filmParam : null;
+    let filmListFailed = false;
+    let films: VideoProjectSummary[] = [];
+    let openedFilm: VideoProjectDetail | null = null;
+
+    // G1: `loadVideoProjects(..., filmId)` answers `not_found` for the WHOLE call when `filmId` is stale.
+    // Recover by reloading the list without `filmId` and treating the film as absent.
+    try {
+      const firstLoad = await loadVideoProjects({ sql: ctx.deps.sql, media }, ctx.viewer, choice.id, validFilmId);
+      if (firstLoad.ok) {
+        films = firstLoad.projects;
+        openedFilm = firstLoad.project;
+      } else if (validFilmId && firstLoad.code === "not_found") {
+        validFilmId = null;
+        const retryList = await loadVideoProjects({ sql: ctx.deps.sql, media }, ctx.viewer, choice.id, null);
+        if (retryList.ok) {
+          films = retryList.projects;
+        } else {
+          filmListFailed = true;
+        }
+      } else {
+        filmListFailed = true;
+      }
+    } catch {
+      filmListFailed = true;
+    }
+
+    // G2: When `?project=` is a UUID not in `spine.projects` and not in the first-100 `films` list,
+    // ask once for that specific film id so older films still redirect to `?film=<id>`.
+    const trimmedProject = projectParam?.trim() ?? "";
+    const inBrandProjects =
+      Boolean(trimmedProject) && spine.projects.some((p) => p.id.toLowerCase() === trimmedProject.toLowerCase());
+    const inFilmList =
+      Boolean(trimmedProject) && films.some((f) => f.id.toLowerCase() === trimmedProject.toLowerCase());
+    let filmLookup: VideoStudioFilmLookup | undefined;
+    if (!filmListFailed && trimmedProject && UUID.test(trimmedProject) && !inBrandProjects && !inFilmList) {
+      try {
+        const single = await loadVideoProjects({ sql: ctx.deps.sql, media }, ctx.viewer, choice.id, trimmedProject);
+        if (single.ok && single.project) filmLookup = "found";
+        else if (!single.ok && single.code === "not_found") filmLookup = "not_found";
+        else filmLookup = "error";
+      } catch {
+        filmLookup = "error";
+      }
+    }
+
+    // §4.5, G1, G2: disambiguate `?project=` cleanly.
+    const decision = resolveVideoStudioAddress({
+      pathname: "/brand/studio/video",
+      searchParams: searchParamEntries(params),
+      projectIds: spine.projects.map((p) => p.id),
+      filmIds: films.map((f) => f.id),
+      filmLookup,
+      filmListFailed,
+    });
+    if (decision.kind === "redirect_film") {
+      redirect(decision.href);
+      return null;
+    }
+
+    effectiveSpine = resolveVideoPageSpine({
+      spine,
+      decision,
+      openedFilm,
+      hadQueryProject: Boolean(trimmedProject),
+    });
+
+    const loadedState = await loadStudioState(await studioRuntimeDeps(ctx.deps.sql), ctx.viewer, choice.id, {
+      scope: scopeOfOpenProject(effectiveSpine.open),
+    }).catch(() => null);
+    initialState = loadedState && loadedState.ok ? loadedState : null;
+    initialProjects = films;
+    initialProjectDetail = openedFilm;
+    initialProjectId = validFilmId;
+  }
+
+  const title = <h1 className="bs-title">{t.title}</h1>;
+  const page = (
     <div className={`bs-page ${s.page}`} data-brand-studio-v2 data-brand-studio-video>
       <header className={`bs-head ${s.head}`}>
-        <h1 className="bs-title">{t.title}</h1>
+        {effectiveSpine ? (
+          <div className={projectChipStyles.titleGroup}>
+            {title}
+            <ProjectChip />
+          </div>
+        ) : (
+          title
+        )}
         <div className={s.headEnd}>
           {contracts && (
             <a className={s.contracts} href={scopedHref("/brand/studio?tab=formats", choice)} data-studio-video-contracts>
@@ -120,6 +239,7 @@ export default async function StudioVideoPage({
           <div className="bs-head-slot" data-studio-head-slot />
         </div>
       </header>
+      {effectiveSpine ? <ProjectGoneNotice /> : null}
       <VideoStudioWorkspace
         organizationId={choice.id}
         organizationName={choice.name}
@@ -132,9 +252,26 @@ export default async function StudioVideoPage({
         initialTab={opensEdit ? "edit" : "create"}
         initialCreateMode={opensReverse ? "blueprint" : "prompt"}
         initialAssetId={asset && UUID.test(asset) ? asset : null}
-        initialProjectId={projectParam && UUID.test(projectParam) ? projectParam : null}
+        initialProjectId={initialProjectId}
+        {...(effectiveSpine
+          ? {
+              initialState,
+              initialProjects,
+              initialProjectDetail,
+              spine: effectiveSpine,
+              spineCopy: dict.projectSpine,
+            }
+          : {})}
         musicGeneration={studioEnv().musicGeneration === true}
       />
     </div>
+  );
+
+  return effectiveSpine ? (
+    <ProjectSpineProvider organizationId={choice.id} locale={locale} copy={dict.projectSpine} initial={effectiveSpine}>
+      {page}
+    </ProjectSpineProvider>
+  ) : (
+    page
   );
 }

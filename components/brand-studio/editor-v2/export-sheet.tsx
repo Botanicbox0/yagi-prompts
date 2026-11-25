@@ -9,7 +9,7 @@ import { captionsToSrt, type EditorWorkspace } from '@/lib/brand-studio/editor-v
 import { filmContents } from '@/lib/brand-studio/editor-v2/film-contents';
 import type { StoredFilmView } from '@/lib/brand-studio/editor-v2/stored';
 import { browserCanExport, plannedPath, type SourcePath } from './export-film';
-import { cancelExport, exportJobSnapshot, idleExportJob, startExport, subscribeExportJob, watchExportJob, type ExportJob } from './export-job';
+import { cancelExport, exportJobSnapshot, idleExportJob, startExport, subscribeExportJob, watchExportJob, type ExportJob, type ExportRequest } from './export-job';
 import { ExportKeep, type ExportKeepCopy, type KeepOptions } from './export-keep';
 import { FilmContentsList } from './film-contents-list';
 import { EditorIcon } from './icons';
@@ -37,16 +37,26 @@ import styles from './editor-v2.module.css';
  * `keep` (the current editor's words for "에셋에 저장" and "검수 · 공유", and the film's name) gives the done state
  * those two actions (export-keep.tsx), on the organization's own film and for people who may change it only.
  */
+/** J5: Attach `brandProjectId` onto `ExportRequest` only when a brand project is open (exact `main` object without it). */
+export function exportStartRequest(
+  base: Omit<ExportRequest, 'brandProjectId'>,
+  brandProjectId?: string | null,
+): ExportRequest {
+  return brandProjectId ? { ...base, brandProjectId } : base;
+}
+
 export function ExportSheet({
   api,
   exportPath = null,
   autoDownload = true,
   keep = null,
+  brandProjectId,
 }: {
   api: EditorApi;
   exportPath?: ExportPathOverride;
   autoDownload?: boolean;
   keep?: { copy: ExportKeepCopy; title: string } | null;
+  brandProjectId?: string | null;
 }) {
   const { copy, doc, sequence } = api;
   const e = copy.export;
@@ -95,20 +105,25 @@ export function ExportSheet({
     // The stored film as it is the moment export starts, with whatever waited to be saved written first.
     // Its captions are the ones burned in: exactly what is stored, each at its offset into its cut.
     const film = real ? filmForExport() : null;
-    startExport({
-      sequence: film ? film.sequence : sequence,
-      reframe: doc.reframe,
-      // A real film is framed like the current editor's file (and v2's preview of it): no control of its own yet.
-      framing: real ? 'current' : 'reframe',
-      extras: film ? film.film : null,
-      burnCaptions: burnsCaptions(sampleDoc),
-      captionText: writesCaptionFile(sampleDoc, sequence) ? captionsToSrt(sequence.captions, sequence.fps) : null,
-      notify: (outcome) => api.say(outcome === 'done' ? e.toastDone : e.toastFailed),
-      path: exportPath,
-      download: autoDownload,
-      // The organization's own film leaves the current editor's export record; the sample film has none.
-      recordFor: real ? api.organizationId : null,
-    });
+    startExport(
+      exportStartRequest(
+        {
+          sequence: film ? film.sequence : sequence,
+          reframe: doc.reframe,
+          // A real film is framed like the current editor's file (and v2's preview of it): no control of its own yet.
+          framing: real ? 'current' : 'reframe',
+          extras: film ? film.film : null,
+          burnCaptions: burnsCaptions(sampleDoc),
+          captionText: writesCaptionFile(sampleDoc, sequence) ? captionsToSrt(sequence.captions, sequence.fps) : null,
+          notify: (outcome) => api.say(outcome === 'done' ? e.toastDone : e.toastFailed),
+          path: exportPath,
+          download: autoDownload,
+          // The organization's own film leaves the current editor's export record; the sample film has none.
+          recordFor: real ? api.organizationId : null,
+        },
+        brandProjectId,
+      ),
+    );
   };
 
   return (

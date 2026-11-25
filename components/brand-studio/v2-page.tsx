@@ -21,10 +21,17 @@ import { currentSelfie } from "@/lib/identity/selfie-service";
 import { loadProductionWorkspace } from "@/lib/brands/production/service";
 import { studioStage } from "@/lib/brands/production/stage";
 import { scopedHref, type BrandWorkspaceChoice } from "@/lib/brands/workspace/selection";
+import { scopeOfOpenProject } from "@/lib/brand-studio/open-project";
+import { loadStudioSpine } from "@/lib/brand-studio/open-project-server";
+import { studioRuntimeDeps } from "@/lib/brand-studio/runtime";
+import { loadStudioState } from "@/lib/brand-studio/service";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import { billingPlanCatalogue } from "@/lib/brands/billing-page-data";
 import { ContractProduction } from "./contract-production";
 import type { StudioLocale } from "./copy";
+import { ProjectChip, ProjectGoneNotice, ProjectSpineProvider } from "./project-chip";
+// Imported here, not through the client module: a server component cannot read a class map a client module exports.
+import projectChipStyles from "./project-chip/project-chip.module.css";
 import { StudioApp } from "./studio-app";
 
 export type StudioTab = "create" | "formats";
@@ -42,6 +49,7 @@ export interface StudioV2Input {
   brandHost: boolean;
   tab: string | string[] | undefined;
   mode: string | string[] | undefined;
+  project?: string | string[] | undefined;
 }
 
 export async function brandStudioV2(input: StudioV2Input): Promise<ReactElement> {
@@ -66,15 +74,59 @@ export async function brandStudioV2(input: StudioV2Input): Promise<ReactElement>
       </div>
     );
   }
-  return (
+  const spine = await loadStudioSpine({
+    sql: input.deps.sql,
+    viewer: input.viewer,
+    organizationId: choice.id,
+    seat: { staff: input.access.staff, role: choice.role },
+    queryProject: input.project,
+  });
+  const initialState = spine
+    ? await loadStudioState(await studioRuntimeDeps(input.deps.sql), input.viewer, choice.id, {
+        scope: scopeOfOpenProject(spine.open),
+      })
+        .then((loaded) => (loaded.ok ? loaded : null))
+        .catch(() => null)
+    : undefined;
+
+  const title = <h1 className="bs-title">{copy.title}</h1>;
+  const page = (
     <div className="bs-page" data-brand-studio-v2 data-studio-tab="create" data-studio-screen="image">
       <header className="bs-head">
-        <h1 className="bs-title">{copy.title}</h1>
+        {spine ? (
+          <div className={projectChipStyles.titleGroup}>
+            {title}
+            <ProjectChip />
+          </div>
+        ) : (
+          title
+        )}
         {/* The credits line and the phone's library button are placed here by the studio (studio-app.tsx). */}
         <div className="bs-head-slot" data-studio-head-slot />
       </header>
-      <StudioApp organizationId={choice.id} organizationName={choice.name} locale={locale} copy={copy} billingCopy={dict.brandBilling.customer} planCatalogue={billingPlanCatalogue()} mode="image" libraryCopy={dict.studioLibrary} {...(brandStudioProjectsOpen() ? { projectsCopy: dict.studioVideo.workspace.projects } : {})} layersCopy={dict.studioLayers} />
+      {spine ? <ProjectGoneNotice /> : null}
+      <StudioApp
+        organizationId={choice.id}
+        organizationName={choice.name}
+        locale={locale}
+        copy={copy}
+        billingCopy={dict.brandBilling.customer}
+        planCatalogue={billingPlanCatalogue()}
+        mode="image"
+        libraryCopy={dict.studioLibrary}
+        {...(!spine && brandStudioProjectsOpen() ? { projectsCopy: dict.studioVideo.workspace.projects } : {})}
+        layersCopy={dict.studioLayers}
+        {...(spine ? { initialState, spine } : {})}
+      />
     </div>
+  );
+
+  return spine ? (
+    <ProjectSpineProvider organizationId={choice.id} locale={locale} copy={dict.projectSpine} initial={spine}>
+      {page}
+    </ProjectSpineProvider>
+  ) : (
+    page
   );
 }
 
