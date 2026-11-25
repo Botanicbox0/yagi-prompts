@@ -119,6 +119,13 @@ const VideoStep = z.object({
   params: z.object({ aspect: z.enum(VIDEO_ASPECTS), duration: z.number().int(), resolution: z.enum(['720p', '1080p']) }).strict(),
 }).strict();
 const Step = z.discriminatedUnion('kind', [ImageStep, VideoStep]);
+const GuideStep = z.object({
+  title: z.string().trim().min(1).max(120),
+  kind: z.enum(['image', 'video']),
+  meta: z.string().trim().max(80).optional(),
+  prompt: Prompt,
+  note: Note,
+}).strict();
 const Output = z.union([z.object({ from: Name }).strict(), z.object({ frames: z.array(Name).min(1).max(MAX_RECIPE_STEPS) }).strict()]);
 const RecipeShape = z.object({
   version: z.literal(RECIPE_VERSION),
@@ -126,10 +133,12 @@ const RecipeShape = z.object({
   steps: z.array(Step).min(1).max(MAX_RECIPE_STEPS),
   output: Output,
   notes: Notes.optional(),
+  guide: z.array(GuideStep).min(1).max(16).optional(),
 }).strict();
 
 export type RecipeSlot = z.infer<typeof Slot>;
 export type RecipeStep = z.infer<typeof Step>;
+export type RecipeGuideStep = z.infer<typeof GuideStep>;
 export type ImageRecipeStep = z.infer<typeof ImageStep>;
 export type VideoRecipeStep = z.infer<typeof VideoStep>;
 export type Recipe = z.infer<typeof RecipeShape>;
@@ -467,7 +476,7 @@ export function engineStepPrompt(recipe: Recipe, step: RecipeStep): string {
 }
 
 /** The same prompt for a person to read: slots become `[내 사진]`, `[참조 1]`, steps `[1단계 결과]`. */
-export function displayStepPrompt(recipe: Recipe, step: RecipeStep, labels: { selfie: string; reference: string; step: string; pet?: string; partner?: string }): string {
+export function displayStepPrompt(recipe: Recipe, step: { prompt: string }, labels: { selfie: string; reference: string; step: string; pet?: string; partner?: string }): string {
   const creators = creatorSlotNames(recipe);
   return step.prompt.replace(TOKEN, (_match, raw: string) => {
     const name = raw.trim();
@@ -484,7 +493,7 @@ export function displayStepPrompt(recipe: Recipe, step: RecipeStep, labels: { se
 
 /** A recipe the way an import/export file holds it: the schema, nothing else, stable key order. */
 export function exportRecipe(recipe: Recipe): string {
-  return JSON.stringify({ version: recipe.version, slots: recipe.slots, steps: recipe.steps, output: recipe.output, ...(recipe.notes ? { notes: recipe.notes } : {}) }, null, 2);
+  return JSON.stringify({ version: recipe.version, slots: recipe.slots, steps: recipe.steps, output: recipe.output, ...(recipe.notes ? { notes: recipe.notes } : {}), ...(recipe.guide ? { guide: recipe.guide } : {}) }, null, 2);
 }
 
 /** The single-prompt fallback stored in prompt_text (legacy readers), in the catalogue's `@imageN` dialect. */

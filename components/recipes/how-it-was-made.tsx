@@ -71,6 +71,27 @@ function UnlockedRecipeBody({ recipe, copy, compact = false }: { recipe: PublicR
           ))}
         </ol>
       ) : null}
+      {recipe.guide?.length ? (
+        <div data-recipe-guide className="mt-7 border-t border-hairline pt-6">
+          <h3 className="text-sm font-semibold text-black/90">{h.guideHeading}</h3>
+          <p className="mt-1 text-xs leading-relaxed text-black/65">{h.guideLede}</p>
+          <ol className={`${css.list} mt-4`}>
+            {recipe.guide.map((item) => (
+              <li key={item.n} data-recipe-guide-step={item.n} className={css.step}>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-black/90">{item.title}</p>
+                    {item.meta ? <p className="mt-0.5 text-xs text-black/55">{item.meta}</p> : null}
+                  </div>
+                  <CopyPrompt text={item.prompt} label={h.copy} done={h.copied} />
+                </div>
+                <StepPrompt text={item.prompt} fold={compact} copy={h} />
+                {item.note ? <p data-recipe-guide-note className={`${css.note} rounded-xl bg-black/[0.035] px-4 py-3 text-sm leading-relaxed whitespace-pre-line text-black/80`}>{item.note}</p> : null}
+              </li>
+            ))}
+          </ol>
+        </div>
+      ) : null}
       {recipe.files?.length ? (
         <div className="mt-6">
           <p className="text-sm font-semibold">{h.assets}</p>

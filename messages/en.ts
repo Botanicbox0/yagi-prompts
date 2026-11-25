@@ -1451,6 +1451,8 @@ export const en = {
       fileCount: '{n} of {total}',
       expand: 'Show the whole prompt',
       collapse: 'Show less',
+      guideHeading: 'Clip-by-clip breakdown',
+      guideLede: 'Want to render each shot separately instead of one quick take? Copy each prompt in order below.',
       gateTitle: 'Sign up for free to unlock the full recipe',
       gateBody: 'Create a free TWINGS account to view and copy the complete step-by-step prompt, sound guide, and reference files.',
       gateCta: 'Sign up / Sign in to view recipe →',
