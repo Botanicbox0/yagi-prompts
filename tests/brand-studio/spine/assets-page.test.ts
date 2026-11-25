@@ -20,8 +20,8 @@ import {
 } from '@/lib/brand-studio/contracts';
 import { studioEnv } from '@/lib/brand-studio/env';
 import { dispatchMcpJsonRpc, MCP_TOOL_DEFINITIONS } from '@/lib/brand-studio/mcp/server';
-import { assetView, assetsOf } from '@/lib/brand-studio/repo';
-import { loadStudioState, runStudioOperation } from '@/lib/brand-studio/service';
+import { NOT_FILL, VISIBLE_OUTPUT, assetView, assetsOf, jobsByIds, jobsOf, viewsOf } from '@/lib/brand-studio/repo';
+import { loadStudioState, pollStudioJobs, runStudioOperation } from '@/lib/brand-studio/service';
 import type { AssetRow } from '@/lib/brand-studio/types';
 import { loadVideoProjects, runVideoProjectOperation } from '@/lib/brand-studio/video-projects/service';
 import type { SqlRunner } from '@/lib/db/sql-runner';
@@ -544,10 +544,41 @@ describe('who may read: the same answers as project.list', () => {
           expect(crossed, label).toBe(expected === 'ok' ? 'not_found' : expected);
         }
       }
+      // A made-up organization: whatever project.list answers.
+      const madeUp = randomUUID();
+      for (const role of ROLES) {
+        const list = outcome(await op(viewerFor(role), 'project.list', { organizationId: madeUp }));
+        expect(list).toBe(spine === 'open' ? 'not_found' : 'invalid');
+        expect(outcome(await op(viewerFor(role), 'project.overview', { organizationId: madeUp }))).toBe(list);
+        expect(outcome(await op(viewerFor(role), 'project.files', { organizationId: madeUp, scope: { kind: 'unfiled' } }))).toBe(list);
+      }
       // Closed: an unknown operation's answer, before anything is judged.
       if (spine !== 'open') expect(await op(owner(), 'project.overview', { organizationId: f.orgId })).toEqual(await op(owner(), 'no.such.operation', { organizationId: f.orgId }));
     });
   }
+
+  /** Requests the schema refuses: only a seated member may learn that (`invalid`); everyone else gets the seat's answer. */
+  const MALFORMED: Array<Record<string, unknown>> = [
+    {},
+    { scope: { kind: 'everything' } },
+    { scope: { kind: 'unfiled' }, kind: 'photo' },
+    { scope: { kind: 'project', brandProjectId: 'x'.repeat(65) } },
+    { scope: { kind: 'project', brandProjectId: 7 } },
+    { scope: { kind: 'unfiled' }, cursor: '' },
+    { scope: { kind: 'unfiled' }, cursor: 'x'.repeat(BRAND_PROJECT_LIMITS.cursorMax + 1) },
+  ];
+
+  it('malformed requests are judged after the seat: invalid for members, the seat’s answer for everyone else', async () => {
+    open();
+    for (const input of MALFORMED) {
+      const label = JSON.stringify(input).slice(0, 80);
+      for (const role of ['owner', 'editor', 'viewer'] as const) expect(await files(input, viewerOf(f.ids[role])), `${role} ${label}`).toEqual({ ok: false, code: 'invalid' });
+      for (const viewer of [viewerOf(f.ids.guest), viewerOf(f.ids.outsider), staff()]) {
+        expect(await files(input, viewer), label).toEqual({ ok: false, code: 'not_found' });
+        expect(await files(input, viewer), label).toEqual(await op(viewer, 'project.list', { organizationId: f.orgId }));
+      }
+    }
+  });
 
   it('sandboxed and generation-closed organizations: the same 404 as project.list on both reads', async () => {
     openFor('*');
@@ -569,6 +600,7 @@ describe('who may read: the same answers as project.list', () => {
       expect(await op(owner(), 'project.overview', { organizationId: org })).toEqual(list);
       expect(await op(owner(), 'project.files', { organizationId: org, scope: { kind: 'unfiled' } })).toEqual(list);
       expect(await op(owner(), 'project.files', { organizationId: org, scope: { kind: 'project', brandProjectId: randomUUID() } })).toEqual(list);
+      for (const input of MALFORMED) expect(await op(owner(), 'project.files', { organizationId: org, ...input }), JSON.stringify(input).slice(0, 80)).toEqual(list);
     }
   });
 
@@ -597,6 +629,11 @@ describe('who may read: the same answers as project.list', () => {
     expect(importing(/from ['"][^'"]*brand-project-files['"]/)).toEqual(['lib/brand-studio/service.ts']);
     // Library entries get brandProjectId only where the studio's member answers are built.
     expect(importing(/withAssetBrandProjects/)).toEqual(['lib/brand-studio/brand-project-files.ts', 'lib/brand-studio/brand-projects.ts', 'lib/brand-studio/service.ts']);
+    // The spine's own-project-aware pieces stay inside the spine: no team, admin, MCP or workflow file can list or
+    // join a brand's own projects through them (they carry no TEAM_PROJECTS on purpose).
+    for (const name of ['selectableProjects', 'SHOWN_PROJECT_JOIN', 'UNFILED_ROWS', 'spineSeat', 'spineOrganization']) {
+      expect(importing(new RegExp(`\\b${name}\\b`)), name).toEqual(['lib/brand-studio/brand-project-files.ts', 'lib/brand-studio/brand-projects.ts']);
+    }
   });
 });
 
@@ -685,7 +722,49 @@ describe('closed: every answer touched here is byte for byte origin/main’s', (
     return { texts, deps: { ...deps, sql: wrap(f.sql) } };
   };
 
+  it('the shared rules generate origin/main’s text, and a result is shown exactly when the SQL twin says so', async () => {
+    expect(NOT_FILL).toBe("coalesce(params ->> 'purpose', '') <> 'fill'");
+    const recorded = recordingDeps();
+    await jobsOf(recorded.deps.sql, f.orgId);
+    expect(recorded.texts).toContain(
+      "select * from brand_studio_jobs where organization_id = $1 and model <> 'compose-1080p' and coalesce(params ->> 'purpose', '') <> 'fill' and deleted_at is null order by created_at desc, id limit $2",
+    );
+    // One run, results in every state a row can be in.
+    const r = await run('image', f.orgId, 1);
+    const extra = async (idx: number, status: string, key: string | null, deleted: boolean) =>
+      f.sql.query(
+        `insert into brand_studio_outputs (job_id, organization_id, idx, kind, status, storage_key, mime, deleted_at)
+          values ($1, $2, $3, 'image', $4, $5, 'image/png', ${deleted ? 'now()' : 'null'})`,
+        [r.jobId, f.orgId, idx, status, key],
+      );
+    // (A ready result always has a key: table check brand_studio_outputs_ready. An empty key is the edge left.)
+    await extra(1, 'pending', null, false);
+    await extra(2, 'failed', null, false);
+    await extra(4, 'ready', '', false);
+    await extra(5, 'ready', `brand-studio/${randomUUID()}`, true);
+    await extra(6, 'pending', `brand-studio/${randomUUID()}`, false);
+    await extra(7, 'ready', `brand-studio/${randomUUID()}`, false);
+    const [view] = await viewsOf(f.sql, await jobsByIds(f.sql, f.orgId, [r.jobId]), deps.media);
+    const shown = (await f.sql.query<{ idx: number }>(`select o.idx from brand_studio_outputs o where o.job_id = $1 and ${VISIBLE_OUTPUT('o')} order by o.idx`, [r.jobId])).rows.map((row) => Number(row.idx));
+    expect(shown).toEqual([0, 7]);
+    expect(view!.outputs.map((o) => o.id)).toEqual(
+      (await f.sql.query<{ id: string }>('select id from brand_studio_outputs where job_id = $1 and idx = any($2::int[]) order by idx', [r.jobId, shown])).rows.map((row) => row.id),
+    );
+  });
+
   for (const [label, close] of closedStates) {
+    it(`${label}: the poll answers as before`, async () => {
+      openFor('*');
+      const P = await selfProject('Spring');
+      const r = await run('image');
+      await fileIn('brand_studio_jobs', r.jobId, P);
+      await close();
+      const polled = await pollStudioJobs(deps, owner(), f.orgId, [r.jobId]);
+      if (!polled.ok) throw new Error(polled.code);
+      expect(JSON.stringify(polled)).not.toContain('brandProjectId');
+      expect(JSON.stringify(polled.jobs)).toBe(JSON.stringify(await viewsOf(f.sql, await jobsByIds(f.sql, f.orgId, [r.jobId]), deps.media)));
+    });
+
     it(`${label}: the state, the asset answers and the films' list`, async () => {
       openFor('*');
       const P = await selfProject('Spring');

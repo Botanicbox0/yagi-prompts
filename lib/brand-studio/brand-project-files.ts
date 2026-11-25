@@ -129,8 +129,8 @@ export async function loadBrandProjectOverview(deps: StudioDeps, viewer: Viewer,
   const organizationId = parsed.data.organizationId;
   return guarded(() =>
     deps.sql.transaction(async (sql) => {
-      await spineSeat(sql, viewer, organizationId, false);
-      const projects = await selectableProjects(sql, deps.media, organizationId);
+      const seat = await spineSeat(sql, viewer, organizationId, false);
+      const projects = await selectableProjects(sql, deps.media, seat);
       const live = await liveRunsFilter(sql, 'j');
       const covers = BRAND_PROJECT_LIMITS.overviewCovers;
       // Results by shown project and kind (indexes: idx_brand_studio_jobs_org, brand_studio_outputs_slot (job_id, idx)).
@@ -266,15 +266,21 @@ function decodeCursor(raw: string): PageKey | null {
 
 type Scope = { project: string } | { unfiled: true } | { materials: true };
 
-/** `project.files`. The scope is judged after the seat, by the scoped state read's own rule (`stateScopeFilter`). */
+/**
+ * `project.files`. Only the organization is read before the seat (as `project.list`); everything else in the request
+ * (scope, kind, cursor) is judged after it, the scope by the scoped state read's own rule (`stateScopeFilter`), so
+ * nobody who is not seated learns anything from how their input is answered.
+ */
 export async function loadBrandProjectFiles(deps: StudioDeps, viewer: Viewer, raw: unknown): Promise<StudioBrandProjectFiles | StudioFailure> {
-  const parsed = BrandProjectFilesSchema.safeParse(raw);
-  if (!parsed.success) return failure('invalid');
-  const v = parsed.data;
+  const named = BrandProjectOverviewSchema.safeParse(raw);
+  if (!named.success) return failure('invalid');
+  const organizationId = named.data.organizationId;
   return guarded(() =>
     deps.sql.transaction(async (sql) => {
-      const seat = await spineSeat(sql, viewer, v.organizationId, false);
-      const organizationId = v.organizationId;
+      const seat = await spineSeat(sql, viewer, organizationId, false);
+      const parsed = BrandProjectFilesSchema.safeParse(raw);
+      if (!parsed.success) throw new StudioDenied('invalid');
+      const v = parsed.data;
       let scope: Scope;
       if (v.scope.kind === 'brand_materials') scope = { materials: true };
       else {

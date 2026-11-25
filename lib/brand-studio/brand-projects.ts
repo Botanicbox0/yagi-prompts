@@ -380,12 +380,14 @@ export async function runBrandProjectOperation(deps: StudioDeps, viewer: Viewer,
 
 /**
  * The projects new work can be filed in, most recent activity first, at most `listMax`: what `project.list` answers
- * (the assets page's overview lists the very same, ./brand-project-files.ts). The caller has seated the member.
+ * (the assets page's overview lists the very same, ./brand-project-files.ts). It takes the member's seat from
+ * `spineSeat`, not an organization id, so it cannot be called for an organization nobody seated; its importers are
+ * pinned to the spine files (tests/brand-studio/spine/assets-page.test.ts).
  */
-export async function selectableProjects(sql: SqlRunner, media: StudioMediaStore, organizationId: string): Promise<StudioBrandProject[]> {
+export async function selectableProjects(sql: SqlRunner, media: StudioMediaStore, seat: StudioSeat): Promise<StudioBrandProject[]> {
   const rows = (
     await sql.query<ProjectRow>(`${projectsQuery(`p.organization_id = $1 and ${SELECTABLE_PROJECTS('p')}`)} order by last_activity_at desc, p.id desc limit $2`, [
-      organizationId,
+      seat.organizationId,
       BRAND_PROJECT_LIMITS.listMax,
     ])
   ).rows;
@@ -399,8 +401,8 @@ export async function listBrandProjects(deps: StudioDeps, viewer: Viewer, raw: u
   const v = parsed.data;
   return guarded(() =>
     deps.sql.transaction(async (sql) => {
-      await spineSeat(sql, viewer, v.organizationId, false);
-      return { ok: true as const, projects: await selectableProjects(sql, deps.media, v.organizationId) };
+      const seat = await spineSeat(sql, viewer, v.organizationId, false);
+      return { ok: true as const, projects: await selectableProjects(sql, deps.media, seat) };
     }),
   );
 }

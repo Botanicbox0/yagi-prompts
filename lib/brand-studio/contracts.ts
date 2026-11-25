@@ -766,8 +766,9 @@ export const BrandProjectOverviewSchema = z.object({ organizationId: Id });
 export type BrandProjectOverviewInput = z.input<typeof BrandProjectOverviewSchema>;
 
 /**
- * `project.files`: one scope, optionally one kind, newest first; `cursor` is the previous page's `next`. The
- * project id is judged after the seat (malformed: `invalid`; not selectable: `not_found`), as the scoped state read does.
+ * `project.files`: one scope, optionally one kind, newest first; `cursor` is the previous page's `next`. Everything
+ * but `organizationId` is judged after the seat (malformed: `invalid`; a project that is not selectable:
+ * `not_found`), as the scoped state read does, so a caller who is not seated gets the seat's answer whatever they sent.
  */
 export const BrandProjectFilesSchema = z.object({
   organizationId: Id,
