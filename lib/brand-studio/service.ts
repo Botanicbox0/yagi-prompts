@@ -94,7 +94,8 @@ const SELF_STUDIO_OPS: ReadonlySet<StudioOperation> = new Set([
 /**
  * The 직접 만들기 home's project cards for a server page (`project.cards`, ./brand-project-files.ts): what
  * `POST /api/brand-studio` answers the same caller, the route's own flag gate included (studio v2 off: `studio_closed`;
- * spine closed for the organization: `invalid`). Sign-in is the seat's (`sign_in_required`).
+ * spine closed for the organization: `invalid`). Sign-in is the seat's (`sign_in_required`). `env` reaches the studio
+ * switch only; the spine's own switch is read from the process environment, as the POST route reads it.
  */
 export async function loadProjectCards(deps: StudioDeps, viewer: Viewer, organizationId: string, env: NodeJS.ProcessEnv = process.env): Promise<StudioBrandProjectCards | StudioFailure> {
   if (!brandStudioV2Open(env)) return failure('studio_closed');

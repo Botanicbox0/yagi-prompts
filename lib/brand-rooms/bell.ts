@@ -1,6 +1,8 @@
 /**
- * The bell of 직접 만들기 (docs/BRAND-PROJECT-SPINE.md §5.1, §8.1 "알림 종", §8.4, §11-5; slice 3a): one unread number
- * for the bell and the rail's 알림함 row, and the bell's small list. Read only: nothing here marks, sends or queues.
+ * The bell of 직접 만들기 (docs/BRAND-PROJECT-SPINE.md §5.1, §8.1 "알림 종", §8.4, §11-5; slice 3a): the bell's number
+ * and its small list. Read only: nothing here marks, sends or queues. Whether the rail's 알림함 row in 직접 만들기 shows
+ * this number or the summary's `unread` (today's message badge) is still to be decided (slice 3a contract); both come in
+ * the same answer.
  *
  * It is not a second count. It is built from the rooms summary the 알림함 page already reads (`loadRoomSummary`,
  * ./messages.ts), for the same person in the same transaction, from exactly the items that page draws: its alert cards
@@ -79,7 +81,7 @@ export interface RoomBellItem {
 }
 
 export interface RoomBell {
-  /** The one number for the bell and the rail's 알림함 row: the counted lines (alerts + conversations with unread messages). */
+  /** The bell's number: the counted lines (alerts + conversations with unread messages). Not the summary's message `unread`. */
   unread: number;
   /** At most `ROOM_BELL_LIMITS.items`, newest first (by `at`, then `id`). */
   items: RoomBellItem[];
