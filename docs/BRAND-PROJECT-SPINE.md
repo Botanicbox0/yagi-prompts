@@ -53,7 +53,7 @@
 | 무엇 | 사실 | 근거 |
 | --- | --- | --- |
 | 야기 팀 프로젝트 | `brand_projects`. 의뢰서 성격: `title` 3–120자, `objective` 3–2000자 필수, `production_mode in ('creator','studio')` 필수, `status in ('requested','active','completed','cancelled')`. 이후 `client_visible`, `cover_attachment_id`, `campaign_terms`, `shortlist_criteria`, `intake_brief`가 붙었다. 종류를 가르는 `kind`·`origin` 열은 없다 | `supabase/migrations/0027_core_brand_workspace.sql:23-35`, `0031:3`, `0034:42`, `0056:22`, `0068:27`, `0085:35` |
-| 그 표를 가리키는 것 | 외래 키 29곳(대화 `brand_room_messages`, 스토리보드, 검수 `brand_studio_reviews.project_id`, 공유 링크 `brand_room_shares`, 알림 `brand_room_notices`, 납품본, 캠페인·정산·사용권 등). `lib/`와 `app/`의 33개 파일이 SQL로 읽는다 | `0027`–`0094`의 `references brand_projects`, `lib/brand-rooms/*`, `lib/brands/workspace/service.ts` |
+| 그 표를 가리키는 것 | 외래 키 29곳(대화 `brand_room_messages`, 스토리보드, 검수 `brand_studio_reviews.project_id`, 공유 링크 `brand_room_shares`, 알림 `brand_room_notices`, 납품본, 캠페인·정산·사용권 등). `lib/`와 `app/`의 약 35개 파일이 이 표를 다룬다 | `0027`–`0094`의 `references brand_projects`, `lib/brand-rooms/*`, `lib/brands/workspace/service.ts` |
 | 영상 프로젝트 | `brand_studio_video_projects`. `title` 1–120자, `status in ('active','completed','archived')`, `aspect`, `timeline` jsonb(편집 타임라인 `ComposerProject`). 가리키는 외래 키는 `brand_studio_jobs.project_id` 하나 | `0087_core_brand_studio_projects_workflows_mcp.sql:15-35`, `0091_core_brand_studio_job_project.sql`, `lib/brand-studio/compose/timeline.ts:174-187` |
 | 실행의 프로젝트 | `brand_studio_jobs.project_id`(nullable, 영상 프로젝트를 가리킴). `BRAND_STUDIO_PROJECTS=on`이고 열이 있을 때만 쓴다(기본 off). 이미지 스튜디오는 `?project=`로 고르고, 영상 스튜디오는 실행에 프로젝트를 보내지 않는다. 사운드 실행도 넣지 않는다 | `lib/flags.ts:265-274`, `lib/brand-studio/job-projects.ts`, `components/brand-studio/studio-app.tsx:244-258`, `components/brand-studio/video/workspace.tsx:219`, `lib/brand-studio/sound/music-jobs.ts:385-387` |
 | 한 덩어리로 옮기기 | 실행과 거기서 나온 것(새 버전, 1080p 마무리, 부분 수정)은 한 가족으로 같이 움직인다(`job.assign_project`의 재귀 쿼리). 새 실행은 원본 실행의 프로젝트를 물려받는다 | `lib/brand-studio/job-projects.ts:67-145` |
@@ -65,8 +65,9 @@
 | 에셋 화면 | 탭 `projects|all|uploads|generated|folders|liked|deliverables`. "프로젝트"는 타임라인에 놓인 파일, 검수 파일, 납품본에서 읽어 묶은 것이다(열이 없어서) | `components/brand-studio/asset-hub-model.ts:9,335-412`, `lib/brand-studio/asset-projects.ts` |
 | 홈 | 이름 → 입력창 → "바로 확인할 작업물"·"야기 팀과" 줄 → 시작 가이드 → 최근 작업물 벽(최대 12, 오디오 제외). 소식을 띄우는 자리는 없다 | `components/brand-workspace/home/home-view.tsx`, `lib/brands/workspace/home.ts:134-163` |
 | 대화 | `brand_room_messages`. 방은 따로 없고 `channel`이 `'general'`(프로젝트 없음) 또는 프로젝트 id 문자열이다. 답글은 한 단계. `mentions uuid[]`. `ref_key`는 `storyboard:`·`review:`만 허용하고, `ref`가 있으면 프로젝트가 있어야 한다 | `0082_core_brand_room_messages.sql:44-76`, `lib/brand-rooms/messages.ts:794` |
-| 누가 대화를 보나 | 조직의 활성 멤버 + 그 프로젝트의 손님(`brand_project_members`). 야기 팀은 관리자 화면에서 `client_visible` 프로젝트의 채널을 `channel = p.id::text`로 읽는다. 멘션 후보는 멤버와 손님이고 "@야기 팀"은 팀 알림으로 간다 | `lib/brand-rooms/access.ts:140-176`, `lib/brand-rooms/messages.ts:590-609,1618-1737` |
-| 읽음 | `brand_room_reads`: 사람·채널마다 `last_read_at` 하나(메시지별이 아님) | `0082:113-122` |
+| 누가 대화를 보나 | 조직의 활성 멤버 + 그 프로젝트의 손님(`brand_project_members`). 야기 팀은 관리자 화면에서 `client_visible` 프로젝트의 채널을 읽는다: 대부분 `channel = p.id::text`로 찾지만, 대화 목록의 두 번째 조회는 채널을 가리지 않고 `channel`로 묶는다. 멤버가 글을 쓰면 매번 야기 팀 알림이 대기열에 들어간다. 멘션 후보는 멤버와 손님이고 "@야기 팀"은 팀 알림으로 간다 | `lib/brand-rooms/access.ts:140-176`, `lib/brand-rooms/messages.ts:590-609,1195-1203,1618-1657,1724-1737` |
+| 읽음 | `brand_room_reads`: 사람·채널마다 `last_read_at` 하나(메시지별이 아님). 이 표의 `channel`도 `'general'`이나 uuid 문자열만 허용한다(`brand_room_reads_channel`) | `0082:113-122` |
+| 채널 값을 믿는 코드 | 채널 문자열을 `'general'` 또는 uuid로만 받는 곳: zod `ChannelId`, 메시지 조회·보내기의 채널 해석. `parseRefKey`는 `storyboard:`·`review:`만 읽는다. 알림은 채널을 `project_id`에서 만들어 읽음·묶음을 판단한다 | `lib/brand-rooms/message-contracts.ts:180,263-269,519`, `lib/brand-rooms/messages.ts:154-160,1181,1456-1457`, `lib/brand-rooms/notices.ts:560,736,802-803` |
 | 알림 | `brand_room_notices`(메일·푸시 대기열). 종류 `new_version·storyboard·team_message·team_reply·mention·intake_received`. 멘션은 즉시 메일 + 푸시, 팀 메시지는 10분 묶음. 멤버끼리의 멘션 없는 글은 아무에게도 알리지 않는다. `BRAND_ROOMS`와 `BRAND_ROOM_NOTIFY`가 둘 다 on이어야 한다 | `0094_core_brand_room_notices.sql:30-65`, `lib/brand-rooms/notices.ts:60-111`, `vercel.json:16-17` |
 | 지금의 "검수 · 공유" | `POST /api/brand-studio/share-bridge`. 검수 기록을 만들고, 프로젝트가 없으면 제목이 "스튜디오 공유 · 검수함"인 `brand_projects` 행을 만든다(제목으로 다시 찾는다). 채팅에 올리면 `ref: review`로 글을 쓰고 **야기 팀 Slack 알림을 보낸다** | `app/api/brand-studio/share-bridge/route.ts:33,124-133,253-314,494-506` |
 | 초대 | 워크스페이스 초대는 owner만(`createBrandInvitation`), 역할은 editor·viewer, 조직당 하루 20건, 7일 만료. 초대 메일은 `BRAND_ORG_INVITE_EMAIL`(기본 off). `brand_plan_assignments.seats`는 있지만 초대할 때 확인하는 코드는 없다 | `lib/brands/workspace/service.ts:861-880`, `lib/flags.ts`(`BRAND_ORG_INVITE_EMAIL`), `0074:49,57` |
@@ -93,7 +94,7 @@
 
 | 대상 | 프로젝트와의 연결 | 프로젝트가 없을 때 |
 | --- | --- | --- |
-| 프로젝트 | `brand_projects` + 새 열 `origin`: `'team'`(야기 팀에 맡긴 것. 지금 있는 행 전부의 기본값) / `'self'`(직접 만들기에서 만든 것) | — |
+| 프로젝트 | `brand_projects` + 새 열 `origin`: `'team'`(야기 팀에 맡긴 것. 지금 있는 행 전부의 기본값) / `'self'`(직접 만들기에서 만든 것). `'self'` 행은 `client_visible=false`로 만든다(§3.4) | — |
 | 스튜디오 실행(이미지·영상·사운드) | 새 열 `brand_studio_jobs.brand_project_id` → `brand_projects`. 결과물은 실행을 따라간다 | null = 미분류 |
 | 올린 자료 | 새 열 `brand_studio_assets.brand_project_id` | null이고 `role`이 product·person·logo·style·place면 브랜드 자료, 아니면 미분류 |
 | 편집본 | `brand_studio_video_projects` + 새 열 `brand_project_id`. 고객 화면의 이름은 "편집본"(영상 프로젝트라는 말은 없앤다) | null = 미분류 편집본 |
@@ -107,28 +108,37 @@
 ### 3.3 직접 만들기와 야기 팀과
 
 - `origin`은 "누가 만들고 있나"다. 레일의 두 모드는 화면을 가르는 렌즈로 남고, 프로젝트는 하나다.
-- **야기 팀에 맡기기:** `origin='self'` 프로젝트에서 의뢰 마법사(`/brand/projects/new`의 `ProjectIntakeWizard`)를 그 프로젝트 id로 연다. 제출하면 같은 행을 `origin='team'`, `status='requested'`로 바꾸고 `objective`·`intake_brief`·`production_mode`를 채운 뒤, 지금 새 의뢰가 하는 일(`project_requested` 이벤트, 야기 팀 알림 `lib/brands/workspace/service.ts:423-439`)을 그대로 한다. 야기 팀과의 채널이 그때 열린다.
+- **야기 팀에 맡기기:** `origin='self'` 프로젝트에서 의뢰 마법사(`/brand/projects/new`의 `ProjectIntakeWizard`)를 그 프로젝트 id로 연다. 제출하면 같은 행을 `origin='team'`, `status='requested'`, `client_visible=true`로 바꾸고 `objective`·`intake_brief`·`production_mode`를 채운 뒤, 지금 새 의뢰가 하는 일(`project_requested` 이벤트, 야기 팀 알림 `lib/brands/workspace/service.ts:423-439`)을 그대로 한다. 야기 팀과의 채널이 그때 열린다(그 전에는 `client_visible=false`라 채널 목록·글쓰기·야기 팀 화면 어디에도 없다). 이 갱신에는 `service_role`의 열 권한이 더 필요하다(§3.6).
 - 직접 만든 파일은 야기 팀에 **자동으로 보이지 않는다.** 지금처럼 고객이 고른 파일만 넘긴다(`lib/brand-studio/handoff.ts`가 `brand_attachments`로 복사하는 방식). 멤버 칸의 대화도 넘어가지 않는다.
 - 반대로, 야기 팀 프로젝트에도 고객이 직접 만든 결과를 담을 수 있다(스튜디오에서 그 프로젝트를 고르면 된다). 고객 쪽 "파일" 탭에만 보인다.
 - 보관: 직접 만든 프로젝트는 `status='completed'`를 "보관"으로 쓴다. 홈 카드에서 빠지고 "전체 프로젝트"에 남는다.
 
 ### 3.4 직접 만든 프로젝트가 야기 팀 쪽에 새지 않게
 
-`origin='self'` 행이 들어가면 필터 없이 `brand_projects`를 읽는 곳에 섞인다. 고쳐야 하는 곳(전부 `origin = 'team'` 조건을 더한다):
+두 겹으로 막는다.
+
+**첫째 겹: `origin='self'` 행은 `client_visible=false`로 만든다.** 이 열은 지금 "야기 팀과 화면에 보이는가"로 쓰인다(직원이 숨겨 둔 프로젝트가 false, `lib/brands/workspace/service.ts:421`). 지금 코드의 대부분이 이 조건을 건다. 그래서 따로 고치지 않아도 닫히는 곳:
+
+- 고객의 야기 팀 채널 목록과 안 읽은 수(`channelRows`, `lib/brand-rooms/messages.ts:1256-1287`), 그 채널에 글쓰기(`requireRoomProject`, `lib/brand-rooms/access.ts:119`)와 거기서 나가는 야기 팀 알림(`messages.ts:1195-1203`).
+- 야기 팀 대화 목록·채널(`messages.ts:1627,1653,1724`), 직원이 id로 여는 방(`messages.ts:1458,1695`).
+- 고객 쪽 `/brand`·야기 팀과 홈·에셋의 팀 묶음(`loadBrandWorkspace`의 고객 분기 `service.ts:273`, `lib/brand-studio/asset-projects.ts:97`), "야기 팀 프로젝트에 추가" 목록(`lib/brand-studio/repo.ts:346`, `app/api/brand-studio/share-bridge/route.ts:367`), 알림 대상(`roomAudience`, `access.ts:152-155`).
+
+새 화면(홈 카드, 프로젝트 페이지, 프로젝트 칩)은 `client_visible`을 보지 않고 `origin`으로 읽는 새 조회를 쓴다.
+
+**둘째 겹: `client_visible`을 걸지 않는 조회에 `origin = 'team'`을 더한다.**
 
 | 어디 | 지금 조건 | 섞이면 생기는 일 |
 | --- | --- | --- |
-| `lib/brand-rooms/messages.ts:1627,1653` `staffRoomOverview`, `:1724` `staffRoomChannels` | `client_visible`(+ 상태) | 고객의 내부 프로젝트가 야기 팀 대화 목록에 뜬다 |
-| `lib/brand-rooms/storyboards.ts:1077`, `lib/brand-studio/review.ts:1458` | 취소 아님 | 야기 팀 작업 목록에 뜬다 |
-| `lib/brands/workspace/service.ts:269,321,335` `loadStudioWorkspace` 등, `lib/admin/brand-org-list.ts:320` | 없음 | 관리자 화면 목록·개수 |
-| `lib/brands/storage-quota.ts:537-545` | 완료·취소 아님 | "진행 중인 프로젝트 있음"이 항상 참이 되어 보관 규칙이 달라진다 |
-| `lib/brands/workspace/service.ts:273` `loadBrandWorkspace`(`/brand`, 야기 팀과 홈, 에셋의 팀 묶음), `lib/brand-studio/repo.ts:346` `campaignsOf`, `app/api/brand-studio/share-bridge/route.ts:367` | `client_visible` | 야기 팀과 화면과 "야기 팀 프로젝트에 추가" 목록에 직접 만든 프로젝트가 뜬다 |
+| `lib/brand-rooms/storyboards.ts:1077` `staffStoryboardList`, `lib/brand-studio/review.ts:1458` `staffDeliveryProjects` | 취소 아님 | 야기 팀 작업 목록에 고객의 내부 프로젝트가 뜬다 |
+| `lib/brands/workspace/service.ts:335` `loadStudioWorkspace`, `:269`(`loadBrandWorkspace`의 직원 분기), `:321`(`loadBrandWorkspaceChoices`의 id→조직 맵) | 없음 또는 조직만 | 관리자 화면의 프로젝트 목록 |
+| `lib/admin/brand-org-list.ts:320` | 없음 | 조직별 프로젝트 수 |
+| `lib/brands/storage-quota.ts:537-545` | 조직만 | "진행 중인 프로젝트 있음"이 항상 참이 되고, 직접 만든 프로젝트를 보관(`completed`)하면 "마지막 완료 시각"이 움직여 보관 기한 계산이 달라진다. 조회 전체를 `origin='team'`으로 좁힌다 |
 
-안전한 곳: `app/(admin)/admin/inquiries/page.tsx:52`(`status='requested'` + `intake_brief` 있음), 캠페인 쪽(`production_mode='creator'` 조건), `lib/brands/creator-pool.ts:114`(캠페인 링크 조인).
+영향이 없는 것으로 본 곳: `app/(admin)/admin/inquiries/page.tsx:52`(`status='requested'` + `intake_brief` 있음), 캠페인 쪽(`production_mode='creator'` 조건), `lib/brands/creator-pool.ts:114`(캠페인 링크 조인), `lib/brands/workspace/inbox.ts:64`(옛 `brand_messages` 행이 있어야 잡힌다. 직접 만든 프로젝트에는 없다), `lib/brands/upload-gate.ts:236-244`(관리자가 만든 행만 본다).
 
-막는 방법 세 가지를 같이 쓴다. ① 조건을 상수 하나(`TEAM_PROJECTS`)로 두고 위 쿼리가 모두 그것을 쓴다. ② `lib/`·`app/`에서 `brand_projects`를 읽는 파일 목록을 테스트가 들고 있다가, 새 파일이 생기거나 목록의 파일이 상수 없이 여러 행을 읽으면 실패한다(`rail.css`의 선택자 범위를 읽는 테스트와 같은 방식). ③ 직접 만든 프로젝트를 하나 넣고 위 화면들이 그대로인지 보는 통합 테스트.
+**테스트로 못 박는다.** ① 조건을 상수 하나(`TEAM_PROJECTS`)로 두고 둘째 겹의 조회가 모두 그것을 쓴다. ② `lib/`·`app/`에서 `brand_projects`를 읽는 파일 목록을 테스트가 들고 있다가, 새 파일이 생기거나 목록의 파일이 `client_visible`도 상수도 없이 여러 행을 읽으면 실패한다(`rail.css`의 선택자 범위를 읽는 테스트와 같은 방식). ③ 직접 만든 프로젝트를 하나 넣고 위 화면·목록·알림·보관 계산이 그대로인지 보는 통합 테스트.
 
-`origin='self'` 행은 `production_mode='studio'`, `objective=''`로 쓴다. `production_mode`의 허용 값은 넓히지 않는다(zod `z.enum(['creator','studio'])`, `lib/brands/workspace/schemas.ts:41`을 그대로 둔다).
+`origin='self'` 행은 `production_mode='studio'`, `objective=''`로 쓴다. `production_mode`의 허용 값은 넓히지 않는다(zod `z.enum(['creator','studio'])`, `lib/brands/workspace/schemas.ts:41`을 그대로 둔다). 지금의 `createProject`는 의뢰서 스키마(제목 3–120자, 목적 3–2000자, `schemas.ts:36`)를 통과해야 하므로 직접 만든 프로젝트는 넣는 함수를 따로 둔다.
 
 ### 3.5 기존 행
 
@@ -147,7 +157,8 @@
 -- core 0194 (요지)
 alter table brand_projects add column if not exists origin text not null default 'team';
 alter table brand_projects add constraint brand_projects_origin check (origin in ('team','self'));
--- 제목·목적 검사는 열에 붙은 이름 없는 check라 pg_get_constraintdef로 찾아 바꾼다.
+-- 제목·목적 검사는 열에 붙은 check라 이름이 정해져 있다(brand_projects_title_check,
+-- brand_projects_objective_check). 이름으로 지우고 다시 만든다(0053:39가 같은 식으로 지운다).
 --   title:     origin='self' → 1–120자, 그 외 지금처럼 3–120자
 --   objective: origin='self' → 0–2000자, 그 외 지금처럼 3–2000자
 create index if not exists idx_brand_projects_origin on brand_projects (organization_id, origin, updated_at desc);
@@ -159,10 +170,10 @@ alter table brand_studio_video_projects  add column if not exists brand_project_
 --        on delete set null (brand_project_id), 그리고 where brand_project_id is not null 부분 색인.
 ```
 
-- glue 0195: 세 스튜디오 표는 0152·0162의 자세(RLS 강제, 브라우저 정책 없음, `service_role`만)를 다시 확인만 한다(0165가 0091에 한 것과 같다). `brand_projects`는 열 단위 UPDATE 권한이 있는 표라(`0113:13`, `0117:6`, `0120:4`, `0148:4`, `0160:4`) `origin`에는 브라우저 권한을 주지 않는다.
+- glue 0195: 세 스튜디오 표는 0152·0162의 자세(RLS 강제, 브라우저 정책 없음, `service_role`만)를 다시 확인만 한다(0165가 0091에 한 것과 같다). `brand_projects`는 `service_role`에게도 `select, insert`와 **열 단위 UPDATE**만 열려 있다(`0113:7-13`의 `status, revision, updated_at`, 이후 `0117:6`·`0120:4`·`0148:4`·`0160:4`가 `client_visible`·`cover_attachment_id`·`shortlist_criteria`·`intake_brief`를 더했다). `origin`·`title`·`objective`·`production_mode`에는 UPDATE 권한이 없고 DELETE도 없다. 그래서 glue가 `grant update(origin, title, objective, production_mode) on brand_projects to service_role`을 준다(이름 바꾸기와 "야기 팀에 맡기기"에 필요하다). 브라우저 역할에는 아무것도 주지 않는다.
 - 스위치: `BRAND_PROJECT_SPINE`(기본 off). 서버는 열이 있는지도 본다(`jobProjectColumnReady`와 같은 방식, `lib/brand-studio/job-projects.ts:24-33`). 그래서 코드를 먼저 배포하고 마이그레이션을 뒤에 적용해도 된다.
 - 순서: 코드 배포(스위치 off) → 0194·0195 적용 → 시험 조직에서 on → 전체 on.
-- 되돌리기: 스위치를 끄면 아무도 새 열을 읽거나 쓰지 않는다. 완전히 되돌리려면 `origin='self'` 행을 지우거나 보관하고, 새 열 셋과 `origin`을 지우고, 제목·목적 검사를 원래대로 돌린다. 기존 행의 값은 바뀐 적이 없다.
+- 되돌리기: 스위치를 끄면 아무도 새 열을 읽거나 쓰지 않는다. `origin='self'` 행은 `client_visible=false`라 스위치가 꺼진 화면 어디에도 나오지 않는다. 완전히 되돌리려면 그 행들을 지우고(앱 역할에는 DELETE 권한이 없어 되돌리기 마이그레이션에서 지운다), 새 열 셋과 `origin`을 지우고, 제목·목적 검사와 권한을 원래대로 돌린다. 기존 행의 값은 바뀐 적이 없다.
 
 **뒤 조각의 마이그레이션(번호는 그때 정한다, 모두 클라우드 적용 필요):** 소식 칸(§6), 보내기(§8.6), Slack(§9.3).
 
@@ -209,7 +220,7 @@ alter table brand_studio_video_projects  add column if not exists brand_project_
 | 6 이상 | 같음 | 위에 검색, 최근 6개, "전체 프로젝트" 링크 |
 
 - 야기 팀 프로젝트는 보조 줄에 "야기 팀과"가 붙는다.
-- 새 프로젝트는 이름만 받는다(1–120자). `origin='self'`, `status='active'`로 만들고 바로 고른다. 지금의 하루 20개 한도(`lib/brands/workspace/service.ts:395`)를 같이 쓴다.
+- 새 프로젝트는 이름만 받는다(1–120자). `origin='self'`, `status='active'`, `client_visible=false`로 만들고 바로 고른다. 넣는 함수는 따로 두되(§3.4) 지금의 조직당 하루 20개 한도(`lib/brands/workspace/service.ts:395-396`, share-bridge가 만든 행도 센다)와 같은 규칙으로 센다.
 
 ## 5. 홈 (직접 만들기)
 
@@ -239,7 +250,7 @@ alter table brand_studio_video_projects  add column if not exists brand_project_
 - 카드에는 테두리 상자를 두지 않는다. 사진이 카드고 글은 그 아래 세 줄이다(TASTE 규칙 15·20). 채운 버튼은 입력창의 것 하나다.
 - 글자는 홈의 세 단계(22 / 15 / 12.5)만 쓴다.
 
-**야기 팀과 홈**(`team-home.tsx`): 구조는 그대로 두고 프로젝트 목록만 `origin='team'`으로 좁힌다. 직접 만들기 홈의 카드에는 야기 팀 프로젝트도 함께 보인다(둘째 줄로 구분).
+**야기 팀과 홈**(`team-home.tsx`): 그대로다. 직접 만든 프로젝트는 `client_visible=false`라 지금 조회에 잡히지 않는다(§3.4). 직접 만들기 홈의 카드에는 야기 팀 프로젝트도 함께 보인다(둘째 줄로 구분).
 
 **TASTE와의 관계:** 규칙 20("홈은 입력창 + 확인할 것 + 최근 작업물 벽")의 벽이 프로젝트 카드로 바뀌고, 규칙 14(캠페인 운영과 셀프 스튜디오 분리)는 "프로젝트는 하나, 화면은 모드로 가른다"로 다시 써야 한다. 대표가 시안을 승인하면 구현 PR에서 `docs/design/TASTE.md`에 그 판정을 적는다.
 
@@ -305,7 +316,7 @@ brand_announcement_dismissals (announcement_id, user_id, dismissed_at)   -- 사�
 - **미분류:** `brand_project_id`가 null인 실행·편집본, 그리고 역할이 없거나 `other`인 올린 자료.
 - **해야 하는 일:** 지금 에셋 화면은 이미지 60 + 영상 60 실행을 한 번에 받아 브라우저에서 묶는다(`loadStudioState`). 프로젝트별로 정확히 묶으려면 서버가 프로젝트마다 표지 몇 장과 개수를 주고, "모두 보기"는 그 프로젝트만 페이지로 읽어야 한다.
 
-**프로젝트 페이지(시안 c):** 주소는 지금의 방 페이지 `/brand/rooms/[projectId]`를 넓혀 쓴다(대화·파일 탭이 이미 있다, `lib/brand-rooms/overview.ts:22-23`). 탭은 파일 · 편집본 · 대화. 파일은 종류별 줄(이미지, 영상, 사운드, 올린 자료). 주 버튼 "이어서 만들기"는 그 프로젝트를 고른 채 스튜디오를 연다. 야기 팀 프로젝트는 지금의 개요·시안·스토리보드가 그대로 있고, 고객이 직접 만든 파일 줄이 더해진다.
+**프로젝트 페이지(시안 c):** 새 주소 `/brand/project/[id]`. 지금 `/brand/rooms*`와 `/brand/projects*`는 레일을 야기 팀과 모드로 바꾸는 경로라(`pathRailMode`, `components/brand-workspace/rail-mode.ts:55-62`) 직접 만든 프로젝트를 거기에 두면 레일이 뒤집힌다. 새 주소는 홈·에셋처럼 모드를 바꾸지 않는 공용 페이지로 둔다. 탭은 파일 · 편집본 · 대화. 파일은 종류별 줄(이미지, 영상, 사운드, 올린 자료). 주 버튼 "이어서 만들기"는 그 프로젝트를 고른 채 스튜디오를 연다. 야기 팀 프로젝트는 지금의 방 페이지 `/brand/rooms/[projectId]`(개요·파일·대화 탭, `lib/brand-rooms/overview.ts:22-23`)가 그대로 프로젝트 페이지이고, 고객이 직접 만든 파일 줄과 멤버 칸이 더해진다. 두 페이지는 같은 머리말·탭 컴포넌트를 쓴다.
 
 ## 8. 보내기 (팀 내부 공유)
 
@@ -316,17 +327,31 @@ brand_announcement_dismissals (announcement_id, user_id, dismissed_at)   -- 사�
 - 그 파일에 이미 있는 대화는 입력칸 위에 줄로 보인다. 타일에는 올렸을 때 작은 말풍선 숫자만.
 - 보낸 것은 프로젝트의 "대화" 탭(시안 e-2)에 카드로 보인다: 보낸 사람, 멘션, 글, 파일 카드(썸네일·종류·"파일 열기"), 답글.
 - 받는 사람의 알림함(시안 f): 썸네일, 보낸 사람, 프로젝트, 글 첫머리, 시각, 안 읽음 점. 열면 오른쪽에 그 대화가 열리고 바로 답글을 단다.
-- 레일: 직접 만들기 모드에도 "알림함" 줄을 둔다(지금은 야기 팀과 모드에만 있다, `/brand/rooms`). 안 읽은 수가 붙는다.
+- 레일: 직접 만들기 모드에도 "알림함" 줄을 둔다(지금은 야기 팀과 모드에만 있다, `/brand/rooms`). 안 읽은 수가 붙는다. 알림함 목록 주소는 레일 모드를 바꾸지 않는 공용 페이지로 옮긴다(`pathRailMode`에서 `/brand/rooms` 목록만 빼거나 새 주소를 둔다). 그러지 않으면 직접 만들기에서 알림함을 누를 때마다 레일이 야기 팀과로 바뀐다.
 
 ### 8.2 데이터: 멤버 칸
 
-방향은 "파일에 붙은 대화가 그 프로젝트의 지금 대화 채널에 카드로 보인다"였다. 코드를 보면 그 채널은 **야기 팀이 관리자 화면에서 읽고**(`lib/brand-rooms/messages.ts:1618-1737`), 프로젝트 손님도 본다(`lib/brand-rooms/access.ts:160-172`). 내부 의견이 그리로 가면 안 된다. 그래서 채팅 제품을 하나 더 만들지 않고, 같은 표에 **칸**을 하나 더 둔다.
+방향은 "파일에 붙은 대화가 그 프로젝트의 지금 대화 채널에 카드로 보인다"였다. 코드를 보면 그 채널은 **야기 팀이 관리자 화면에서 읽고**(`lib/brand-rooms/messages.ts:1618-1657`), 프로젝트 손님도 보며(`lib/brand-rooms/access.ts:160-172`), 멤버가 글을 쓸 때마다 야기 팀 알림이 나간다(`messages.ts:1195-1203`). 내부 의견이 그리로 가면 안 된다. 그래서 채팅 제품을 하나 더 만들지 않고, 같은 표에 **칸**을 하나 더 둔다.
 
 - `brand_room_messages.channel`의 허용 값에 `'members'`(프로젝트 없음)와 `'members:' || project_id`를 더한다. 지금 값(`'general'`, `project_id::text`)은 야기 팀과 하는 대화로 그대로 남는다.
-- 야기 팀 쪽 조회는 전부 `channel = p.id::text`로 찾기 때문에 멤버 칸은 구조적으로 잡히지 않는다. 그래도 테스트로 못 박는다: 멤버 칸의 글이 관리자 화면 목록, 야기 팀 알림(`enqueueTeamNotice`), 손님에게 나가지 않는다.
 - 읽는 권한: 그 조직의 활성 멤버만. 손님과 야기 팀은 아니다.
 - 답글은 지금 규칙 그대로 한 단계. 답글은 부모와 같은 칸에 있어야 한다는 외래 키(`brand_room_messages_parent_fk`)가 그대로 지켜 준다.
 - 화면에서는 프로젝트 "대화" 탭 위에 누가 보는 대화인지 한 줄로 적는다. 야기 팀 프로젝트는 "우리 팀 / 야기 팀과" 두 칸을 나란히 둔다.
+
+**멤버 칸은 저절로 숨겨지지 않는다.** 야기 팀 쪽 조회 대부분은 `channel = p.id::text`로 찾지만 그렇지 않은 곳이 있다. 멤버 칸에 글이 하나라도 들어가기 전에 고쳐야 하는 곳:
+
+| 어디 | 지금 | 고칠 것 |
+| --- | --- | --- |
+| `lib/brand-rooms/messages.ts:1639-1657` (`staffRoomOverview`의 두 번째 조회) | 모든 글을 `channel`로 묶고 `project_id is null or p.client_visible`만 건다. 마지막 글의 본문이 `/admin/brand-rooms`에 찍힌다(`app/(admin)/admin/brand-rooms/page.tsx:114`) | `m0.channel = 'general' or m0.channel = m0.project_id::text` 조건 |
+| `lib/admin/brand-org-list.ts:343-347` | 채널을 가리지 않고 `max(created_at)` | 같은 조건(시각만 새지만 맞춘다) |
+| `lib/brand-rooms/messages.ts:1195-1203` (`message.send` 뒤의 야기 팀 알림) | 멤버 글마다 대기열에 넣는다 | 멤버 칸이면 넣지 않는다 |
+| `lib/brand-rooms/message-contracts.ts:180,519`, `messages.ts:154-160,1181,1456-1457` | 채널 문자열을 `'general'`이나 uuid로만 받는다 | 멤버 칸 값을 받는 고객 쪽 길을 따로 둔다. 직원 쪽 해석(`:1456-1457`)은 그대로 거부하게 둔다 |
+| `lib/brand-rooms/message-contracts.ts:263-269` (`parseRefKey`) | `storyboard:`·`review:`만 읽어서 답글이 `ref`를 잃는다(`messages.ts:797`) | `output:`·`asset:` |
+| `lib/brand-rooms/notices.ts:560,736,802-803` | 알림이 채널을 `project_id`에서 만든다. 멤버 칸의 멘션이 야기 팀 채널의 읽음으로 판단되고 그 채널 묶음에 섞인다 | 알림 행에 채널을 싣거나 글에서 읽는다 |
+| `lib/brand-rooms/access.ts:140-176` (`roomAudience`) | 손님이 대상에 든다. `client_visible`이 아닌 프로젝트는 대상이 비어 버린다 | 멤버 칸 전용 대상(활성 멤버만, `client_visible`과 무관) |
+| 저장 용량·정리(`lib/brands/storage-quota.ts:208`, `lib/brands/upload-gate.ts:278,380`, `lib/brand-studio/physical-cleanup.ts:107`) | 채널과 무관하게 첨부를 센다 | 그대로 둔다(멤버 칸의 첨부도 조직 용량이다) |
+
+테스트: 멤버 칸에 글을 넣고, 관리자 대화 목록·조직 목록·야기 팀 알림 대기열·손님 화면·직원 채널 열기에 그 글이 나오지 않는지 본다.
 
 ### 8.3 데이터: 파일에 붙이기
 
@@ -341,7 +366,7 @@ brand_announcement_dismissals (announcement_id, user_id, dismissed_at)   -- 사�
 - 지금의 읽음은 사람·채널마다 하나라서, 칸을 열면 전부 읽은 것이 된다. 받은 공유가 열 때까지 안 읽음으로 남으려면 대화별 읽음이 필요하다: `brand_room_thread_reads (organization_id, root_message_id, user_id, last_read_at)`.
 - 알림함의 "나에게 온 것" = 나를 부른 뿌리 글, 그리고 내가 쓰거나 답글을 단 대화 가운데 마지막 글이 내 읽음보다 뒤인 것.
 - 누가 알림을 받나(전부 아니면 전무가 되지 않게):
-  - 뿌리 글에서 불린 사람: 지금의 `mention` 규칙(즉시 메일 + 푸시).
+  - 뿌리 글에서 불린 사람: `mention`(즉시 메일 + 푸시). 규칙표는 그대로 쓰지만, 대상과 읽음 판단은 멤버 칸 기준으로 바꿔야 한다(§8.2 표의 `notices.ts`·`roomAudience` 줄).
   - 그 대화의 참여자(쓴 사람, 불린 사람, 답글 단 사람): 새 답글마다 새 종류 `member_reply`(10분 묶음 메일 + 푸시). 지금은 멤버끼리의 멘션 없는 글이 아무에게도 알리지 않는다(`messageNoticeKind`, `lib/brand-rooms/notices.ts:85-88`).
   - 그 밖의 멤버: 알림 없음. 프로젝트 카드와 레일의 숫자만.
   - "이 프로젝트의 모든 활동 받기"는 나중에 사람이 켜는 것으로.
@@ -359,7 +384,7 @@ brand_announcement_dismissals (announcement_id, user_id, dismissed_at)   -- 사�
 
 ### 8.6 마이그레이션 (조각 4, 번호는 그때): 클라우드 적용 필요
 
-- core: `brand_room_messages_channel`·`_ref_key`·`_ref_project` 검사 교체, `brand_room_notices_kind`·`_general` 교체, 표 `brand_room_thread_reads`·`brand_room_pending_mentions`.
+- core: `brand_room_messages_channel`·`_ref_key`·`_ref_project` 검사 교체, `brand_room_reads_channel` 검사 교체(지금은 `'general'`이나 uuid만 받아 멤버 칸의 읽음 표시가 실패한다, `0082:119-121`), `brand_room_notices_kind`·`_general` 교체와 알림 행의 채널 열, 표 `brand_room_thread_reads`·`brand_room_pending_mentions`.
 - glue: 새 표 둘은 대화 표와 같은 자세(RLS 강제, 정책 없음, `service_role`만, `0156`과 같다).
 - 스위치 `BRAND_SEND`(기본 off). 되돌리기: 스위치를 끄면 멤버 칸에 쓰는 길이 닫힌다. 검사를 원래대로 돌리려면 멤버 칸의 글을 먼저 지우거나 옮겨야 한다.
 
@@ -449,6 +474,8 @@ brand_integration_deliveries (message_id, provider, state 'pending'|'sent'|'fail
 - 영상 스튜디오의 `?project=`는 편집본 id다. 프로젝트 id와 겹치지 않게 `?film=`으로 옮긴다.
 - 워크스페이스 초대는 owner만 한다.
 - 사운드는 `brand_studio_jobs`에 있어 프로젝트 열을 같이 쓸 수 있다. 다만 넣는 코드와 읽는 코드가 둘 다 없다.
+- `/brand/rooms*`와 `/brand/projects*`는 레일을 야기 팀과 모드로 바꾼다. 프로젝트 페이지와 알림함은 모드를 바꾸지 않는 주소가 필요하다(§7, §8.1).
+- `brand_projects`는 서버 역할도 정해진 열만 고칠 수 있다. 이름 바꾸기와 "야기 팀에 맡기기"에는 권한 추가가 필요하다(§3.6).
 
 ### 11-3. 확인하지 못한 것
 
@@ -460,6 +487,10 @@ brand_integration_deliveries (message_id, provider, state 'pending'|'sent'|'fail
 - viewer 역할이 지금 프로젝트 대화에 글을 쓸 수 있는지(보내기의 권한을 거기에 맞춘다).
 - 프로젝트 카드 조회의 속도(프로젝트·실행이 많은 조직에서). 색인은 §3.6의 것으로 시작하고 조각 3a에서 잰다.
 - 형식 검증(AGENTS.md §11): 이 설계는 결제·크레딧 상태를 바꾸지 않아 대상이 아니다. 실행하지 않았다.
+
+### 11-4. 사실 검토
+
+작성자와 다른 검토 에이전트가 이 문서의 코드 사실을 코드와 대조했다(2026-11-25, 한 차례). 고친 것: 멤버 칸이 새는 조회(§8.2 표), `brand_projects`의 열 권한(§3.6), 직접 만든 프로젝트를 `client_visible=false`로 두는 첫째 겹(§3.4), 읽음 표의 채널 검사와 알림의 채널(§8.2, §8.6), 레일 모드를 바꾸는 경로(§7, §8.1), 검사 이름(§3.6), 조회 이름과 보관 시각(§3.4), 프로젝트 넣는 함수(§4.5). 검토가 확인하지 못했다고 밝힌 것: viewer의 글쓰기 권한, 홈 블록의 순서(표시 속성 너머), 시안 스크린샷.
 
 ## 12. 시안 화면
 
