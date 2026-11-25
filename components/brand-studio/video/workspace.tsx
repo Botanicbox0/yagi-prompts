@@ -86,6 +86,7 @@ import { ClipTrimModal } from "./clip-trim-modal";
 import { VideoProjectBar, filmBarCopy } from "./project-bar";
 import { RecentCreationsPanel } from "./recent-creations-panel";
 import { ReversePanel } from "./reverse";
+import { collectSessionRunAdds, createSessionRunBook } from "./session-runs";
 import { fillText } from "./reverse-model";
 import { SequenceRail, type SequenceInspectorTab, type SequenceRailHeight } from "./sequence-rail";
 import w from "./video-workspace.module.css";
@@ -344,6 +345,21 @@ export function filmsInOpenScope<T extends Pick<VideoProjectSummary, "brandProje
   return films.filter((film) => belongsToOpenProject(film.brandProjectId, open));
 }
 
+/**
+ * Where a lazily created film goes: the scope that was open when the member acted (pressed 만들기, added a clip),
+ * captured by the caller, never the scope of whichever render happens to run the save. One value feeds the
+ * request body, the request-id slot and the adopt check. Without the spine: main's values (no key, legacy slot).
+ */
+export function filmCreateTarget(input: { spineActive: boolean; actionScope: OpenProject | undefined }): {
+  brandProjectId: string | null | undefined;
+  scopeKey: string;
+  sentScope: OpenProject | undefined;
+} {
+  if (!input.spineActive || !input.actionScope) return { brandProjectId: undefined, scopeKey: "__legacy__", sentScope: undefined };
+  const brandProjectId = brandProjectIdOf(input.actionScope);
+  return { brandProjectId, scopeKey: brandProjectId ? brandProjectId.toLowerCase() : "__unfiled__", sentScope: input.actionScope };
+}
+
 /** Payload for `POST /api/brand-studio/video-projects` `{ op: 'create' }`, attaching `brandProjectId` only when open. */
 export function videoFilmCreateBody(input: {
   organizationId: string;
@@ -544,10 +560,8 @@ export function VideoStudioWorkspace({
   const inFlightSaveRef = useRef<InFlightFilmSave | null>(null);
   const localBlobUrlsRef = useRef<string[]>([]);
 
-  // Track jobs started in this session for automatic Sequence Rail append or Take Stack (`1/N`)
-  const knownJobIdsRef = useRef<Set<string> | null>(null);
-  const sessionJobTargetClipRef = useRef<Map<string, string | null>>(new Map());
-  const ingestedOutputIdsRef = useRef<Set<string>>(new Set());
+  // Track jobs started in this session for automatic Sequence Rail append or Take Stack (`1/N`) (./session-runs.ts)
+  const sessionRunsRef = useRef(createSessionRunBook());
 
   useEffect(() => {
     projectIdRef.current = projectId;
@@ -616,7 +630,13 @@ export function VideoStudioWorkspace({
   // 만들기 recorded belongs to the project that was open when it was pressed.
   const projectContextRef = useRef(0);
   // An accepted run's bookkeeping, done once the timeline holding its references is committed.
-  const [afterRun, setAfterRun] = useState<{ firstPrompt: string; context: number; refsChanged: boolean } | null>(null);
+  const [afterRun, setAfterRun] = useState<{
+    firstPrompt: string;
+    context: number;
+    refsChanged: boolean;
+    /** The scope open at the press (spine); the film is filed there. */
+    actionScope?: OpenProject;
+  } | null>(null);
 
   useEffect(
     () => () => {
@@ -746,19 +766,18 @@ export function VideoStudioWorkspace({
       nextTimeline: ComposerProject;
       firstPrompt?: string;
       explicitTitle?: string;
+      /** The scope open when the member acted (spine); read now only when the caller had none. */
+      actionScope?: OpenProject;
     }): Promise<string | null> => {
       if (projectIdRef.current) return projectIdRef.current;
       if (!canCreate || typeof fetch !== "function") return null;
 
       const persistable = sanitizeProjectForPersistence(opts.nextTimeline);
-      const sentScope = spineOpenRef.current;
-      const targetBrandProjectId = spineActive ? openBrandProjectId : undefined;
-      const scopeCacheKey =
-        targetBrandProjectId === undefined
-          ? "__legacy__"
-          : targetBrandProjectId
-            ? targetBrandProjectId.toLowerCase()
-            : "__unfiled__";
+      const {
+        brandProjectId: targetBrandProjectId,
+        scopeKey: scopeCacheKey,
+        sentScope,
+      } = filmCreateTarget({ spineActive, actionScope: opts.actionScope ?? spineOpenRef.current });
       const reusable = reusableLazyCreatePromise(lazyCreatePromiseRef.current, scopeCacheKey, spineActive);
       if (reusable) return reusable;
       const reqId = scopedLazyRequestId(lazyRequestIdsRef.current, targetBrandProjectId);
@@ -778,7 +797,7 @@ export function VideoStudioWorkspace({
                 firstPrompt: opts.firstPrompt,
                 locale,
                 timeline: persistable,
-                brandProjectId: openBrandProjectId,
+                brandProjectId: targetBrandProjectId,
               }),
             ),
           });
@@ -788,10 +807,10 @@ export function VideoStudioWorkspace({
             project?: VideoProjectDetail;
           } | null;
           if (!res.ok || !data?.ok || !data.project) {
-            if (data?.code === "not_found" && openBrandProjectId && spineCtx?.markProjectGone) {
+            if (data?.code === "not_found" && targetBrandProjectId && spineCtx?.markProjectGone) {
               const gone = await handleNotFoundForOpenProject({
                 code: "not_found",
-                openProjectId: openBrandProjectId,
+                openProjectId: targetBrandProjectId,
                 listProjects: () => clientApi.listBrandProjects(),
                 onProjectGone: spineCtx.markProjectGone,
               });
@@ -836,7 +855,7 @@ export function VideoStudioWorkspace({
       lazyCreatePromiseRef.current = entry;
       return promise;
     },
-    [canCreate, clientApi, locale, openBrandProjectId, organizationId, spineActive, spineCtx],
+    [canCreate, clientApi, locale, organizationId, spineActive, spineCtx],
   );
 
   const sendFilmSave = useCallback(
@@ -899,12 +918,12 @@ export function VideoStudioWorkspace({
   );
 
   const scheduleProjectSave = useCallback(
-    (nextTimeline: ComposerProject, nextTitle?: string) => {
+    (nextTimeline: ComposerProject, nextTitle?: string, actionScope?: OpenProject) => {
       if (!canCreate || typeof fetch !== "function") return;
       const pid = projectIdRef.current;
       if (!pid) {
         if (nextTimeline.clips.length > 0) {
-          void ensureLazyProjectCreated({ nextTimeline, explicitTitle: nextTitle });
+          void ensureLazyProjectCreated({ nextTimeline, explicitTitle: nextTitle, ...(actionScope ? { actionScope } : {}) });
         }
         return;
       }
@@ -931,8 +950,13 @@ export function VideoStudioWorkspace({
     if (!afterRun) return;
     setAfterRun(null);
     if (projectContextRef.current !== afterRun.context) return;
-    void ensureLazyProjectCreated({ nextTimeline: timeline, firstPrompt: afterRun.firstPrompt }).then((pid) => {
-      if (pid && afterRun.refsChanged) scheduleProjectSave(timelineRef.current);
+    const { actionScope } = afterRun;
+    void ensureLazyProjectCreated({
+      nextTimeline: timeline,
+      firstPrompt: afterRun.firstPrompt,
+      ...(actionScope ? { actionScope } : {}),
+    }).then((pid) => {
+      if (pid && afterRun.refsChanged) scheduleProjectSave(timelineRef.current, undefined, actionScope);
     });
   }, [afterRun, timeline, ensureLazyProjectCreated, scheduleProjectSave]);
 
@@ -1145,6 +1169,8 @@ export function VideoStudioWorkspace({
       const dur = Math.max(1, roundTenths(output.seconds ?? 5));
       const cleanLabel = label.trim().slice(0, 64) || output.id.slice(0, 8);
       const targetStackId = opts?.stackIntoClipId ?? null;
+      // The scope on screen at the add (the updater below may run in a later render).
+      const actionScope = spineOpenRef.current;
 
       setTimeline((prev) => {
         let next: ComposerProject;
@@ -1185,46 +1211,33 @@ export function VideoStudioWorkspace({
           if (added) setSelectedClipId(added.id);
           setStatus(interpolate(wc.projects.clipAddedNotice, { label: cleanLabel }));
         }
-        scheduleProjectSave(next);
+        scheduleProjectSave(next, undefined, actionScope);
         return next;
       });
     },
     [scheduleProjectSave, wc.projects.clipAddedNotice, wc.projects.takeStackedNotice],
   );
 
-  // Detect newly started & newly settled video jobs from this session
+  // Detect newly started & newly settled video jobs from this session. With the spine, only runs this page
+  // started (never runs that merely arrive in a list: the other scope, another member, a reload).
+  // A started run joins only the film it was started for: the one open then, or the one its lazy create answers
+  // with in the same film context (`projectContextRef` moves when that film leaves the screen).
+  const { wasStartedHere } = studio;
+  const filmForLandedRuns = useCallback(
+    () => ({ id: projectIdRef.current, context: projectContextRef.current, creating: lazyCreatePromiseRef.current !== null }),
+    [],
+  );
+  const landedRunsFilmId = spineActive ? projectId : null;
   useEffect(() => {
     if (!state) return;
-    if (knownJobIdsRef.current === null) {
-      knownJobIdsRef.current = new Set(jobs.map((j) => j.id));
-      for (const j of jobs) {
-        for (const o of j.outputs) ingestedOutputIdsRef.current.add(o.id);
-      }
-      return;
-    }
-
-    for (const j of jobs) {
-      if (!knownJobIdsRef.current.has(j.id)) {
-        knownJobIdsRef.current.add(j.id);
-        if (!sessionJobTargetClipRef.current.has(j.id)) {
-          sessionJobTargetClipRef.current.set(j.id, selectedClipId);
-        }
-      }
-
-      if (sessionJobTargetClipRef.current.has(j.id) && j.status === "succeeded" && j.outputs.length > 0) {
-        const targetClipId = sessionJobTargetClipRef.current.get(j.id) ?? null;
-        for (const out of j.outputs) {
-          if (out.kind === "video" && !ingestedOutputIdsRef.current.has(out.id)) {
-            ingestedOutputIdsRef.current.add(out.id);
-            addVideoOutputToSequence(out, j.prompt || projectsCopy.untitled, {
-              stackIntoClipId: targetClipId,
-            });
-          }
-        }
-        sessionJobTargetClipRef.current.delete(j.id);
-      }
-    }
-  }, [addVideoOutputToSequence, jobs, projectsCopy.untitled, selectedClipId, state]);
+    const adds = collectSessionRunAdds(sessionRunsRef.current, {
+      jobs,
+      selectedClipId,
+      untitled: projectsCopy.untitled,
+      ...(spineActive ? { startedHere: wasStartedHere, open: spineOpenRef.current, film: filmForLandedRuns() } : {}),
+    });
+    for (const add of adds) addVideoOutputToSequence(add.output, add.label, { stackIntoClipId: add.stackIntoClipId });
+  }, [addVideoOutputToSequence, filmForLandedRuns, jobs, landedRunsFilmId, projectsCopy.untitled, selectedClipId, spineActive, state, wasStartedHere]);
 
   // Refresh gallery when a job starts from the wide ReversePanel drawer.
   const { load: reloadStudio } = studio;
@@ -1430,6 +1443,8 @@ export function VideoStudioWorkspace({
 
   const handleLocalSequenceFiles = useCallback(
     async (files: File[]) => {
+      // The scope on screen at the drop: the film is filed there, whatever is open when the upload answers.
+      const actionScope = spineOpenRef.current;
       for (const file of files) {
         if (!file.type.startsWith("video/") && !/\.(mp4|mov)$/i.test(file.name)) continue;
         const measured = await measureInBrowser(file, "video").catch(() => ({ seconds: 5 }));
@@ -1452,7 +1467,7 @@ export function VideoStudioWorkspace({
                 volume: 1,
                 muted: false,
               });
-              scheduleProjectSave(next);
+              scheduleProjectSave(next, undefined, actionScope);
               return next;
             });
             continue;
@@ -2189,6 +2204,7 @@ export function VideoStudioWorkspace({
                       .filter((id): id is string => typeof id === "string" && id.length > 0);
                     const submittedPrompt = dock.draft.prompt || dock.draft.change || "";
                     const context = projectContextRef.current;
+                    const actionScope = spineOpenRef.current;
 
                     // Lazy Create ("첫 생성 제출 또는 첫 클립 추가 시"): the project is made, and the references
                     // recorded on it, only once a run was accepted. A press the bar refuses (empty prompt, unknown
@@ -2204,7 +2220,7 @@ export function VideoStudioWorkspace({
                       const known = timelineRef.current;
                       const refsChanged = addProjectReferenceAssetIds(known, trayAssetIds) !== known;
                       setTimeline((prev) => addProjectReferenceAssetIds(prev, trayAssetIds));
-                      setAfterRun({ firstPrompt: submittedPrompt, context, refsChanged });
+                      setAfterRun({ firstPrompt: submittedPrompt, context, refsChanged, ...(actionScope ? { actionScope } : {}) });
                     });
                   }}
                   onDropSource={attachSource}
