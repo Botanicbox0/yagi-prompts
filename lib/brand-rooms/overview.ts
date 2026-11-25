@@ -294,25 +294,128 @@ export interface OverviewInput {
   userId: string;
 }
 
+/** The storyboards the brand sees: a draft the team made stays hidden until it is shared (0083). */
+const SHOWN_BOARDS = `deleted_at is null
+          and (status <> 'draft' or created_role = 'brand')`;
+/** At most this many storyboards and this many deliverables of one room are read for its stage line and activity. */
+const ROOM_ROWS_MAX = 100;
+const BOARD_COLUMNS = 'id, lineage_id, title, version, status, created_role, shared_at, status_changed_at, updated_at';
+const REVIEW_COLUMNS = 'id, coalesce(stack_id, id)::text as stack_key, title, version, status, status_changed_at, created_at';
+
+export type RoomStageBoard = Pick<BoardRow, 'status' | 'shared_at' | 'updated_at'>;
+export type RoomStageReview = Pick<ReviewRow, 'stack_key' | 'version' | 'status' | 'status_changed_at' | 'created_at'>;
+
+/**
+ * The stage line of one room from its storyboards and deliverables (as `loadRoomOverview` reads them): the stage it
+ * is at and every step's state. One rule, shared by the room overview (the 야기 팀과 home's stage line) and the
+ * 직접 만들기 home's project cards (lib/brand-studio/brand-project-files.ts through `loadRoomStages`).
+ */
+export function roomStageOf(
+  project: Pick<RoomProject, 'status' | 'createdAt' | 'updatedAt'>,
+  boards: readonly RoomStageBoard[],
+  reviews: readonly RoomStageReview[],
+): { stage: RoomStage; steps: RoomStep[] } {
+  const latestReviews = latestBy(reviews, (r) => String(r.stack_key));
+  const sharedBoards = boards.filter((b) => b.status !== 'draft');
+  const reached: Record<RoomStage, string | null | false> = {
+    requested: project.createdAt,
+    storyboard: sharedBoards.length ? minIso(sharedBoards.map((b) => iso(b.shared_at) ?? iso(b.updated_at))) : false,
+    draft: reviews.length ? minIso(reviews.map((r) => iso(r.created_at))) : false,
+    revision: (() => {
+      const later = reviews.filter((r) => Number(r.version) > 1).map((r) => iso(r.created_at));
+      const asked = reviews.filter((r) => r.status === 'changes_requested').map((r) => iso(r.status_changed_at) ?? iso(r.created_at));
+      return later.length || asked.length ? minIso([...later, ...asked]) : false;
+    })(),
+    done: (() => {
+      if (project.status === 'completed') return project.updatedAt;
+      if (latestReviews.length && latestReviews.every((r) => r.status === 'approved')) {
+        return maxIso(latestReviews.map((r) => iso(r.status_changed_at) ?? iso(r.created_at)));
+      }
+      return false;
+    })(),
+  };
+  let currentIndex = 0;
+  ROOM_STAGES.forEach((stage, index) => {
+    if (reached[stage] !== false) currentIndex = index;
+  });
+  const stage = ROOM_STAGES[currentIndex]!;
+  const steps: RoomStep[] = ROOM_STAGES.map((s, index) => {
+    const at = reached[s] === false ? null : (reached[s] as string | null);
+    const state: RoomStepState =
+      index > currentIndex
+        ? 'ahead'
+        : index === currentIndex
+          ? s === 'done'
+            ? 'done'
+            : 'current'
+          : reached[s] === false
+            ? 'skipped'
+            : 'done';
+    return { stage: s, state, at };
+  });
+  return { stage, steps };
+}
+
+/**
+ * The stage line of several rooms at once (the home's project cards): the same rows `loadRoomOverview` reads for one
+ * room (the shown storyboards, newest `ROOM_ROWS_MAX` by change; the deliverables, newest `ROOM_ROWS_MAX` by creation),
+ * read in two statements whatever the number of rooms, then `roomStageOf`. Keyed by project id as given. The caller has
+ * already decided that this person may see these projects; a missing table reads as no rows.
+ */
+export async function loadRoomStages(
+  sql: SqlRunner,
+  organizationId: string,
+  projects: ReadonlyArray<Pick<RoomProject, 'id' | 'status' | 'createdAt' | 'updatedAt'>>,
+): Promise<Map<string, { stage: RoomStage; steps: RoomStep[] }>> {
+  const stages = new Map<string, { stage: RoomStage; steps: RoomStep[] }>();
+  const ids = projects.map((p) => p.id).filter((id) => UUID.test(id));
+  if (!UUID.test(organizationId) || ids.length === 0) return stages;
+  const boards = await rowsOrEmpty<BoardRow & { project_id: string }>(
+    sql,
+    `select x.* from (
+       select project_id::text as project_id, ${BOARD_COLUMNS},
+              row_number() over (partition by project_id order by updated_at desc) as rn
+         from brand_storyboards
+        where organization_id = $1 and project_id = any($2::uuid[]) and ${SHOWN_BOARDS}
+     ) x where x.rn <= ${ROOM_ROWS_MAX}`,
+    [organizationId, ids],
+  );
+  const reviews = await rowsOrEmpty<ReviewRow & { project_id: string }>(
+    sql,
+    `select x.* from (
+       select project_id::text as project_id, ${REVIEW_COLUMNS},
+              row_number() over (partition by project_id order by created_at desc) as rn
+         from brand_studio_reviews
+        where organization_id = $1 and project_id = any($2::uuid[]) and deleted_at is null
+     ) x where x.rn <= ${ROOM_ROWS_MAX}`,
+    [organizationId, ids],
+  );
+  const byProject = <T extends { project_id: string }>(rows: readonly T[], id: string): T[] => rows.filter((row) => String(row.project_id).toLowerCase() === id.toLowerCase());
+  for (const project of projects) {
+    if (!UUID.test(project.id)) continue;
+    stages.set(project.id, roomStageOf(project, byProject(boards, project.id), byProject(reviews, project.id)));
+  }
+  return stages;
+}
+
 export async function loadRoomOverview(sql: SqlRunner, input: OverviewInput): Promise<RoomOverview> {
   const { organizationId, project, userId } = input;
   const [boards, reviews, messages, unread] = await Promise.all([
     // A draft the team made stays hidden from the brand until it is shared (0083).
     rowsOrEmpty<BoardRow>(
       sql,
-      `select id, lineage_id, title, version, status, created_role, shared_at, status_changed_at, updated_at
+      `select ${BOARD_COLUMNS}
          from brand_storyboards
-        where organization_id = $1 and project_id = $2 and deleted_at is null
-          and (status <> 'draft' or created_role = 'brand')
-        order by updated_at desc limit 100`,
+        where organization_id = $1 and project_id = $2 and ${SHOWN_BOARDS}
+        order by updated_at desc limit ${ROOM_ROWS_MAX}`,
       [organizationId, project.id],
     ),
     rowsOrEmpty<ReviewRow>(
       sql,
-      `select id, coalesce(stack_id, id)::text as stack_key, title, version, status, status_changed_at, created_at
+      `select ${REVIEW_COLUMNS}
          from brand_studio_reviews
         where organization_id = $1 and project_id = $2 and deleted_at is null
-        order by created_at desc limit 100`,
+        order by created_at desc limit ${ROOM_ROWS_MAX}`,
       [organizationId, project.id],
     ),
     rowsOrEmpty<MessageRow>(
@@ -361,44 +464,8 @@ export async function loadRoomOverview(sql: SqlRunner, input: OverviewInput): Pr
     }));
   const todos: RoomTodo[] = [...boardTodos, ...reviewTodos, ...(unread > 0 ? [{ kind: 'chat', unread } as RoomTodo] : [])];
 
-  /* stage line */
-  const sharedBoards = boards.filter((b) => b.status !== 'draft');
-  const reached: Record<RoomStage, string | null | false> = {
-    requested: project.createdAt,
-    storyboard: sharedBoards.length ? minIso(sharedBoards.map((b) => iso(b.shared_at) ?? iso(b.updated_at))) : false,
-    draft: reviews.length ? minIso(reviews.map((r) => iso(r.created_at))) : false,
-    revision: (() => {
-      const later = reviews.filter((r) => Number(r.version) > 1).map((r) => iso(r.created_at));
-      const asked = reviews.filter((r) => r.status === 'changes_requested').map((r) => iso(r.status_changed_at) ?? iso(r.created_at));
-      return later.length || asked.length ? minIso([...later, ...asked]) : false;
-    })(),
-    done: (() => {
-      if (project.status === 'completed') return project.updatedAt;
-      if (latestReviews.length && latestReviews.every((r) => r.status === 'approved')) {
-        return maxIso(latestReviews.map((r) => iso(r.status_changed_at) ?? iso(r.created_at)));
-      }
-      return false;
-    })(),
-  };
-  let currentIndex = 0;
-  ROOM_STAGES.forEach((stage, index) => {
-    if (reached[stage] !== false) currentIndex = index;
-  });
-  const stage = ROOM_STAGES[currentIndex]!;
-  const steps: RoomStep[] = ROOM_STAGES.map((s, index) => {
-    const at = reached[s] === false ? null : (reached[s] as string | null);
-    const state: RoomStepState =
-      index > currentIndex
-        ? 'ahead'
-        : index === currentIndex
-          ? s === 'done'
-            ? 'done'
-            : 'current'
-          : reached[s] === false
-            ? 'skipped'
-            : 'done';
-    return { stage: s, state, at };
-  });
+  /* stage line (one rule with the home's project cards) */
+  const { stage, steps } = roomStageOf(project, boards, reviews);
 
   /* recent activity: the request itself is always the first line (read from the project, not a message) */
   const activity: RoomActivity[] = [];

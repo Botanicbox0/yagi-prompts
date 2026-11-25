@@ -40,8 +40,9 @@ import { imageInfo, sniffMime, videoInfo } from '@/lib/brand-studio/files';
 import { isStudioMediaKey, type StudioMediaStore } from '@/lib/brand-studio/media-store';
 import { dropUnreferencedStudioKeys } from '@/lib/brand-studio/physical-cleanup';
 import { publicNotesOnly, teamNotesReady } from '@/lib/brand-studio/review-visibility';
-import type { RoomAlertItem, RoomSummary } from '@/components/brand-rooms/seams';
+import type { RoomAlertItem } from '@/components/brand-rooms/seams';
 import { canTalkIn, requireRoomProject, RoomDenied, roomSeat, type RoomSeat } from './access';
+import { roomBellFor, type RoomBellRequest, type RoomSummaryWithBell } from './bell';
 import type { RoomEventKind, RoomRef } from './events';
 import { enqueueNotices } from './notices';
 import {
@@ -1391,8 +1392,18 @@ async function loadRoomAlerts(
   return alerts.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 20);
 }
 
-/** `GET /api/brand-rooms/summary?organizationId=` — what the rail and the inbox's channel list read. */
-export async function loadRoomSummary(deps: Pick<RoomMessageDeps, 'sql'>, viewer: Viewer, organizationId: string): Promise<RoomSummary | RoomFailure> {
+/**
+ * `GET /api/brand-rooms/summary?organizationId=` — what the rail and the inbox's channel list read.
+ *
+ * `options.bell` is the 직접 만들기 bell's opt-in (`&bell=1`, ./bell.ts, slice 3a): the same summary, plus `bell` for a
+ * workspace member while the spine is open for the organization. Without it the answer is exactly what it was.
+ */
+export async function loadRoomSummary(
+  deps: Pick<RoomMessageDeps, 'sql'>,
+  viewer: Viewer,
+  organizationId: string,
+  options: { bell?: RoomBellRequest } = {},
+): Promise<RoomSummaryWithBell | RoomFailure> {
   if (!UUID.test(organizationId)) return failure('invalid');
   return guard(() =>
     deps.sql.transaction(async (sql) => {
@@ -1406,7 +1417,10 @@ export async function loadRoomSummary(deps: Pick<RoomMessageDeps, 'sql'>, viewer
         lastLine: lastLineOf(r.last_line),
       }));
       const alerts = await loadRoomAlerts(sql, organizationId, channels);
-      return { ok: true as const, unread: channels.reduce((n, c) => n + c.unread, 0), channels, alerts };
+      const summary = { ok: true as const, unread: channels.reduce((n, c) => n + c.unread, 0), channels, alerts };
+      if (!options.bell) return summary;
+      const bell = await roomBellFor(sql, seat, summary, options.bell);
+      return bell ? { ...summary, bell } : summary;
     }),
   );
 }

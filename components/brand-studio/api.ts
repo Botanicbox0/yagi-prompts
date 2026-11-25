@@ -39,6 +39,7 @@ import {
   type StudioAssetReserved,
   type StudioAssetRole,
   type StudioAssetSaved,
+  type StudioBrandProjectCards,
   type StudioBrandProjectCreated,
   type StudioBrandProjectFiles,
   type StudioBrandProjectList,
@@ -217,6 +218,13 @@ export function createStudioApi({ organizationId, fetch: fetcher = (...args) => 
         method: "POST",
         headers: json,
         body: JSON.stringify({ operation: "project.overview", input: { organizationId } }),
+      }),
+    /** The 직접 만들기 home's project cards and its 미분류 line (spine open; read once per visit, never polled). */
+    loadBrandProjectCards: () =>
+      send<StudioBrandProjectCards>(STUDIO_ENDPOINT, {
+        method: "POST",
+        headers: json,
+        body: JSON.stringify({ operation: "project.cards", input: { organizationId } }),
       }),
     /** One scope's files, one page; pass the answer's `next` as `cursor` for the following page (spine open). */
     listBrandProjectFiles: (input: Omit<BrandProjectFilesInput, "organizationId">) =>
