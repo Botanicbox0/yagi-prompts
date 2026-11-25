@@ -57,7 +57,9 @@ export const charCount = (value: string): number => Array.from(value).length;
 
 /* ------------------------------------------------------------------ link */
 
-const CONTROL_OR_SPACE = /[\u0000- \u007f-￿]/;
+const CONTROL_OR_SPACE = /[\u0000-\u0020\u007f-\uffff]/;
+/** A `%` that does not start two hex digits, or one that encodes a control character (`%00` to `%1F`, `%7F`). */
+const BAD_ESCAPE = /%(?![0-9a-f]{2})|%[01][0-9a-f]|%7f/i;
 const INTERNAL_PREFIX = '/brand/';
 /** Lower-case labels only, no user, no port: `twings.app` or a subdomain of it, then a path, query or fragment. */
 const TWINGS_HTTPS = /^https:\/\/((?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)*twings\.app)(?:[/?#].*)?$/;
@@ -70,12 +72,16 @@ export type BrandNewsLinkRefusal = 'empty' | 'tooLong' | 'characters' | 'notAllo
  *    (`.` or `..`, also percent-encoded), and no encoded slash or backslash inside a segment;
  *  - an `https://` address (lower-case scheme and host) whose host is exactly `twings.app` or a subdomain of it,
  *    with no user and no port.
- * Every character must be printable ASCII (percent-encode anything else); no space or control character.
+ * Every character must be printable ASCII (percent-encode anything else); no space or control character, raw or
+ * percent-encoded; every `%` starts a valid escape; at most one `#`. So the link is stored, scoped and followed as
+ * written (lib/brands/workspace/selection.ts `scopedHref` only adds `organizationId` to the query).
  */
 export function judgeBrandNewsLink(raw: string): { ok: true; href: string; external: boolean } | { ok: false; reason: BrandNewsLinkRefusal } {
   if (raw === '') return { ok: false, reason: 'empty' };
   if (raw.length > BRAND_NEWS_LIMITS.hrefChars) return { ok: false, reason: 'tooLong' };
-  if (CONTROL_OR_SPACE.test(raw) || raw.includes('\\')) return { ok: false, reason: 'characters' };
+  if (CONTROL_OR_SPACE.test(raw) || raw.includes('\\') || BAD_ESCAPE.test(raw) || raw.indexOf('#') !== raw.lastIndexOf('#')) {
+    return { ok: false, reason: 'characters' };
+  }
   if (raw.startsWith(INTERNAL_PREFIX)) {
     if (raw.includes('//')) return { ok: false, reason: 'notAllowed' };
     const path = raw.split(/[?#]/, 1)[0]!;

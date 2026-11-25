@@ -126,7 +126,7 @@ const read = (viewer: Viewer = owner(), organizationId = f.orgId, extra: { mode?
   loadHomeAnnouncement({ sql: extra.sql ?? f.sql, imageUrl: media }, viewer, { organizationId, mode: extra.mode ?? 'make', locale: extra.locale ?? 'ko' });
 const idOf = async (viewer?: Viewer, organizationId?: string, extra?: Parameters<typeof read>[2]) => (await read(viewer, organizationId, extra))?.id ?? null;
 
-async function memberOrg(id = randomUUID(), name = 'Second fixture brand'): Promise<string> {
+async function memberOrg(id: string = randomUUID(), name = 'Second fixture brand'): Promise<string> {
   await f.sql.query('insert into brand_organizations (id, name, created_by, request_id) values ($1, $2, $3, $4)', [id, name, f.ids.owner, randomUUID()]);
   await f.sql.query("insert into brand_memberships (organization_id, user_id, role) values ($1, $2, 'owner')", [id, f.ids.owner]);
   return id;
@@ -508,5 +508,9 @@ describe('the admin’s count follows the same rule', () => {
         expect(await countBrandNewsReach(f.sql, audience as never), `${rooms} ${JSON.stringify(audience)}`).toBe(shown);
       }
     }
+    // No home without studio v2: the read answers null and the count is 0.
+    vi.stubEnv('BRAND_STUDIO_V2', 'off');
+    expect(await read()).toBeNull();
+    expect(await countBrandNewsReach(f.sql, {})).toBe(0);
   });
 });

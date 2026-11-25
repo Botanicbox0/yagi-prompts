@@ -1,10 +1,12 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import sharp from 'sharp';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AdminOutcome } from '@/lib/admin/context';
 import { dispatchAdmin } from '@/lib/admin/dispatch';
-import { ADMIN_OPERATION_NAMES } from '@/lib/admin/operations';
-import { parseBrandNewsInstant } from '@/lib/admin/brand-news-operations';
+import { ADMIN_OPERATIONS, ADMIN_OPERATION_NAMES } from '@/lib/admin/operations';
+import { BRAND_NEWS_OPERATIONS, parseBrandNewsInstant } from '@/lib/admin/brand-news-operations';
 import { BRAND_NEWS_LIMITS, judgeBrandNewsLink, type BrandNewsAdminItem } from '@/lib/brand-news/contracts';
 import { loadBrandNewsAdmin, loadBrandNewsReach, resetBrandNewsProbe } from '@/lib/brand-news/service';
 import type { SqlRunner } from '@/lib/db/sql-runner';
@@ -85,12 +87,16 @@ async function banner(width = 1600, height = 400, noisy = false): Promise<File> 
 /* ---------------------------------------------------------------- registry */
 
 describe('the registry', () => {
-  it('adds the three operations and leaves every other one exactly as on origin/main', () => {
-    for (const name of ['brandNews.save', 'brandNews.publish', 'brandNews.end']) expect(ADMIN_OPERATION_NAMES).toContain(name);
-    const others = ADMIN_OPERATION_NAMES.filter((name) => !name.startsWith('brandNews.'));
-    // origin/main fa208c6e: 186 names, in this order (sha256 of the names joined by new lines).
-    expect(others).toHaveLength(186);
-    expect(createHash('sha256').update(others.join('\n')).digest('hex')).toBe('3e5ffaa4c68fe92cb965cfce542ac0b48e3120aeda56232b5bf2dc679ad80d66');
+  it('adds the three operations, last, under names no other module uses, so every other entry is untouched', () => {
+    // At this commit the other 186 names equal origin/main's list, in order (checked once against fa208c6e; see the
+    // slice report). What is pinned here stays true when later work adds operations of its own.
+    const names = ['brandNews.save', 'brandNews.publish', 'brandNews.end'] as const;
+    expect(ADMIN_OPERATION_NAMES.filter((name) => name.startsWith('brandNews.'))).toEqual([...names]);
+    for (const name of names) expect(ADMIN_OPERATIONS[name]).toBe(BRAND_NEWS_OPERATIONS[name]);
+    const adminDir = join(process.cwd(), 'lib', 'admin');
+    for (const file of readdirSync(adminDir).filter((f) => /\.tsx?$/.test(f) && f !== 'brand-news-operations.ts')) {
+      expect(readFileSync(join(adminDir, file), 'utf8'), file).not.toMatch(/['"]brandNews\./);
+    }
   });
 
   it('is admin-only: a member, a free viewer and nobody signed in are refused before anything is parsed', async () => {
@@ -108,6 +114,11 @@ describe('the registry', () => {
     for (const [name, fields] of [['brandNews.save', DRAFT], ['brandNews.publish', { id }], ['brandNews.end', { id }]] as const) {
       expect(await h.run(name, fields), name).toEqual({ ok: false, code: 'disabled', detail: 'BRAND_NEWS' });
     }
+    // Whatever the form holds: the same code, not `invalid`.
+    for (const [name, fields] of [['brandNews.save', { shape: 'card' }], ['brandNews.publish', { id: 'nope' }], ['brandNews.end', {}]] as const) {
+      expect(await h.run(name, fields), name).toEqual({ ok: false, code: 'disabled', detail: 'BRAND_NEWS' });
+    }
+    expect(await statusOf(id)).toBe('draft');
     expect(await loadBrandNewsAdmin({ sql }, ADMIN_VIEWER)).toEqual({ ok: false, code: 'disabled' });
     expect(await loadBrandNewsReach({ sql }, ADMIN_VIEWER, id)).toEqual({ ok: false, code: 'disabled' });
     vi.stubEnv('BRAND_NEWS', 'on');
@@ -169,8 +180,12 @@ describe('brandNews.save', () => {
       [{ ctaLabelKo: '다'.repeat(13) }, 'brandNews:ctaLabelKo:tooLong'],
       [{ ctaLabelEn: 'c'.repeat(13) }, 'brandNews:ctaLabelEn:tooLong'],
       [{ titleKo: '두 줄\n제목' }, 'brandNews:titleKo:characters'],
-      [{ titleEn: 'right-to-left ‮ override' }, 'brandNews:titleEn:characters'],
+      [{ titleEn: 'right-to-left \u202e override' }, 'brandNews:titleEn:characters'],
       [{ kickerKo: 'tab\there' }, 'brandNews:kickerKo:characters'],
+      [{ titleKo: 'line\u2028separator' }, 'brandNews:titleKo:characters'],
+      [{ ctaLabelEn: 'pa\u2029ra' }, 'brandNews:ctaLabelEn:characters'],
+      [{ kickerEn: 'Ne\ufeffw' }, 'brandNews:kickerEn:characters'],
+      [{ titleEn: 'zero\u200bwidth' }, 'brandNews:titleEn:characters'],
       [{ shape: 'card' }, 'brandNews:shape'],
       [{ startsAt: '' }, 'brandNews:startsAt'],
       [{ endsAt: 'next week' }, 'brandNews:endsAt'],
@@ -193,9 +208,11 @@ describe('brandNews.save', () => {
     for (const [fields, detail] of cases) {
       expect(await save(fields), JSON.stringify(fields)).toEqual({ ok: false, code: 'invalid', detail });
     }
-    // Exactly at the limits is fine.
+    // Exactly at the limits is fine, and an empty audience field beside the JSON one is "not sent".
     await created({ kickerKo: '가'.repeat(12), titleEn: 't'.repeat(60), ctaLabelKo: '다'.repeat(12), startsAt: '2026-12-01T00:00:00Z', endsAt: '2027-01-30T00:00:00Z' });
-    expect((await sql.query('select count(*)::int as n from brand_announcements')).rows[0]).toEqual({ n: 1 });
+    const id = await created({ audience: '{"plans":["none"]}', audienceOrgs: '', audienceModes: [''] });
+    expect((await rowOf(id)).audience).toEqual({ plans: ['none'] });
+    expect((await sql.query('select count(*)::int as n from brand_announcements')).rows[0]).toEqual({ n: 2 });
   });
 
   it('keeps the link to /brand/ paths and https on twings.app, whatever is tried', async () => {
@@ -216,6 +233,15 @@ describe('brandNews.save', () => {
       'https://evil.example/twings.app',
       'https://evil.example?x=.twings.app',
       'https://evil.example#.twings.app',
+      '/brand/x%00',
+      '/brand/x%0a',
+      '/brand/x%0D%0Aheader',
+      '/brand/x%7F',
+      '/brand/x%',
+      '/brand/x%2',
+      '/brand/x#a#b',
+      'https://twings.app/%0d%0a',
+      'https://twings.app/a#b#c',
       'https://eviltwings.app',
       'https://twings.app@evil.example',
       'https://user:pass@twings.app/',
@@ -250,7 +276,7 @@ describe('brandNews.save', () => {
       '/brand/x\ny',
       '/brand/x\u0000',
       '/brand/x\u007f',
-      '/brand/x​',
+      '/brand/x\u200b',
       '/brand/홈',
       `/brand/${'x'.repeat(BRAND_NEWS_LIMITS.hrefChars)}`,
     ];
@@ -363,13 +389,18 @@ describe('brandNews.publish', () => {
     const ended = await rowOf(first);
     expect(ended.status).toBe('ended');
     expect(ended.ended_at).not.toBeNull();
-    expect((await audits()).map((a) => [a.entity_id, a.action, a.reason])).toEqual([
-      [first, 'brandNews.save', 'brand_news_draft_created'],
-      [second, 'brandNews.save', 'brand_news_draft_created'],
-      [first, 'brandNews.publish', 'brand_news_published'],
-      [first, 'brandNews.end', 'brand_news_ended_by_publish'],
-      [second, 'brandNews.publish', 'brand_news_published'],
-    ]);
+    // Rows written in one transaction share its time, so they are compared as a set.
+    const trail = (await audits()).map((a) => [a.entity_id, a.action, a.reason]);
+    expect(trail).toHaveLength(5);
+    expect(trail).toEqual(
+      expect.arrayContaining([
+        [first, 'brandNews.save', 'brand_news_draft_created'],
+        [second, 'brandNews.save', 'brand_news_draft_created'],
+        [first, 'brandNews.publish', 'brand_news_published'],
+        [first, 'brandNews.end', 'brand_news_ended_by_publish'],
+        [second, 'brandNews.publish', 'brand_news_published'],
+      ]),
+    );
     expect((await audits(second)).at(-1)!.details).toEqual({ slot: 'home', ended: [first] });
   });
 
@@ -378,11 +409,14 @@ describe('brandNews.publish', () => {
     await h.run('brandNews.publish', { id: live });
     const mine = await created({ titleKo: '내 소식' });
     const theirs = await created({ titleKo: '다른 관리자의 소식' });
-    // Another publish commits between this one ending the live row and going live: simulated on the one PGlite
-    // connection by sending its statement right after ours ends the slot's live row.
+    // What a rival publish leaves behind: another row of the slot already live when ours goes live. PGlite has one
+    // connection, so the rival's statement is sent right after ours ends the slot's live row, INSIDE our transaction
+    // (and is rolled back with it). This proves the unique index's refusal becomes `badTransition`/`slotBusy` and that
+    // nothing of the lost publish stays. The two real cross-transaction orders (READ COMMITTED: the loser waits on the
+    // live row's lock or on the index entry, then gets 23505) are reasoned in the slice report, not run here.
     const racing = (inner: SqlRunner): SqlRunner => ({
-      query: async (text, params) => {
-        const result = await inner.query(text, params);
+      query: async <T = Record<string, unknown>>(text: string, params?: unknown[]): Promise<{ rows: T[] }> => {
+        const result = await inner.query<T>(text, params);
         if (/set status = 'ended'/.test(text) && /where slot = \$1/.test(text)) {
           await inner.query("update brand_announcements set status = 'live', published_at = now() where id = $1", [theirs]);
         }
@@ -445,6 +479,7 @@ describe('the admin page’s reads', () => {
   });
 
   it('counts the organizations a draft would reach, as a number only', async () => {
+    vi.stubEnv('BRAND_STUDIO_V2', 'on');
     const owner = randomUUID();
     await h.db.query('insert into auth.users (id) values ($1)', [owner]);
     await h.db.query('insert into profiles (id, email) values ($1, $2)', [owner, `${owner}@fixture.invalid`]);

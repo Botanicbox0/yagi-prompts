@@ -28,7 +28,7 @@ import * as f from './form';
  * `platform_audit` row in the same transaction.
  *
  * Refusals reuse the admin dictionary's codes; the detail says exactly what (`brandNews:<what>`):
- *   disabled        `BRAND_NEWS` is off, or migration 0196 has not reached this database
+ *   disabled        `BRAND_NEWS` is off (whatever the form holds), or migration 0196 has not reached this database
  *   invalid         a field the rules refuse (`brandNews:<field>[:<reason>]`)
  *   upload/storage  the banner picture (`brandNews:image:<reason>`)
  *   notFound        no such announcement
@@ -44,8 +44,8 @@ const AUDIT_ACTIONS = { save: 'brandNews.save', publish: 'brandNews.publish', en
 const LIVE_INDEX = 'brand_announcements_one_live';
 const ACCEPTED_IMAGES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/avif']);
 const WEBP_QUALITY = 82;
-/** One line each: no control character (newlines included) and no bidirectional override. */
-const BAD_TEXT = /[\u0000-\u001f\u007f-\u009f​-‏‪-‮⁦-⁩]/;
+/** One line each: no control character (new lines included), no line or paragraph separator, no invisible or direction mark. */
+const BAD_TEXT = /[\u0000-\u001f\u007f-\u009f\u061c\u200b-\u200f\u2028-\u202e\u2060-\u2069\ufeff]/;
 const AUDIENCE_FIELDS = new Set(['audience', 'audienceModes', 'audiencePlans', 'audienceOrgs']);
 
 const refuse = (what: string) => ({ ok: false as const, detail: `brandNews:${what}` });
@@ -93,29 +93,33 @@ function words(form: FormData, name: string, max: number): { ok: true; value: st
 /**
  * The audience from the form: either one `audience` field holding the JSON object, or the plain form's fields
  * (`audienceModes` and `audiencePlans` repeated, `audienceOrgs` as ids separated by commas, spaces or new lines).
- * Nothing at all is the default audience. Any other `audience…` field, or both ways at once, is refused, and so is
- * every key the schema does not know.
+ * Nothing at all is the default audience; an empty field counts as not sent. Any other `audience…` field, or both
+ * ways at once with values, is refused, and so is every key the schema does not know.
  */
 function audienceFrom(form: FormData): { ok: true; value: BrandNewsAudience } | { ok: false; detail: string } {
-  const keys = new Set<string>();
-  for (const key of form.keys()) if (key.startsWith('audience')) keys.add(key);
-  for (const key of keys) if (!AUDIENCE_FIELDS.has(key)) return refuse('audience:unknownKey');
+  for (const key of new Set(form.keys())) if (key.startsWith('audience') && !AUDIENCE_FIELDS.has(key)) return refuse('audience:unknownKey');
+  const strings = (name: string) =>
+    form
+      .getAll(name)
+      .filter((v): v is string => typeof v === 'string')
+      .flatMap((v) => (name === 'audienceOrgs' ? v.split(/[\s,]+/) : [v.trim()]))
+      .filter((v) => v !== '');
+  const modes = strings('audienceModes');
+  const plans = strings('audiencePlans');
+  const orgs = strings('audienceOrgs');
   const json = f.str(form, 'audience');
-  const plain = keys.has('audienceModes') || keys.has('audiencePlans') || keys.has('audienceOrgs');
   let value: unknown;
   if (json !== '') {
-    if (plain) return refuse('audience:twoWays');
+    if (modes.length || plans.length || orgs.length) return refuse('audience:twoWays');
     try {
       value = JSON.parse(json);
     } catch {
       return refuse('audience:json');
     }
   } else {
-    const strings = (name: string) => form.getAll(name).filter((v): v is string => typeof v === 'string').map((v) => v.trim()).filter((v) => v !== '');
-    const orgs = f.str(form, 'audienceOrgs').split(/[\s,]+/).filter((v) => v !== '');
     const out: Record<string, unknown> = {};
-    if (strings('audienceModes').length) out.modes = strings('audienceModes');
-    if (strings('audiencePlans').length) out.plans = strings('audiencePlans');
+    if (modes.length) out.modes = modes;
+    if (plans.length) out.plans = plans;
     if (orgs.length) out.orgs = orgs;
     value = out;
   }
@@ -400,8 +404,20 @@ export function brandNewsEnd(env: Env = process.env): AdminOperation<{ id: strin
   };
 }
 
+/**
+ * The dispatcher parses a form before it runs the operation (lib/admin/dispatch.ts). While `BRAND_NEWS` is off,
+ * `parse` lets any form through and `run` answers `disabled`, so a switched-off slot answers one code whatever the
+ * form holds. Each operation's own `run` checks the switch and the tables again.
+ */
+function switched<T>(op: AdminOperation<T>, env: Env = process.env): AdminOperation<T | null> {
+  return {
+    parse: (form) => (brandNewsOpen(env) ? op.parse(form) : { ok: true, value: null }),
+    run: (ctx, input) => (input === null ? Promise.resolve(fail('disabled', 'BRAND_NEWS')) : op.run(ctx, input)),
+  };
+}
+
 export const BRAND_NEWS_OPERATIONS = {
-  'brandNews.save': brandNewsSave(),
-  'brandNews.publish': brandNewsPublish(),
-  'brandNews.end': brandNewsEnd(),
+  'brandNews.save': switched(brandNewsSave()),
+  'brandNews.publish': switched(brandNewsPublish()),
+  'brandNews.end': switched(brandNewsEnd()),
 } as const;

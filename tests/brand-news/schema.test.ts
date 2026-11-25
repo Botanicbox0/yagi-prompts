@@ -64,7 +64,8 @@ async function refused(over: Record<string, unknown>, constraint: RegExp): Promi
 describe('0196 — the tables', () => {
   it('applies after every earlier core file, and a second time without error', async () => {
     const files = coreMigrationFiles();
-    expect(files.at(-1)).toBe(CORE);
+    expect(files).toContain(CORE);
+    expect(files.indexOf(CORE)).toBeGreaterThan(files.indexOf('0194_core_brand_project_spine.sql'));
     await db.exec(readFileSync(join(MIGRATIONS_DIR, CORE), 'utf8'));
     const draft = await insert();
     expect((await db.query('select slot, shape, status, audience, kicker_ko, published_at from brand_announcements where id = $1', [draft])).rows[0]).toEqual({
@@ -100,6 +101,8 @@ describe('0196 — the tables', () => {
       ['kicker_en', 'trailing '],
       ['title_en', 'two\nlines'],
       ['cta_label_ko', 'tab\there'],
+      ['title_ko', 'line\u2028separator'],
+      ['kicker_en', 'para\u2029separator'],
     ] as const) {
       await refused({ [column]: value }, /brand_announcements_(kicker|title|cta_label)/);
     }
@@ -217,7 +220,16 @@ describe('0197 — glue', () => {
   const statements = glue.replace(/--[^\n]*/g, '');
 
   it('pairs with 0196 and is a glue file', () => {
-    expect(glueMigrationFiles().at(-1)).toBe(GLUE);
+    expect(glueMigrationFiles()).toContain(GLUE);
+  });
+
+  it('0196 already turns row level security on and forces it, so nothing is open before 0197 lands', () => {
+    const core = readFileSync(join(MIGRATIONS_DIR, CORE), 'utf8');
+    for (const table of ['brand_announcements', 'brand_announcement_dismissals']) {
+      expect(core).toContain(`alter table ${table} enable row level security;`);
+      expect(core).toContain(`alter table ${table} force row level security;`);
+      expect(core).toContain(`revoke all on ${table} from public;`);
+    }
   });
 
   it('closes both tables to browser roles, with no policy', () => {

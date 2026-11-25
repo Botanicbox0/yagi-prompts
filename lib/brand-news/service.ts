@@ -341,10 +341,12 @@ export async function loadBrandNewsAdmin(
 /**
  * How many organizations an audience reaches now, by the home read's rule: open (not sandboxed, generation and
  * 직접 만들기 open), at least one active member, and taken by the audience on one of the homes it names that the
- * organization has (야기 팀과 only while project rooms are open). A number only: no organization is named.
- * A constant number of statements, whatever the number of organizations.
+ * organization has (야기 팀과 only while project rooms are open). While studio v2 is off there is no home to show it on,
+ * so the count is 0, as the read answers null. A number only: no organization is named. A constant number of
+ * statements, whatever the number of organizations.
  */
 export async function countBrandNewsReach(sql: SqlRunner, audience: BrandNewsAudience, env: Env = process.env): Promise<number> {
+  if (!brandStudioV2Open(env as NodeJS.ProcessEnv)) return 0;
   const listed = audience.orgs ?? null;
   const orgs = (
     await sql.query<{ id: string; name: string }>(

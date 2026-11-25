@@ -15,7 +15,8 @@
 --
 -- Safe to deploy the code first: the server looks for both tables (lib/brand-news/service.ts, `brandNewsTablesReady`)
 -- and answers "no announcement" until they exist, whatever `BRAND_NEWS` says. Nothing existing is altered.
--- Apply glue 0197 right after it in the same session (it closes both tables to browser roles).
+-- Both tables are born with row level security on and forced (end of this file); apply glue 0197 right after it in the
+-- same session (it revokes the browser roles and grants the server role exactly what the code does).
 -- Re-runnable: every statement is guarded or idempotent.
 
 create table if not exists brand_announcements (
@@ -44,22 +45,23 @@ create table if not exists brand_announcements (
   constraint brand_announcements_slot check (slot in ('home')),
   constraint brand_announcements_shape check (shape in ('line', 'banner')),
   constraint brand_announcements_status check (status in ('draft', 'live', 'ended')),
-  -- The words: trimmed, one line each, at most 12 / 60 / 12 characters per language. Empty means "not written":
-  -- an empty kicker or button label is the screen's default, an empty title cannot go live (below).
+  -- The words: trimmed, one line each (no control character, no Unicode line or paragraph separator), at most
+  -- 12 / 60 / 12 characters per language. Empty means "not written": an empty kicker or button label is the screen's
+  -- default, an empty title cannot go live (below).
   constraint brand_announcements_kicker check (
     kicker_ko = btrim(kicker_ko) and kicker_en = btrim(kicker_en)
     and char_length(kicker_ko) <= 12 and char_length(kicker_en) <= 12
-    and kicker_ko !~ '[[:cntrl:]]' and kicker_en !~ '[[:cntrl:]]'
+    and kicker_ko !~ '[[:cntrl:]\u2028\u2029]' and kicker_en !~ '[[:cntrl:]\u2028\u2029]'
   ),
   constraint brand_announcements_title check (
     title_ko = btrim(title_ko) and title_en = btrim(title_en)
     and char_length(title_ko) <= 60 and char_length(title_en) <= 60
-    and title_ko !~ '[[:cntrl:]]' and title_en !~ '[[:cntrl:]]'
+    and title_ko !~ '[[:cntrl:]\u2028\u2029]' and title_en !~ '[[:cntrl:]\u2028\u2029]'
   ),
   constraint brand_announcements_cta_label check (
     cta_label_ko = btrim(cta_label_ko) and cta_label_en = btrim(cta_label_en)
     and char_length(cta_label_ko) <= 12 and char_length(cta_label_en) <= 12
-    and cta_label_ko !~ '[[:cntrl:]]' and cta_label_en !~ '[[:cntrl:]]'
+    and cta_label_ko !~ '[[:cntrl:]\u2028\u2029]' and cta_label_en !~ '[[:cntrl:]\u2028\u2029]'
   ),
   -- The link: printable ASCII only (no space, no control character), no backslash, at most 500 characters, and
   -- either an internal path under /brand/ without '//' or an https address on twings.app or one of its subdomains
@@ -84,8 +86,9 @@ create table if not exists brand_announcements (
       and image_key ~ '^[0-9a-f]{64}\.webp$' and image_w = 1600 and image_h = 400
     )
   ),
-  -- Both ends required (not null above), the start before the end, at most 60 days apart.
-  constraint brand_announcements_period check (starts_at < ends_at and ends_at <= starts_at + interval '60 days'),
+  -- Both ends required (not null above), the start before the end, at most 60 days apart, counted in hours so the
+  -- rule does not depend on the session's time zone (the server counts 60 × 24 hours too).
+  constraint brand_announcements_period check (starts_at < ends_at and ends_at <= starts_at + interval '1440 hours'),
   constraint brand_announcements_audience check (jsonb_typeof(audience) = 'object'),
   -- The lifecycle's footprints: a draft was never published, a live row was published and not ended, an ended row
   -- was published and then ended. Ended is final (a new draft is the way back).
@@ -116,3 +119,12 @@ create table if not exists brand_announcement_dismissals (
 
 -- A person's dismissals go with their profile (account deletion cascades through this index).
 create index if not exists idx_brand_announcement_dismissals_user on brand_announcement_dismissals (user_id);
+
+-- Closed from the moment they exist, before glue 0197 lands: no browser role may read or write either table even if
+-- the glue is applied later in the session (0178's shape). 0197 then sets the server role's exact grants.
+alter table brand_announcements enable row level security;
+alter table brand_announcements force row level security;
+revoke all on brand_announcements from public;
+alter table brand_announcement_dismissals enable row level security;
+alter table brand_announcement_dismissals force row level security;
+revoke all on brand_announcement_dismissals from public;

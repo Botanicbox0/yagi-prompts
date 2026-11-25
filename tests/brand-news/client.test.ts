@@ -51,9 +51,12 @@ describe('where the slot’s server code is used from', () => {
   const code = (file: string) => readFileSync(path.join(ROOT, file), 'utf8').replace(/^\s*(\/\/|\*|\/\*).*$/gm, '');
   const all = [...files('app'), ...files('components'), ...files('lib')];
 
-  it('the service is imported only by the workspace door and the admin operations (the home and the admin page come next)', () => {
+  it('the service is imported only by server code: the workspace door, the admin operations, and the two pages that come next', () => {
     const users = all.filter((file) => /brand-news\/service/.test(code(file)) && !file.startsWith('lib/brand-news/'));
-    expect(users.sort()).toEqual(['app/api/brand-workspace/route.ts', 'lib/admin/brand-news-operations.ts']);
+    expect(users).toEqual(expect.arrayContaining(['app/api/brand-workspace/route.ts', 'lib/admin/brand-news-operations.ts']));
+    // The screen half adds the home page and the admin page; nothing else (no client component) may import it.
+    const allowed = /^(app\/api\/brand-workspace\/route\.ts|lib\/admin\/brand-news-operations\.ts|app\/\(brand\)\/brand\/home\/page\.tsx|app\/\(admin\)\/admin\/brand-news\/.+\.tsx?)$/;
+    for (const file of users) expect(file, file).toMatch(allowed);
   });
 
   it('nothing under components/ imports the server module; the client method reads the pure contracts only', () => {
