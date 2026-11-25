@@ -313,6 +313,8 @@
     gap: 12px;
     width: 100%;
     height: var(--bw-rail-row);
+    /* 야기 팀과's row is a link: without this the workspace's 42px floor for sidebar links makes it taller than a row. */
+    min-height: 0;
     padding: 0 12px;
     border-radius: 18px;
     box-shadow: inset 0 0 0 1px var(--ys-line-strong);
@@ -373,6 +375,7 @@
   .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail .bw-rail-credits {
     display: block;
     margin: 0 var(--bw-rail-pad);
+    min-height: 0;
     padding: 8px 12px 9px;
     border-radius: 12px;
     background: transparent;
@@ -380,6 +383,11 @@
     color: inherit;
     text-decoration: none;
     transition: background-color var(--ys-dur) var(--ys-ease);
+  }
+  .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-foot .bw-rail-credits-bar {
+    height: 2px;
+    border-radius: 1px;
+    background: color-mix(in srgb, var(--ys-ink) 12%, transparent);
   }
   .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail a.bw-rail-credits:hover {
     background: var(--bw-rail-hover);
@@ -461,10 +469,10 @@
 .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-credits-bar {
   position: relative;
   display: block;
-  height: 2px;
+  height: 3px;
   overflow: hidden;
-  border-radius: 1px;
-  background: color-mix(in srgb, var(--ys-ink) 12%, transparent);
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--ys-ink) 9%, transparent);
 }
 .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-credits-bar > span {
   position: absolute;
@@ -519,7 +527,7 @@
     color: var(--ys-ink-secondary);
   }
   .bw-shell:has([data-brand-layout-mode="rail"]) .bw-sidebar-utilities .bw-language-select label:hover {
-    background: var(--bw-rail-hover, var(--ys-hover));
+    background: var(--bw-rail-hover, rgba(17, 17, 20, 0.05));
     color: var(--ys-ink);
   }
   .bw-shell:has([data-brand-layout-mode="rail"]) .bw-sidebar-utilities .bw-language-select select {
@@ -694,7 +702,7 @@
   text-decoration: none;
 }
 .bw-shell:has([data-brand-layout-mode="rail"]) :is(.bw-rail-create-menu, .bw-rail-sheet-create) a:hover {
-  background: var(--bw-rail-hover, var(--ys-hover));
+  background: var(--bw-rail-hover, rgba(17, 17, 20, 0.05));
 }
 /* With rooms: what the team makes sits under a hairline, apart from what the brand makes itself. */
 .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-create-divider {
@@ -788,7 +796,7 @@
   cursor: pointer;
 }
 .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-toast-close:hover {
-  background: var(--bw-rail-hover, var(--ys-hover));
+  background: var(--bw-rail-hover, rgba(17, 17, 20, 0.05));
 }
 
 .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-sr {
@@ -1085,10 +1093,6 @@
   .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail {
     gap: 6px;
   }
-  .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-list {
-    gap: 2px;
-    padding-block: 2px;
-  }
   .bw-shell:has([data-brand-layout-mode="rail"]) {
     --bw-rail-foot-inset: 8px;
   }
@@ -1097,20 +1101,6 @@
   .bw-shell:has([data-brand-layout-mode="rail"]) .bw-sidebar-utilities .bw-signout button,
   .bw-shell:has([data-brand-layout-mode="rail"]) .bw-sidebar > .bw-rail-toggle {
     min-height: 36px;
-  }
-  /* The Home row (docs/BRAND-STUDIO-V3.md §12) costs one row; win it back from the spacing so 팀 and 설정
-     still show without scrolling the rail at 900px, expanded or not. */
-  .bw-shell:has([data-brand-layout-mode="rail"]):has([data-rail-group="home"]) .bw-rail {
-    gap: 2px;
-  }
-  .bw-shell:has([data-brand-layout-mode="rail"]):has([data-rail-group="home"]) .bw-rail-list {
-    gap: 0;
-  }
-  .bw-shell:has([data-brand-layout-mode="rail"]):has([data-rail-group="home"]) .bw-rail-list[data-rail-group="home"] {
-    padding-block: 0;
-  }
-  .bw-shell:has([data-brand-layout-mode="rail"]):has([data-rail-group="home"]) .bw-rail-order button {
-    min-height: 28px;
   }
 }
 
@@ -1286,10 +1276,11 @@
 .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-workspace-trigger {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 7px;
   width: 100%;
   min-height: 44px;
-  padding: 6px 8px;
+  /* Avatar centred on the icon column, the name on the labels' column. */
+  padding: 6px 8px 6px 7px;
   border: 0;
   border-radius: 12px;
   background: transparent;
@@ -1301,7 +1292,7 @@
 }
 .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-workspace-trigger:hover,
 .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-workspace-trigger[aria-expanded="true"] {
-  background: var(--bw-rail-hover, var(--ys-hover));
+  background: var(--bw-rail-hover, rgba(17, 17, 20, 0.05));
 }
 .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-workspace-trigger:focus-visible {
   outline: 2px solid var(--ys-focus);
@@ -1344,6 +1335,11 @@
 .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-workspace-trigger[aria-expanded="true"] .bw-rail-workspace-chevron {
   transform: rotate(180deg);
 }
+/* The open menu drops over the mode switch; the switch's count sits a few pixels above the menu's edge and
+   would peek out over it. It comes back when the menu closes. */
+.bw-shell:has([data-brand-layout-mode="rail"][data-rail-expanded="true"]) .bw-rail:has(.bw-rail-workspace-trigger[aria-expanded="true"]) .bw-rail-mode-wait {
+  visibility: hidden;
+}
 @media (min-width: 641px) {
   /* Folded: the avatar alone opens the same menu; the name stays in the button for a screen reader. */
   .bw-shell:has([data-brand-layout-mode="rail"][data-rail-expanded="false"]) .bw-rail-workspace-trigger {
@@ -1364,6 +1360,16 @@
   .bw-shell:has([data-brand-layout-mode="rail"][data-rail-expanded="false"]) .bw-rail-workspace-chevron {
     display: none;
   }
+  /* No brand open (none yet, or one this account cannot open): there is no avatar, so the chevron stays as the button's face. */
+  .bw-shell:has([data-brand-layout-mode="rail"][data-rail-expanded="false"]) [data-rail-workspace="none"] .bw-rail-workspace-chevron {
+    display: block;
+    width: 14px;
+    height: 14px;
+  }
+  .bw-shell:has([data-brand-layout-mode="rail"][data-rail-expanded="false"]) [data-rail-workspace="none"] .bw-rail-workspace-trigger {
+    box-shadow: inset 0 0 0 1px var(--ys-line-strong);
+    border-radius: 18px;
+  }
 }
 .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-workspace-menu {
   position: fixed;
@@ -1376,6 +1382,9 @@
   background: var(--ys-surface);
   box-shadow: var(--ys-float);
   animation: bw-rail-drop 220ms var(--ys-spring) both;
+}
+.bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-workspace-menu[data-rail-workspace-menu="beside"] {
+  animation-name: bw-rail-pop;
 }
 @supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
   .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-workspace-menu {
@@ -1425,11 +1434,16 @@
   background: var(--ys-hover);
   outline: none;
 }
+
+.bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-workspace-menu :is(a, button)[role^="menuitem"] {
+  box-shadow: none;
+}
+.bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-workspace-menu :is(a, button)[role^="menuitem"][aria-current="page"] {
+  background: var(--bw-rail-chosen, var(--ys-hover));
+  font-weight: 600;
+}
 .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-workspace-menu :is(a, button)[role^="menuitem"]:focus-visible {
   box-shadow: inset 0 0 0 1.5px var(--ys-ink);
-}
-.bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-workspace-menu [aria-current="page"] {
-  font-weight: 600;
 }
 .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-workspace-menu .bw-rail-icon {
   width: 18px;
@@ -1441,6 +1455,10 @@
   stroke-linecap: round;
   stroke-linejoin: round;
   color: var(--ys-ink-secondary);
+}
+.bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-workspace-subgroup {
+  display: grid;
+  gap: 2px;
 }
 /* A brand: its mark, its name over the viewer's role there, a tick on the one that is open. */
 .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-workspace-menu a[role="menuitemradio"] {
@@ -1487,6 +1505,9 @@
   min-height: 36px;
 }
 .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-workspace-language .bw-rail-workspace-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   margin: 0 10px;
   color: var(--ys-ink);
   font-size: 13.5px;
@@ -1623,11 +1644,16 @@
 @media (min-width: 641px) {
   .bw-shell:has([data-brand-layout-mode="rail"][data-rail-expanded="false"]) .bw-rail-mode {
     grid-template-columns: minmax(0, 1fr);
-    padding: 3px;
+    padding: 0;
+    background: transparent;
   }
   .bw-shell:has([data-brand-layout-mode="rail"][data-rail-expanded="false"]) .bw-rail-mode-option {
-    min-height: 34px;
+    min-height: var(--bw-rail-row, 36px);
     padding: 0;
+  }
+  .bw-shell:has([data-brand-layout-mode="rail"][data-rail-expanded="false"]) .bw-rail-mode-option[aria-checked="true"] {
+    background: var(--bw-rail-chosen, var(--ys-hover));
+    box-shadow: none;
   }
   .bw-shell:has([data-brand-layout-mode="rail"][data-rail-expanded="false"]) .bw-rail-mode-option .bw-rail-icon {
     display: block;

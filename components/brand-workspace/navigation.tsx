@@ -343,7 +343,7 @@ function Scoped({ scope, studioV2 = false, shell, locale = 'ko', railExpanded = 
                   staff: c.role === 'studio',
                 })),
                 locale,
-                copy: { switch: workspaceMenu.identity.switch, staffGroup: workspaceMenu.identity.staffGroup, language: workspaceMenu.language, signOut: workspaceMenu.signOut },
+                copy: { current: workspaceMenu.identity.current, switch: workspaceMenu.identity.switch, staffGroup: workspaceMenu.identity.staffGroup, language: workspaceMenu.language, signOut: workspaceMenu.signOut },
               }
             : undefined
         }

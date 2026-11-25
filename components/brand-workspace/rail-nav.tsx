@@ -685,7 +685,17 @@ export function RailNavigation(props: RailNavigationProps) {
         {/* 순서 편집 starts in the workspace menu (or, with no menu, from this row); while it is on, this row ends it. */}
         {expanded && items.length > 1 && (reordering || !props.workspace) ? (
           <div className="bw-rail-order" data-rail-order>
-            <button ref={reorderDone} type="button" aria-pressed={reordering} onClick={() => setReordering((value) => !value)}>
+            <button
+              ref={reorderDone}
+              type="button"
+              // With the workspace menu this row is 완료 alone (the menu starts the editing): nothing to press on or off.
+              aria-pressed={props.workspace ? undefined : reordering}
+              onClick={(event) => {
+                setReordering((value) => !value);
+                // The row leaves with the editing: focus goes back to where the editing was started from.
+                if (props.workspace) event.currentTarget.closest('nav')?.querySelector<HTMLElement>('[data-rail-workspace-trigger]')?.focus();
+              }}
+            >
               {reordering ? copy.rail.reorderDone : copy.rail.reorder}
             </button>
             {reordering && order.length > 0 ? (
@@ -733,6 +743,23 @@ export function RailNavigation(props: RailNavigationProps) {
           {studio && mode !== 'team' ? (
             <CreditsMeter allowance={activity.summary?.allowance} copy={copy} locale={locale} expanded={expanded} href={creditsHref} hrefLabel={copy.rail.billing} />
           ) : null}
+          {/* With the menu, 팀 · 플랜 및 청구 · 설정 live in it; a browser without JavaScript cannot open it and gets them as plain links. */}
+          {props.workspace && utilities.some((u) => u.shown) ? (
+            <noscript>
+              <ul className="bw-rail-list" data-rail-noscript>
+                {utilities
+                  .filter((u) => u.shown)
+                  .map((u) => (
+                    <li key={u.key} className="bw-rail-row">
+                      <a href={scope(u.href)} className="bw-rail-item">
+                        <Icon d={RAIL_ICON[u.key]} />
+                        <span className="bw-rail-label">{copy.rail[u.key]}</span>
+                      </a>
+                    </li>
+                  ))}
+              </ul>
+            </noscript>
+          ) : null}
           {/* Without the workspace menu (no brand block given) the three keep their rows here. */}
           {!props.workspace && utilities.some((u) => u.shown) ? (
             <ul className="bw-rail-list" data-rail-group="utility">
@@ -764,6 +791,8 @@ export function RailNavigation(props: RailNavigationProps) {
         data-rail-toggle
         aria-pressed={expanded}
         aria-label={expanded ? copy.rail.collapse : copy.rail.expand}
+        // Folded, the rail's own tooltip names it; open, it is an icon with the browser's.
+        title={expanded && props.workspace ? copy.rail.collapse : undefined}
         data-rail-tip={expanded ? copy.rail.collapse : copy.rail.expand}
         onClick={toggle}
         {...tipHandlers}

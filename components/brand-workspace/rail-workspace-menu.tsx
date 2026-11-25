@@ -40,7 +40,7 @@ export interface RailWorkspace {
   /** Every brand this account can open, in the scope's order. The menu lists them when there are two or more. */
   brands: readonly RailWorkspaceBrand[];
   locale: 'ko' | 'en';
-  copy: { switch: string; staffGroup: string; language: string; signOut: string };
+  copy: { current: string; switch: string; staffGroup: string; language: string; signOut: string };
 }
 
 export interface RailWorkspaceLink {
@@ -58,8 +58,21 @@ const SIGN_OUT_ICON = 'M8.5 3.5h-5v13h5M12 6.5l3.5 3.5-3.5 3.5M7 10h8.5';
 const ORDER_ICON = 'M4 6h12M4 10h12M4 14h12';
 const CHECK_ICON = 'M4.5 10.5 8.5 14.5 15.5 6';
 
+/**
+ * Without JavaScript the block opens nothing, so on a wide screen the layout's own brand list, language form
+ * and sign-out row come back as they were (their displays are workspace.css's), the foot goes back to a
+ * column for them, and the fold button (which needs script) goes. rail-nav.tsx adds 팀 · 플랜 및 청구 · 설정 as
+ * plain links in its own `noscript`.
+ */
 const NO_SCRIPT_CSS =
-  '.bw-sidebar>.bw-identity,.bw-sidebar-utilities>.bw-language-menu,.bw-sidebar-utilities>.bw-signout{display:revert!important}[data-rail-workspace]{display:none!important}';
+  '@media (min-width:641px){' +
+  '.bw-sidebar>.bw-identity{display:block!important}' +
+  '.bw-sidebar>.bw-sidebar-utilities{display:grid!important;min-height:0!important;padding:6px 0 0!important}' +
+  '.bw-sidebar-utilities>.bw-language-menu{display:contents!important}' +
+  '.bw-sidebar-utilities>.bw-signout{display:block!important}' +
+  '.bw-sidebar>.bw-rail-toggle{display:none!important}' +
+  '}[data-rail-workspace]{display:none!important}';
+const GLOBE_ICON = 'M10 2.5a7.5 7.5 0 1 0 0 15 7.5 7.5 0 0 0 0-15zM2.5 10h15M10 2.5c2.2 2 3.3 4.5 3.3 7.5s-1.1 5.5-3.3 7.5c-2.2-2-3.3-4.5-3.3-7.5s1.1-5.5 3.3-7.5z';
 
 type Place = { top: number; left: number; maxHeight: number };
 
@@ -86,7 +99,8 @@ export function RailWorkspaceMenu({
   const open = at !== null;
   const current = workspace.brands.find((brand) => brand.id === workspace.currentId) ?? null;
   const name = current?.name ?? workspace.emptyLabel;
-  const firstStaff = workspace.brands.findIndex((brand) => brand.staff);
+  const ownBrands = workspace.brands.filter((brand) => !brand.staff);
+  const staffBrands = workspace.brands.filter((brand) => brand.staff);
   const items = () => [...(menu.current?.querySelectorAll<HTMLElement>('[role^="menuitem"]') ?? [])];
 
   const show = useCallback(
@@ -141,7 +155,16 @@ export function RailWorkspaceMenu({
   };
   const menuKeys = (event: KeyboardEvent<HTMLDivElement>) => {
     const list = items();
-    const move = languageMenuKey(event.key, list.indexOf(document.activeElement as HTMLElement), list.length);
+    const active = document.activeElement as HTMLElement | null;
+    // Space presses a link the way it presses a button (a link alone would scroll the page).
+    if (event.key === ' ' && active?.tagName === 'A' && list.includes(active)) {
+      event.preventDefault();
+      active.click();
+      return;
+    }
+    // The two languages sit side by side: left and right move between them as up and down do.
+    const key = active?.hasAttribute('data-language-option') ? (event.key === 'ArrowRight' ? 'ArrowDown' : event.key === 'ArrowLeft' ? 'ArrowUp' : event.key) : event.key;
+    const move = languageMenuKey(key, active ? list.indexOf(active) : -1, list.length);
     if (move === null) return;
     if (move === 'tab') {
       close(false);
@@ -168,6 +191,30 @@ export function RailWorkspaceMenu({
     form.requestSubmit();
   };
 
+  /** A brand: its mark, its name over the viewer's role there, a tick on the one that is open. */
+  const brandItem = (brand: RailWorkspaceBrand) => (
+    <a
+      key={brand.id}
+      role="menuitemradio"
+      aria-checked={brand.id === workspace.currentId}
+      tabIndex={-1}
+      href={brand.href}
+      data-brand-choice={brand.id}
+      data-brand-role={brand.staff ? 'studio' : undefined}
+    >
+      <BrandAvatar name={brand.name} logoUrl={brand.logoUrl} size="sm" />
+      <span className="bw-rail-workspace-brand">
+        <strong>{brand.name}</strong>
+        <small>{brand.role}</small>
+      </span>
+      {brand.id === workspace.currentId ? (
+        <svg viewBox="0 0 20 20" aria-hidden="true" className="bw-rail-workspace-check">
+          <path d={CHECK_ICON} />
+        </svg>
+      ) : null}
+    </a>
+  );
+
   return (
     <div className="bw-rail-workspace" data-rail-workspace={workspace.currentId ?? 'none'}>
       {/* Without JavaScript this button opens nothing: the layout's own brand list, language form and sign-out row come back. */}
@@ -189,6 +236,7 @@ export function RailWorkspaceMenu({
       >
         {current ? <BrandAvatar name={current.name} logoUrl={current.logoUrl} size="sm" /> : null}
         <span className="bw-rail-workspace-text">
+          {current ? <span className="bw-rail-sr">{workspace.copy.current}: </span> : null}
           <strong>{name}</strong>
           {current ? <small>{current.role}</small> : null}
         </span>
@@ -204,7 +252,7 @@ export function RailWorkspaceMenu({
           role="menu"
           aria-labelledby={triggerId}
           className="bw-rail-workspace-menu"
-          data-rail-workspace-menu
+          data-rail-workspace-menu={expanded ? 'below' : 'beside'}
           style={{ top: at.top, left: at.left, maxHeight: at.maxHeight }}
           onKeyDown={menuKeys}
         >
@@ -235,38 +283,23 @@ export function RailWorkspaceMenu({
               <p className="bw-rail-workspace-title" aria-hidden="true">
                 {workspace.copy.switch}
               </p>
-              {workspace.brands.map((brand, index) => (
-                <div key={brand.id} role="none">
-                  {index === firstStaff && index > 0 ? (
-                    <p className="bw-rail-workspace-title" data-brand-staff-group aria-hidden="true">
-                      {workspace.copy.staffGroup}
-                    </p>
-                  ) : null}
-                  <a
-                    role="menuitemradio"
-                    aria-checked={brand.id === workspace.currentId}
-                    tabIndex={-1}
-                    href={brand.href}
-                    data-brand-choice={brand.id}
-                  >
-                    <BrandAvatar name={brand.name} logoUrl={brand.logoUrl} size="sm" />
-                    <span className="bw-rail-workspace-brand">
-                      <strong>{brand.name}</strong>
-                      <small>{brand.role}</small>
-                    </span>
-                    {brand.id === workspace.currentId ? (
-                      <svg viewBox="0 0 20 20" aria-hidden="true" className="bw-rail-workspace-check">
-                        <path d={CHECK_ICON} />
-                      </svg>
-                    ) : null}
-                  </a>
+              {ownBrands.map(brandItem)}
+              {staffBrands.length > 0 ? (
+                <div role="group" aria-label={workspace.copy.staffGroup} className="bw-rail-workspace-subgroup" data-brand-staff-group>
+                  <p className="bw-rail-workspace-title" aria-hidden="true">
+                    {workspace.copy.staffGroup}
+                  </p>
+                  {staffBrands.map(brandItem)}
                 </div>
-              ))}
+              ) : null}
             </div>
           ) : null}
 
           <div role="group" aria-label={workspace.copy.language} className="bw-rail-workspace-group bw-rail-workspace-language" data-rail-workspace-group="language">
             <p className="bw-rail-workspace-title" aria-hidden="true">
+              <svg viewBox="0 0 20 20" aria-hidden="true" className="bw-rail-icon">
+                <path d={GLOBE_ICON} />
+              </svg>
               {workspace.copy.language}
             </p>
             <div className="bw-rail-workspace-segments" role="none">

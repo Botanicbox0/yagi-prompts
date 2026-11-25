@@ -358,14 +358,12 @@ export function CreditsMeter({
             <span className="bw-rail-credits-total"> / {figures.totalText}</span>
           </strong>
         </span>
+        {/* As a link the name already says the figures; the bar is then a picture of them, not a second voice. */}
         <span
           className="bw-rail-credits-bar"
-          role="meter"
-          aria-valuemin={0}
-          aria-valuemax={figures.total}
-          aria-valuenow={figures.left}
-          aria-valuetext={summary}
-          aria-label={copy.credits.label}
+          {...(href
+            ? { 'aria-hidden': true }
+            : { role: 'meter', 'aria-valuemin': 0, 'aria-valuemax': figures.total, 'aria-valuenow': figures.left, 'aria-valuetext': summary, 'aria-label': copy.credits.label })}
         >
           <span style={{ width: `${(figures.ratio * 100).toFixed(1)}%` }} />
         </span>
