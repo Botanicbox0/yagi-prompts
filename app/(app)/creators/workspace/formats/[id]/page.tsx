@@ -16,8 +16,9 @@ import { CREATOR_WORKSPACE_PATH } from '@/lib/creator-platform/links';
 import { loadMakerDraft, MAKER_TEST_RENDERS } from '@/lib/recipes/maker';
 import { recipeSchemaReady } from '@/lib/recipes/repo';
 import { MAKER_ENGINE_IDS } from '@/lib/recipes/schema';
+import { editorCasts } from '@/lib/recipes/editor-casts';
 import { AppHeader } from '@/components/app/app-header';
-import { RecipeEditor, editorCasts, type EngineOption } from '@/components/recipes/recipe-editor';
+import { RecipeEditor, type EngineOption } from '@/components/recipes/recipe-editor';
 import { coupleTemplatesOpen, petTemplatesOpen } from '@/lib/flags';
 import { selfPublishOpen } from '@/lib/recipes/self-publish';
 

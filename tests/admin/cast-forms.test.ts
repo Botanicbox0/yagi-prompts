@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createElement } from 'react';
-import { EDITOR_CASTS, castTokens, editorCasts, fromRecipe, toRecipe } from '@/components/recipes/recipe-editor';
+import { castTokens, fromRecipe, toRecipe } from '@/components/recipes/recipe-editor';
+import { EDITOR_CASTS, editorCasts } from '@/lib/recipes/editor-casts';
 import { PromptFields } from '@/components/admin/prompt-fields';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { loadPromptBySlug } from '@/lib/prompts/repo';
