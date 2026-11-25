@@ -56,6 +56,15 @@ export interface VideoProjectsDeps {
   media: StudioMediaStore;
 }
 
+const listedColumn = (alias: string | undefined, name: string): string => (alias ? `${alias}.${name}` : name);
+
+/**
+ * A film the films' list shows (`loadVideoProjects`): not deleted, active or completed (archived ones are not
+ * listed). The assets page counts and pages films by this same rule (lib/brand-studio/brand-project-files.ts).
+ */
+export const LISTED_FILMS = (alias?: string): string =>
+  `${listedColumn(alias, 'deleted_at')} is null and ${listedColumn(alias, 'status')} in ('active', 'completed')`;
+
 export interface VideoProjectViewer {
   userId: string | null;
 }
@@ -585,6 +594,33 @@ function toSummary(row: VideoProjectRow, hydratedTimeline: ComposerProject): Vid
   };
 }
 
+/**
+ * Summaries of this organization's listed films (`LISTED_FILMS`) among `ids`, in the order of `ids`, built exactly
+ * as `loadVideoProjects` builds its list (one media lookup for all). Unknown, deleted or archived ids are left out.
+ * No seat check here: the caller has seated the member. Never adds `brandProjectId` (opt-in, `withFilmBrandProjects`).
+ */
+export async function filmSummariesByIds(
+  sql: SqlRunner,
+  media: StudioMediaStore,
+  organizationId: string,
+  ids: readonly string[],
+): Promise<VideoProjectSummary[]> {
+  if (ids.length === 0) return [];
+  const rows = (
+    await sql.query<VideoProjectRow>(
+      `select * from brand_studio_video_projects where organization_id = $1 and id = any($2::uuid[]) and ${LISTED_FILMS()}`,
+      [organizationId, [...ids]],
+    )
+  ).rows;
+  const timelines = new Map(rows.map((row) => [String(row.id).toLowerCase(), normalizeStoredTimeline(row.timeline, row.aspect)]));
+  const maps = await fetchMediaMaps(sql, media, organizationId, collectMediaRefs([...timelines.values()]));
+  const byId = new Map(rows.map((row) => [String(row.id).toLowerCase(), toSummary(row, hydrateTimelineWithMaps(timelines.get(String(row.id).toLowerCase())!, maps))]));
+  return ids.flatMap((id) => {
+    const summary = byId.get(id.toLowerCase());
+    return summary ? [summary] : [];
+  });
+}
+
 async function hydrateSingleRow(
   sql: SqlRunner,
   media: StudioMediaStore,
@@ -688,8 +724,7 @@ export async function loadVideoProjects(
           `select *
              from brand_studio_video_projects
             where organization_id = $1
-              and deleted_at is null
-              and status in ('active', 'completed')
+              and ${LISTED_FILMS()}
             order by updated_at desc, id desc
             limit 100`,
           [organizationId],
