@@ -8,7 +8,8 @@
  * Three bands (docs/BRAND-STUDIO-V3.md §3.1, 2026-11-25): the brand block and its one menu on top, the
  * mode switch and the list in the middle, the credits line, the fold button and the maker's mark at the
  * foot. Nothing in the rail is filled with ink or the accent: the page's one filled button stays the
- * page's. The chosen row is a quiet wash, "+" is an outlined row of the list's own height.
+ * page's. The chosen row is a quiet wash. There is no "+" button (2026-11-25): the rows are the way in. A
+ * thin divider follows the working screens, and what sits under it is one step quieter.
  *
  * Techniques (docs/design/TOOLBOX.md §1-2), four: one panel surface for the whole column, pill rows of
  * one height (36px), frosted glass on the floating menus only, tabular numerals on credits and counts.
@@ -28,6 +29,8 @@
     /* Hover and the chosen row: two steps of the same ink wash, never a filled chip. */
     --bw-rail-hover: color-mix(in srgb, var(--ys-ink) 6%, transparent);
     --bw-rail-chosen: color-mix(in srgb, var(--ys-ink) 11%, transparent);
+    /* Rows under the divider: one step back from a row's own words, still 5:1 on the panel. */
+    --bw-rail-quiet: color-mix(in srgb, var(--ys-ink) 54%, transparent);
     grid-template-columns: var(--ys-sidebar-w) minmax(0, 1fr);
   }
   .bw-shell:has([data-brand-layout-mode="rail"][data-rail-expanded="true"]) {
@@ -301,60 +304,21 @@
     outline-offset: 2px;
   }
 
-  /* ---------------------------------------------------------------- "+" create
-     A row of the list's own height with a hairline outline: it is still the way in to making something,
-     and it no longer competes with the page's filled button. */
-  .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-create {
-    padding: 4px var(--bw-rail-pad) 0;
-  }
-  .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-create-button {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    width: 100%;
-    height: var(--bw-rail-row);
-    /* 야기 팀과's row is a link: without this the workspace's 42px floor for sidebar links makes it taller than a row. */
-    min-height: 0;
-    padding: 0 12px;
-    border-radius: 18px;
-    box-shadow: inset 0 0 0 1px var(--ys-line-strong);
-    color: var(--ys-ink);
-    font-size: 13.5px;
-    font-weight: 600;
-    letter-spacing: -0.01em;
-    white-space: nowrap;
-    text-decoration: none;
-    cursor: pointer;
-    transition: background-color var(--ys-dur) var(--ys-ease), box-shadow var(--ys-dur) var(--ys-ease);
-  }
-  .bw-shell:has([data-brand-layout-mode="rail"][data-rail-expanded="false"]) .bw-rail-create-button {
-    justify-content: center;
-    width: var(--bw-rail-row);
-    padding: 0;
-  }
-  .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-create-button:hover,
-  .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-create-button[aria-expanded="true"] {
-    background: var(--bw-rail-hover);
-    box-shadow: inset 0 0 0 1px var(--ys-ink-secondary);
-  }
-  .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-create-button:focus-visible {
-    outline: 2px solid var(--ys-focus);
-    outline-offset: 2px;
-  }
-  .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-create-mark {
-    display: grid;
-    place-items: center;
-    width: 18px;
-    height: 18px;
+  /* ---------------------------------------------------------------- the divider and the lower band
+     One hairline after the working screens; the rows under it (워크플로우 for now) are opened now and then,
+     so their words and icons sit one step back. The page you are on is ink in either band. */
+  .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-divider {
     flex: none;
-    transition: transform 180ms var(--ys-spring);
+    height: 1px;
+    margin: 10px var(--bw-rail-pad);
+    border: 0;
+    background: var(--ys-line);
   }
-  .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-create-button[aria-expanded="true"] .bw-rail-create-mark {
-    transform: rotate(45deg);
+  .bw-shell:has([data-brand-layout-mode="rail"]) .bw-sidebar nav .bw-rail-list[data-rail-group="lower"] .bw-rail-item:not(:hover):not([aria-current="page"]) {
+    color: var(--bw-rail-quiet);
   }
-  .bw-shell:has([data-brand-layout-mode="rail"]) .bw-sidebar nav .bw-rail-create-mark .bw-rail-icon {
-    color: inherit;
-    stroke-width: 1.8;
+  .bw-shell:has([data-brand-layout-mode="rail"]) .bw-sidebar nav .bw-rail-list[data-rail-group="lower"] .bw-rail-item:not(:hover):not([aria-current="page"]) .bw-rail-icon {
+    color: var(--bw-rail-quiet);
   }
 
   /* ---------------------------------------------------------------- foot: credits, team, settings */
@@ -644,7 +608,7 @@
   }
 }
 
-/* ------------------------------------------------------------------ floating: tooltip, create menu, toasts */
+/* ------------------------------------------------------------------ floating: tooltip, toasts */
 .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-tip {
   position: fixed;
   z-index: 90;
@@ -664,32 +628,8 @@
   animation: bw-rail-tip-in 160ms var(--ys-spring) both;
 }
 
-.bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-create-menu {
-  position: fixed;
-  z-index: 85;
-  display: grid;
-  gap: 2px;
-  width: 248px;
-  padding: 8px;
-  border-radius: 20px;
-  background: var(--ys-surface);
-  box-shadow: var(--ys-float);
-  animation: bw-rail-pop 240ms var(--ys-spring) both;
-}
-@supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
-  .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-create-menu {
-    background: var(--ys-glass);
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
-    backdrop-filter: blur(20px) saturate(180%);
-  }
-}
-.bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-create-title {
-  margin: 2px 8px 6px;
-  font-size: 11.5px;
-  font-weight: 500;
-  color: var(--ys-ink-muted);
-}
-.bw-shell:has([data-brand-layout-mode="rail"]) :is(.bw-rail-create-menu, .bw-rail-sheet-create) a {
+/* The phone sheet's shortcuts. */
+.bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-sheet-create a {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -701,24 +641,10 @@
   font-weight: 500;
   text-decoration: none;
 }
-.bw-shell:has([data-brand-layout-mode="rail"]) :is(.bw-rail-create-menu, .bw-rail-sheet-create) a:hover {
+.bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-sheet-create a:hover {
   background: var(--bw-rail-hover, rgba(17, 17, 20, 0.05));
 }
-/* With rooms: what the team makes sits under a hairline, apart from what the brand makes itself. */
-.bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-create-divider {
-  height: 1px;
-  margin: 5px 8px;
-  border: 0;
-  background: var(--ys-line);
-}
-.bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-create-menu [data-rail-create-link="commission"] {
-  color: var(--ys-ink);
-  font-weight: 600;
-}
-.bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-create-menu [data-rail-create-link="commission"] .bw-rail-icon {
-  color: var(--ys-ink);
-}
-.bw-shell:has([data-brand-layout-mode="rail"]) :is(.bw-rail-create-menu, .bw-rail-sheet-create, .bw-rail-tabs, .bw-rail-sheet-list) .bw-rail-icon,
+.bw-shell:has([data-brand-layout-mode="rail"]) :is(.bw-rail-sheet-create, .bw-rail-tabs, .bw-rail-sheet-list) .bw-rail-icon,
 .bw-shell:has([data-brand-layout-mode="rail"]) :is(.bw-rail-toast-close, .bw-rail-sheet-close) svg {
   width: 18px;
   height: 18px;
@@ -1677,10 +1603,10 @@
 
 @media (prefers-reduced-motion: reduce) {
   .bw-shell:has([data-brand-layout-mode="rail"]),
-  .bw-shell:has([data-brand-layout-mode="rail"]) :is(.bw-rail-item, .bw-rail-mode-option, .bw-rail-create-button, .bw-rail-create-mark, .bw-rail-icon, .bw-rail-credits, .bw-rail-credits-bar > span, .bw-rail-ring-fill, .bw-rail-workspace-trigger, .bw-rail-workspace-chevron, .bw-rail-workspace-menu [role^="menuitem"]) {
+  .bw-shell:has([data-brand-layout-mode="rail"]) :is(.bw-rail-item, .bw-rail-mode-option, .bw-rail-icon, .bw-rail-credits, .bw-rail-credits-bar > span, .bw-rail-ring-fill, .bw-rail-workspace-trigger, .bw-rail-workspace-chevron, .bw-rail-workspace-menu [role^="menuitem"]) {
     transition: none;
   }
-  .bw-shell:has([data-brand-layout-mode="rail"]) :is(.bw-rail-tip, .bw-rail-create-menu, .bw-rail-workspace-menu, .bw-rail-toast, .bw-rail-sheet-bg, .bw-rail-sheet, .bw-language-popover) {
+  .bw-shell:has([data-brand-layout-mode="rail"]) :is(.bw-rail-tip, .bw-rail-workspace-menu, .bw-rail-toast, .bw-rail-sheet-bg, .bw-rail-sheet, .bw-language-popover) {
     animation: none;
   }
   .bw-shell:has([data-brand-layout-mode="rail"]) :is(.bw-language-trigger, .bw-language-popover [role="menuitemradio"]) {

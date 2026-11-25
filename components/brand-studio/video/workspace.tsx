@@ -1837,7 +1837,7 @@ export function VideoStudioWorkspace({
         locale={locale}
         copy={copy}
         video={videoCopy}
-        // `?start=reverse` (the rail's "+" menu, with or without `&asset=`): open once on arrival. The panel
+        // `?start=reverse` (a link from the asset hub or the prompt bar, with or without `&asset=`): open once on arrival. The panel
         // reads this only as its first state, so a state refresh never reopens it after it was closed.
         initialOpen={initialCreateMode === "blueprint"}
         initialAssetId={remixVideo?.assetId ?? initialAssetId}

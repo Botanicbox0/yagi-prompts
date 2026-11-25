@@ -34,7 +34,6 @@ export const studioShellEn = {
     running: '{count} in progress',
   },
   create: {
-    button: 'Create',
     menu: 'What would you like to make?',
     image: 'Make an image',
     video: 'Make a video',
@@ -175,7 +174,6 @@ export const studioShellKo: typeof studioShellEn = {
     running: '{count}개 만드는 중',
   },
   create: {
-    button: '만들기',
     menu: '무엇을 만들까요?',
     image: '이미지 만들기',
     video: '영상 만들기',

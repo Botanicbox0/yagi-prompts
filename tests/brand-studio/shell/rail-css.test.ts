@@ -173,18 +173,51 @@ describe('app/(brand)/rail.css — the tidied rail (docs/BRAND-STUDIO-V3.md §3.
     expect(chosen && values(chosen.body, 'background')).toEqual(['var(--bw-rail-chosen)']);
   });
 
-  it('draws "+" as an outlined row: no active ink or accent background, and the old disc is gone', () => {
-    const create = rules.filter((r) => r.selector.includes('.bw-rail-create-button'));
-    expect(create.length).toBeGreaterThan(0);
-    for (const rule of create) {
-      for (const property of ['background', 'background-color']) {
-        for (const value of values(rule.body, property)) expect(value, `${rule.selector} ${property}`).not.toMatch(/--ys-active-bg|--ys-accent/);
-      }
+  it('has no "+" rules any more (2026-11-25): button, mark, menu, title, divider and wrapper are gone, reduced motion included', () => {
+    for (const name of ['bw-rail-create-button', 'bw-rail-create-mark', 'bw-rail-create-menu', 'bw-rail-create-title', 'bw-rail-create-divider', 'bw-rail-create-disc']) {
+      expect(
+        rules.filter((r) => r.selector.includes(name)).map((r) => r.selector),
+        name,
+      ).toEqual([]);
     }
-    const base = create.find((r) => subject(r.selector) === '.bw-rail-create-button' && r.at.includes(WIDE));
-    expect(base && values(base.body, 'box-shadow')).toEqual(['inset 0 0 0 1px var(--ys-line-strong)']);
-    expect(css).not.toContain('bw-rail-create-disc');
-    expect(rules.some((r) => r.selector.includes('.bw-rail-create-mark'))).toBe(true);
+    // The old wrapper `.bw-rail-create` on its own.
+    expect(rules.filter((r) => /\.bw-rail-create(?![\w-])/.test(r.selector)).map((r) => r.selector)).toEqual([]);
+    // The phone sheet's shortcuts keep their styles.
+    const sheet = rules.filter((r) => r.selector.includes('.bw-rail-sheet-create'));
+    expect(sheet.length).toBeGreaterThan(0);
+    expect(sheet.some((r) => subject(r.selector) === 'a' && r.selector.endsWith('.bw-rail-sheet-create a'))).toBe(true);
+    expect(sheet.some((r) => r.selector.endsWith('.bw-rail-sheet-create a:hover'))).toBe(true);
+  });
+
+  it('draws the divider as one hairline, only on a wide screen', () => {
+    const divider = rules.filter((r) => parts(r.selector).some((part) => subject(part) === '.bw-rail-divider'));
+    expect(divider.length).toBeGreaterThan(0);
+    for (const rule of divider) expect(rule.at, rule.selector).toEqual([WIDE]);
+    const base = divider.find((r) => r.selector === `${RAIL_SCOPE}) .bw-rail-divider`);
+    expect(base).toBeDefined();
+    expect(values(base!.body, 'height')).toEqual(['1px']);
+    expect(values(base!.body, 'margin')).toEqual(['10px var(--bw-rail-pad)']);
+    expect(values(base!.body, 'border')).toEqual(['0']);
+    expect(values(base!.body, 'background')).toEqual(['var(--ys-line)']);
+    // Never filled with the active ink or the accent.
+    expect(base!.body).not.toMatch(/--ys-active-bg|--ys-accent/);
+  });
+
+  it('sets the rows under the divider one step quieter, words and icons, leaving hover and the current page alone', () => {
+    const shell = rules.find((r) => r.selector === RAIL_SCOPE + ')' && r.at.includes(WIDE));
+    expect(shell).toBeDefined();
+    const quiet = values(shell!.body, '--bw-rail-quiet');
+    expect(quiet).toHaveLength(1);
+    expect(quiet[0]).toMatch(/^color-mix\(in srgb, var\(--ys-ink\) \d+%, transparent\)$/);
+    const LOWER_ROW = '.bw-rail-list[data-rail-group="lower"] .bw-rail-item:not(:hover):not([aria-current="page"])';
+    const row = rules.find((r) => r.at.includes(WIDE) && r.selector.endsWith(LOWER_ROW));
+    expect(row && values(row.body, 'color')).toEqual(['var(--bw-rail-quiet)']);
+    const icon = rules.find((r) => r.at.includes(WIDE) && r.selector.endsWith(`${LOWER_ROW} .bw-rail-icon`));
+    expect(icon && values(icon.body, 'color')).toEqual(['var(--bw-rail-quiet)']);
+    // The quiet tone is used only by the lower band.
+    for (const rule of rules.filter((r) => r.body.includes('var(--bw-rail-quiet)'))) {
+      expect(rule.selector, rule.selector).toContain('[data-rail-group="lower"]');
+    }
   });
 
   it('hides the layout brand block, language control and sign-out row only on a wide screen with the rail block present', () => {
@@ -299,9 +332,7 @@ describe('app/(brand)/rail.css — the tidied rail (docs/BRAND-STUDIO-V3.md §3.
     }
   });
 
-  it('lets "+" and the credits line keep the row height (no inherited 42px floor)', () => {
-    const create = rules.find((r) => r.at.includes(WIDE) && subject(r.selector) === '.bw-rail-create-button' && !r.selector.includes('expanded'));
-    expect(create && values(create.body, 'min-height')).toEqual(['0']);
+  it('lets the credits line keep the row height (no inherited 42px floor)', () => {
     const credits = rules.find((r) => r.at.includes(WIDE) && r.selector.endsWith(' .bw-rail .bw-rail-credits'));
     expect(credits && values(credits.body, 'min-height')).toEqual(['0']);
   });

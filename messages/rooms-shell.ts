@@ -2,8 +2,8 @@
  * Project room copy, slice H (docs/BRAND-ROOMS.md §10). Wired into the dictionaries as `roomsShell`.
  * Both languages live here so one owner edits one file. Korean is a draft until the wording pass.
  *
- * `nav`: the rail's two groups, 메시지 and the "+" menu line (handed to the navigation only while rooms
- * are open). `entry`: the "룸 열기" link on campaign cards and the project page. `room` and `overview`:
+ * `nav`: the rail's two groups, 메시지 and the request line (the phone sheet's shortcut and the home's team
+ * line; handed to the navigation only while rooms are open). `entry`: the "룸 열기" link on campaign cards and the project page. `room` and `overview`:
  * the room page (`/brand/rooms/[projectId]`).
  */
 export const roomsShellEn = {

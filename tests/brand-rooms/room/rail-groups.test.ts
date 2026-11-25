@@ -95,8 +95,8 @@ describe('the current item with rooms', () => {
   });
 });
 
-describe('the "+" menu', () => {
-  it('ends with 캠페인 의뢰 without rooms, and with 야기 팀에 의뢰하기 apart from the rest with rooms', () => {
+describe("the phone sheet's shortcuts (the wide rail's \"+\" is gone since 2026-11-25)", () => {
+  it('end with 캠페인 의뢰 without rooms, and with 야기 팀에 의뢰하기 apart from the rest with rooms', () => {
     expect(railCreateLinks(false).map((l) => [l.key, l.href])).toEqual([
       ['image', '/brand/studio'],
       ['video', '/brand/studio/video'],

@@ -119,12 +119,16 @@ describe('the two-mode rail (founder 2026-11-20, components/brand-workspace/rail
     const html = render(owner, team);
     expect(html).toContain('data-brand-layout-mode="rail"');
     expect(modeOf(html)).toBe('make');
-    expect(ids(html)).toEqual(['image', 'video', 'compose', 'workflows', 'assets']);
+    // 워크플로우 sits under the divider (rail-model `railTiers`), after the working screens.
+    expect(ids(html)).toEqual(['image', 'video', 'compose', 'assets', 'workflows']);
+    expect(html).toContain('data-rail-divider');
+    expect(html).toContain('data-rail-group="lower"');
     expect(html).toContain(`>${shell.rail.compose}<`);
     expect(html).not.toContain('data-rail-section');
     expect(html).not.toContain('bw-rail-group');
-    // "+" is the making menu; 새 프로젝트 의뢰 lives on the other side.
-    expect(html).toContain('data-rail-create="true"');
+    // No "+" button or menu since 2026-11-25: the rows are the way in. 새 프로젝트 의뢰 is not on this side either.
+    expect(html).not.toContain('data-rail-create');
+    expect(html).not.toContain('bw-rail-create-button');
     expect(html).not.toContain(nav.commission);
     // Tooltips name the item only.
     expect(html).toContain(`data-rail-tip="${shell.rail.image}"`);
@@ -147,16 +151,20 @@ describe('the two-mode rail (founder 2026-11-20, components/brand-workspace/rail
     expect(html).toContain(`>${nav.groupTeam}<`);
   });
 
-  it('shows 야기 팀과 with 프로젝트 · 알림함 · 에셋 and 새 프로젝트 의뢰 as its one action', () => {
+  it('shows 야기 팀과 with 프로젝트 · 알림함 · 에셋 and no 새 프로젝트 의뢰 row, divider or lower band', () => {
     state.path = '/brand';
     const html = render(owner, team);
     expect(modeOf(html)).toBe('team');
     expect(ids(html)).toEqual(['campaigns', 'messages', 'assets']);
     expect(html).toContain(`href="/brand?organizationId=${OWNER}"`);
     expect(html).toContain(`href="/brand/rooms?organizationId=${OWNER}"`);
-    expect(html).toContain('data-rail-create="team"');
-    expect(html).toContain(`href="/brand/projects/new?organizationId=${OWNER}"`);
-    expect(html).toContain(`>${nav.commission}<`);
+    // The rail's 새 프로젝트 의뢰 row went with the "+" button (2026-11-25): a new project starts from 프로젝트.
+    expect(html).not.toContain('data-rail-create');
+    expect(html).not.toContain('bw-rail-create-button');
+    expect(html).not.toContain('/brand/projects/new');
+    expect(html).not.toContain(`>${nav.commission}<`);
+    expect(html).not.toContain('data-rail-divider');
+    expect(html).not.toContain('data-rail-group="lower"');
     expect(html).not.toContain('/brand/studio');
     expect(html).not.toContain('data-rail-credits');
   });
@@ -208,12 +216,15 @@ describe('the two-mode rail (founder 2026-11-20, components/brand-workspace/rail
     expect(modeOf(html)).toBe('team');
     expect(ids(html)).toEqual(['campaigns', 'messages', 'assets']);
     expect(html).toContain('data-rail-mode-switch="rail"');
-    expect(html).toContain('data-rail-create="team"');
+    expect(html).not.toContain('data-rail-create');
+    expect(html).not.toContain('/brand/projects/new');
     expect(html).not.toContain('data-rail-credits');
     state.path = '/brand/studio';
     const make = render({ ...owner, denied: ['self_studio'] }, team);
     expect(modeOf(make)).toBe('make');
-    expect(ids(make)).toEqual(['image', 'video', 'compose', 'workflows', 'assets']);
+    // The showroom draws the same two bands: 워크플로우 under the divider.
+    expect(ids(make)).toEqual(['image', 'video', 'compose', 'assets', 'workflows']);
+    expect(make).toContain('data-rail-divider');
     // The showroom has nothing to make: no "+", no credits.
     expect(make).not.toContain('data-rail-create');
     expect(make).not.toContain('data-rail-credits');

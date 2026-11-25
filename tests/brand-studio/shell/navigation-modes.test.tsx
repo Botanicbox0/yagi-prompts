@@ -66,7 +66,10 @@ const RAIL_ONLY = [
   'data-nav-item="/brand/studio/review"',
   'href="/brand/studio/video',
   'href="/brand/studio/review',
-  shell.create.button,
+  // The divider and the band under it (워크플로우), 2026-11-25.
+  'data-rail-divider',
+  'bw-rail-divider',
+  'data-rail-group="lower"',
   // Project rooms: the groups, 메시지 and its address.
   'data-rail-section',
   'data-rail-item="messages"',
@@ -131,7 +134,9 @@ describe('the rail', () => {
     expect(html).toContain(`data-rail-workspace="${OWNER}"`);
     expect(html).not.toContain('data-rail-group="utility"');
     expect(html).not.toContain('data-rail-order');
-    expect(html).toContain('data-rail-create');
+    // No "+" button since 2026-11-25; 워크플로우 sits under a divider instead.
+    expect(html).not.toContain('data-rail-create');
+    expect(html).toContain('data-rail-divider');
     expect(html).toContain('data-rail-toggle');
     expect(html).toContain('data-rail-tabs');
     expect(html).toContain(`aria-label="${shell.rail.label}"`);
@@ -168,20 +173,29 @@ describe('the rail', () => {
     expect(current(render(owner, { studioV2: true }))).toEqual(['campaigns']);
   });
 
-  it('opens "+" for owners and editors only, and the studio items never for a campaign-only guest', () => {
+  it('gives no role a "+" button or menu, and a campaign-only guest never the studio items', () => {
     // With and without the menu words: the rows (no menu) show exactly what the role may open, and the
     // menu takes the same list (tests/brand-studio/shell/rail-workspace-nav.test.tsx opens it per role).
+    // The wide rail has had no "+" since 2026-11-25 for any role, with rooms or without: its rows are the way in.
+    const noCreate = (html: string, who: string) => {
+      expect(html, who).toContain('data-brand-layout-mode="rail"');
+      expect(html, who).not.toContain('data-rail-create');
+      expect(html, who).not.toContain('bw-rail-create-button');
+      expect(html, who).not.toContain('bw-rail-create-mark');
+      // The old button's word, as a row label or a tooltip.
+      expect(html, who).not.toContain('>만들기<');
+      expect(html, who).not.toContain('data-rail-tip="만들기"');
+    };
     for (const menu of [true, false]) {
+      for (const role of ['owner', 'editor', 'viewer', 'guest', 'studio'] as const) {
+        for (const withRooms of [false, true]) noCreate(render({ ...owner, role }, { studioV2: true, menu, rooms: withRooms }), `${role} menu ${menu} rooms ${withRooms}`);
+      }
       const viewer = render({ ...owner, role: 'viewer' }, { studioV2: true, menu });
-      expect(viewer).toContain('data-brand-layout-mode="rail"');
       expect(viewer).toContain('data-rail-item="image"');
-      expect(viewer).not.toContain('data-rail-create');
       expect(viewer).not.toContain('/brand/members');
-      expect(render({ ...owner, role: 'editor' }, { studioV2: true, menu })).toContain('data-rail-create');
+      expect(render({ ...owner, role: 'editor' }, { studioV2: true, menu })).toContain('data-rail-item="image"');
       const guest = render({ ...owner, role: 'guest' }, { studioV2: true, menu });
-      expect(guest).toContain('data-brand-layout-mode="rail"');
       expect(guest).not.toContain('/brand/studio');
-      expect(guest).not.toContain('data-rail-create');
       expect(guest).not.toContain('/brand/settings');
     }
   });
