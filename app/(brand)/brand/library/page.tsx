@@ -7,6 +7,7 @@ import { brandScope } from "@/components/brand-workspace/scope";
 import { BrandUnavailable } from "@/components/brand-workspace/brand-unavailable";
 import { StaffNotice } from "@/components/brand-workspace/staff-notice";
 import { loadAssetProjectLinks } from "@/lib/brand-studio/asset-projects";
+import { brandProjectSpineOpen, memberSeesBrandProjects } from "@/lib/brand-studio/brand-projects";
 import { studioRuntimeDeps } from "@/lib/brand-studio/runtime";
 import { loadStudioState } from "@/lib/brand-studio/service";
 import { assetHubVisible, studioV2Visible } from "@/lib/brand-studio/visibility";
@@ -88,6 +89,10 @@ export default async function ContentLibrary({
       </div>
     ) : null;
 
+    const spineOpen =
+      memberSeesBrandProjects({ staff: choice.role === "studio", role: choice.role }) &&
+      (await brandProjectSpineOpen(sql, choice.id));
+
     return (
       <>
         {choice.role === "studio" && <StaffNotice b={b} />}
@@ -101,6 +106,7 @@ export default async function ContentLibrary({
           projectLinks={projectLinks}
           deliverables={deliverables}
           canOpenStudio={canOpenStudio}
+          {...(spineOpen ? { useFilmParam: true } : {})}
         />
       </>
     );

@@ -17,6 +17,8 @@ import {
   type AssetRefSchema,
   type AssetReserveSchema,
   type AssetUpdateSchema,
+  type BrandProjectFilingInput,
+  type BrandProjectMoveInput,
   type CampaignHandoffSchema,
   type OutputWaveformSchema,
   type LyricsDraftSchema,
@@ -36,6 +38,9 @@ import {
   type StudioAssetReserved,
   type StudioAssetRole,
   type StudioAssetSaved,
+  type StudioBrandProjectCreated,
+  type StudioBrandProjectList,
+  type StudioBrandProjectMoved,
   type StudioDone,
   type StudioErrorCode,
   type StudioFailure,
@@ -60,15 +65,15 @@ export const STUDIO_ENDPOINT = "/api/brand-studio";
 
 /** Operation name -> [request input, success answer]. */
 export interface StudioOps {
-  "job.create": [z.input<typeof StudioJobCreateSchema>, StudioJobCreated];
-  "job.create_group": [z.input<typeof ImageJobGroupSchema>, StudioJobGroupCreated];
+  "job.create": [z.input<typeof StudioJobCreateSchema> & BrandProjectFilingInput, StudioJobCreated];
+  "job.create_group": [z.input<typeof ImageJobGroupSchema> & BrandProjectFilingInput, StudioJobGroupCreated];
   "job.cancel": [z.input<typeof JobRefSchema>, StudioDone];
   "prompt.enhance": [z.input<typeof PromptPreviewSchema>, StudioPromptPreview];
   "film.analyze": [z.input<typeof FilmAnalyzeSchema>, StudioFilmAnalysis];
   "revise.plan": [z.input<typeof RevisePlanSchema>, StudioRevisePlan];
   "revise.mark": [z.input<typeof ReviseMarkReadSchema>, StudioReviseMarkRead];
   "revise.talk": [z.input<typeof ReviseTalkSchema>, StudioReviseTalk];
-  "asset.reserve": [z.input<typeof AssetReserveSchema>, StudioAssetReserved];
+  "asset.reserve": [z.input<typeof AssetReserveSchema> & BrandProjectFilingInput, StudioAssetReserved];
   "asset.complete": [z.input<typeof AssetCompleteSchema>, StudioAssetSaved];
   "asset.update": [z.input<typeof AssetUpdateSchema>, StudioAssetSaved];
   "asset.delete": [z.input<typeof AssetRefSchema>, StudioDone];
@@ -174,13 +179,35 @@ export function createStudioApi({ organizationId, fetch: fetcher = (...args) => 
 
   return {
     organizationId,
-    loadState: () => send<StudioState>(query(), { method: "GET", headers: { Accept: "application/json" } }),
+    loadState: (options?: { brandProject?: string }) =>
+      send<StudioState>(
+        query(options?.brandProject ? `&brandProject=${encodeURIComponent(options.brandProject)}` : ""),
+        { method: "GET", headers: { Accept: "application/json" } },
+      ),
     poll: (jobIds: readonly string[]) =>
       send<StudioJobsPoll>(query(`&jobs=${jobIds.map(encodeURIComponent).join(",")}`), {
         method: "GET",
         headers: { Accept: "application/json" },
       }),
     call,
+    listBrandProjects: () =>
+      send<StudioBrandProjectList>(STUDIO_ENDPOINT, {
+        method: "POST",
+        headers: json,
+        body: JSON.stringify({ operation: "project.list", input: { organizationId } }),
+      }),
+    createBrandProject: (input: { requestId: string; title: string }) =>
+      send<StudioBrandProjectCreated>(STUDIO_ENDPOINT, {
+        method: "POST",
+        headers: json,
+        body: JSON.stringify({ operation: "project.create", input: { organizationId, ...input } }),
+      }),
+    moveToBrandProject: (input: Omit<BrandProjectMoveInput, "organizationId">) =>
+      send<StudioBrandProjectMoved>(STUDIO_ENDPOINT, {
+        method: "POST",
+        headers: json,
+        body: JSON.stringify({ operation: "project.move", input: { organizationId, ...input } }),
+      }),
     /** Library upload. `measure` reads width/height/length in the browser; tests pass a stub. */
     async upload(
       file: UploadFile & Blob,
@@ -190,6 +217,8 @@ export function createStudioApi({ organizationId, fetch: fetcher = (...args) => 
         measure?: (file: Blob, kind: StudioAssetKind) => Promise<MeasuredMedia>;
         /** A source made for one run and deleted afterwards ("빈 곳 채우기"): its role is not recognised. */
         transient?: boolean;
+        /** Brand project spine only: omitted for 미분류 and when spine is closed. */
+        brandProjectId?: string;
       } = {},
     ): Promise<ApiResult<StudioAssetSaved>> {
       const problem = uploadProblem(file);
@@ -203,6 +232,7 @@ export function createStudioApi({ organizationId, fetch: fetcher = (...args) => 
         mime: file.type,
         sizeBytes: file.size,
         ...(options.role ? { role: options.role } : {}),
+        ...(options.brandProjectId ? { brandProjectId: options.brandProjectId } : {}),
       });
       if (isFailure(reserved)) return reserved;
       let put: Response;

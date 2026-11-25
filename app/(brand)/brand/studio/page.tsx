@@ -54,6 +54,7 @@ export default async function BrandStudio({
   searchParams: Promise<{
     organizationId?: string | string[];
     projectId?: string | string[];
+    project?: string | string[];
     track?: string | string[];
     scenario?: string | string[];
     mode?: string | string[];
@@ -61,7 +62,7 @@ export default async function BrandStudio({
   }>;
 }) {
   const [
-    { organizationId, projectId, track, scenario, mode: queryMode, tab },
+    { organizationId, projectId, project, track, scenario, mode: queryMode, tab },
     { sql, viewer, verifiedEmail, brandHost, b, dict, locale },
   ] = await Promise.all([searchParams, brandContext()]);
   const initialProjectId = Array.isArray(projectId) ? projectId[0] : projectId;
@@ -120,7 +121,7 @@ export default async function BrandStudio({
   if (choice && featureDenied(choice.denied, "self_studio")) notFound();
   // Studio v2 (docs/BRAND-STUDIO-V2.md §5.2): behind its flag, and never for a sandboxed or generation-closed brand.
   if (choice && brandStudioV2Open() && studioV2Visible(choice, true))
-    return brandStudioV2({ deps: { sql, verifiedEmail }, viewer, choice, access, locale, brandHost, tab, mode: queryMode });
+    return brandStudioV2({ deps: { sql, verifiedEmail }, viewer, choice, access, locale, brandHost, tab, mode: queryMode, project });
   // The TWINGS team reads the brand's templates, remaining count and history; it never generates here.
   const staffOrgId = access.staff ? choice?.id : undefined;
   const historyOrg = orgId ?? staffOrgId;

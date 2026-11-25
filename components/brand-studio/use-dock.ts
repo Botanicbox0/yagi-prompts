@@ -153,6 +153,78 @@ export function tabsAfterMove(tabs: DesignTabs, renumber: (text: string) => stri
   return { tabs: next, dropped };
 }
 
+const MAX_PRESS_CACHE = 16;
+
+/**
+ * Press fingerprint for single / multi-clip `job.create`. Without the brand project spine
+ * (`brandProjectId === undefined`), returns the exact string `main` produces so nothing changes.
+ * With the spine (`brandProjectId: string | null`), embeds the open scope into the key so a retry in
+ * the same project keeps its request ids across switching away and back, while another project gets new ids.
+ */
+export function singlePressFingerprint(
+  inputs: readonly Record<string, unknown>[],
+  brandProjectId?: string | null,
+): string {
+  const base = JSON.stringify(inputs.map((inp) => ({ ...inp, requestId: null })));
+  return brandProjectId === undefined ? base : JSON.stringify({ base, brandProjectId });
+}
+
+/** Press fingerprint for `job.create_group`. Byte-identical to `main` when `brandProjectId === undefined`. */
+export function groupPressFingerprint(
+  input: Record<string, unknown>,
+  brandProjectId?: string | null,
+): string {
+  const base = JSON.stringify({ ...input, requestId: null });
+  return brandProjectId === undefined ? base : JSON.stringify({ base, brandProjectId });
+}
+
+export interface PressSlot {
+  fingerprint: string;
+  ids: string[];
+}
+
+/**
+ * Per-scope press memory (G0):
+ * - Without the spine (`brandProjectId === undefined`): single slot (`__legacy__`), matching the exact
+ *   replace-on-different-draft semantics on `main`.
+ * - With the spine (`brandProjectId: string | null`): at most one slot per scope (`projectId` or `__unfiled__`),
+ *   each with the exact same replace-on-different-draft rule as the old single slot.
+ */
+export type PressCache = Map<string, PressSlot>;
+
+export function pressScopeKey(brandProjectId?: string | null): string {
+  if (brandProjectId === undefined) return "__legacy__";
+  return brandProjectId ? brandProjectId.toLowerCase() : "__unfiled__";
+}
+
+/** Reuse the request ids for the open scope's remembered press when fingerprint and count match; otherwise replace the slot. */
+export function resolvePressIds(
+  cache: PressCache,
+  fingerprint: string,
+  count: number,
+  makeId: () => string,
+  brandProjectId?: string | null,
+): string[] {
+  const scopeKey = pressScopeKey(brandProjectId);
+  const existing = cache.get(scopeKey);
+  if (existing && existing.fingerprint === fingerprint && existing.ids.length === count) {
+    return existing.ids;
+  }
+  const ids = Array.from({ length: count }, () => makeId());
+  cache.set(scopeKey, { fingerprint, ids });
+  while (cache.size > MAX_PRESS_CACHE) {
+    const oldest = cache.keys().next().value;
+    if (oldest !== undefined && oldest !== scopeKey) cache.delete(oldest);
+    else break;
+  }
+  return ids;
+}
+
+/** Release the cached request ids for the open scope once a press has succeeded. */
+export function clearPressIds(cache: PressCache, brandProjectId?: string | null): void {
+  cache.delete(pressScopeKey(brandProjectId));
+}
+
 export function useDock({
   studio,
   copy,
@@ -160,6 +232,7 @@ export function useDock({
   initialMedium,
   mode,
   prefill,
+  brandProjectId,
 }: {
   studio: StudioController;
   copy: StudioCopy;
@@ -172,6 +245,8 @@ export function useDock({
    * left for this screen goes in the field, once, when this member can create and the field is empty.
    */
   prefill?: { ready: boolean; canCreate: boolean };
+  /** Brand project spine only: embedded in the press fingerprint so switching projects never drops a key. */
+  brandProjectId?: string | null;
 }) {
   const [draft, setDraft] = useState<DockDraft>(() => initialDraft(mode ?? initialMedium));
   const [tray, setTray] = useState<TrayItem[]>([]);
@@ -206,7 +281,7 @@ export function useDock({
   const designSeq = useRef(0);
   /** The single bar's design call; a move of the references makes a running one stale. */
   const singleDesign = useRef(0);
-  const press = useRef<{ fingerprint: string; ids: string[] } | null>(null);
+  const press = useRef<PressCache>(new Map());
   // Several files can finish uploading in one tick; each attach must see the ones before it.
   const latest = useRef(tray);
   latest.current = tray;
@@ -259,7 +334,7 @@ export function useDock({
       setTabs(nextTabs);
       setActiveTab((current) => (nextTabs ? (current && nextTabs[current] ? current : picked[0]!) : null));
       setEnhanced(nextEnhanced);
-      press.current = null;
+      press.current.clear();
       // One model for another is the bar it always was: its lines stay as they were.
       if (!options.quiet && (wasGroup || nowGroup)) {
         setMessage(null);
@@ -356,21 +431,25 @@ export function useDock({
       setMessage(problemLine(probe.problem, copy));
       return false;
     }
-    const fingerprint = JSON.stringify({ ...probe.input, requestId: null });
+    const fingerprint = groupPressFingerprint(probe.input as unknown as Record<string, unknown>, brandProjectId);
     // The group key is shorter than a run's (contracts.ts `ImageJobGroupSchema`): a UUID without dashes.
-    if (press.current?.fingerprint !== fingerprint) press.current = { fingerprint, ids: [newRequestId().replace(/-/g, "")] };
+    const ids = resolvePressIds(press.current, fingerprint, 1, () => newRequestId().replace(/-/g, ""), brandProjectId);
     setBusy(true);
     setMessage(null);
     setNotice(null);
-    const result = await studio.createGroup({ ...probe.input, requestId: press.current.ids[0]! });
+    const result = await studio.createGroup({ ...probe.input, requestId: ids[0]! });
     setBusy(false);
     if (isFailure(result)) {
+      if ((result as { projectGone?: boolean }).projectGone) {
+        clearPressIds(press.current, brandProjectId);
+        return false;
+      }
       setMessage(errorLine(copy, result.code), result.code);
       return false;
     }
-    press.current = null;
+    clearPressIds(press.current, brandProjectId);
     return true;
-  }, [copy, draft, organizationId, studio, tabs, tray]);
+  }, [brandProjectId, copy, draft, organizationId, studio, tabs, tray]);
 
   /** True when one or more runs started (multi-clip plans dispatch concurrently via Promise.all). */
   const submit = useCallback(async (): Promise<boolean> => {
@@ -389,11 +468,11 @@ export function useDock({
       setMessage(problemLine(probe.problem, copy));
       return false;
     }
-    const fingerprint = JSON.stringify(probe.inputs.map((inp) => ({ ...inp, requestId: null })));
-    if (press.current?.fingerprint !== fingerprint || press.current.ids.length !== probe.inputs.length) {
-      press.current = { fingerprint, ids: probe.inputs.map(() => newRequestId()) };
-    }
-    const ids = press.current.ids;
+    const fingerprint = singlePressFingerprint(
+      probe.inputs as unknown as readonly Record<string, unknown>[],
+      brandProjectId,
+    );
+    const ids = resolvePressIds(press.current, fingerprint, probe.inputs.length, newRequestId, brandProjectId);
     setBusy(true);
     setMessage(null);
     setNotice(null);
@@ -402,10 +481,14 @@ export function useDock({
       const result = await studio.createJob({ ...probe.inputs[0]!, requestId: ids[0]! });
       setBusy(false);
       if (isFailure(result)) {
+        if ((result as { projectGone?: boolean }).projectGone) {
+          clearPressIds(press.current, brandProjectId);
+          return false;
+        }
         setMessage(errorLine(copy, result.code), result.code);
         return false;
       }
-      press.current = null;
+      clearPressIds(press.current, brandProjectId);
       return true;
     }
 
@@ -415,12 +498,16 @@ export function useDock({
     setBusy(false);
     const failed = results.find(isFailure);
     if (failed) {
+      if ((failed as { projectGone?: boolean }).projectGone) {
+        clearPressIds(press.current, brandProjectId);
+        return false;
+      }
       setMessage(errorLine(copy, failed.code), failed.code);
       if (results.every(isFailure)) return false;
     }
-    press.current = null;
+    clearPressIds(press.current, brandProjectId);
     return true;
-  }, [busy, copy, designing, draft, enhancing, organizationId, ownWords, studio, submitGroup, tray]);
+  }, [brandProjectId, busy, copy, designing, draft, enhancing, organizationId, ownWords, studio, submitGroup, tray]);
 
   /**
    * Several models: one design per model, in parallel, each with that model's own profile. Each tab fills
@@ -544,7 +631,7 @@ export function useDock({
       setEnhanced(plan.reviewed);
       setMessage(null);
       setNotice(missingReferencesLine(plan.missing, copy));
-      press.current = null;
+      press.current.clear();
       // Designed sentences are never brought back: the typed words are (2026-11-19, #266).
       if (latestTabs.current) dropTabs();
       if (remembers && plan.draft.medium === "image") writeStoredPick(localStore(), organizationId, pickedModels(plan.draft));

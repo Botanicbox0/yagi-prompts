@@ -4,10 +4,12 @@ import { brandContext } from '@/components/brand-workspace/context';
 import { brandScope } from '@/components/brand-workspace/scope';
 import { studioRouteContext } from '@/components/brand-studio/route-context';
 import { SoundStudio } from '@/components/brand-studio/sound/sound-studio';
+import { ProjectSpineProvider } from '@/components/brand-studio/project-chip';
 import { createStudioMediaStore } from '@/lib/brand-studio/media-store';
 import { soundTabParam } from '@/lib/brand-studio/sound/library';
 import { loadSoundStudio } from '@/lib/brand-studio/sound/load';
 import { memberSeesBrandProjects } from '@/lib/brand-studio/brand-projects';
+import { loadStudioSpine } from '@/lib/brand-studio/open-project-server';
 import { studioEnv } from '@/lib/brand-studio/env';
 import { soundStudioVisible } from '@/lib/brand-studio/visibility';
 import { STUDIO_LIMITS } from '@/lib/brand-studio/contracts';
@@ -45,7 +47,7 @@ export async function generateMetadata({
 export default async function StudioSoundPage({
   searchParams,
 }: {
-  searchParams: Promise<{ organizationId?: string | string[]; tab?: string | string[] }>;
+  searchParams: Promise<{ organizationId?: string | string[]; tab?: string | string[]; project?: string | string[] }>;
 }) {
   const params = await searchParams;
   const { choice, access, locale, dict, deps, viewer } = await studioRouteContext(params.organizationId);
@@ -60,12 +62,20 @@ export default async function StudioSoundPage({
 
   const media = createStudioMediaStore();
   // `brandProjectId` on runs only for a member seen as themselves; staff browsing a brand get none.
-  const data = await loadSoundStudio(deps.sql, media, studioEnv(), choice.id, viewer.userId ?? null, {
-    member: memberSeesBrandProjects({ staff: access.staff, role: choice.role }),
-  });
+  const member = memberSeesBrandProjects({ staff: access.staff, role: choice.role });
+  const [data, spine] = await Promise.all([
+    loadSoundStudio(deps.sql, media, studioEnv(), choice.id, viewer.userId ?? null, { member }),
+    loadStudioSpine({
+      sql: deps.sql,
+      viewer,
+      organizationId: choice.id,
+      seat: { staff: access.staff, role: choice.role },
+      queryProject: params.project,
+    }),
+  ]);
   const canCreate = !access.staff && (choice.role === 'owner' || choice.role === 'editor');
 
-  return (
+  const studio = (
     <SoundStudio
       organizationId={choice.id}
       organizationName={choice.name}
@@ -87,6 +97,15 @@ export default async function StudioSoundPage({
         compose: scopedHref('/brand/studio/compose', choice),
         video: scopedHref('/brand/studio/video', choice),
       }}
+      {...(spine ? { spine, useFilmParam: true } : {})}
     />
+  );
+
+  return spine ? (
+    <ProjectSpineProvider organizationId={choice.id} locale={locale} copy={dict.projectSpine} initial={spine}>
+      {studio}
+    </ProjectSpineProvider>
+  ) : (
+    studio
   );
 }

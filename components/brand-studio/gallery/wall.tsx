@@ -37,6 +37,7 @@ import {
   pruneSelection,
   resultKey,
   selectRange,
+  selectedMoveJobIds,
   selectedTargets,
   toggleSelection,
   type BulkAction,
@@ -45,6 +46,7 @@ import {
   type Selection,
 } from "./selection";
 import { Menu, useAnchored, useDismiss, type MenuEntry } from "./menu";
+import { useProjectSpine } from "../project-chip";
 import { useElementSize, useMediaQuery } from "../use-media";
 
 /** Everything a tile's buttons and menu can ask the screen to do. */
@@ -100,6 +102,8 @@ export interface WallProps {
   canRemove?: boolean;
   /** Takes one such run off the wall. Without it failed tiles have no checkbox and no remove button. */
   onRemove?(job: StudioJobView): void | Promise<unknown>;
+  /** Brand project spine only (§4.6): opens MoveToProjectDialog for one run or a multi-select batch. */
+  onMoveJobs?(jobIds: string[], opener?: HTMLElement | null): void;
   /** Tiles selected first, by key (tests). */
   initialSelection?: readonly string[];
   onNotice(line: string | null): void;
@@ -172,6 +176,7 @@ export type TileMenuKey =
   | "decorate"
   | "to-video"
   | "folder"
+  | "project-move"
   | "review"
   | "campaign"
   | "save"
@@ -200,8 +205,10 @@ export function tileMenuKeys(input: {
   inMenu?: { select?: boolean; like?: boolean; reference?: boolean };
   /** A preset workflow run (`StudioJobView.preset`): its text is never shown, so it is not made again from here. */
   preset?: boolean;
+  /** Brand project spine open + canCreate: shows "프로젝트로 옮기기" right after "폴더에 담기" (§4.6). */
+  canMoveProject?: boolean;
 }): TileMenuKey[] {
-  const { canGenerate, canEdit, kind, image, sized, saved, copyable = false, inMenu = {}, preset = false } = input;
+  const { canGenerate, canEdit, kind, image, sized, saved, copyable = false, inMenu = {}, preset = false, canMoveProject = false } = input;
   const keys: TileMenuKey[] = ["open"];
   if (inMenu.select) keys.push("select");
   if (canGenerate && kind === "region_edit") keys.push("reuse");
@@ -212,6 +219,7 @@ export function tileMenuKeys(input: {
   if (canGenerate && image) keys.push("to-video");
   if (canGenerate && inMenu.reference) keys.push("reference");
   if (canEdit) keys.push("folder");
+  if (canEdit && canMoveProject) keys.push("project-move");
   if (canEdit && inMenu.like) keys.push("like");
   if (canEdit) keys.push("review", "campaign");
   if (canEdit && !saved) keys.push("save");
@@ -272,8 +280,18 @@ export function Wall(props: WallProps) {
   // What left the wall (deleted, or replaced by a newer version) is no longer selected.
   const selection = pruneSelection(picked, order);
   const targets = selectedTargets(tiles, selection);
+  const spine = useProjectSpine();
+  const canMoveProject = Boolean(spine && spine.canCreate && props.canEdit && props.onMoveJobs);
+  const moveLabel = spine?.copy.move ?? "";
+  const moveTooMany = spine?.copy.moveTooMany ?? "";
+  const moveSelection = canMoveProject ? selectedMoveJobIds(targets) : null;
   const selecting = selection.keys.size > 0;
-  const actions = bulkActions(targets, { canGenerate: props.canGenerate, canEdit: props.canEdit, canRemove });
+  const actions = bulkActions(targets, {
+    canGenerate: props.canGenerate,
+    canEdit: props.canEdit,
+    canRemove,
+    ...(canMoveProject ? { canMoveProject: true } : {}),
+  });
   const select: Select = {
     selecting,
     has: (key) => selection.keys.has(key),
@@ -302,7 +320,7 @@ export function Wall(props: WallProps) {
     point: (id, on) => setPointed((current) => (on ? id : current === id ? null : current)),
     focus: (id, on) => setFocused((current) => (on ? id : current === id ? null : current)),
   };
-  const tileProps = { ...props, badges, select, canRemove, group };
+  const tileProps = { ...props, badges, select, canRemove, group, canMoveProject, moveLabel };
   const groups = groupByDay(wallEntries(collapseRevisions(jobs), parentOf), (entry) => entry.job.createdAt, now);
   const label = mode === "video" ? g.labelVideo : g.label;
   if (!groups.length && !sending.length)
@@ -349,6 +367,14 @@ export function Wall(props: WallProps) {
           confirmLine={deleteConfirmLine(targets, jobs, copy)}
           copy={copy}
           library={props.library}
+          moveLabel={moveLabel}
+          moveOverLimit={moveSelection?.overLimit ?? false}
+          moveTooMany={moveTooMany}
+          onMoveProject={
+            canMoveProject && moveSelection && !moveSelection.overLimit
+              ? (opener) => props.onMoveJobs?.(moveSelection.jobIds, opener)
+              : undefined
+          }
           onReference={sendAsReferences}
           onDelete={() => {
             for (const item of targets.items) props.onAction("delete", item);
@@ -388,6 +414,10 @@ function SelectionBar({
   confirmLine,
   copy,
   library,
+  moveLabel,
+  moveOverLimit = false,
+  moveTooMany = "",
+  onMoveProject,
   onReference,
   onDelete,
   onClear,
@@ -398,6 +428,10 @@ function SelectionBar({
   confirmLine: string;
   copy: StudioCopy;
   library: StudioLibrary;
+  moveLabel?: string;
+  moveOverLimit?: boolean;
+  moveTooMany?: string;
+  onMoveProject?(opener?: HTMLElement | null): void;
   onReference(): void;
   onDelete(): void;
   onClear(): void;
@@ -408,6 +442,7 @@ function SelectionBar({
   const [panel, setPanel] = useState<"folders" | "confirm" | null>(null);
   const [saving, setSaving] = useState(false);
   const folderButton = useRef<HTMLButtonElement>(null);
+  const moveButton = useRef<HTMLButtonElement>(null);
   // The delete question opens with focus on 취소 (never on the destructive button); leaving it puts focus
   // back on the bar's 삭제, not on the page.
   const bar = useRef<HTMLDivElement>(null);
@@ -436,9 +471,22 @@ function SelectionBar({
     setSaving(false);
     onNotice(fallback > 1 ? g.downloadFailed : null);
   };
-  const button: Record<BulkAction, { label: string; icon: "plus" | "folder-plus" | "download" | "trash"; run(): void; busy?: boolean; disabled?: boolean; tone?: "danger" }> = {
+  const button: Record<
+    BulkAction,
+    { label: string; icon: "plus" | "folder-plus" | "download" | "trash"; run(): void; busy?: boolean; disabled?: boolean; title?: string; describedBy?: string; tone?: "danger" }
+  > = {
     reference: { label: g.reference, icon: "plus", run: onReference },
     folder: { label: g.folder, icon: "folder-plus", run: () => setPanel(panel === "folders" ? null : "folders"), disabled: !library.ready },
+    "project-move": {
+      label: moveLabel ?? "",
+      icon: "folder-plus",
+      run: () => {
+        if (!moveOverLimit) onMoveProject?.(moveButton.current);
+      },
+      disabled: !onMoveProject || moveOverLimit,
+      title: moveOverLimit && moveTooMany ? moveTooMany : undefined,
+      describedBy: moveOverLimit && moveTooMany ? `${id}-move-limit` : undefined,
+    },
     download: { label: g.menu.download, icon: "download", run: () => void download(), busy: saving, disabled: saving },
     delete: { label: g.menu.delete, icon: "trash", run: () => setPanel("confirm"), tone: "danger" },
   };
@@ -490,14 +538,17 @@ function SelectionBar({
             return (
               <button
                 key={action}
-                ref={action === "folder" ? folderButton : undefined}
+                ref={action === "folder" ? folderButton : action === "project-move" ? moveButton : undefined}
                 type="button"
                 className="bs-btn"
                 data-variant="ghost"
                 data-size="sm"
                 data-tone={b.tone}
                 data-bulk={action}
+                data-project-move={action === "project-move" ? "" : undefined}
                 disabled={b.disabled}
+                title={b.title}
+                aria-describedby={b.describedBy}
                 aria-busy={b.busy}
                 aria-haspopup={action === "folder" ? "dialog" : undefined}
                 aria-expanded={action === "folder" ? panel === "folders" : undefined}
@@ -509,6 +560,11 @@ function SelectionBar({
               </button>
             );
           })}
+          {moveOverLimit && moveTooMany && (
+            <span id={`${id}-move-limit`} className="bs-sr">
+              {moveTooMany}
+            </span>
+          )}
           <button type="button" className="bs-tile-btn bs-selection-clear" aria-label={g.clearSelection} title={g.clearSelection} onClick={onClear}>
             <StudioIcon name="close" />
           </button>
@@ -667,8 +723,17 @@ function FailedTile({ entry, copy, canGenerate, onRetry, onRemove, canRemove, se
   );
 }
 
-function ResultTile(props: WallProps & Badges & Picking & { entry: Extract<Entry, { type: "result" }>; n: number }) {
-  const { entry, n, copy, locale, canGenerate, canEdit, library, onAction, onNotice, badges, select, group } = props;
+function ResultTile(
+  props: WallProps &
+    Badges &
+    Picking & {
+      entry: Extract<Entry, { type: "result" }>;
+      n: number;
+      canMoveProject: boolean;
+      moveLabel: string;
+    },
+) {
+  const { entry, n, copy, locale, canGenerate, canEdit, library, onAction, onNotice, onMoveJobs, badges, select, group, canMoveProject, moveLabel } = props;
   const { output, job } = entry.item;
   const key = resultKey(output.id);
   const selected = select.has(key);
@@ -724,6 +789,7 @@ function ResultTile(props: WallProps & Badges & Picking & { entry: Extract<Entry
     decorate: { label: m.decorate, icon: "layers", run: () => onAction("decorate", entry.item) },
     "to-video": { label: m.toVideo, icon: "video", run: () => onAction("toVideo", entry.item) },
     folder: { label: m.folder, icon: "folder-plus", keepOpen: true, disabled: !library.ready, run: () => setPanel("folders") },
+    "project-move": { label: moveLabel, icon: "folder-plus", run: () => onMoveJobs?.([job.id], more.current) },
     review: { label: locale === "en" ? "Review & Share" : "검수 · 공유", icon: "review", run: () => onAction("review", entry.item) },
     campaign: { label: m.campaign, icon: "send", run: () => onAction("campaign", entry.item) },
     save: { label: m.save, icon: "save", run: () => onAction("save", entry.item) },
@@ -752,6 +818,7 @@ function ResultTile(props: WallProps & Badges & Picking & { entry: Extract<Entry
     copyable: Boolean(promptText),
     inMenu: { select: !fit.check, like: canEdit && !fit.like, reference: canGenerate && (phone || fit.tools < wanted) },
     preset: Boolean(job.preset),
+    ...(canMoveProject ? { canMoveProject: true } : {}),
   }).map((key) => ({ key, ...item[key] }));
 
   return (

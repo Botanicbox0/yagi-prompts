@@ -17,17 +17,20 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, ty
 import { createStudioApi, isFailure, measureInBrowser } from '@/components/brand-studio/api';
 import { newRequestId } from '@/components/brand-studio/copy';
 import { STUDIO_JOB_SETTLED, STUDIO_JOB_STARTED, announce } from '@/components/brand-studio/seams';
+import { clearPressIds, resolvePressIds, type PressCache } from '@/components/brand-studio/use-dock';
 import { settledJobs } from '@/components/brand-studio/use-studio';
 import { windowText, type AllowanceWindowView } from '@/lib/brand-studio/allowance-window';
 import { composeStorageKey } from '@/lib/brand-studio/compose/timeline';
 import type { StudioAllowanceView, StudioErrorCode, StudioJobView } from '@/lib/brand-studio/contracts';
 import { creditsLeft, formatCredits } from '@/lib/brand-studio/credits';
+import { belongsToOpenProject, brandProjectIdOf, type OpenProject, type StudioSpineProps } from '@/lib/brand-studio/open-project';
 import { filterTracks, mergeTracks, musicTracks, soundTracks, type SoundTab, type SoundTrackView } from '@/lib/brand-studio/sound/library';
 import { composeBgmHandoff, composeSfxHandoff, type SoundSendTrack } from '@/lib/brand-studio/sound/send';
 import type { BillingPlanCatalogueItem } from '@/lib/brands/billing-ui';
 import type { BrandBillingCopy } from '@/messages/brand-billing';
 import { interpolate } from '@/lib/i18n/format';
 import type { StudioSoundCopy } from '@/messages/studio-sound';
+import { ProjectChip, ProjectGoneNotice, handleNotFoundForOpenProject, projectChipStyles, useProjectSpine } from '../project-chip';
 import { StudioAllowanceNotice } from '../studio-allowance-notice';
 import { MusicComposer, type ComposerHandle, type ComposerInput } from './composer';
 import { SendToVideoDialog, type SendTarget } from './send-dialog';
@@ -57,6 +60,67 @@ export interface SoundStudioProps {
   canCreate: boolean;
   audioMaxMb: number;
   hrefs: { page: string; compose: string; video: string };
+  /** Brand project spine prop (present only when `BRAND_PROJECT_SPINE` is open and viewer is a member). */
+  spine?: StudioSpineProps | null;
+  /** Brand project spine open: video studio film links use `?film=` instead of `?project=` (§4.5). */
+  useFilmParam?: boolean;
+}
+
+/** Build the `job.create` input for music generation, attaching `brandProjectId` only when a project is open (§4.4). */
+export function soundMusicCreateInput(
+  input: ComposerInput,
+  opts: { organizationId: string; locale: 'ko' | 'en'; requestId: string; brandProjectId?: string | null },
+) {
+  return {
+    kind: 'music' as const,
+    organizationId: opts.organizationId,
+    requestId: opts.requestId,
+    prompt: input.prompt,
+    vocal: input.vocal,
+    language: opts.locale,
+    ...(opts.brandProjectId ? { brandProjectId: opts.brandProjectId } : {}),
+    ...(input.vocal && input.lyrics
+      ? {
+          lyrics: input.lyrics,
+          structure: input.structure,
+          targetSeconds: input.targetSeconds,
+          ...(input.lyricsBy ? { lyricsBy: input.lyricsBy } : {}),
+          ...(input.videoAssetId ? { videoAssetId: input.videoAssetId } : {}),
+        }
+      : {}),
+    ...(input.careful ? { careful: true } : {}),
+    ...(input.vocal && !input.lyrics && input.words ? { words: input.words } : {}),
+    ...(input.vocal && input.lyrics && input.bpm ? { bpm: input.bpm } : {}),
+    architect: input.architect,
+    ...(input.designed ? { designed: input.designed } : {}),
+  };
+}
+
+/**
+ * Resolve the music press idempotency key (H1):
+ * - Without the spine (`brandProjectId === undefined`): exact `main` single `??=` slot (content-independent).
+ * - With the spine (`brandProjectId: string | null`): one content-independent slot per scope (`projectId` or
+ *   `__unfiled__`), cleared on the exact same events (success or server refusal).
+ */
+export function resolveSoundRequestId(
+  cache: PressCache,
+  brandProjectId: string | null | undefined,
+  makeId: () => string = newRequestId,
+): string {
+  return resolvePressIds(cache, '__sound__', 1, makeId, brandProjectId)[0]!;
+}
+
+export function clearSoundRequestId(cache: PressCache, brandProjectId: string | null | undefined): void {
+  clearPressIds(cache, brandProjectId);
+}
+
+/** Filter sound studio `StudioJobView`s to the open brand project scope while spine is open (§4.4). */
+export function soundJobsInScope<T extends Pick<StudioJobView, 'brandProjectId'>>(
+  jobs: readonly T[],
+  open: OpenProject | undefined,
+): T[] {
+  if (!open) return jobs as T[];
+  return jobs.filter((job) => belongsToOpenProject(job.brandProjectId, open));
 }
 
 type Notice = { text: string; href?: string } | null;
@@ -92,10 +156,17 @@ export function soundErrorLine(copy: StudioSoundCopy, code: StudioErrorCode | 'a
 
 export function SoundStudio(props: SoundStudioProps) {
   const { copy, organizationId, locale, canCreate } = props;
+  const spineCtx = useProjectSpine();
+  const spineOpen = spineCtx?.open ?? props.spine?.open ?? undefined;
+  const spineActive = Boolean(spineOpen);
+  const openBrandProjectId = spineActive ? brandProjectIdOf(spineOpen) : null;
+  const spineOpenRef = useRef<OpenProject | undefined>(spineOpen);
+  spineOpenRef.current = spineOpen;
   const api = useMemo(() => createStudioApi({ organizationId }), [organizationId]);
   const [tab, setTab] = useState<SoundTab>(props.initialTab);
   const [files, setFiles] = useState<SoundTrackView[]>(props.initialTracks.filter((t) => !t.outputId));
   const [jobs, setJobs] = useState<StudioJobView[]>(props.initialJobs);
+  const visibleJobs = useMemo(() => soundJobsInScope(jobs, spineOpen), [jobs, spineOpen]);
   // A run this screen watched has settled: the rail refreshes its credits and shows a toast elsewhere (as the
   // image board does). Real-screen check 2026-11-21: the rail kept the old figure until a reload.
   const seenJobs = useRef<Map<string, StudioJobView['status']> | null>(null);
@@ -123,7 +194,7 @@ export function SoundStudio(props: SoundStudioProps) {
   const audio = useRef<HTMLAudioElement | null>(null);
   const fileInput = useRef<HTMLInputElement | null>(null);
   const composer = useRef<ComposerHandle | null>(null);
-  const draftRequest = useRef<string | null>(null);
+  const draftRequests = useRef<PressCache>(new Map());
 
   /* ------------------------------------------------------------------ rows */
   const initialMadeLikes = useMemo(
@@ -131,18 +202,18 @@ export function SoundStudio(props: SoundStudioProps) {
     [props.initialTracks],
   );
   const tracks = useMemo(() => {
-    const made = musicTracks(organizationId, jobs, []).map((t) => ({
+    const made = musicTracks(organizationId, visibleJobs, []).map((t) => ({
       ...t,
       liked: likes[t.key] ?? initialMadeLikes[t.key] ?? false,
       assetId: saved[t.key] ?? t.assetId,
     }));
     const own = files.map((t) => ({ ...t, liked: likes[t.key] ?? t.liked }));
     return mergeTracks(made, own);
-  }, [files, jobs, likes, saved, initialMadeLikes, organizationId]);
+  }, [files, visibleJobs, likes, saved, initialMadeLikes, organizationId]);
   const shown = useMemo(() => filterTracks(tracks, tab, { query, likedOnly }), [tracks, tab, query, likedOnly]);
   const tabCount = useMemo(() => tracks.filter((t) => t.tab === tab).length, [tracks, tab]);
-  const openJobs = useMemo(() => jobs.filter((j) => OPEN.has(j.status)), [jobs]);
-  const failedJobs = useMemo(() => jobs.filter((j) => j.status === 'failed' || j.status === 'canceled'), [jobs]);
+  const openJobs = useMemo(() => visibleJobs.filter((j) => OPEN.has(j.status)), [visibleJobs]);
+  const failedJobs = useMemo(() => visibleJobs.filter((j) => j.status === 'failed' || j.status === 'canceled'), [visibleJobs]);
   const searching = query.trim() !== '' || likedOnly;
 
   const nameOf = useCallback(
@@ -185,7 +256,9 @@ export function SoundStudio(props: SoundStudioProps) {
       setAllowance(answer.allowance);
       setJobs((all) => {
         const next = all.map((job) => answer.jobs.find((j) => j.id === job.id) ?? job);
+        const currentScope = spineOpenRef.current;
         for (const job of answer.jobs) {
+          if (currentScope && !belongsToOpenProject(job.brandProjectId, currentScope)) continue;
           const before = all.find((j) => j.id === job.id);
           if (before && OPEN.has(before.status) && job.status === 'succeeded') {
             setNotice({ text: interpolate(copy.composer.versions, { count: job.outputs.length }) });
@@ -205,8 +278,9 @@ export function SoundStudio(props: SoundStudioProps) {
     setComposerError(null);
     setAllowanceErrorCode(null);
     setLastNeededCredits(typeof input.quotedCredits === 'number' ? input.quotedCredits : null);
-    // One id per draft: a retried press (double click, a dropped answer) is the same request on the server.
-    draftRequest.current ??= newRequestId();
+    // One content-independent slot per scope (H1): exact `main` single `??=` slot without spine.
+    const targetBrandProjectId = spineActive ? openBrandProjectId : undefined;
+    const requestId = resolveSoundRequestId(draftRequests.current, targetBrandProjectId, newRequestId);
     let answer: unknown;
     try {
       const response = await fetch('/api/brand-studio', {
@@ -215,20 +289,12 @@ export function SoundStudio(props: SoundStudioProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           operation: 'job.create',
-          input: {
-            kind: 'music',
+          input: soundMusicCreateInput(input, {
             organizationId,
-            requestId: draftRequest.current,
-            prompt: input.prompt,
-            vocal: input.vocal,
-            language: locale,
-            ...(input.vocal && input.lyrics ? { lyrics: input.lyrics, structure: input.structure, targetSeconds: input.targetSeconds, ...(input.lyricsBy ? { lyricsBy: input.lyricsBy } : {}), ...(input.videoAssetId ? { videoAssetId: input.videoAssetId } : {}) } : {}),
-            ...(input.careful ? { careful: true } : {}),
-            ...(input.vocal && !input.lyrics && input.words ? { words: input.words } : {}),
-            ...(input.vocal && input.lyrics && input.bpm ? { bpm: input.bpm } : {}),
-            architect: input.architect,
-            ...(input.designed ? { designed: input.designed } : {}),
-          },
+            locale,
+            requestId,
+            brandProjectId: openBrandProjectId,
+          }),
         }),
       });
       answer = await response.json();
@@ -238,7 +304,7 @@ export function SoundStudio(props: SoundStudioProps) {
     setCreating(false);
     const result = answer as { ok?: boolean; job?: StudioJobView; code?: StudioErrorCode; blocked?: 'name' | 'lyrics' | 'paused' } | null;
     if (result?.ok && result.job) {
-      draftRequest.current = null;
+      clearSoundRequestId(draftRequests.current, targetBrandProjectId);
       setJobs((all) => [result.job!, ...all.filter((j) => j.id !== result.job!.id)]);
       // The rail reads the credits and the running count again (as the reverse panel tells it), and this screen's
       // own figure reads the reservation at once instead of on the next poll: both show the same number.
@@ -249,6 +315,19 @@ export function SoundStudio(props: SoundStudioProps) {
       chooseTab('music');
       return true;
     }
+    // H5: If the open project was closed elsewhere while open, fall back to 미분류 + gone notice and keep the draft.
+    if (
+      spineCtx &&
+      (await handleNotFoundForOpenProject({
+        code: result?.code,
+        openProjectId: openBrandProjectId,
+        listProjects: () => api.listBrandProjects(),
+        onProjectGone: (goneId) => spineCtx.markProjectGone(goneId),
+      }))
+    ) {
+      clearSoundRequestId(draftRequests.current, targetBrandProjectId);
+      return false;
+    }
     if (result?.blocked === 'name') setComposerError(soundErrorLine(copy, 'artist'));
     else if (result?.blocked === 'lyrics') setComposerError(copy.composer.lyricsBlocked);
     else if (result?.blocked === 'paused') setComposerError(copy.errors.paused);
@@ -256,7 +335,7 @@ export function SoundStudio(props: SoundStudioProps) {
       setAllowanceErrorCode(result.code);
     } else setComposerError(soundErrorLine(copy, result?.code ?? 'failed', allowance.window));
     // A refused request reserved nothing: the next press is a new one.
-    if (result?.code) draftRequest.current = null;
+    if (result?.code) clearSoundRequestId(draftRequests.current, targetBrandProjectId);
     return false;
   };
 
@@ -339,9 +418,29 @@ export function SoundStudio(props: SoundStudioProps) {
     setUploading(true);
     setNotice(null);
     let failed = false;
+    let projectGone = false;
     for (const file of picked) {
-      const result = await api.upload(file, { measure: measureInBrowser });
-      if (isFailure(result) || result.asset.kind !== 'audio') {
+      const result = await api.upload(file, {
+        measure: measureInBrowser,
+        ...(openBrandProjectId ? { brandProjectId: openBrandProjectId } : {}),
+      });
+      if (isFailure(result)) {
+        if (
+          spineCtx &&
+          (await handleNotFoundForOpenProject({
+            code: result.code,
+            openProjectId: openBrandProjectId,
+            listProjects: () => api.listBrandProjects(),
+            onProjectGone: (goneId) => spineCtx.markProjectGone(goneId),
+          }))
+        ) {
+          projectGone = true;
+          break;
+        }
+        failed = true;
+        continue;
+      }
+      if (result.asset.kind !== 'audio') {
         failed = true;
         continue;
       }
@@ -349,6 +448,7 @@ export function SoundStudio(props: SoundStudioProps) {
       if (row) setFiles((all) => [row, ...all.filter((t) => t.key !== row.key)]);
     }
     setUploading(false);
+    if (projectGone) return;
     if (failed) setNotice({ text: copy.upload.failed });
     else chooseTab('music');
   };
@@ -457,7 +557,14 @@ export function SoundStudio(props: SoundStudioProps) {
     <div ref={pageRef} className={`bs-page ${s.page}`} data-brand-studio-v2 data-studio-sound data-sound-tab-current={tab} data-sound-composer-open={showComposer ? '' : undefined}>
       <header className={s.head}>
         <div className={s.titles}>
-          <h1 className="bs-title">{copy.title}</h1>
+          {spineActive ? (
+            <div className={projectChipStyles.titleGroup}>
+              <h1 className="bs-title">{copy.title}</h1>
+              <ProjectChip />
+            </div>
+          ) : (
+            <h1 className="bs-title">{copy.title}</h1>
+          )}
           <p className={s.lead}>{copy.lead}</p>
         </div>
         <div className={s.tools}>
@@ -515,6 +622,7 @@ export function SoundStudio(props: SoundStudioProps) {
           </span>
         </div>
       </header>
+      {spineActive ? <ProjectGoneNotice /> : null}
 
       <p className={s.notice} role="status" aria-live="polite" data-sound-notice>
         {notice ? (
@@ -687,6 +795,7 @@ export function SoundStudio(props: SoundStudioProps) {
           target={videoTarget}
           copy={copy}
           videoHref={props.hrefs.video}
+          useFilmParam={props.useFilmParam}
           onClose={() => setVideoTarget(null)}
           onDone={(href) => {
             setVideoTarget(null);

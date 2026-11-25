@@ -6,7 +6,7 @@
  * version on screen, so selecting or deleting it never reaches the versions behind it. Deleting the shown
  * version brings the one before it back to the wall.
  */
-import type { StudioJobView, StudioOutputView } from "@/lib/brand-studio/contracts";
+import { BRAND_PROJECT_LIMITS, type StudioJobView, type StudioOutputView } from "@/lib/brand-studio/contracts";
 
 export interface Selection {
   keys: ReadonlySet<string>;
@@ -72,14 +72,44 @@ export function selectedTargets(tiles: readonly SelectableTile[], selection: Sel
 }
 
 /** Which actions the bar offers for what is selected (in order): what the member may do, and what applies. */
-export type BulkAction = "reference" | "folder" | "download" | "delete";
+export type BulkAction = "reference" | "folder" | "project-move" | "download" | "delete";
 
-export function bulkActions(targets: SelectedTargets, may: { canGenerate: boolean; canEdit: boolean; canRemove: boolean }): BulkAction[] {
+export function bulkActions(
+  targets: SelectedTargets,
+  may: { canGenerate: boolean; canEdit: boolean; canRemove: boolean; canMoveProject?: boolean },
+): BulkAction[] {
   const actions: BulkAction[] = [];
   const results = targets.items.length > 0;
   if (results && may.canGenerate) actions.push("reference");
   if (results && may.canEdit) actions.push("folder");
+  if (may.canMoveProject && may.canEdit && (results || targets.failed.length > 0)) actions.push("project-move");
   if (results) actions.push("download");
   if ((results && may.canEdit) || (targets.failed.length > 0 && may.canRemove)) actions.push("delete");
   return actions;
+}
+
+/**
+ * Unique job ids across selected results and failed runs (H6).
+ * Reports `overLimit` when more than `BRAND_PROJECT_LIMITS.moveMax` (200) runs are selected so the UI
+ * disables the move button with `moveTooMany` instead of silently truncating.
+ */
+export function selectedMoveJobIds(
+  targets: SelectedTargets,
+  max = BRAND_PROJECT_LIMITS.moveMax,
+): { jobIds: string[]; overLimit: boolean } {
+  const seen = new Set<string>();
+  const jobIds: string[] = [];
+  for (const item of targets.items) {
+    if (!seen.has(item.job.id)) {
+      seen.add(item.job.id);
+      jobIds.push(item.job.id);
+    }
+  }
+  for (const job of targets.failed) {
+    if (!seen.has(job.id)) {
+      seen.add(job.id);
+      jobIds.push(job.id);
+    }
+  }
+  return { jobIds, overLimit: jobIds.length > max };
 }

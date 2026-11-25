@@ -5,13 +5,15 @@
  */
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { z } from "zod";
-import type { FilmSheet, ReviseMarkReadSchema, StudioAssetView, StudioFailure, StudioJobCreate, StudioJobGroupCreate, StudioJobView, StudioProjectRef, StudioReviseMarkRead, StudioState } from "@/lib/brand-studio/contracts";
+import type { BrandProjectFilingInput, FilmSheet, ReviseMarkReadSchema, StudioAssetView, StudioErrorCode, StudioFailure, StudioJobCreate, StudioJobGroupCreate, StudioJobView, StudioProjectRef, StudioReviseMarkRead, StudioState } from "@/lib/brand-studio/contracts";
+import { belongsToOpenProject, brandProjectIdOf, queryParamOfOpenProject, type OpenProject } from "@/lib/brand-studio/open-project";
 import { createStudioApi, isFailure, measureInBrowser, type ApiResult, type StudioApi, type StudioOps } from "./api";
 import { newRequestId } from "./copy";
 import type { RefSource } from "./refs";
 import { createPollLoop, type PollLoop } from "./poller";
+import { handleNotFoundForOpenProject } from "./project-chip/model";
 import { STUDIO_JOB_SETTLED, STUDIO_JOB_STARTED, announce } from "./seams";
-import { initialStore, isOpen, studioReducer } from "./store";
+import { initialStore, isOpen, studioReducer, type StudioAction, type StudioStore } from "./store";
 
 export type FilmState = { status: "loading" } | { status: "done"; sheet: FilmSheet | null };
 
@@ -25,42 +27,173 @@ export function jobInputForProject(input: StudioJobCreate, projectId: string | n
   return projectId && fresh ? { ...input, projectId } : input;
 }
 
+/**
+ * Brand project spine filing on `job.create` (§2, §4.3): attaches `brandProjectId` only when a project is open
+ * and the run is fresh; omits the key completely for 미분류 (`null`) or child runs (`video_final`, `video_revise`).
+ */
+export function jobInputForBrandProject(
+  input: StudioJobCreate,
+  brandProjectId: string | null,
+): StudioJobCreate & BrandProjectFilingInput {
+  const fresh = input.kind === "image" || input.kind === "video" || input.kind === "video_remix" || input.kind === "region_edit";
+  return brandProjectId && fresh ? { ...input, brandProjectId } : input;
+}
+
+/** Brand project spine filing on `job.create_group` (§2, §4.3): attaches `brandProjectId` only when a project is open. */
+export function groupInputForBrandProject(
+  input: StudioJobGroupCreate,
+  brandProjectId: string | null,
+): StudioJobGroupCreate & BrandProjectFilingInput {
+  return brandProjectId ? { ...input, brandProjectId } : input;
+}
+
+/**
+ * Filter incoming jobs to the current open scope while the brand project spine is active (F2).
+ * Without the spine (`open` null/undefined), returns `jobs` untouched.
+ */
+export function filterJobsForScope(
+  jobs: readonly StudioJobView[],
+  open: OpenProject | null | undefined,
+): StudioJobView[] {
+  if (!open) return jobs as StudioJobView[];
+  return jobs.filter((job) => belongsToOpenProject(job.brandProjectId, open));
+}
+
+/**
+ * Pure reducer wrapper for F2: while `open` is active, drops late `polled` or `jobAdded` runs that belong to
+ * another scope so a switch never leaks the previous project's runs onto the new project's wall.
+ */
+export function applyScopedStudioAction(
+  store: StudioStore,
+  action: StudioAction,
+  open: OpenProject | null | undefined,
+): StudioStore {
+  if (!open) return studioReducer(store, action);
+  if (action.type === "jobAdded") {
+    return belongsToOpenProject(action.job.brandProjectId, open) ? studioReducer(store, action) : store;
+  }
+  if (action.type === "polled") {
+    const filtered = filterJobsForScope(action.poll.jobs, open);
+    return studioReducer(store, { type: "polled", poll: { ...action.poll, jobs: filtered } });
+  }
+  return studioReducer(store, action);
+}
+
+export type StudioLoadPlan =
+  | { load: false }
+  | { load: true; options: { brandProject: string } | undefined };
+
+/** Pure request plan for `useStudio`: skips initial load when preloaded for the same scope, otherwise loads once. */
+export function planStudioLoad(input: {
+  scopeParam: string | undefined;
+  preloaded: { done: boolean; scope: string | undefined };
+}): StudioLoadPlan {
+  if (input.preloaded.done && input.preloaded.scope === input.scopeParam) {
+    return { load: false };
+  }
+  return {
+    load: true,
+    options: input.scopeParam ? { brandProject: input.scopeParam } : undefined,
+  };
+}
+
+/** Stale-load guard: only the latest load sequence may commit its result. */
+export function isCurrentLoadSeq(latestSeq: number, requestSeq: number): boolean {
+  return latestSeq === requestSeq;
+}
+
+export type ScopedLoadFailureDecision =
+  | { action: "fallback_unfiled" }
+  | { action: "dispatch_failed"; code: StudioErrorCode };
+
+/**
+ * F7: when a scoped project state load answers `not_found` (project closed elsewhere while the page was open),
+ * fall back to 미분류 with the gone notice and reload unfiled.
+ */
+export function decideScopedLoadFailure(input: {
+  spineOpen: OpenProject | null | undefined;
+  code: StudioErrorCode;
+}): ScopedLoadFailureDecision {
+  if (input.spineOpen?.kind === "project" && input.code === "not_found") {
+    return { action: "fallback_unfiled" };
+  }
+  return { action: "dispatch_failed", code: input.code };
+}
+
 export function useStudio({
   organizationId,
   initialState,
   api: injected,
   projectId = null,
+  spineOpen,
+  onProjectGone,
 }: {
   organizationId: string;
   initialState?: StudioState | null;
   api?: StudioApi;
   /** The project new runs go into. Sent only while the server says projects are open (`state.projects`). */
   projectId?: string | null;
+  /** Brand project spine scope (present only while the spine prop exists). */
+  spineOpen?: OpenProject | null;
+  /** Called when a scoped load or making request discovers the open project was closed elsewhere (F7, H5). */
+  onProjectGone?: (goneId?: string) => void;
 }) {
   const api = useMemo(() => injected ?? createStudioApi({ organizationId }), [injected, organizationId]);
-  const [store, dispatch] = useReducer(studioReducer, initialState ?? null, initialStore);
-  const projectsOpen = Boolean(store.state?.projects);
+  const spineActive = spineOpen !== undefined && spineOpen !== null;
+  const scopeParam = spineActive ? queryParamOfOpenProject(spineOpen) : undefined;
+  const openScopeRef = useRef<OpenProject | null>(spineActive ? spineOpen : null);
+  openScopeRef.current = spineActive ? spineOpen : null;
+  // H4: Run the tested `applyScopedStudioAction` directly inside `useReducer` (zero duplicate dispatch logic).
+  const [store, dispatch] = useReducer(
+    (state: StudioStore, action: StudioAction) => applyScopedStudioAction(state, action, openScopeRef.current),
+    initialState ?? null,
+    initialStore,
+  );
+  const projectsOpen = !spineActive && Boolean(store.state?.projects);
   const intoProject = useRef<string | null>(null);
   intoProject.current = projectsOpen ? projectId : null;
-  const preloaded = useRef(Boolean(initialState));
+  const intoBrandProject = useRef<string | null>(null);
+  intoBrandProject.current = spineActive ? brandProjectIdOf(spineOpen) : null;
+  const onProjectGoneRef = useRef(onProjectGone);
+  onProjectGoneRef.current = onProjectGone;
+  const preloadedScope = useRef<{ done: boolean; scope: string | undefined }>({
+    done: Boolean(initialState),
+    scope: scopeParam,
+  });
+  const loadSeqRef = useRef(0);
 
   const load = useCallback(async () => {
+    const seq = ++loadSeqRef.current;
     dispatch({ type: "load" });
-    let result = await api.loadState();
+    const loadOpts = scopeParam ? { brandProject: scopeParam } : undefined;
+    let result = await api.loadState(loadOpts);
     // The first request after a quiet period can fail while the server wakes up (seen in production on
     // 2026-11-10: the first load failed, the next one answered in 0.2 s). One quiet second try before
     // showing an error.
     if (isFailure(result) && (result.code === "failed" || result.code === "provider_unavailable")) {
       await new Promise((resolve) => setTimeout(resolve, 1500));
-      result = await api.loadState();
+      if (!isCurrentLoadSeq(loadSeqRef.current, seq)) return;
+      result = await api.loadState(loadOpts);
     }
-    dispatch(isFailure(result) ? { type: "loadFailed", code: result.code } : { type: "loaded", state: result });
-  }, [api]);
+    if (!isCurrentLoadSeq(loadSeqRef.current, seq)) return;
+    if (isFailure(result)) {
+      const decision = decideScopedLoadFailure({ spineOpen: openScopeRef.current, code: result.code });
+      if (decision.action === "fallback_unfiled" && onProjectGoneRef.current) {
+        onProjectGoneRef.current(openScopeRef.current?.kind === "project" ? openScopeRef.current.id : undefined);
+        return;
+      }
+      dispatch({ type: "loadFailed", code: result.code });
+      return;
+    }
+    dispatch({ type: "loaded", state: result });
+  }, [api, scopeParam]);
 
   useEffect(() => {
-    if (preloaded.current) return;
+    const plan = planStudioLoad({ scopeParam, preloaded: preloadedScope.current });
+    if (!plan.load) return;
+    preloadedScope.current = { done: false, scope: scopeParam };
     void load();
-  }, [load]);
+  }, [load, scopeParam]);
 
   // One poll loop per page: 3 s for images, 8 s once a video is open, paused while the tab is hidden.
   const loop = useRef<PollLoop | null>(null);
@@ -106,22 +239,61 @@ export function useStudio({
 
   const createJob = useCallback(
     async (input: StudioJobCreate) => {
-      const result = await api.call("job.create", jobInputForProject(input, intoProject.current));
-      if (!isFailure(result)) dispatch({ type: "jobAdded", job: result.job });
+      const openProjectId = spineActive ? intoBrandProject.current : null;
+      const body = spineActive
+        ? jobInputForBrandProject(input, openProjectId)
+        : jobInputForProject(input, intoProject.current);
+      const result = await api.call("job.create", body);
+      if (!isFailure(result)) {
+        dispatch({ type: "jobAdded", job: result.job });
+        return result;
+      }
+      if (
+        openProjectId &&
+        onProjectGoneRef.current &&
+        (await handleNotFoundForOpenProject({
+          code: result.code,
+          openProjectId,
+          listProjects: () => api.listBrandProjects(),
+          onProjectGone: (goneId) => onProjectGoneRef.current?.(goneId),
+        }))
+      ) {
+        return { ...result, projectGone: true as const };
+      }
       return result;
     },
-    [api],
+    [api, spineActive],
   );
 
   /** One request on several image models: every run lands on the wall at once, or none does. */
   const createGroup = useCallback(
     async (input: StudioJobGroupCreate) => {
-      const target = intoProject.current;
-      const result = await api.call("job.create_group", target ? { ...input, projectId: target } : input);
-      if (!isFailure(result)) for (const job of result.jobs) dispatch({ type: "jobAdded", job });
+      const openProjectId = spineActive ? intoBrandProject.current : null;
+      const body = spineActive
+        ? groupInputForBrandProject(input, openProjectId)
+        : intoProject.current
+          ? { ...input, projectId: intoProject.current }
+          : input;
+      const result = await api.call("job.create_group", body);
+      if (!isFailure(result)) {
+        for (const job of result.jobs) dispatch({ type: "jobAdded", job });
+        return result;
+      }
+      if (
+        openProjectId &&
+        onProjectGoneRef.current &&
+        (await handleNotFoundForOpenProject({
+          code: result.code,
+          openProjectId,
+          listProjects: () => api.listBrandProjects(),
+          onProjectGone: (goneId) => onProjectGoneRef.current?.(goneId),
+        }))
+      ) {
+        return { ...result, projectGone: true as const };
+      }
       return result;
     },
-    [api],
+    [api, spineActive],
   );
 
   /** Put a run (and everything made from it) in a project, or take it out with `null`. */
@@ -179,10 +351,12 @@ export function useStudio({
   );
 
   const refreshSilently = useCallback(() => {
-    void api.loadState().then((fresh) => {
-      if (!isFailure(fresh)) dispatch({ type: "loaded", state: fresh });
+    const seq = loadSeqRef.current;
+    const loadOpts = scopeParam ? { brandProject: scopeParam } : undefined;
+    void api.loadState(loadOpts).then((fresh) => {
+      if (loadSeqRef.current === seq && !isFailure(fresh)) dispatch({ type: "loaded", state: fresh });
     });
-  }, [api]);
+  }, [api, scopeParam]);
 
   /**
    * Who to tell when this member deletes an asset or a result and the server said yes: the prompt bar drops
@@ -261,6 +435,17 @@ export function useStudio({
     [api, organizationId],
   );
 
+  /** Remove runs that moved out of the open brand project scope from the wall (§4.6). */
+  const removeJobs = useCallback((jobIds: readonly string[]) => {
+    for (const jobId of jobIds) dispatch({ type: "jobRemoved", jobId });
+  }, []);
+
+  /** Brand project spine `project.move` call (preview or commit, §4.6). */
+  const moveToBrandProject = useCallback(
+    (input: Parameters<StudioApi["moveToBrandProject"]>[0]) => api.moveToBrandProject(input),
+    [api],
+  );
+
   // A reference video is read once per asset; a failed reading is simply no reading.
   const [films, setFilms] = useState<Record<string, FilmState>>({});
   const asked = useRef(new Set<string>());
@@ -300,22 +485,41 @@ export function useStudio({
       const id = newRequestId();
       setUploads((current) => [...current, { id, name: file.name }]);
       try {
-        const result = await api.upload(file, { requestId: id, measure: measureInBrowser, ...(options.transient ? { transient: true } : {}) });
+        const brandProjectId = spineActive ? intoBrandProject.current : null;
+        const result = await api.upload(file, {
+          requestId: id,
+          measure: measureInBrowser,
+          ...(options.transient ? { transient: true } : {}),
+          ...(brandProjectId ? { brandProjectId } : {}),
+        });
         if (!isFailure(result)) {
           dispatch({ type: "assetUpserted", asset: result.asset });
           refreshSilently();
           const assetId = result.asset.id;
           if (result.roleCheck) setAwaitingRoles((current) => ({ ids: [...new Set([...current.ids, assetId])], reads: 0 }));
+          return result;
+        }
+        if (
+          brandProjectId &&
+          onProjectGoneRef.current &&
+          (await handleNotFoundForOpenProject({
+            code: result.code,
+            openProjectId: brandProjectId,
+            listProjects: () => api.listBrandProjects(),
+            onProjectGone: (goneId) => onProjectGoneRef.current?.(goneId),
+          }))
+        ) {
+          return { ...result, projectGone: true as const };
         }
         return result;
       } finally {
         setUploads((current) => current.filter((u) => u.id !== id));
       }
     },
-    [api, refreshSilently],
+    [api, refreshSilently, spineActive],
   );
 
-  return { store, load, createJob, createGroup, assignProject, createProject, cancelJob, saveOutput, deleteOutput, deleteJob, updateAsset, deleteAsset, onSourceDeleted, handoff, enhancePrompt, planRevision, talkRevision, readMark, films, analyzeFilm, uploads, upload };
+  return { store, load, createJob, createGroup, assignProject, createProject, cancelJob, saveOutput, deleteOutput, deleteJob, removeJobs, moveToBrandProject, updateAsset, deleteAsset, onSourceDeleted, handoff, enhancePrompt, planRevision, talkRevision, readMark, films, analyzeFilm, uploads, upload };
 }
 
 /**

@@ -54,6 +54,19 @@ import { useStudio } from "./use-studio";
 export { buildHubEntries, filterHubEntries, filterProjectView, groupByProject, hubActions, humanTitle, similarityScore } from "./asset-hub-model";
 export type { HubAction, HubDeliverable, HubEntry, HubProjectGroup, HubProjectLinks, HubProjectView, HubSection } from "./asset-hub-model";
 
+/** Link target for a project group in the asset hub (`?film=` while brand project spine is open, `?project=` otherwise). */
+export function assetHubProjectHref(
+  organizationId: string,
+  group: Pick<HubProjectGroup, "id" | "origin">,
+  canOpenStudio: boolean,
+  useFilmParam = false,
+): string | null {
+  if (group.origin === "team") return `/brand/projects/${group.id}`;
+  if (!canOpenStudio) return null;
+  const param = useFilmParam ? "film" : "project";
+  return `/brand/studio/video?organizationId=${encodeURIComponent(organizationId)}&${param}=${encodeURIComponent(group.id)}`;
+}
+
 const KINDS = ["all", "image", "video", "audio"] as const;
 /** A project's cover row shows at most this many pictures (fewer on narrow screens, by CSS). */
 const COVERS = 6;
@@ -71,6 +84,8 @@ export interface BrandAssetHubProps {
   deliverables?: readonly HubDeliverable[];
   /** False for project-only clients (`self_studio` denied) so dead links to `/brand/studio` are hidden. */
   canOpenStudio?: boolean;
+  /** Brand project spine open: video studio film links use `?film=` instead of `?project=` (§4.5). */
+  useFilmParam?: boolean;
   /** Optional test injection so server/unit tests render without network calls. */
   injectedLibrary?: StudioLibrary;
   api?: StudioApi;
@@ -86,6 +101,7 @@ export function BrandAssetHub({
   projectLinks = null,
   deliverables,
   canOpenStudio = true,
+  useFilmParam = false,
   injectedLibrary,
   api,
 }: BrandAssetHubProps) {
@@ -303,11 +319,7 @@ export function BrandAssetHub({
   const countLine = (n: number) => (n === 1 ? h.projects.one : fill(libraryCopy.folders.count, { n }));
   const originLine = (group: HubProjectGroup) => `${group.origin === "team" ? h.projects.team : h.projects.self} · ${countLine(groupCount(group))}`;
   const projectHref = (group: HubProjectGroup): string | null =>
-    group.origin === "team"
-      ? `/brand/projects/${group.id}`
-      : canOpenStudio
-        ? `/brand/studio/video?organizationId=${encodeURIComponent(organizationId)}&project=${encodeURIComponent(group.id)}`
-        : null;
+    assetHubProjectHref(organizationId, group, canOpenStudio, useFilmParam);
   /** `scope` keeps one open menu when the same file is drawn in two places (two projects, or a project and the strip). */
   const tile = (entry: HubEntry, scope: string, compact = false) => {
     const name = nameOf(entry);

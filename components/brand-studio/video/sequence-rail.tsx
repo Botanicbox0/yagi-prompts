@@ -109,6 +109,14 @@ function makeReqId(prefix: string): string {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
+/** Attach `brandProjectId` to post-production requests only when a brand project is open (omit for 미분류 / flag off). */
+export function sequencePostProdInput<T extends Record<string, unknown>>(
+  input: T,
+  brandProjectId: string | null | undefined,
+): T & { brandProjectId?: string } {
+  return brandProjectId ? { ...input, brandProjectId } : input;
+}
+
 async function postPostProduction(
   operation: string,
   input: Record<string, unknown>,
@@ -145,6 +153,8 @@ export interface SequenceRailProps {
    * inspector (its tab keeps the sound-effect generator), and the empty BGM lane does not offer generation.
    */
   musicGeneration?: boolean;
+  /** Brand project spine only: open project id for post-production runs (omitted for 미분류 / flag off). */
+  brandProjectId?: string | null;
   onHeightChange(next: SequenceRailHeight): void;
   onSelectClip(clipId: string | null): void;
   onInspectorTabChange(tab: SequenceInspectorTab): void;
@@ -173,6 +183,7 @@ export function SequenceRail({
   floatingCopy,
   extendingScene = false,
   musicGeneration = false,
+  brandProjectId = null,
   onHeightChange,
   onSelectClip,
   onInspectorTabChange,
@@ -524,17 +535,23 @@ export function SequenceRail({
     setPostProdAllowanceError(null);
     try {
       const spec = MUSIC_STYLES[musicStyle];
-      let current = await postPostProduction("music.generate", {
-        organizationId,
-        requestId: makeReqId("mus"),
-        presetId: spec.presetId,
-        prompt: `${spec.prompt}, pure instrumental arrangement without vocals`,
-        bpm: musicBpm,
-        keySignature: spec.keySignature,
-        leadInstrument: spec.leadInstrument,
-        durationSec: targetMusicDuration,
-        ...(musicRefAssetId ? { refAudioAssetId: musicRefAssetId } : {}),
-      });
+      let current = await postPostProduction(
+        "music.generate",
+        sequencePostProdInput(
+          {
+            organizationId,
+            requestId: makeReqId("mus"),
+            presetId: spec.presetId,
+            prompt: `${spec.prompt}, pure instrumental arrangement without vocals`,
+            bpm: musicBpm,
+            keySignature: spec.keySignature,
+            leadInstrument: spec.leadInstrument,
+            durationSec: targetMusicDuration,
+            ...(musicRefAssetId ? { refAudioAssetId: musicRefAssetId } : {}),
+          },
+          brandProjectId,
+        ),
+      );
 
       let polls = 0;
       while (
@@ -594,12 +611,18 @@ export function SequenceRail({
     setSfxBusy(true);
     setPostProdAllowanceError(null);
     try {
-      let current = await postPostProduction("sfx.generate", {
-        organizationId,
-        requestId: makeReqId("sfx"),
-        text,
-        durationSec: 4,
-      });
+      let current = await postPostProduction(
+        "sfx.generate",
+        sequencePostProdInput(
+          {
+            organizationId,
+            requestId: makeReqId("sfx"),
+            text,
+            durationSec: 4,
+          },
+          brandProjectId,
+        ),
+      );
       let polls = 0;
       while (
         current.ok === true &&
@@ -698,19 +721,25 @@ export function SequenceRail({
     setUpscaleBusy(true);
     setPostProdAllowanceError(null);
     try {
-      let current = await postPostProduction("upscale.submit", {
-        organizationId,
-        requestId: makeReqId("ups"),
-        kind: "video",
-        ...(targetUpscaleClip.assetId ? { assetId: targetUpscaleClip.assetId } : {}),
-        ...(!targetUpscaleClip.assetId && targetUpscaleClip.outputId ? { outputId: targetUpscaleClip.outputId } : {}),
-        sourceUrl: targetUpscaleClip.srcUrl,
-        resolution: upscaleRes,
-        durationSec: upscaleDuration,
-        shotCutSeconds: targetUpscaleClip.cutMarkers ?? [],
-        batchSize: 21,
-        colorCorrection: upscaleColor,
-      });
+      let current = await postPostProduction(
+        "upscale.submit",
+        sequencePostProdInput(
+          {
+            organizationId,
+            requestId: makeReqId("ups"),
+            kind: "video",
+            ...(targetUpscaleClip.assetId ? { assetId: targetUpscaleClip.assetId } : {}),
+            ...(!targetUpscaleClip.assetId && targetUpscaleClip.outputId ? { outputId: targetUpscaleClip.outputId } : {}),
+            sourceUrl: targetUpscaleClip.srcUrl,
+            resolution: upscaleRes,
+            durationSec: upscaleDuration,
+            shotCutSeconds: targetUpscaleClip.cutMarkers ?? [],
+            batchSize: 21,
+            colorCorrection: upscaleColor,
+          },
+          brandProjectId,
+        ),
+      );
 
       let polls = 0;
       while (

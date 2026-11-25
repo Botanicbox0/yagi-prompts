@@ -16,18 +16,24 @@ import { makeComposeRequestId, postComposeOperation } from '@/components/brand-s
 
 export const EXPORT_RECORD_PREFIX = 'ed2';
 
-/** The current editor's input for `render.reserve`: the organization, a new request id, the film's length. */
-export function exportRecordInput(organizationId: string, frames: number, fps: number): { organizationId: string; requestId: string; durationSec: number } {
+/** The current editor's input for `render.reserve`: the organization, a new request id, the film's length, and optional open project. */
+export function exportRecordInput(
+  organizationId: string,
+  frames: number,
+  fps: number,
+  brandProjectId?: string | null,
+): { organizationId: string; requestId: string; durationSec: number; brandProjectId?: string } {
   return {
     organizationId,
     requestId: makeComposeRequestId(EXPORT_RECORD_PREFIX),
     durationSec: Math.max(0.3, fps > 0 ? frames / fps : 0),
+    ...(brandProjectId ? { brandProjectId } : {}),
   };
 }
 
 /** Asks for the record and returns at once. Whatever the answer, the export goes on. */
-export function recordExport(organizationId: string, frames: number, fps: number): void {
-  postComposeOperation('render.reserve', exportRecordInput(organizationId, frames, fps))
+export function recordExport(organizationId: string, frames: number, fps: number, brandProjectId?: string | null): void {
+  postComposeOperation('render.reserve', exportRecordInput(organizationId, frames, fps, brandProjectId))
     .then((answer) => {
       if (answer?.ok !== true) console.warn('[editor export] not recorded', answer?.code ?? answer);
     })

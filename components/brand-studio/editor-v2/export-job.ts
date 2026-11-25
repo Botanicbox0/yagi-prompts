@@ -77,6 +77,8 @@ export interface ExportRequest {
    * `null` or absent on the sample film, which records nothing.
    */
   recordFor?: string | null;
+  /** Optional brand project captured when the export starts; threaded to `recordExport` and "에셋에 저장" (H2). */
+  brandProjectId?: string | null;
 }
 
 const IDLE: ExportJob = { status: 'idle' };
@@ -89,7 +91,7 @@ const listeners = new Set<() => void>();
  * download address already holds alive (`URL.createObjectURL` keeps it until revoked), so it costs no memory of its
  * own, and it is let go at the same moment as that address: when the next export starts.
  */
-let finished: { job: ExportJob; file: ExportedFile } | null = null;
+let finished: { job: ExportJob; file: ExportedFile; brandProjectId: string | null } | null = null;
 
 /** The finished MP4 and what the export measured it as. */
 export interface ExportedFile {
@@ -150,9 +152,15 @@ export function exportedFile(of: ExportJob): ExportedFile | null {
   return of.status === 'done' && of === job && finished?.job === of ? finished.file : null;
 }
 
+/** The brand project id captured when `of` started, or `null` when unfiled / spine closed (H2). */
+export function exportedBrandProjectId(of: ExportJob): string | null {
+  return of.status === 'done' && of === job && finished?.job === of ? finished.brandProjectId : null;
+}
+
 export function startExport(request: ExportRequest): void {
   if (job.status === 'running') return;
   release(job);
+  const capturedBrandProjectId = request.brandProjectId ?? null;
   const own = new AbortController();
   controller = own;
   const { sequence } = request;
@@ -192,7 +200,7 @@ export function startExport(request: ExportRequest): void {
     // cancel or failure after this point keeps the record. Never waited for: it never stops the export.
     if (!recorded && request.recordFor && progress.phase === 'video' && !own.signal.aborted) {
       recorded = true;
-      recordExport(request.recordFor, frames, fps);
+      recordExport(request.recordFor, frames, fps, capturedBrandProjectId);
     }
     const now = performance.now();
     const finished = progress.done >= progress.total;
@@ -233,7 +241,11 @@ export function startExport(request: ExportRequest): void {
         paths: result.paths,
         restarts: result.restarts,
       };
-      finished = { job: done, file: { blob: result.blob, mime: result.mime, filename: result.filename, width: result.width, height: result.height, durationSec: result.durationSec } };
+      finished = {
+        job: done,
+        file: { blob: result.blob, mime: result.mime, filename: result.filename, width: result.width, height: result.height, durationSec: result.durationSec },
+        brandProjectId: capturedBrandProjectId,
+      };
       set(done);
       if (request.download !== false) downloadFile(url, result.filename);
       if (openSheets === 0) request.notify('done');

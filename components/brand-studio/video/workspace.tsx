@@ -29,6 +29,15 @@ import { exportProjectNleBundleZip } from "@/lib/brand-studio/compose/nle-export
 import type { ContinuityPlan } from "@/lib/brand-studio/continuity/contracts";
 import { extractContinuityFramesInBrowser } from "@/lib/brand-studio/continuity/frame-picker";
 import type { StudioAllowanceView, StudioAssetView, StudioJobView, StudioOutputView, StudioState } from "@/lib/brand-studio/contracts";
+import {
+  belongsToOpenProject,
+  brandProjectIdOf,
+  queryParamOfOpenProject,
+  replaceProjectUrlParam,
+  writeOpenProjectCookie,
+  type OpenProject,
+  type StudioSpineProps,
+} from "@/lib/brand-studio/open-project";
 import type { StudioVideoModel } from "@/lib/brand-studio/models";
 import type { VideoProjectDetail, VideoProjectStatus, VideoProjectSummary } from "@/lib/brand-studio/video-projects";
 import type { BillingPlanCatalogueItem } from "@/lib/brands/billing-ui";
@@ -69,11 +78,12 @@ import { ShareReviewDialog, useShareReviewEvent, type ShareReviewTarget } from "
 import { STUDIO_JOB_STARTED } from "../seams";
 import { findOutput, listedJobs } from "../store";
 import { useDock } from "../use-dock";
-import { useStudio } from "../use-studio";
+import { jobInputForBrandProject, useStudio } from "../use-studio";
 import { sourceOf, useViewer } from "../use-viewer";
 import { Viewer, canRerun, itemKey, type ViewerItem } from "../viewer";
+import { handleNotFoundForOpenProject, MoveToProjectDialog, useProjectSpine, type ProjectSpineCopy } from "../project-chip";
 import { ClipTrimModal } from "./clip-trim-modal";
-import { VideoProjectBar } from "./project-bar";
+import { VideoProjectBar, filmBarCopy } from "./project-bar";
 import { RecentCreationsPanel } from "./recent-creations-panel";
 import { ReversePanel } from "./reverse";
 import { fillText } from "./reverse-model";
@@ -98,6 +108,14 @@ export interface VideoStudioWorkspaceProps {
   initialTimeline?: ComposerProject | null;
   initialSelectedClipId?: string | null;
   initialState?: StudioState | null;
+  /** Server-loaded films (spine open only). */
+  initialProjects?: VideoProjectSummary[];
+  /** Server-loaded film detail when opened via `?film=` (spine open only). */
+  initialProjectDetail?: VideoProjectDetail | null;
+  /** Brand project spine prop (present only when `BRAND_PROJECT_SPINE` is open and viewer is a member). */
+  spine?: StudioSpineProps | null;
+  /** `dict.projectSpine` (spine open only, for the bar's `편집본` noun). */
+  spineCopy?: ProjectSpineCopy;
   api?: StudioApi;
   /** `BRAND_STUDIO_MUSIC_GENERATION`: music generation controls in the sequence rail. Closed by default. */
   musicGeneration?: boolean;
@@ -122,16 +140,238 @@ function makeProjectReqId(prefix = "vp"): string {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
 }
 
-function syncProjectUrlParam(projectId: string | null): void {
+/**
+ * Keyed lazy-film requestId (G0):
+ * - Without the spine (`brandProjectId === undefined`): single slot (`__legacy__`), exact old behaviour.
+ * - With the spine (`brandProjectId: string | null`): one slot per scope (`projectId` or `__unfiled__`),
+ *   so switching projects never drops an in-flight/pending key.
+ */
+export function scopedLazyRequestId(
+  cache: Map<string, string>,
+  brandProjectId: string | null | undefined,
+  makeId: () => string = () => makeProjectReqId("vp"),
+): string {
+  const key =
+    brandProjectId === undefined ? "__legacy__" : brandProjectId ? brandProjectId.toLowerCase() : "__unfiled__";
+  const existing = cache.get(key);
+  if (existing) return existing;
+  const next = makeId();
+  cache.set(key, next);
+  return next;
+}
+
+/** Pure helper for `?project=` (flag off) vs `?film=` (spine open, preserving `?project=`). */
+export function syncVideoFilmUrlParam(href: string, filmId: string | null, useFilmParam: boolean): string {
+  const url = new URL(href);
+  const key = useFilmParam ? "film" : "project";
+  if (filmId) url.searchParams.set(key, filmId);
+  else url.searchParams.delete(key);
+  return `${url.pathname}${url.search}${url.hash}`;
+}
+
+/** Read the initial film id from the address on mount (`film` under spine, `project` without, G6). */
+export function readVideoFilmIdFromUrl(href: string, spineActive: boolean): string | null {
+  try {
+    const paramName = spineActive ? "film" : "project";
+    const value = new URL(href).searchParams.get(paramName);
+    return value && /^[0-9a-f-]{36}$/i.test(value) ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Client recovery when the film named in the address cannot be opened (G1, J1):
+ * runs ONLY when the spine is active AND the server answered `not_found`.
+ * Without the spine or on any temporary/network error, returns no-op (`main` parity).
+ */
+export function planStaleFilmRecovery(input: {
+  requestedFilmId: string | null;
+  loadedFilmPresent: boolean;
+  spineActive: boolean;
+  errorCode?: string | null;
+  href: string | null;
+}): { reloadListWithoutFilm: boolean; nextUrl: string | null } {
+  if (!input.spineActive || !input.requestedFilmId || input.loadedFilmPresent) {
+    return { reloadListWithoutFilm: false, nextUrl: null };
+  }
+  if (input.errorCode !== "not_found") {
+    return { reloadListWithoutFilm: false, nextUrl: null };
+  }
+  const nextUrl = input.href ? syncVideoFilmUrlParam(input.href, null, true) : null;
+  return {
+    reloadListWithoutFilm: true,
+    nextUrl,
+  };
+}
+
+/** Client sync after server-side film-wins on `?film=` (G5): update cookie and rewrite `?project=` to the winning scope. */
+export function planFilmWinsSync(input: {
+  spineActive: boolean;
+  initialFilm: { brandProjectId?: string | null } | null;
+  open: OpenProject | undefined;
+  href: string | null;
+}): { writeCookie: OpenProject | null; nextUrl: string | null } {
+  if (!input.spineActive || !input.initialFilm || !input.open) {
+    return { writeCookie: null, nextUrl: null };
+  }
+  const nextUrl = input.href ? replaceProjectUrlParam(input.href, input.open) : null;
+  return {
+    writeCookie: input.open,
+    nextUrl: nextUrl && nextUrl !== input.href ? nextUrl : null,
+  };
+}
+
+export interface PendingFilmSave {
+  projectId: string;
+  timeline: ComposerProject;
+  title?: string;
+  expectedRevision: number;
+}
+
+export interface InFlightFilmSave {
+  projectId: string;
+  promise: Promise<number | null>;
+}
+
+/**
+ * J2: Flush a pending film save using the revision current at flush time; if another save of the
+ * same film is still in flight, wait for its answer first so two saves of one film never race.
+ */
+export async function flushFilmSaveWithCurrentRevision(input: {
+  pending: PendingFilmSave;
+  currentRevision: number;
+  inFlight: InFlightFilmSave | null;
+  send: (save: PendingFilmSave) => Promise<number | null> | void;
+}): Promise<PendingFilmSave> {
+  let revision = input.currentRevision;
+  if (input.inFlight && input.inFlight.projectId === input.pending.projectId) {
+    const settledRevision = await input.inFlight.promise.catch(() => null);
+    if (typeof settledRevision === "number") {
+      revision = settledRevision;
+    }
+  }
+  const toSend: PendingFilmSave = { ...input.pending, expectedRevision: revision };
+  await input.send(toSend);
+  return toSend;
+}
+
+export interface InFlightLazyCreate {
+  scopeKey: string;
+  promise: Promise<string | null>;
+}
+
+/**
+ * J3: Reuse an in-flight lazy film-create promise only when it matches the current scope
+ * (always reused without the spine, matching `main`).
+ */
+export function reusableLazyCreatePromise(
+  inFlight: InFlightLazyCreate | null,
+  currentScopeKey: string,
+  spineActive: boolean,
+): Promise<string | null> | null {
+  if (!inFlight) return null;
+  if (!spineActive) return inFlight.promise;
+  return inFlight.scopeKey === currentScopeKey ? inFlight.promise : null;
+}
+
+/** Decide whether a chip scope switch must flush a pending debounced film save before resetting (G3). */
+export function planScopeSwitchFilmReset(input: {
+  activeFilmId: string | null;
+  activeFilmBrandProjectId: string | null | undefined;
+  nextScope: OpenProject;
+  pendingSave: PendingFilmSave | null;
+}): { reset: boolean; flush: PendingFilmSave | null } {
+  if (!input.activeFilmId || belongsToOpenProject(input.activeFilmBrandProjectId, input.nextScope)) {
+    return { reset: false, flush: null };
+  }
+  const flush =
+    input.pendingSave && input.pendingSave.projectId === input.activeFilmId ? input.pendingSave : null;
+  return { reset: true, flush };
+}
+
+/** Whether a lazy-created film response should be adopted as the active film on screen (G3). */
+export function shouldAdoptCreatedFilm(input: {
+  createdBrandProjectId: string | null | undefined;
+  sentScope: OpenProject | undefined;
+  currentScope: OpenProject | undefined;
+}): boolean {
+  if (!input.sentScope && !input.currentScope) return true;
+  if (!input.sentScope || !input.currentScope) return false;
+  if (queryParamOfOpenProject(input.sentScope) !== queryParamOfOpenProject(input.currentScope)) return false;
+  return belongsToOpenProject(input.createdBrandProjectId, input.currentScope);
+}
+
+/** Exact `render.reserve` input for MP4 export (G6): omits `brandProjectId` when closed/unfiled. */
+export function videoRenderReserveBody(input: {
+  organizationId: string;
+  requestId: string;
+  durationSec: number;
+  brandProjectId?: string | null;
+}) {
+  return {
+    organizationId: input.organizationId,
+    requestId: input.requestId,
+    durationSec: input.durationSec,
+    ...(input.brandProjectId ? { brandProjectId: input.brandProjectId } : {}),
+  };
+}
+
+/** Pass the exact `clientApi` reference to ReversePanel when no project is open (G6). */
+export function selectReverseApi(clientApi: StudioApi, openBrandProjectId: string | null | undefined): StudioApi {
+  if (!openBrandProjectId) return clientApi;
+  return {
+    ...clientApi,
+    call: ((operation, input) => {
+      if (operation === "job.create") {
+        return clientApi.call(
+          "job.create",
+          jobInputForBrandProject(input as Parameters<typeof jobInputForBrandProject>[0], openBrandProjectId),
+        );
+      }
+      return clientApi.call(operation, input as never);
+    }) as StudioApi["call"],
+    upload: (file, options = {}) => clientApi.upload(file, { ...options, brandProjectId: openBrandProjectId }),
+  };
+}
+
+/** Films visible in `VideoProjectBar`: all films when spine is closed, or only films in the open scope (§4.5). */
+export function filmsInOpenScope<T extends Pick<VideoProjectSummary, "brandProjectId">>(
+  films: readonly T[],
+  open: OpenProject | undefined,
+): T[] {
+  if (!open) return [...films];
+  return films.filter((film) => belongsToOpenProject(film.brandProjectId, open));
+}
+
+/** Payload for `POST /api/brand-studio/video-projects` `{ op: 'create' }`, attaching `brandProjectId` only when open. */
+export function videoFilmCreateBody(input: {
+  organizationId: string;
+  requestId: string;
+  title?: string;
+  firstPrompt?: string;
+  locale: StudioLocale;
+  timeline: ComposerProject;
+  brandProjectId?: string | null;
+}) {
+  return {
+    op: "create" as const,
+    organizationId: input.organizationId,
+    requestId: input.requestId,
+    ...(input.brandProjectId ? { brandProjectId: input.brandProjectId } : {}),
+    ...(input.title ? { title: input.title } : {}),
+    ...(input.firstPrompt ? { firstPrompt: input.firstPrompt } : {}),
+    locale: input.locale,
+    aspect: input.timeline.aspect,
+    timeline: input.timeline,
+  };
+}
+
+function syncProjectUrlParam(projectId: string | null, useFilmParam = false): void {
   if (typeof window === "undefined") return;
   try {
-    const url = new URL(window.location.href);
-    if (projectId) {
-      url.searchParams.set("project", projectId);
-    } else {
-      url.searchParams.delete("project");
-    }
-    window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+    const next = syncVideoFilmUrlParam(window.location.href, projectId, useFilmParam);
+    window.history.replaceState(window.history.state, "", next);
   } catch {
     // Ignore synthetic test environments without valid window.location
   }
@@ -215,12 +455,33 @@ export function VideoStudioWorkspace({
   initialTimeline = null,
   initialSelectedClipId = null,
   initialState = null,
+  initialProjects,
+  initialProjectDetail = null,
+  spine = null,
+  spineCopy,
   api,
   musicGeneration = false,
 }: VideoStudioWorkspaceProps) {
   const wc = videoCopy.workspace;
+  const spineCtx = useProjectSpine();
+  const spineOpen = spineCtx?.open ?? spine?.open ?? undefined;
+  const spineActive = Boolean(spineOpen);
+  const openBrandProjectId = spineActive ? brandProjectIdOf(spineOpen) : null;
+  const projectsCopy = useMemo(
+    () => (spineActive && spineCopy ? filmBarCopy(wc.projects, spineCopy) : wc.projects),
+    [spineActive, spineCopy, wc.projects],
+  );
   const clientApi = useMemo(() => api ?? createStudioApi({ organizationId }), [api, organizationId]);
-  const studio = useStudio({ organizationId, initialState, api: clientApi });
+  const reverseApi = useMemo<StudioApi>(
+    () => selectReverseApi(clientApi, openBrandProjectId),
+    [clientApi, openBrandProjectId],
+  );
+  const studio = useStudio({
+    organizationId,
+    initialState,
+    api: clientApi,
+    ...(spineOpen ? { spineOpen, onProjectGone: spineCtx?.markProjectGone } : {}),
+  });
   const dock = useDock({
     studio,
     copy,
@@ -229,6 +490,7 @@ export function VideoStudioWorkspace({
     mode: "video",
     // The workspace home's hand-off (prefill.ts): only where this member has an open prompt bar.
     prefill: { ready: Boolean(studio.store.state), canCreate: Boolean(studio.store.state?.canCreate) && (studio.store.state?.allowance.capKrw ?? 0) > 0 },
+    ...(spineActive ? { brandProjectId: openBrandProjectId } : {}),
   });
   const library = useStudioLibrary(organizationId);
   const state = studio.store.state;
@@ -246,29 +508,40 @@ export function VideoStudioWorkspace({
   const [trimModalClip, setTrimModalClip] = useState<StudioAssetView | null>(null);
   const [handoff, setHandoff] = useState<RefSource | null>(null);
   const [shareTarget, setShareTarget] = useState<ShareReviewTarget | null>(null);
+  const [moveRequest, setMoveRequest] = useState<{ jobIds: string[]; opener: HTMLElement | null } | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
 
   // Lazy server-persisted Video Project & 3-Height Sequence Rail state
-  const [projects, setProjects] = useState<VideoProjectSummary[]>([]);
-  const [projectId, setProjectId] = useState<string | null>(initialProjectId);
-  const [projectTitle, setProjectTitle] = useState<string>(wc.projects.untitled);
-  const [projectStatus, setProjectStatus] = useState<VideoProjectStatus>("active");
-  const [projectRevision, setProjectRevision] = useState<number>(1);
+  const [projects, setProjects] = useState<VideoProjectSummary[]>(() => initialProjects ?? []);
+  const [projectId, setProjectId] = useState<string | null>(initialProjectDetail?.id ?? initialProjectId);
+  const [projectBrandProjectId, setProjectBrandProjectId] = useState<string | null | undefined>(
+    initialProjectDetail?.brandProjectId,
+  );
+  const [projectTitle, setProjectTitle] = useState<string>(initialProjectDetail?.title ?? projectsCopy.untitled);
+  const [projectStatus, setProjectStatus] = useState<VideoProjectStatus>(initialProjectDetail?.status ?? "active");
+  const [projectRevision, setProjectRevision] = useState<number>(initialProjectDetail?.revision ?? 1);
   const [savingProject, setSavingProject] = useState(false);
   const [timeline, setTimeline] = useState<ComposerProject>(
-    () => initialTimeline ?? emptyComposerProject("9:16"),
+    () => initialProjectDetail?.timeline ?? initialTimeline ?? emptyComposerProject("9:16"),
   );
   const [railHeight, setRailHeight] = useState<SequenceRailHeight>(initialRailHeight);
-  const [selectedClipId, setSelectedClipId] = useState<string | null>(initialSelectedClipId);
+  const [selectedClipId, setSelectedClipId] = useState<string | null>(
+    () => initialSelectedClipId ?? initialProjectDetail?.timeline.clips[0]?.id ?? null,
+  );
   const [inspectorTab, setInspectorTab] = useState<SequenceInspectorTab>("color");
   const [exportingNle, setExportingNle] = useState(false);
   const [exportingMp4Ratio, setExportingMp4Ratio] = useState<number | null>(null);
 
-  const lazyCreatePromiseRef = useRef<Promise<string | null> | null>(null);
-  const lazyRequestIdRef = useRef<string>(makeProjectReqId("vp"));
-  const revisionRef = useRef<number>(1);
-  const projectIdRef = useRef<string | null>(initialProjectId);
+  const lazyCreatePromiseRef = useRef<InFlightLazyCreate | null>(null);
+  const lazyRequestIdsRef = useRef<Map<string, string>>(new Map());
+  const spineOpenRef = useRef<OpenProject | undefined>(spineOpen);
+  spineOpenRef.current = spineOpen;
+  const revisionRef = useRef<number>(initialProjectDetail?.revision ?? 1);
+  const projectIdRef = useRef<string | null>(initialProjectDetail?.id ?? initialProjectId);
+  const projectBrandProjectIdRef = useRef<string | null | undefined>(initialProjectDetail?.brandProjectId);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingSaveRef = useRef<PendingFilmSave | null>(null);
+  const inFlightSaveRef = useRef<InFlightFilmSave | null>(null);
   const localBlobUrlsRef = useRef<string[]>([]);
 
   // Track jobs started in this session for automatic Sequence Rail append or Take Stack (`1/N`)
@@ -281,8 +554,58 @@ export function VideoStudioWorkspace({
   }, [projectId]);
 
   useEffect(() => {
+    projectBrandProjectIdRef.current = projectBrandProjectId;
+  }, [projectBrandProjectId]);
+
+  useEffect(() => {
     revisionRef.current = projectRevision;
   }, [projectRevision]);
+
+  // G5: If the page opened a film by `?film=` on the server and the film won the open scope, keep cookie AND `?project=` in sync.
+  const syncedFilmCookieRef = useRef(false);
+  useEffect(() => {
+    if (syncedFilmCookieRef.current) return;
+    const href = typeof window !== "undefined" ? window.location.href : null;
+    const plan = planFilmWinsSync({
+      spineActive,
+      initialFilm: initialProjectDetail,
+      open: spineOpen,
+      href,
+    });
+    if (!plan.writeCookie) return;
+    syncedFilmCookieRef.current = true;
+    writeOpenProjectCookie(organizationId, plan.writeCookie);
+    if (plan.nextUrl && typeof window !== "undefined") {
+      try {
+        window.history.replaceState(window.history.state, "", plan.nextUrl);
+      } catch {
+        // Ignore history errors in restricted environments.
+      }
+    }
+  }, [initialProjectDetail, organizationId, spineActive, spineOpen]);
+
+  // G1: If the server recovered from a stale `?film=` (initialProjectId null, but `?film=` still in URL), strip `film` cleanly.
+  const strippedStaleFilmRef = useRef(false);
+  useEffect(() => {
+    if (strippedStaleFilmRef.current || !spineActive || initialProjectId || typeof window === "undefined") return;
+    strippedStaleFilmRef.current = true;
+    const urlFilm = readVideoFilmIdFromUrl(window.location.href, true);
+    if (!urlFilm) return;
+    const recovery = planStaleFilmRecovery({
+      requestedFilmId: urlFilm,
+      loadedFilmPresent: false,
+      spineActive: true,
+      errorCode: "not_found",
+      href: window.location.href,
+    });
+    if (recovery.nextUrl) {
+      try {
+        window.history.replaceState(window.history.state, "", recovery.nextUrl);
+      } catch {
+        // Ignore
+      }
+    }
+  }, [initialProjectId, spineActive]);
 
   // The timeline as it is now, for work that resumes after a request (a run is sent before its project is made).
   const timelineRef = useRef<ComposerProject>(timeline);
@@ -324,21 +647,34 @@ export function VideoStudioWorkspace({
 
   /* --------------------------------------------- Video Projects API & Lazy Persistence */
 
-  const applyLoadedProject = useCallback((detail: VideoProjectDetail) => {
-    projectContextRef.current += 1;
-    setProjectId(detail.id);
-    projectIdRef.current = detail.id;
-    setProjectTitle(detail.title);
-    setProjectStatus(detail.status);
-    setProjectRevision(detail.revision);
-    revisionRef.current = detail.revision;
-    setTimeline(detail.timeline);
-    setSelectedClipId(detail.timeline.clips[0]?.id ?? null);
-    syncProjectUrlParam(detail.id);
-  }, []);
+  const applyLoadedProject = useCallback(
+    (detail: VideoProjectDetail, opts?: { fromUrl?: boolean }) => {
+      projectContextRef.current += 1;
+      setProjectId(detail.id);
+      projectIdRef.current = detail.id;
+      setProjectBrandProjectId(detail.brandProjectId);
+      projectBrandProjectIdRef.current = detail.brandProjectId;
+      setProjectTitle(detail.title);
+      setProjectStatus(detail.status);
+      setProjectRevision(detail.revision);
+      revisionRef.current = detail.revision;
+      setTimeline(detail.timeline);
+      setSelectedClipId(detail.timeline.clips[0]?.id ?? null);
+      syncProjectUrlParam(detail.id, spineActive);
+      // Opening a film by address (`?film=`) whose brandProjectId differs from open scope switches scope (film wins).
+      if (opts?.fromUrl && spineCtx && !belongsToOpenProject(detail.brandProjectId, spineCtx.open)) {
+        const targetOpen: OpenProject =
+          detail.brandProjectId && spineCtx.projects.some((p) => p.id.toLowerCase() === detail.brandProjectId!.toLowerCase())
+            ? { kind: "project", id: detail.brandProjectId }
+            : { kind: "unfiled" };
+        spineCtx.select(targetOpen);
+      }
+    },
+    [spineActive, spineCtx],
+  );
 
   const loadProjectsFromServer = useCallback(
-    async (targetId?: string | null) => {
+    async (targetId?: string | null, opts?: { fromUrl?: boolean }) => {
       if (typeof fetch !== "function") return;
       try {
         const q = new URLSearchParams({ organizationId });
@@ -346,37 +682,64 @@ export function VideoStudioWorkspace({
         const res = await fetch(`/api/brand-studio/video-projects?${q.toString()}`, {
           credentials: "same-origin",
         });
-        if (!res.ok) return;
-        const data = (await res.json()) as {
+        const data = (await res.json().catch(() => null)) as {
           ok?: boolean;
+          code?: string;
           projects?: VideoProjectSummary[];
           project?: VideoProjectDetail | null;
-        };
-        if (!data.ok) return;
+        } | null;
+        if (!res.ok || !data?.ok) {
+          // J1: Recover only when the spine is active AND the server answered `not_found`.
+          // Without the spine (or on temporary/network errors), do nothing — exact `main` parity.
+          if (targetId && spineActive) {
+            const href = typeof window !== "undefined" ? window.location.href : null;
+            const recovery = planStaleFilmRecovery({
+              requestedFilmId: targetId,
+              loadedFilmPresent: false,
+              spineActive,
+              errorCode: data?.code ?? null,
+              href,
+            });
+            if (recovery.nextUrl && typeof window !== "undefined") {
+              try {
+                window.history.replaceState(window.history.state, "", recovery.nextUrl);
+              } catch {
+                // Ignore
+              }
+            }
+            if (recovery.reloadListWithoutFilm) {
+              await loadProjectsFromServer(null);
+            }
+          }
+          return;
+        }
         if (Array.isArray(data.projects)) setProjects(data.projects);
-        if (data.project) applyLoadedProject(data.project);
+        if (data.project) {
+          const currentScope = spineOpenRef.current;
+          if (!opts?.fromUrl && currentScope && !belongsToOpenProject(data.project.brandProjectId, currentScope)) {
+            return;
+          }
+          applyLoadedProject(data.project, opts);
+        }
       } catch {
         // Offline / pure unit test environment without fetch handler
       }
     },
-    [applyLoadedProject, organizationId],
+    [applyLoadedProject, organizationId, spineActive],
   );
 
-  const initialProjectsLoadedRef = useRef(false);
+  const initialProjectsLoadedRef = useRef(
+    Boolean(initialProjects && (!initialProjectId || initialProjectDetail?.id === initialProjectId)),
+  );
   useEffect(() => {
     if (initialProjectsLoadedRef.current) return;
     initialProjectsLoadedRef.current = true;
     let urlProjectId = initialProjectId;
     if (!urlProjectId && typeof window !== "undefined") {
-      try {
-        const p = new URL(window.location.href).searchParams.get("project");
-        if (p && /^[0-9a-f-]{36}$/i.test(p)) urlProjectId = p;
-      } catch {
-        // Ignore
-      }
+      urlProjectId = readVideoFilmIdFromUrl(window.location.href, spineActive);
     }
-    void loadProjectsFromServer(urlProjectId);
-  }, [initialProjectId, loadProjectsFromServer]);
+    void loadProjectsFromServer(urlProjectId, { fromUrl: Boolean(urlProjectId) });
+  }, [initialProjectId, loadProjectsFromServer, spineActive]);
 
   const ensureLazyProjectCreated = useCallback(
     async (opts: {
@@ -386,9 +749,20 @@ export function VideoStudioWorkspace({
     }): Promise<string | null> => {
       if (projectIdRef.current) return projectIdRef.current;
       if (!canCreate || typeof fetch !== "function") return null;
-      if (lazyCreatePromiseRef.current) return lazyCreatePromiseRef.current;
 
       const persistable = sanitizeProjectForPersistence(opts.nextTimeline);
+      const sentScope = spineOpenRef.current;
+      const targetBrandProjectId = spineActive ? openBrandProjectId : undefined;
+      const scopeCacheKey =
+        targetBrandProjectId === undefined
+          ? "__legacy__"
+          : targetBrandProjectId
+            ? targetBrandProjectId.toLowerCase()
+            : "__unfiled__";
+      const reusable = reusableLazyCreatePromise(lazyCreatePromiseRef.current, scopeCacheKey, spineActive);
+      if (reusable) return reusable;
+      const reqId = scopedLazyRequestId(lazyRequestIdsRef.current, targetBrandProjectId);
+      const entry: InFlightLazyCreate = { scopeKey: scopeCacheKey, promise: null! };
       const promise = (async () => {
         setSavingProject(true);
         try {
@@ -396,42 +770,132 @@ export function VideoStudioWorkspace({
             method: "POST",
             headers: { "Content-Type": "application/json" },
             credentials: "same-origin",
-            body: JSON.stringify({
-              op: "create",
-              organizationId,
-              requestId: lazyRequestIdRef.current,
-              ...(opts.explicitTitle ? { title: opts.explicitTitle } : {}),
-              ...(opts.firstPrompt ? { firstPrompt: opts.firstPrompt } : {}),
-              locale,
-              aspect: persistable.aspect,
-              timeline: persistable,
-            }),
+            body: JSON.stringify(
+              videoFilmCreateBody({
+                organizationId,
+                requestId: reqId,
+                title: opts.explicitTitle,
+                firstPrompt: opts.firstPrompt,
+                locale,
+                timeline: persistable,
+                brandProjectId: openBrandProjectId,
+              }),
+            ),
           });
-          if (!res.ok) return null;
-          const data = (await res.json()) as { ok?: boolean; project?: VideoProjectDetail };
-          if (!data.ok || !data.project) return null;
+          const data = (await res.json().catch(() => null)) as {
+            ok?: boolean;
+            code?: string;
+            project?: VideoProjectDetail;
+          } | null;
+          if (!res.ok || !data?.ok || !data.project) {
+            if (data?.code === "not_found" && openBrandProjectId && spineCtx?.markProjectGone) {
+              const gone = await handleNotFoundForOpenProject({
+                code: "not_found",
+                openProjectId: openBrandProjectId,
+                listProjects: () => clientApi.listBrandProjects(),
+                onProjectGone: spineCtx.markProjectGone,
+              });
+              if (gone) lazyRequestIdsRef.current.delete(scopeCacheKey);
+            }
+            return null;
+          }
           const created = data.project;
+          lazyRequestIdsRef.current.delete(scopeCacheKey);
+          setProjects((prev) => [created, ...prev.filter((p) => p.id !== created.id)]);
+          // G3: If the member switched brand project while this film was creating, keep it in its created scope without adopting it.
+          if (
+            !shouldAdoptCreatedFilm({
+              createdBrandProjectId: created.brandProjectId,
+              sentScope,
+              currentScope: spineOpenRef.current,
+            })
+          ) {
+            return created.id;
+          }
           setProjectId(created.id);
           projectIdRef.current = created.id;
+          setProjectBrandProjectId(created.brandProjectId);
+          projectBrandProjectIdRef.current = created.brandProjectId;
           setProjectTitle(created.title);
           setProjectStatus(created.status);
           setProjectRevision(created.revision);
           revisionRef.current = created.revision;
-          setProjects((prev) => [created, ...prev.filter((p) => p.id !== created.id)]);
-          syncProjectUrlParam(created.id);
+          syncProjectUrlParam(created.id, spineActive);
           return created.id;
         } catch {
           return null;
         } finally {
           setSavingProject(false);
-          lazyCreatePromiseRef.current = null;
+          if (lazyCreatePromiseRef.current === entry) {
+            lazyCreatePromiseRef.current = null;
+          }
         }
       })();
 
-      lazyCreatePromiseRef.current = promise;
+      entry.promise = promise;
+      lazyCreatePromiseRef.current = entry;
       return promise;
     },
-    [canCreate, locale, organizationId],
+    [canCreate, clientApi, locale, openBrandProjectId, organizationId, spineActive, spineCtx],
+  );
+
+  const sendFilmSave = useCallback(
+    (save: PendingFilmSave): Promise<number | null> => {
+      const persistable = sanitizeProjectForPersistence(save.timeline);
+      setSavingProject(true);
+      const entry: InFlightFilmSave = { projectId: save.projectId, promise: null! };
+      const promise = fetch("/api/brand-studio/video-projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({
+          op: "save",
+          organizationId,
+          projectId: save.projectId,
+          ...(save.title ? { title: save.title } : {}),
+          aspect: persistable.aspect,
+          timeline: persistable,
+          expectedRevision: save.expectedRevision,
+        }),
+      })
+        .then(async (res): Promise<number | null> => {
+          const data = (await res.json().catch(() => ({}))) as {
+            ok?: boolean;
+            project?: VideoProjectDetail;
+            code?: string;
+            currentRevision?: number;
+          };
+          if (data.ok && data.project) {
+            // J4: Without the spine, update state unconditionally as on `main`; with the spine, guard by active film id.
+            if (!spineActive || projectIdRef.current === data.project.id) {
+              setProjectRevision(data.project.revision);
+              revisionRef.current = data.project.revision;
+              setProjectTitle(data.project.title);
+            }
+            setProjects((prev) => [data.project!, ...prev.filter((p) => p.id !== data.project!.id)]);
+            return data.project.revision;
+          }
+          if (data.code === "conflict" && typeof data.currentRevision === "number") {
+            if (!spineActive || projectIdRef.current === save.projectId) {
+              revisionRef.current = data.currentRevision;
+              setProjectRevision(data.currentRevision);
+            }
+            return data.currentRevision;
+          }
+          return null;
+        })
+        .catch(() => null)
+        .finally(() => {
+          setSavingProject(false);
+          if (inFlightSaveRef.current === entry) {
+            inFlightSaveRef.current = null;
+          }
+        });
+      entry.promise = promise;
+      inFlightSaveRef.current = entry;
+      return promise;
+    },
+    [organizationId, spineActive],
   );
 
   const scheduleProjectSave = useCallback(
@@ -445,46 +909,20 @@ export function VideoStudioWorkspace({
         return;
       }
 
+      const pending: PendingFilmSave = {
+        projectId: pid,
+        timeline: nextTimeline,
+        title: nextTitle,
+        expectedRevision: revisionRef.current,
+      };
+      pendingSaveRef.current = pending;
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
       saveTimerRef.current = setTimeout(() => {
-        const persistable = sanitizeProjectForPersistence(nextTimeline);
-        setSavingProject(true);
-        void fetch("/api/brand-studio/video-projects", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "same-origin",
-          body: JSON.stringify({
-            op: "save",
-            organizationId,
-            projectId: pid,
-            ...(nextTitle ? { title: nextTitle } : {}),
-            aspect: persistable.aspect,
-            timeline: persistable,
-            expectedRevision: revisionRef.current,
-          }),
-        })
-          .then(async (res) => {
-            const data = (await res.json().catch(() => ({}))) as {
-              ok?: boolean;
-              project?: VideoProjectDetail;
-              code?: string;
-              currentRevision?: number;
-            };
-            if (data.ok && data.project) {
-              setProjectRevision(data.project.revision);
-              revisionRef.current = data.project.revision;
-              setProjectTitle(data.project.title);
-              setProjects((prev) => [data.project!, ...prev.filter((p) => p.id !== data.project!.id)]);
-            } else if (data.code === "conflict" && typeof data.currentRevision === "number") {
-              revisionRef.current = data.currentRevision;
-              setProjectRevision(data.currentRevision);
-            }
-          })
-          .catch(() => {})
-          .finally(() => setSavingProject(false));
+        pendingSaveRef.current = null;
+        sendFilmSave({ ...pending, expectedRevision: revisionRef.current });
       }, 600);
     },
-    [canCreate, ensureLazyProjectCreated, organizationId],
+    [canCreate, ensureLazyProjectCreated, sendFilmSave],
   );
 
   // After an accepted run (Lazy Create): make the project, or save the references onto the open one, from the
@@ -506,20 +944,67 @@ export function VideoStudioWorkspace({
     [scheduleProjectSave],
   );
 
+  const resetActiveFilm = useCallback(
+    (rotateRequestId: boolean) => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      pendingSaveRef.current = null;
+      projectContextRef.current += 1;
+      if (rotateRequestId) {
+        const key = !spineActive ? "__legacy__" : openBrandProjectId ? openBrandProjectId.toLowerCase() : "__unfiled__";
+        lazyRequestIdsRef.current.delete(key);
+      }
+      setProjectId(null);
+      projectIdRef.current = null;
+      setProjectBrandProjectId(openBrandProjectId);
+      projectBrandProjectIdRef.current = openBrandProjectId;
+      setProjectTitle(projectsCopy.untitled);
+      setProjectStatus("active");
+      setProjectRevision(1);
+      revisionRef.current = 1;
+      setTimeline(emptyComposerProject("9:16"));
+      setSelectedClipId(null);
+      syncProjectUrlParam(null, spineActive);
+    },
+    [openBrandProjectId, projectsCopy.untitled, spineActive],
+  );
+
   const handleStartNewProject = useCallback(() => {
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    projectContextRef.current += 1;
-    lazyRequestIdRef.current = makeProjectReqId("vp");
-    setProjectId(null);
-    projectIdRef.current = null;
-    setProjectTitle(wc.projects.untitled);
-    setProjectStatus("active");
-    setProjectRevision(1);
-    revisionRef.current = 1;
-    setTimeline(emptyComposerProject("9:16"));
-    setSelectedClipId(null);
-    syncProjectUrlParam(null);
-  }, [wc.projects.untitled]);
+    resetActiveFilm(true);
+  }, [resetActiveFilm]);
+
+  // G3: When the user switches the open brand project in the header chip, flush any pending debounced film save
+  // BEFORE resetting an open film from another scope, without dropping any pending lazy-create requestId (G0/F1).
+  const prevSpineScopeRef = useRef<string | undefined>(spineOpen ? queryParamOfOpenProject(spineOpen) : undefined);
+  useEffect(() => {
+    if (!spineOpen) return;
+    const nextScope = queryParamOfOpenProject(spineOpen);
+    const prevScope = prevSpineScopeRef.current;
+    prevSpineScopeRef.current = nextScope;
+    if (prevScope === undefined || prevScope === nextScope) return;
+    const plan = planScopeSwitchFilmReset({
+      activeFilmId: projectIdRef.current,
+      activeFilmBrandProjectId: projectBrandProjectIdRef.current,
+      nextScope: spineOpen,
+      pendingSave: pendingSaveRef.current,
+    });
+    if (!plan.reset) return;
+    if (plan.flush) {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      pendingSaveRef.current = null;
+      // J2: Capture current revision before resetActiveFilm zeroes it, and wait for any in-flight save of this film first.
+      const currentRevision = revisionRef.current;
+      const inFlight = inFlightSaveRef.current;
+      void flushFilmSaveWithCurrentRevision({
+        pending: plan.flush,
+        currentRevision,
+        inFlight,
+        send: sendFilmSave,
+      });
+    }
+    resetActiveFilm(false);
+  }, [resetActiveFilm, sendFilmSave, spineOpen]);
+
+  const visibleProjects = useMemo(() => filmsInOpenScope(projects, spineOpen), [projects, spineOpen]);
 
   const handleRenameProject = useCallback(
     (nextTitle: string) => {
@@ -558,13 +1043,13 @@ export function VideoStudioWorkspace({
         revisionRef.current = data.project.revision;
         setProjects((prev) => [data.project!, ...prev.filter((p) => p.id !== data.project!.id)]);
         if (nextStatus === "completed") {
-          setStatus(wc.projects.projectCompletedNotice);
+          setStatus(projectsCopy.projectCompletedNotice);
         }
       }
     } finally {
       setSavingProject(false);
     }
-  }, [canCreate, organizationId, projectStatus, wc.projects.projectCompletedNotice]);
+  }, [canCreate, organizationId, projectStatus, projectsCopy.projectCompletedNotice]);
 
   const handleDeleteProject = useCallback(async () => {
     const pid = projectIdRef.current;
@@ -644,13 +1129,13 @@ export function VideoStudioWorkspace({
         };
         if (savedJson.ok && savedJson.project) {
           setProjects((prev) => [savedJson.project!, ...prev.filter((p) => p.id !== savedJson.project!.id)]);
-          setStatus(interpolate(wc.projects.sentToProject, { title: savedJson.project.title }));
+          setStatus(interpolate(projectsCopy.sentToProject, { title: savedJson.project.title }));
         }
       } catch {
         // Ignore network errors
       }
     },
-    [canCreate, organizationId, selectedClipId, timeline.clips, wc.projects.sentToProject],
+    [canCreate, organizationId, projectsCopy.sentToProject, selectedClipId, timeline.clips],
   );
 
   /* --------------------------------------------- Session Video Output -> Sequence / Take Stack */
@@ -731,7 +1216,7 @@ export function VideoStudioWorkspace({
         for (const out of j.outputs) {
           if (out.kind === "video" && !ingestedOutputIdsRef.current.has(out.id)) {
             ingestedOutputIdsRef.current.add(out.id);
-            addVideoOutputToSequence(out, j.prompt || wc.projects.untitled, {
+            addVideoOutputToSequence(out, j.prompt || projectsCopy.untitled, {
               stackIntoClipId: targetClipId,
             });
           }
@@ -739,7 +1224,7 @@ export function VideoStudioWorkspace({
         sessionJobTargetClipRef.current.delete(j.id);
       }
     }
-  }, [addVideoOutputToSequence, jobs, selectedClipId, state, wc.projects.untitled]);
+  }, [addVideoOutputToSequence, jobs, projectsCopy.untitled, selectedClipId, state]);
 
   // Refresh gallery when a job starts from the wide ReversePanel drawer.
   const { load: reloadStudio } = studio;
@@ -806,11 +1291,11 @@ export function VideoStudioWorkspace({
   const latestReadyVideoOutput = useMemo(() => {
     for (const job of jobs) {
       for (const output of job.outputs) {
-        if (output.kind === "video") return { output, label: job.prompt || wc.projects.untitled };
+        if (output.kind === "video") return { output, label: job.prompt || projectsCopy.untitled };
       }
     }
     return null;
-  }, [jobs, wc.projects.untitled]);
+  }, [jobs, projectsCopy.untitled]);
 
   const onReview = useCallback(
     (source: RefSource, title: string) => {
@@ -932,7 +1417,10 @@ export function VideoStudioWorkspace({
           const problem = uploadProblem(file);
           if (problem) return say(studioUploadErrorLine(copy, problem));
           const result = await studio.upload(file);
-          if (isFailure(result)) return say(studioUploadErrorLine(copy, result.code, result.reason));
+          if (isFailure(result)) {
+            if ((result as { projectGone?: boolean }).projectGone) return;
+            return say(studioUploadErrorLine(copy, result.code, result.reason));
+          }
           if (attach) dock.attach(trayItemFromAsset(result.asset));
         }),
       );
@@ -1071,7 +1559,9 @@ export function VideoStudioWorkspace({
       }
       const res = await studio.upload(file);
       if (isFailure(res)) {
-        dock.setMessage(studioUploadErrorLine(copy, res.code, res.reason));
+        if (!(res as { projectGone?: boolean }).projectGone) {
+          dock.setMessage(studioUploadErrorLine(copy, res.code, res.reason));
+        }
         return null;
       }
       return res.asset;
@@ -1128,7 +1618,7 @@ export function VideoStudioWorkspace({
         return new Uint8Array(await res.arrayBuffer());
       };
       const bundle = await exportProjectNleBundleZip(timeline, fetchMedia, {
-        projectTitle: projectTitle || wc.projects.untitled,
+        projectTitle: projectTitle || projectsCopy.untitled,
         includeBgm: true,
       });
       const blob = new Blob([bundle.zipBytes as BlobPart], { type: "application/zip" });
@@ -1141,7 +1631,7 @@ export function VideoStudioWorkspace({
     } finally {
       setExportingNle(false);
     }
-  }, [exportingNle, projectTitle, timeline, wc.projects.nleExportedNotice, wc.projects.nleFailedNotice, wc.projects.untitled]);
+  }, [exportingNle, projectTitle, projectsCopy.untitled, timeline, wc.projects.nleExportedNotice, wc.projects.nleFailedNotice]);
 
   const handleBarExportMp4 = useCallback(async () => {
     if (!canCreate || timeline.clips.length === 0 || exportingMp4Ratio !== null) return;
@@ -1155,11 +1645,12 @@ export function VideoStudioWorkspace({
         credentials: "same-origin",
         body: JSON.stringify({
           operation: "render.reserve",
-          input: {
+          input: videoRenderReserveBody({
             organizationId,
             requestId: makeProjectReqId("mp4"),
             durationSec: Math.max(0.3, totalSequenceSec),
-          },
+            brandProjectId: openBrandProjectId,
+          }),
         }),
       });
       const reserve = (await reserveRes.json().catch(() => ({ ok: false }))) as Record<string, unknown>;
@@ -1178,7 +1669,7 @@ export function VideoStudioWorkspace({
     } finally {
       setExportingMp4Ratio(null);
     }
-  }, [canCreate, exportingMp4Ratio, organizationId, timeline, totalSequenceSec, wc.projects.mp4ExportedNotice, wc.projects.mp4FailedNotice]);
+  }, [canCreate, exportingMp4Ratio, openBrandProjectId, organizationId, timeline, totalSequenceSec, wc.projects.mp4ExportedNotice, wc.projects.mp4FailedNotice]);
 
   const handleAttachSequenceClipToDock = useCallback(
     (clip: ComposeClip) => {
@@ -1489,14 +1980,14 @@ export function VideoStudioWorkspace({
             projectTitle={projectTitle}
             projectStatus={projectStatus}
             savingProject={savingProject}
-            projects={projects}
+            projects={visibleProjects}
             clipCount={timeline.clips.length}
             railHeight={railHeight}
             solidMp4Cta={dockOpen && dockCollapsed}
             exportingNle={exportingNle}
             exportingMp4Ratio={exportingMp4Ratio}
             canSendClipToOtherProject={timeline.clips.length > 0}
-            copy={wc.projects}
+            copy={projectsCopy}
             onSelectProject={(id) => void loadProjectsFromServer(id)}
             onStartNewProject={handleStartNewProject}
             onRenameTitle={handleRenameProject}
@@ -1586,6 +2077,7 @@ export function VideoStudioWorkspace({
               onCancel={(job) => void cancel(job)}
               canRemove={canCreate && Boolean(state?.canRemoveRuns)}
               onRemove={(job) => studio.deleteJob(job.id).then((result) => setStatus(isFailure(result) ? copy.gallery.removeFailedError : null))}
+              {...(spineActive && spineCtx?.canCreate ? { onMoveJobs: (ids: string[], opener?: HTMLElement | null) => setMoveRequest({ jobIds: ids, opener: opener ?? null }) } : {})}
               onNotice={setStatus}
               empty={guideSection}
             />
@@ -1611,6 +2103,7 @@ export function VideoStudioWorkspace({
               planCatalogue={planCatalogue}
               extendingScene={extendingScene}
               musicGeneration={musicGeneration}
+              {...(openBrandProjectId ? { brandProjectId: openBrandProjectId } : {})}
               railCopy={wc.rail}
               floatingCopy={wc.floatingBar}
               onHeightChange={setRailHeight}
@@ -1841,7 +2334,7 @@ export function VideoStudioWorkspace({
         // reads this only as its first state, so a state refresh never reopens it after it was closed.
         initialOpen={initialCreateMode === "blueprint"}
         initialAssetId={remixVideo?.assetId ?? initialAssetId}
-        api={clientApi}
+        api={reverseApi}
       />
 
       {trimModalClip && (
@@ -1861,6 +2354,23 @@ export function VideoStudioWorkspace({
             setTrimModalClip(null);
           }}
           onClose={() => setTrimModalClip(null)}
+        />
+      )}
+
+      {moveRequest && spineCtx && (
+        <MoveToProjectDialog
+          projects={spineCtx.projects}
+          currentScope={spineCtx.open}
+          jobIds={moveRequest.jobIds}
+          locale={locale}
+          copy={spineCtx.copy}
+          returnFocus={() => moveRequest.opener}
+          onMove={studio.moveToBrandProject}
+          onMoved={({ toast, removedJobIds }) => {
+            if (removedJobIds.length) studio.removeJobs(removedJobIds);
+            setStatus(toast);
+          }}
+          onClose={() => setMoveRequest(null)}
         />
       )}
     </div>

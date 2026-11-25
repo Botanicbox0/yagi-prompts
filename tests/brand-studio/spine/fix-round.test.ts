@@ -150,7 +150,9 @@ describe('F1 the team side never opens a brand’s own project, and brandProject
       expect(memberSeesBrandProjects(seat), JSON.stringify(seat)).toBe(false);
     }
     const page = readFileSync(join(process.cwd(), 'app/(brand)/brand/studio/sound/page.tsx'), 'utf8');
-    expect(page).toContain('member: memberSeesBrandProjects({ staff: access.staff, role: choice.role })');
+    // The page computes the member flag once (the project chip uses it too) and hands it to the loader.
+    expect(page).toContain('const member = memberSeesBrandProjects({ staff: access.staff, role: choice.role });');
+    expect(page).toContain('choice.id, viewer.userId ?? null, { member })');
   });
 });
 
