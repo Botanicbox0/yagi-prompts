@@ -2,12 +2,13 @@
 import { useEffect, useState, type DragEvent } from 'react';
 import { usePathname } from 'next/navigation';
 import { featureDenied, isSandboxedClientOrganization } from '@/lib/brands/features';
-import { billingVisible, poolVisible, scopedHref, sectionVisibility, selectedChoice, type BrandWorkspaceScope } from '@/lib/brands/workspace/selection';
+import { billingVisible, poolVisible, scopedHref, sectionVisibility, selectedChoice, switchHref, type BrandWorkspaceScope } from '@/lib/brands/workspace/selection';
+import type { BrandRole } from '@/lib/brands/workspace/types';
 import { soundStudioVisible, studioShowroomVisible, studioV2Visible } from '@/lib/brand-studio/visibility';
 import { brandHomeVisible } from '@/lib/brands/workspace/home';
 import type { StudioShellCopy } from '@/messages/studio-shell';
 import type { RoomsShellCopy } from '@/messages/rooms-shell';
-import { useWorkspaceSelection } from './identity';
+import { useWorkspaceSelection, type IdentityCopy } from './identity';
 import type { NavigationVisibility } from './access';
 import { RailNavigation } from './rail-nav';
 import type { RailMode } from './rail-mode';
@@ -284,10 +285,17 @@ type RailInputs = {
   railModes?: Readonly<Record<string, RailMode>>;
   /** `brandSoundStudioOpen()` read by the layout: the rail's 사운드 스튜디오 (docs/BRAND-SOUND-STUDIO.md §4.1). */
   soundStudio?: boolean;
+  /**
+   * The words of the rail's workspace menu (rail-workspace-menu.tsx): the brand block's own copy, the role
+   * names, the language control's name and the sign-out word. All are workspace strings the bar already
+   * shows; none is studio copy. Given by the layout; without it the rail keeps its rows.
+   */
+  workspaceMenu?: { identity: IdentityCopy; roles: Record<BrandRole, string>; language: string; signOut: string };
 };
 
-function Scoped({ scope, studioV2 = false, shell, locale = 'ko', railExpanded = false, rooms = false, roomsCopy, homeLabel, railModes, soundStudio = false, ...labels }: Labels & RailInputs & { scope: BrandWorkspaceScope }) {
-  const choice = selectedChoice(useWorkspaceSelection(scope).selection);
+function Scoped({ scope, studioV2 = false, shell, locale = 'ko', railExpanded = false, rooms = false, roomsCopy, homeLabel, railModes, soundStudio = false, workspaceMenu, ...labels }: Labels & RailInputs & { scope: BrandWorkspaceScope }) {
+  const { pathname, selection } = useWorkspaceSelection(scope);
+  const choice = selectedChoice(selection);
   const isMorphic = Boolean(
     choice && (isSandboxedClientOrganization(choice) || featureDenied(choice.denied, 'generative_media')),
   );
@@ -321,6 +329,24 @@ function Scoped({ scope, studioV2 = false, shell, locale = 'ko', railExpanded = 
         roomsCopy={roomsCopy}
         home={homeLabel && brandHomeVisible(choice, true) ? homeLabel : undefined}
         modeMemory={roomsActive ? railModes : undefined}
+        workspace={
+          workspaceMenu
+            ? {
+                currentId: choice?.id ?? null,
+                emptyLabel: selection.state === 'none' ? workspaceMenu.identity.none : workspaceMenu.identity.unavailable,
+                brands: scope.choices.map((c) => ({
+                  id: c.id,
+                  name: c.name,
+                  logoUrl: c.logoUrl,
+                  role: c.role === 'guest' ? workspaceMenu.identity.guest : c.role === 'studio' ? workspaceMenu.identity.studio : workspaceMenu.roles[c.role],
+                  href: switchHref(pathname, c),
+                  staff: c.role === 'studio',
+                })),
+                locale,
+                copy: { switch: workspaceMenu.identity.switch, staffGroup: workspaceMenu.identity.staffGroup, language: workspaceMenu.language, signOut: workspaceMenu.signOut },
+              }
+            : undefined
+        }
       />
     );
   }
@@ -362,10 +388,11 @@ export function WorkspaceNavigation({
   homeLabel,
   railModes,
   soundStudio,
+  workspaceMenu,
   ...labels
 }: Labels & RailInputs & { scope?: BrandWorkspaceScope | null; pendingShare?: boolean }) {
   if (!scope || (scope.choices.length === 0 && !pendingShare)) return <NoTabs />;
   return (
-    <Scoped scope={scope} studioV2={studioV2} shell={shell} locale={locale} railExpanded={railExpanded} rooms={rooms} roomsCopy={roomsCopy} homeLabel={homeLabel} railModes={railModes} soundStudio={soundStudio} {...labels} />
+    <Scoped scope={scope} studioV2={studioV2} shell={shell} locale={locale} railExpanded={railExpanded} rooms={rooms} roomsCopy={roomsCopy} homeLabel={homeLabel} railModes={railModes} soundStudio={soundStudio} workspaceMenu={workspaceMenu} {...labels} />
   );
 }

@@ -28,6 +28,7 @@ import type { StudioShellCopy } from '@/messages/studio-shell';
 import type { RoomsShellCopy } from '@/messages/rooms-shell';
 import { BRAND_HOME_PATH } from '@/lib/brands/workspace/home';
 import { CreditsMeter, RailToasts, useRoomUnread, useStudioActivity } from './rail-activity';
+import { RailWorkspaceMenu, type RailWorkspace } from './rail-workspace-menu';
 import {
   RAIL_MODE_COOKIE,
   parseRailModeCookie,
@@ -100,6 +101,12 @@ export interface RailNavigationProps {
   home?: string;
   /** The mode this browser last used per brand (the layout's reading of the `twings_brand_mode` cookie). */
   modeMemory?: Readonly<Record<string, RailMode>>;
+  /**
+   * The brand block and its menu (rail-workspace-menu.tsx): the brands this account can open, the language
+   * and sign-out words. On a wide screen it replaces the layout's own brand block, language control and
+   * sign-out row (rail.css hides those three); a phone keeps them in its top bar.
+   */
+  workspace?: RailWorkspace;
 }
 
 /** The switch's two sides: a pen for making it yourself, two people for working with the team. */
@@ -166,6 +173,7 @@ export function RailNavigation(props: RailNavigationProps) {
   const [tip, setTip] = useState<Tip | null>(null);
   const createButton = useRef<HTMLButtonElement>(null);
   const createMenu = useRef<HTMLDivElement>(null);
+  const reorderDone = useRef<HTMLButtonElement>(null);
   const moreButton = useRef<HTMLButtonElement>(null);
   const sheet = useRef<HTMLDivElement>(null);
   const menuId = useId();
@@ -275,6 +283,19 @@ export function RailNavigation(props: RailNavigationProps) {
       // ignore
     }
   };
+
+  /** 순서 편집 from the workspace menu: the arrows need the names, so the rail opens first. */
+  const startReordering = () => {
+    if (!expanded) {
+      setExpanded(true);
+      writeExpanded(true);
+    }
+    setTip(null);
+    setReordering(true);
+  };
+  useEffect(() => {
+    if (reordering) reorderDone.current?.focus();
+  }, [reordering]);
 
   const toggle = () => {
     const next = !expanded;
@@ -422,6 +443,12 @@ export function RailNavigation(props: RailNavigationProps) {
     { key: 'billing', href: '/brand/billing', shown: Boolean(props.billing) },
     { key: 'settings', href: '/brand/settings', shown: props.settings },
   ];
+  /** The same three, as the workspace menu's first group. */
+  const workspaceLinks = utilities
+    .filter((u) => u.shown)
+    .map((u) => ({ key: u.key, path: u.href, href: scope(u.href), label: copy.rail[u.key], icon: RAIL_ICON[u.key], current: railActive(u.href, path) }));
+  /** The meter leads to 플랜 및 청구 for a role that may open it. */
+  const creditsHref = props.billing ? scope('/brand/billing') : undefined;
 
   const itemLink = (id: RailItemId, extra: ReactNode = null) => {
     const href = RAIL_HREF[id];
@@ -624,6 +651,14 @@ export function RailNavigation(props: RailNavigationProps) {
         onKeyDown={navKeys}
         {...tipHandlers}
       >
+        {props.workspace ? (
+          <RailWorkspaceMenu
+            workspace={props.workspace}
+            links={workspaceLinks}
+            expanded={expanded}
+            reorder={items.length > 1 && !reordering ? { label: copy.rail.reorder, onSelect: startReordering } : null}
+          />
+        ) : null}
         {modeSwitch('rail')}
         {props.home ? (
           <ul className="bw-rail-list" data-rail-group="home">
@@ -647,9 +682,10 @@ export function RailNavigation(props: RailNavigationProps) {
           {items.map((id) => row(id))}
         </ul>
 
-        {expanded && items.length > 1 ? (
+        {/* 순서 편집 starts in the workspace menu (or, with no menu, from this row); while it is on, this row ends it. */}
+        {expanded && items.length > 1 && (reordering || !props.workspace) ? (
           <div className="bw-rail-order" data-rail-order>
-            <button type="button" aria-pressed={reordering} onClick={() => setReordering((value) => !value)}>
+            <button ref={reorderDone} type="button" aria-pressed={reordering} onClick={() => setReordering((value) => !value)}>
               {reordering ? copy.rail.reorderDone : copy.rail.reorder}
             </button>
             {reordering && order.length > 0 ? (
@@ -668,7 +704,7 @@ export function RailNavigation(props: RailNavigationProps) {
               data-rail-create-link={commissionLink.key}
               data-rail-tip={commissionLink.text}
             >
-              <span className="bw-rail-create-disc" aria-hidden="true">
+              <span className="bw-rail-create-mark" aria-hidden="true">
                 <Icon d={RAIL_ICON.create} />
               </span>
               <span className="bw-rail-label">{commissionLink.text}</span>
@@ -685,7 +721,7 @@ export function RailNavigation(props: RailNavigationProps) {
               data-rail-tip={copy.create.button}
               onClick={() => (createAt ? closeCreate(false) : openCreate())}
             >
-              <span className="bw-rail-create-disc" aria-hidden="true">
+              <span className="bw-rail-create-mark" aria-hidden="true">
                 <Icon d={RAIL_ICON.create} />
               </span>
               <span className="bw-rail-label">{copy.create.button}</span>
@@ -694,8 +730,11 @@ export function RailNavigation(props: RailNavigationProps) {
         ) : null}
 
         <div className="bw-rail-foot">
-          {studio && mode !== 'team' ? <CreditsMeter allowance={activity.summary?.allowance} copy={copy} locale={locale} expanded={expanded} /> : null}
-          {utilities.some((u) => u.shown) ? (
+          {studio && mode !== 'team' ? (
+            <CreditsMeter allowance={activity.summary?.allowance} copy={copy} locale={locale} expanded={expanded} href={creditsHref} hrefLabel={copy.rail.billing} />
+          ) : null}
+          {/* Without the workspace menu (no brand block given) the three keep their rows here. */}
+          {!props.workspace && utilities.some((u) => u.shown) ? (
             <ul className="bw-rail-list" data-rail-group="utility">
               {utilities
                 .filter((u) => u.shown)

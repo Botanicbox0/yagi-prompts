@@ -5,10 +5,14 @@
  * `topbar` and `sidebar` modes (workspace.css) are untouched to the character; a test reads this file
  * and fails on any selector outside that scope. Workspace tokens only (app/(brand)/workspace.css).
  *
- * Techniques (docs/design/TOOLBOX.md §1-2): a calm light rail on the white work surface (alabaster /
- * white layering), concentric radius (42px round targets, pill rows), frosted milky quartz on the one
- * floating menu, tabular numerals on credits and counts. One blue: the active bar, the "+" disc, the
- * meter. Springs only; reduced motion stops them.
+ * Three bands (docs/BRAND-STUDIO-V3.md §3.1, 2026-11-25): the brand block and its one menu on top, the
+ * mode switch and the list in the middle, the credits line, the fold button and the maker's mark at the
+ * foot. Nothing in the rail is filled with ink or the accent: the page's one filled button stays the
+ * page's. The chosen row is a quiet wash, "+" is an outlined row of the list's own height.
+ *
+ * Techniques (docs/design/TOOLBOX.md §1-2), four: one panel surface for the whole column, pill rows of
+ * one height (36px), frosted glass on the floating menus only, tabular numerals on credits and counts.
+ * Springs only; reduced motion stops them.
  */
 
 /* ------------------------------------------------------------------ shell (desktop) */
@@ -19,11 +23,16 @@
     --ys-sidebar-w: 72px;
     --bw-rail-bg: var(--ys-panel);
     --ys-sidebar: var(--bw-rail-bg);
-    --bw-rail-pad: 15px;
+    --bw-rail-pad: 18px;
+    --bw-rail-row: 36px;
+    /* Hover and the chosen row: two steps of the same ink wash, never a filled chip. */
+    --bw-rail-hover: color-mix(in srgb, var(--ys-ink) 6%, transparent);
+    --bw-rail-chosen: color-mix(in srgb, var(--ys-ink) 11%, transparent);
     grid-template-columns: var(--ys-sidebar-w) minmax(0, 1fr);
   }
   .bw-shell:has([data-brand-layout-mode="rail"][data-rail-expanded="true"]) {
     --ys-sidebar-w: 232px;
+    --bw-rail-pad: 12px;
   }
   /* The sticky column is its own stacking context: lift it so its menu, tooltips and brand list
      float over the page (overlays of the page itself sit higher still). */
@@ -31,10 +40,16 @@
     z-index: 30;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
     min-width: 0;
     padding: 16px 0 12px;
     border-right: 0;
+  }
+  /* The rail's own brand block (rail-workspace-menu.tsx) stands in for the layout's block, language control
+     and sign-out row on a wide screen; a phone's top bar keeps all three. */
+  .bw-shell:has([data-brand-layout-mode="rail"]):has([data-rail-workspace]) .bw-sidebar > .bw-identity,
+  .bw-shell:has([data-brand-layout-mode="rail"]):has([data-rail-workspace]) .bw-sidebar-utilities > :is(.bw-language-menu, .bw-signout) {
+    display: none;
   }
 
   /* Lockup and brand switcher keep the rail's column. */
@@ -89,24 +104,28 @@
     min-height: 0;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 6px;
     overflow: hidden auto;
     overscroll-behavior: contain;
     scrollbar-width: none;
   }
   .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-list {
     display: grid;
-    gap: 4px;
+    gap: 2px;
     margin: 0;
-    padding: 3px var(--bw-rail-pad);
+    padding: 0 var(--bw-rail-pad);
     list-style: none;
+  }
+  /* 홈 and the list under it read as one list: the same step between rows. */
+  .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-list[data-rail-group="home"] + .bw-rail-list {
+    margin-top: -4px;
   }
   .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-row {
     position: relative;
     display: flex;
     align-items: center;
     gap: 4px;
-    border-radius: 21px;
+    border-radius: 18px;
   }
   .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-row[data-drag-over="true"] {
     box-shadow: 0 0 0 1.5px var(--ys-ink);
@@ -118,12 +137,12 @@
     flex: 1 1 auto;
     align-items: center;
     gap: 12px;
-    min-width: 42px;
-    height: 42px;
-    min-height: 42px;
+    min-width: var(--bw-rail-row);
+    height: var(--bw-rail-row);
+    min-height: var(--bw-rail-row);
     padding: 0 12px;
     border: 0;
-    border-radius: 21px;
+    border-radius: 18px;
     background: transparent;
     box-shadow: none;
     color: var(--ys-ink-secondary);
@@ -136,20 +155,25 @@
     transition: background-color var(--ys-dur) var(--ys-ease), color var(--ys-dur) var(--ys-ease), box-shadow var(--ys-dur) var(--ys-ease);
   }
   .bw-shell:has([data-brand-layout-mode="rail"][data-rail-expanded="false"]) .bw-sidebar nav .bw-rail-item {
-    flex: 0 0 42px;
-    width: 42px;
+    flex: 0 0 var(--bw-rail-row);
+    width: var(--bw-rail-row);
     justify-content: center;
     padding: 0;
   }
   .bw-shell:has([data-brand-layout-mode="rail"]) .bw-sidebar nav .bw-rail-item:hover {
-    background: var(--ys-hover);
+    background: var(--bw-rail-hover);
     color: var(--ys-ink);
   }
+  /* The page you are on: a quiet wash and ink words. Not a filled chip: that weight belongs to the page's one button. */
   .bw-shell:has([data-brand-layout-mode="rail"]) .bw-sidebar nav .bw-rail-item[aria-current="page"] {
-    background: var(--ys-active-bg);
-    color: var(--ys-active-fg);
+    background: var(--bw-rail-chosen);
+    color: var(--ys-ink);
     font-weight: 600;
     box-shadow: none;
+  }
+  .bw-shell:has([data-brand-layout-mode="rail"]) .bw-sidebar nav .bw-rail-item:focus-visible {
+    outline: 2px solid var(--ys-focus);
+    outline-offset: 2px;
   }
   .bw-shell:has([data-brand-layout-mode="rail"]) .bw-sidebar nav .bw-rail-item[aria-current="page"]::before {
     display: none;
@@ -170,7 +194,7 @@
     color: var(--ys-ink);
   }
   .bw-shell:has([data-brand-layout-mode="rail"]) .bw-sidebar nav .bw-rail-item[aria-current="page"] .bw-rail-icon {
-    color: var(--ys-active-fg);
+    color: var(--ys-ink);
   }
   .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-label {
     min-width: 0;
@@ -207,14 +231,10 @@
     font-variant-numeric: tabular-nums;
     line-height: 1;
   }
-  .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-item[aria-current="page"] .bw-rail-badge {
-    background: var(--ys-surface);
-    color: var(--ys-ink);
-  }
   .bw-shell:has([data-brand-layout-mode="rail"][data-rail-expanded="false"]) .bw-rail .bw-rail-badge {
     position: absolute;
-    top: 3px;
-    left: 25px;
+    top: 0;
+    left: 21px;
     min-width: 16px;
     height: 16px;
     padding: 0 4px;
@@ -260,7 +280,7 @@
     display: flex;
     flex-wrap: wrap;
     gap: 4px;
-    margin: -4px var(--bw-rail-pad) 0;
+    margin: 0 var(--bw-rail-pad);
   }
   .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-order button {
     min-height: 32px;
@@ -273,56 +293,66 @@
   }
   .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-order button:hover,
   .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-order button[aria-pressed="true"] {
-    background: rgba(17, 17, 20, 0.05);
+    background: var(--bw-rail-hover);
     color: var(--ys-ink);
   }
+  .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-order button:focus-visible {
+    outline: 2px solid var(--ys-focus);
+    outline-offset: 2px;
+  }
 
-  /* ---------------------------------------------------------------- "+" create */
+  /* ---------------------------------------------------------------- "+" create
+     A row of the list's own height with a hairline outline: it is still the way in to making something,
+     and it no longer competes with the page's filled button. */
   .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-create {
-    padding: 2px var(--bw-rail-pad);
+    padding: 4px var(--bw-rail-pad) 0;
   }
   .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-create-button {
     display: flex;
     align-items: center;
     gap: 12px;
     width: 100%;
-    min-height: 42px;
-    padding: 0;
-    border-radius: 21px;
+    height: var(--bw-rail-row);
+    padding: 0 12px;
+    border-radius: 18px;
+    box-shadow: inset 0 0 0 1px var(--ys-line-strong);
     color: var(--ys-ink);
     font-size: 13.5px;
     font-weight: 600;
     letter-spacing: -0.01em;
     white-space: nowrap;
+    text-decoration: none;
     cursor: pointer;
+    transition: background-color var(--ys-dur) var(--ys-ease), box-shadow var(--ys-dur) var(--ys-ease);
   }
   .bw-shell:has([data-brand-layout-mode="rail"][data-rail-expanded="false"]) .bw-rail-create-button {
-    width: 42px;
+    justify-content: center;
+    width: var(--bw-rail-row);
+    padding: 0;
   }
-  .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-create-disc {
+  .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-create-button:hover,
+  .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-create-button[aria-expanded="true"] {
+    background: var(--bw-rail-hover);
+    box-shadow: inset 0 0 0 1px var(--ys-ink-secondary);
+  }
+  .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-create-button:focus-visible {
+    outline: 2px solid var(--ys-focus);
+    outline-offset: 2px;
+  }
+  .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-create-mark {
     display: grid;
     place-items: center;
-    width: 42px;
-    height: 42px;
+    width: 18px;
+    height: 18px;
     flex: none;
-    border-radius: 50%;
-    background: var(--ys-active-bg);
-    color: var(--ys-active-fg);
-    box-shadow: var(--ys-shadow-1);
-    transition: transform 180ms var(--ys-spring), background-color var(--ys-dur) var(--ys-ease);
+    transition: transform 180ms var(--ys-spring);
   }
-  .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-create-button:hover .bw-rail-create-disc {
-    background: var(--ys-ink-hover);
-  }
-  .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-create-button[aria-expanded="true"] .bw-rail-create-disc {
+  .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-create-button[aria-expanded="true"] .bw-rail-create-mark {
     transform: rotate(45deg);
   }
-  .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-create-button:active .bw-rail-create-disc {
-    transform: scale(0.95);
-  }
-  .bw-shell:has([data-brand-layout-mode="rail"]) .bw-sidebar nav .bw-rail-create-disc .bw-rail-icon {
+  .bw-shell:has([data-brand-layout-mode="rail"]) .bw-sidebar nav .bw-rail-create-mark .bw-rail-icon {
     color: inherit;
-    stroke-width: 2;
+    stroke-width: 1.8;
   }
 
   /* ---------------------------------------------------------------- foot: credits, team, settings */
@@ -338,13 +368,25 @@
     margin: 0 var(--bw-rail-pad);
     padding-inline: 0;
   }
+  /* One line and a thin bar, no card: the figure is read here and nowhere else. A role that may open
+     플랜 및 청구 gets it as a link. */
   .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail .bw-rail-credits {
     display: block;
     margin: 0 var(--bw-rail-pad);
-    padding: 10px 12px 11px;
-    border-radius: 16px;
-    background: var(--ys-surface);
+    padding: 8px 12px 9px;
+    border-radius: 12px;
+    background: transparent;
     box-shadow: none;
+    color: inherit;
+    text-decoration: none;
+    transition: background-color var(--ys-dur) var(--ys-ease);
+  }
+  .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail a.bw-rail-credits:hover {
+    background: var(--bw-rail-hover);
+  }
+  .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail .bw-rail-credits:focus-visible {
+    outline: 2px solid var(--ys-focus);
+    outline-offset: 2px;
   }
   .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail .bw-rail-ring {
     display: none;
@@ -352,16 +394,15 @@
   .bw-shell:has([data-brand-layout-mode="rail"][data-rail-expanded="false"]) .bw-rail .bw-rail-credits {
     display: grid;
     place-items: center;
-    width: 42px;
-    height: 42px;
+    width: var(--bw-rail-row);
+    height: var(--bw-rail-row);
     padding: 0;
     border-radius: 50%;
     background: transparent;
     box-shadow: none;
-    cursor: default;
   }
   .bw-shell:has([data-brand-layout-mode="rail"][data-rail-expanded="false"]) .bw-rail .bw-rail-credits:hover {
-    background: rgba(17, 17, 20, 0.05);
+    background: var(--bw-rail-hover);
   }
   .bw-shell:has([data-brand-layout-mode="rail"][data-rail-expanded="false"]) .bw-rail .bw-rail-ring {
     display: block;
@@ -420,10 +461,10 @@
 .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-credits-bar {
   position: relative;
   display: block;
-  height: 3px;
+  height: 2px;
   overflow: hidden;
-  border-radius: 2px;
-  background: color-mix(in srgb, var(--ys-ink) 9%, transparent);
+  border-radius: 1px;
+  background: color-mix(in srgb, var(--ys-ink) 12%, transparent);
 }
 .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-credits-bar > span {
   position: absolute;
@@ -450,6 +491,22 @@
     border-top: 0;
     box-shadow: none;
   }
+  /* With the workspace menu the foot's last row is the maker's mark on the left and the fold button on the right. */
+  .bw-shell:has([data-brand-layout-mode="rail"]):has([data-rail-workspace]) .bw-sidebar > .bw-sidebar-utilities {
+    display: flex;
+    align-items: center;
+    min-height: var(--bw-rail-row);
+    padding: 0 44px 0 12px;
+  }
+  .bw-shell:has([data-brand-layout-mode="rail"]):has([data-rail-workspace]) .bw-sidebar-utilities .ys-powered-by {
+    justify-content: flex-start;
+    gap: 8px;
+    width: auto;
+    padding: 0;
+  }
+  .bw-shell:has([data-brand-layout-mode="rail"][data-rail-expanded="false"]):has([data-rail-workspace]) .bw-sidebar > .bw-sidebar-utilities {
+    display: none;
+  }
   .bw-shell:has([data-brand-layout-mode="rail"]) .bw-sidebar-utilities .bw-language-select label {
     position: relative;
     gap: 12px;
@@ -462,7 +519,7 @@
     color: var(--ys-ink-secondary);
   }
   .bw-shell:has([data-brand-layout-mode="rail"]) .bw-sidebar-utilities .bw-language-select label:hover {
-    background: rgba(17, 17, 20, 0.05);
+    background: var(--bw-rail-hover, var(--ys-hover));
     color: var(--ys-ink);
   }
   .bw-shell:has([data-brand-layout-mode="rail"]) .bw-sidebar-utilities .bw-language-select select {
@@ -535,8 +592,33 @@
     padding: 0;
   }
   .bw-shell:has([data-brand-layout-mode="rail"]) .bw-sidebar > .bw-rail-toggle:hover {
-    background: rgba(17, 17, 20, 0.05);
+    background: var(--bw-rail-hover);
     color: var(--ys-ink);
+  }
+  .bw-shell:has([data-brand-layout-mode="rail"]) .bw-sidebar > .bw-rail-toggle:focus-visible {
+    outline: 2px solid var(--ys-focus);
+    outline-offset: 2px;
+  }
+  /* With the workspace menu the fold button is an icon: at the foot's right edge when open, centred when folded.
+     Its name is its accessible name and, folded, its tooltip. */
+  .bw-shell:has([data-brand-layout-mode="rail"]):has([data-rail-workspace]) .bw-sidebar > .bw-rail-toggle {
+    position: absolute;
+    right: var(--bw-rail-pad);
+    bottom: var(--bw-rail-foot-inset, 12px);
+    justify-content: center;
+    width: var(--bw-rail-row);
+    height: var(--bw-rail-row);
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    border-radius: 18px;
+  }
+  .bw-shell:has([data-brand-layout-mode="rail"][data-rail-expanded="false"]):has([data-rail-workspace]) .bw-sidebar > .bw-rail-toggle {
+    position: static;
+    align-self: center;
+  }
+  .bw-shell:has([data-brand-layout-mode="rail"]):has([data-rail-workspace]) .bw-rail-toggle .bw-rail-label {
+    display: none;
   }
   .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-toggle .bw-rail-icon {
     width: 18px;
@@ -612,7 +694,7 @@
   text-decoration: none;
 }
 .bw-shell:has([data-brand-layout-mode="rail"]) :is(.bw-rail-create-menu, .bw-rail-sheet-create) a:hover {
-  background: rgba(17, 17, 20, 0.05);
+  background: var(--bw-rail-hover, var(--ys-hover));
 }
 /* With rooms: what the team makes sits under a hairline, apart from what the brand makes itself. */
 .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-create-divider {
@@ -706,7 +788,7 @@
   cursor: pointer;
 }
 .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-toast-close:hover {
-  background: rgba(17, 17, 20, 0.05);
+  background: var(--bw-rail-hover, var(--ys-hover));
 }
 
 .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-sr {
@@ -1007,12 +1089,8 @@
     gap: 2px;
     padding-block: 2px;
   }
-  .bw-shell:has([data-brand-layout-mode="rail"]) .bw-sidebar nav .bw-rail-item {
-    height: 36px;
-    min-height: 36px;
-  }
-  .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail .bw-rail-credits {
-    padding: 8px 10px 9px;
+  .bw-shell:has([data-brand-layout-mode="rail"]) {
+    --bw-rail-foot-inset: 8px;
   }
   .bw-shell:has([data-brand-layout-mode="rail"]) .bw-sidebar-utilities .bw-language-select label,
   .bw-shell:has([data-brand-layout-mode="rail"]) .bw-sidebar-utilities .bw-language-select select,
@@ -1197,10 +1275,254 @@
   stroke-linejoin: round;
 }
 
+/* ------------------------------------------------------------------ the brand block and the workspace menu
+   (components/brand-workspace/rail-workspace-menu.tsx). The block is the rail's first row: avatar, name,
+   role, a chevron. Its menu is the one place for 팀 · 플랜 및 청구 · 설정, the other brands, the language,
+   순서 편집 and 로그아웃. */
+.bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-workspace {
+  flex: none;
+  padding: 0 var(--bw-rail-pad, 12px);
+}
+.bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-workspace-trigger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--ys-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--ys-dur) var(--ys-ease);
+}
+.bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-workspace-trigger:hover,
+.bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-workspace-trigger[aria-expanded="true"] {
+  background: var(--bw-rail-hover, var(--ys-hover));
+}
+.bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-workspace-trigger:focus-visible {
+  outline: 2px solid var(--ys-focus);
+  outline-offset: 2px;
+}
+.bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-workspace-text {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 1px;
+  min-width: 0;
+}
+.bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-workspace-text strong {
+  overflow: hidden;
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 18px;
+  letter-spacing: -0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-workspace-text small {
+  overflow: hidden;
+  color: var(--ys-ink-secondary);
+  font-size: 11.5px;
+  line-height: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-workspace-chevron {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  fill: none;
+  stroke: var(--ys-ink-secondary);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 180ms var(--ys-spring);
+}
+.bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-workspace-trigger[aria-expanded="true"] .bw-rail-workspace-chevron {
+  transform: rotate(180deg);
+}
+@media (min-width: 641px) {
+  /* Folded: the avatar alone opens the same menu; the name stays in the button for a screen reader. */
+  .bw-shell:has([data-brand-layout-mode="rail"][data-rail-expanded="false"]) .bw-rail-workspace-trigger {
+    justify-content: center;
+    width: var(--bw-rail-row, 36px);
+    min-height: var(--bw-rail-row, 36px);
+    padding: 0;
+  }
+  .bw-shell:has([data-brand-layout-mode="rail"][data-rail-expanded="false"]) .bw-rail-workspace-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  .bw-shell:has([data-brand-layout-mode="rail"][data-rail-expanded="false"]) .bw-rail-workspace-chevron {
+    display: none;
+  }
+}
+.bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-workspace-menu {
+  position: fixed;
+  z-index: 85;
+  width: 264px;
+  padding: 6px;
+  overflow: hidden auto;
+  overscroll-behavior: contain;
+  border-radius: 16px;
+  background: var(--ys-surface);
+  box-shadow: var(--ys-float);
+  animation: bw-rail-drop 220ms var(--ys-spring) both;
+}
+@supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-workspace-menu {
+    background: var(--ys-glass);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    backdrop-filter: blur(20px) saturate(180%);
+  }
+}
+.bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-workspace-group {
+  display: grid;
+  gap: 2px;
+}
+.bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-workspace-group + .bw-rail-workspace-group {
+  margin-top: 6px;
+  padding-top: 6px;
+  box-shadow: inset 0 1px 0 var(--ys-hairline);
+}
+.bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-workspace-title {
+  margin: 4px 10px 2px;
+  color: var(--ys-ink-secondary);
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 16px;
+}
+.bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-workspace-menu :is(a, button)[role^="menuitem"] {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ys-ink);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color var(--ys-dur) var(--ys-ease);
+}
+.bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-workspace-menu :is(a, button)[role^="menuitem"]:hover,
+.bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-workspace-menu :is(a, button)[role^="menuitem"]:focus-visible {
+  background: var(--ys-hover);
+  outline: none;
+}
+.bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-workspace-menu :is(a, button)[role^="menuitem"]:focus-visible {
+  box-shadow: inset 0 0 0 1.5px var(--ys-ink);
+}
+.bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-workspace-menu [aria-current="page"] {
+  font-weight: 600;
+}
+.bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-workspace-menu .bw-rail-icon {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  color: var(--ys-ink-secondary);
+}
+/* A brand: its mark, its name over the viewer's role there, a tick on the one that is open. */
+.bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-workspace-menu a[role="menuitemradio"] {
+  min-height: 46px;
+}
+.bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-workspace-brand {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 1px;
+  min-width: 0;
+}
+.bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-workspace-brand strong {
+  overflow: hidden;
+  font-weight: 500;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-workspace-menu a[aria-checked="true"] .bw-rail-workspace-brand strong {
+  font-weight: 600;
+}
+.bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-workspace-brand small {
+  overflow: hidden;
+  color: var(--ys-ink-secondary);
+  font-size: 11.5px;
+  line-height: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-workspace-check {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  fill: none;
+  stroke: var(--ys-ink);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+/* The language: its name on the left, the two choices as one small switch on the right. */
+.bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-workspace-language {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  min-height: 36px;
+}
+.bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-workspace-language .bw-rail-workspace-title {
+  margin: 0 10px;
+  color: var(--ys-ink);
+  font-size: 13.5px;
+  line-height: 20px;
+}
+.bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-workspace-segments {
+  display: inline-flex;
+  gap: 2px;
+  margin-right: 4px;
+  padding: 2px;
+  border-radius: 10px;
+  background: var(--ys-subtle-bg);
+  box-shadow: var(--ys-ring);
+}
+.bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-workspace-menu .bw-rail-workspace-segments button[role="menuitemradio"] {
+  width: auto;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 8px;
+  color: var(--ys-ink-secondary);
+  font-size: 12.5px;
+}
+.bw-shell:has([data-brand-layout-mode="rail"]) .bw-rail-workspace-menu .bw-rail-workspace-segments button[aria-checked="true"] {
+  background: var(--ys-hover);
+  color: var(--ys-ink);
+  font-weight: 600;
+}
+
 /* ------------------------------------------------------------------ motion */
 @keyframes bw-rail-tip-in {
   from { opacity: 0; transform: translate(-4px, -50%); }
   to { opacity: 1; transform: translate(0, -50%); }
+}
+@keyframes bw-rail-drop {
+  from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+  to { opacity: 1; transform: none; }
 }
 @keyframes bw-rail-pop {
   from { opacity: 0; transform: translateX(-6px) scale(0.98); }
@@ -1329,10 +1651,10 @@
 
 @media (prefers-reduced-motion: reduce) {
   .bw-shell:has([data-brand-layout-mode="rail"]),
-  .bw-shell:has([data-brand-layout-mode="rail"]) :is(.bw-rail-item, .bw-rail-mode-option, .bw-rail-create-disc, .bw-rail-icon, .bw-rail-credits-bar > span, .bw-rail-ring-fill) {
+  .bw-shell:has([data-brand-layout-mode="rail"]) :is(.bw-rail-item, .bw-rail-mode-option, .bw-rail-create-button, .bw-rail-create-mark, .bw-rail-icon, .bw-rail-credits, .bw-rail-credits-bar > span, .bw-rail-ring-fill, .bw-rail-workspace-trigger, .bw-rail-workspace-chevron, .bw-rail-workspace-menu [role^="menuitem"]) {
     transition: none;
   }
-  .bw-shell:has([data-brand-layout-mode="rail"]) :is(.bw-rail-tip, .bw-rail-create-menu, .bw-rail-toast, .bw-rail-sheet-bg, .bw-rail-sheet, .bw-language-popover) {
+  .bw-shell:has([data-brand-layout-mode="rail"]) :is(.bw-rail-tip, .bw-rail-create-menu, .bw-rail-workspace-menu, .bw-rail-toast, .bw-rail-sheet-bg, .bw-rail-sheet, .bw-language-popover) {
     animation: none;
   }
   .bw-shell:has([data-brand-layout-mode="rail"]) :is(.bw-language-trigger, .bw-language-popover [role="menuitemradio"]) {

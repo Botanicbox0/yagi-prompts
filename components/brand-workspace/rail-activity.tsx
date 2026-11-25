@@ -311,26 +311,33 @@ export function CreditsMeter({
   copy,
   locale,
   expanded,
+  href,
+  hrefLabel,
 }: {
   allowance: RailSummary['allowance'] | null | undefined;
   copy: StudioShellCopy;
   locale: 'ko' | 'en';
   expanded: boolean;
+  /** Where the meter leads (플랜 및 청구), for a role that may open it; without it the meter is plain text. */
+  href?: string;
+  /** That page's name, said before the figures in the link's name. */
+  hrefLabel?: string;
 }) {
   const figures = meterFigures(allowance, locale);
   if (!figures) return null;
   const summary = meterSummary(figures, copy);
   const refillLine = meterRefillLine(figures, copy);
   const low = figures.ratio < 0.1;
+  const Box = href ? 'a' : 'div';
   return (
-    <div
+    <Box
       className="bw-rail-credits"
       data-rail-credits
       data-low={low ? 'true' : undefined}
       data-rail-tip={expanded ? undefined : summary}
-      tabIndex={expanded ? undefined : 0}
-      role="group"
-      aria-label={copy.credits.label}
+      {...(href
+        ? { href, 'data-rail-credits-link': '', 'aria-label': hrefLabel ? `${hrefLabel}: ${summary}` : summary }
+        : { tabIndex: expanded ? undefined : 0, role: 'group', 'aria-label': copy.credits.label })}
     >
       <svg className="bw-rail-ring" viewBox="0 0 20 20" aria-hidden="true">
         <circle cx="10" cy="10" r={RING_R} className="bw-rail-ring-track" />
@@ -364,7 +371,7 @@ export function CreditsMeter({
         </span>
         {refillLine !== null ? <span className="bw-rail-credits-refill">{refillLine}</span> : null}
       </div>
-    </div>
+    </Box>
   );
 }
 
