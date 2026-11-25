@@ -17,7 +17,12 @@
    floating support button would sit on the timeline, so it steps aside on this one screen. */
 .bw-main:has([data-studio-editor-v2]) { max-width: none; padding: 0; }
 body:has([data-studio-editor-v2]) .bw-support-launch { display: none; }
-html:has([data-studio-dock]) { scroll-padding-bottom: calc(var(--bs-dock-h, 0px) + 24px); }
+/* What scrolls under the floating bar (the wall's tiles and their buttons, the guide) stops above it when it
+   gets keyboard focus or is scrolled to, instead of landing behind it. This is a margin on those elements, not
+   scroll padding on the page: page padding also applied to everything that is sticky or fixed inside that
+   bottom band (the bar itself, the rails, the help button), which can never leave it, so the browser scrolled
+   the page a little further on every key typed in the prompt and on every focus there (production, 2026-11-25). */
+.bs-wall *, [data-video-guide] * { scroll-margin-bottom: calc(var(--bs-dock-h, 0px) + 24px); }
 .bs-page { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; min-width: 0; }
 .bs-head { display: flex; align-items: center; justify-content: space-between; gap: 8px 16px; flex-wrap: wrap; min-height: 40px; }
 .bs-head-slot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; max-width: 100%; min-width: 0; }
