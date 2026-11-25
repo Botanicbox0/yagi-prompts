@@ -25,6 +25,8 @@ def load_shell(name: str) -> tuple[str, str]:
 
 HTML_TAG, SHELL = load_shell("shell.html")                  # the real rail, expanded (7 rows, as on production)
 _, SHELL_COLLAPSED = load_shell("shell-collapsed.html")     # the real rail as the editing studio opens it
+_, SHELL_TEAM = load_shell("shell-team.html")               # the real rail in 야기 팀과 mode
+SHELLS = {"wide": SHELL, "collapsed": SHELL_COLLAPSED, "team": SHELL_TEAM}
 
 
 def frag(name: str) -> str:
@@ -122,7 +124,7 @@ def avatar(name: str, size: str = "", tone: str = "") -> str:
 
 def note(built: str, pos: str = "") -> str:
     screens = [("home.html", "홈"), ("home-banner.html", "소식 배너"), ("home-empty.html", "프로젝트 없는 홈"), ("home-bell.html", "알림"),
-               ("home-d2.html", "레일 D2"), ("project.html", "프로젝트"), ("assets.html", "에셋"), ("viewer-send.html", "보내기"),
+               ("rail-now.html", "지금 레일"), ("team-home.html", "야기 팀과"), ("project.html", "프로젝트"), ("assets.html", "에셋"), ("viewer-send.html", "보내기"),
                ("project-talk.html", "대화"), ("inbox.html", "알림함"), ("studio-picker.html", "프로젝트 고르기"), ("editor-bell.html", "편집")]
     links = " · ".join(f'<a class="sp-link" href="{h}">{n}</a>' for h, n in screens)
     where = f' data-pos="{pos}"' if pos else ""
@@ -140,26 +142,33 @@ def bell(pop: str = "", count: int = 2, extra: str = "") -> str:
             f'aria-expanded="{open_}">{BELL}{n}</a>{pop}</span>')
 
 
-def rail_d2(shell: str) -> str:
-    """Variant D2: a quiet secondary group under "+ 만들기" for things that are not making work."""
-    icon = frag("rail-inbox-icon")
-    group = (f'<ul class="bw-rail-list sp-rail-secondary" data-rail-group="secondary"><li class="bw-rail-row">'
-             f'<a href="inbox.html" class="bw-rail-item" data-nav-group="secondary" data-rail-item="inbox" data-rail-tip="{T["inbox"]}">'
-             f'{icon}<span class="bw-rail-label">{T["inbox"]}</span><span class="sp-rail-count" aria-label="새 알림 2">2</span></a></li></ul>')
+def rail_v3(shell: str, kind: str) -> str:
+    """The candidate rail: the "+ 만들기" button goes, one divider takes its place, 워크플로우 and 알림함 sit under it."""
     a = shell.index('<div class="bw-rail-create"')
-    b = shell.index("</div>", shell.index("</button>", a)) + len("</div>")
-    return shell[:b] + group + shell[b:]
+    b = shell.index("</div>", shell.index("bw-rail-label", a)) + len("</div>")
+    shell = shell[:a] + shell[b:]                      # no create button (both modes)
+    if kind == "team":
+        return shell                                   # 야기 팀과: 알림함 stays a main row; nothing else moves
+    m = re.search(r'<li class="bw-rail-row"><a [^>]*data-rail-item="workflows".*?</li>', shell, flags=re.S)
+    workflows = m.group(0).replace('data-nav-group="primary"', 'data-nav-group="lower"')
+    shell = shell.replace(m.group(0), "", 1)
+    inbox = (f'<li class="bw-rail-row"><a href="inbox.html" class="bw-rail-item" data-nav-group="lower" data-rail-item="inbox" data-rail-tip="{T["inbox"]}">'
+             f'{frag("rail-inbox-icon")}<span class="bw-rail-label">{T["inbox"]}</span><span class="sp-rail-count" aria-label="새 알림 2">2</span></a></li>')
+    lower = f'<hr class="sp-rail-divider" data-rail-divider="true"><ul class="bw-rail-list sp-rail-lower" data-rail-group="lower">{workflows}{inbox}</ul>'
+    end = shell.index("</ul>", shell.index('data-rail-group="primary"')) + len("</ul>")
+    return shell[:end] + lower + shell[end:]
 
 
-def page(name: str, title: str, rail: str, main: str, built: str, overlay: str = "", shell: str = "wide", variant: str = "d1") -> None:
-    body = SHELL_COLLAPSED if shell == "collapsed" else SHELL
-    if variant == "d2":
-        body = rail_d2(body)
+def page(name: str, title: str, rail: str, main: str, built: str, overlay: str = "", shell: str = "wide", now: bool = False) -> None:
+    """`now=True` keeps the rail exactly as production has it today (the "before" of the rail comparison)."""
+    body = SHELLS[shell]
+    if not now:
+        body = rail_v3(body, shell)
     body = body.replace("{{MAIN}}", main)
     if rail:
         assert f'data-rail-item="{rail}"' in body, rail
         body = body.replace(f'data-rail-item="{rail}"', f'data-rail-item="{rail}" aria-current="page"', 1)
-    pos = "panel" if shell == "collapsed" else ("d2" if variant == "d2" else "")
+    pos = "panel" if shell == "collapsed" else ""
     html = (f"<!doctype html>\n{HTML_TAG}\n<head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
             f"<meta name=\"robots\" content=\"noindex\"><title>{title} · 프로젝트 뼈대 시안</title>"
             f"<link rel=\"stylesheet\" href=\"spine-app.css\"><link rel=\"stylesheet\" href=\"spine-proto.css\"></head>\n"
@@ -254,14 +263,14 @@ def home_main(body: str, state: str, pop: str = "") -> str:
 
 
 # ---------------------------------------------------------------- (a) home = the project list; news as one line by default
-HOME_BUILT = "프로젝트 카드 조회, 소식 칸과 관리 화면, 미분류 줄, 오른쪽 위 알림. 입력창과 레일은 지금 화면 그대로입니다."
+HOME_BUILT = "프로젝트 카드 조회, 소식 칸과 관리 화면, 미분류 줄, 오른쪽 위 알림, 레일 정리(만들기 버튼 없애기, 구분선, 아래 묶음). 입력창은 지금 화면 그대로입니다."
 home_body = lambda n: n + home_prompt() + f'<div class="sp-home-extra">{project_cards()}{loose_row()}</div>'  # noqa: E731
 page("home", "홈", "home", home_main(home_body(news()), "projects"), HOME_BUILT)
 page("home-banner", "홈 (소식 배너형)", "home", home_main(home_body(news("banner")), "projects"), HOME_BUILT)
 page("home-bell", "홈 (알림 열림)", "home", home_main(home_body(news()), "projects", bell_pop()),
      "알림 목록(프로젝트·썸네일·보낸 사람·글·시각), 전체/멘션 보기, 읽음 처리, ‘모두 보기’로 알림함 열기.")
-page("home-d2", "홈 (레일 D2)", "home", home_main(home_body(news()), "projects"),
-     "레일의 ‘만들기’ 아래 보조 묶음과 그 안의 ‘알림함’ 줄. 나머지는 D1과 같습니다.", variant="d2")
+page("rail-now", "홈 (지금 레일)", "home", home_main(home_body(news()), "projects"),
+     "이 화면의 레일은 운영의 지금 모습입니다(비교용). 바꾼 레일은 다른 화면에 있습니다.", now=True)
 
 recent = wall([
     [("landing/cut-pump.webp", 1.79, ""), ("landing/look-knit.webp", 0.667, ""), ("landing/cut-cheek.webp", 1.79, "0:05")],
@@ -426,8 +435,8 @@ inbox = (f'<div class="brc-inbox" data-view="channel" data-room-inbox="true" sty
          f'<div class="brc-channel-body"><div class="brc-stream-col"><div class="brc-scroll"><div class="brc-stream sp-pane-pad" role="log">'
          f'<div class="sp-thread"><div class="sp-day">오늘</div>{inbox_thread}</div></div></div>'
          f'{frag("composer").replace("일반 문의에 메시지 남기기", T["reply_ph"])}</div></div></section></div></div>')
-page("inbox", "알림함", "", inbox,
-     "받은 공유가 알림함에 썸네일·보낸 사람·프로젝트와 함께 뜨는 것, 읽음 표시. 오른쪽 위 알림의 ‘모두 보기’로 여는 화면입니다. 알림함의 틀은 지금 화면 그대로입니다.")
+page("inbox", "알림함", "inbox", inbox,
+     "받은 공유가 알림함에 썸네일·보낸 사람·프로젝트와 함께 뜨는 것, 읽음 표시. 레일 아래 묶음의 ‘알림함’과 오른쪽 위 알림의 ‘모두 보기’가 여는 화면입니다. 알림함의 틀은 지금 화면 그대로입니다.")
 
 
 # ---------------------------------------------------------------- (g) studio head: project picker
@@ -527,6 +536,14 @@ editor = frag("editor-main").replace("{{BELL}}", bell(extra="sp-bell-editor"))
 page("editor-bell", "편집 스튜디오 · 알림 자리", "compose", editor,
      "‘내보내기’ 오른쪽의 알림 하나. 편집 스튜디오는 지금 화면 그대로입니다(로컬의 예시 필름).", shell="collapsed")
 
-for old in ["home-line.html"]:
+page("editor-now", "편집 스튜디오 (지금 레일)", "compose", editor,
+     "이 화면의 접힌 레일은 운영의 지금 모습입니다(비교용).", shell="collapsed", now=True)
+
+TEAM_BUILT = "야기 팀과 모드의 레일에서 ‘새 프로젝트 의뢰’ 버튼을 없앤 모습. 홈 오른쪽 위의 같은 버튼과 나머지는 지금 화면 그대로입니다."
+page("team-home", "야기 팀과 홈", "home", frag("team-home"), TEAM_BUILT, shell="team")
+page("team-home-now", "야기 팀과 홈 (지금 레일)", "home", frag("team-home"),
+     "이 화면의 레일은 운영의 지금 모습입니다(비교용).", shell="team", now=True)
+
+for old in ["home-line.html", "home-d2.html"]:
     (OUT / old).unlink(missing_ok=True)
 print("built", sorted(p.name for p in OUT.glob("*.html")))

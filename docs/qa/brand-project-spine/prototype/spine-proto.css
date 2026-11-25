@@ -1295,27 +1295,39 @@
   margin-left: 0;
 }
 
-/* ------------------------------------------------------------------ rail variant D2: a quiet secondary group under "+ 만들기" */
-.sp-rail-secondary {
-  margin-top: 10px !important;
-  padding-top: 10px !important;
-  border-top: 1px solid var(--ys-hairline);
+/* ------------------------------------------------------------------ rail v3: no "+ 만들기", one divider, a quiet lower group */
+.sp-rail-divider {
+  flex: none;
+  width: auto;
+  height: 0;
+  margin: 10px 12px;
+  border: 0;
+  border-top: 1px solid var(--ys-line-strong);
 }
-.sp-rail-secondary .bw-rail-item {
-  min-height: 32px;
+.sp-rail-lower .bw-rail-item:not([aria-current]) {
   color: var(--ys-ink-secondary);
-  font-size: 12.5px;
 }
-.sp-rail-secondary .sp-rail-count {
-  min-width: 18px;
-  height: 18px;
-  font-size: 11.5px;
+.sp-rail-lower .bw-rail-item {
+  position: relative;
+}
+[data-rail-expanded='false'] .sp-rail-divider {
+  margin: 8px 16px;
+}
+[data-rail-expanded='false'] .sp-rail-lower .sp-rail-count {
+  position: absolute;
+  top: 0;
+  right: 0;
+  min-width: 16px;
+  height: 16px;
+  margin: 0;
+  padding: 0 4px;
+  background: var(--ys-ink);
+  box-shadow: 0 0 0 2px var(--ys-sidebar);
+  color: #09090b;
+  font-size: 10.5px;
 }
 
 /* ------------------------------------------------------------------ mock note positions */
-.sp-note[data-pos='d2'] {
-  top: 632px;
-}
 .sp-note[data-pos='panel'] {
   top: 404px;
   right: 40px;
