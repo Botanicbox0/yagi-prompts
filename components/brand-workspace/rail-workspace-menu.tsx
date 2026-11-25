@@ -257,7 +257,7 @@ export function RailWorkspaceMenu({
           onKeyDown={menuKeys}
         >
           {links.length > 0 ? (
-            <div role="group" className="bw-rail-workspace-group" data-rail-workspace-group="workspace">
+            <div role="none" className="bw-rail-workspace-group" data-rail-workspace-group="workspace">
               {links.map((link) => (
                 <a
                   key={link.key}
@@ -324,7 +324,7 @@ export function RailWorkspaceMenu({
             </form>
           </div>
 
-          <div role="group" className="bw-rail-workspace-group" data-rail-workspace-group="account">
+          <div role="none" className="bw-rail-workspace-group" data-rail-workspace-group="account">
             {reorder ? (
               <button
                 type="button"
