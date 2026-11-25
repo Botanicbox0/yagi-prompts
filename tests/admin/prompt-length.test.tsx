@@ -6,7 +6,7 @@ import { getDictionary } from '@/lib/i18n/dictionaries';
 import { interpolate } from '@/lib/i18n/format';
 import { loadPromptBySlug } from '@/lib/prompts/repo';
 import { loadOverLimitTemplates } from '@/lib/prompts/prompt-length';
-import { renderStylingBlock } from '@/lib/template-director/styling';
+import { TEMPLATE_STYLING_DEFAULT_BLOCK, renderStylingBlock } from '@/lib/template-director/styling';
 import { adminHarness, upload, type AdminHarness } from '../helpers/admin';
 import { runner } from '../helpers/pglite';
 
@@ -34,9 +34,11 @@ import AdminPromptsPage from '@/app/(admin)/admin/prompts/page';
  * Filler text only (the repo is public).
  */
 
+/** A person template's text of exactly `total` characters, its styling block (rule 3, required on create) included. */
 const fill = (total: number): string => {
   const head = 'A woman walks through a white studio while the camera pushes in slowly on her face. ';
-  return `${head}${'x'.repeat(total - head.length)}`;
+  const tail = `\n\n${TEMPLATE_STYLING_DEFAULT_BLOCK}`;
+  return `${head}${'x'.repeat(total - head.length - tail.length)}${tail}`;
 };
 const dict = getDictionary('ko');
 const a = dict.admin;
@@ -169,7 +171,10 @@ describe('prompt.createSet holds each frame to its image engine', () => {
   });
   afterEach(async () => harness.close());
 
-  const frame = (chars: number) => { const head = 'Image 1 is the person. Keep their face. '; return `${head}${'x'.repeat(chars - head.length)}`; };
+  const frame = (chars: number) => {
+    const head = 'Image 1 is the person. Keep their face. ', tail = `\n\n${TEMPLATE_STYLING_DEFAULT_BLOCK}`;
+    return `${head}${'x'.repeat(chars - head.length - tail.length)}${tail}`;
+  };
   const fields = (second: string) => ({
     title: 'Long Frames', titleKo: '긴 컷', engine: 'nano-banana-pro', aspect: '4:5', frameCount: '2', thumbnail: '0',
     frame0Prompt: frame(200), frame1Prompt: second, frame0Size: '1856x2304', frame1Size: '1856x2304',
@@ -193,7 +198,11 @@ describe('prompt.declareStyling and the Seedance 2.5 limit', () => {
   });
   afterEach(async () => harness.close());
 
-  const BLOCK = renderStylingBlock([{ part: 'hair', from: 'template', note: 'a sleek low bun.' }]);
+  // Longer than the default block the template is created with, so declaring it adds characters.
+  const BLOCK = renderStylingBlock([
+    { part: 'hair', from: 'template', note: 'a sleek low bun with a centre part and two loose strands.' },
+    { part: 'makeup', from: 'template', note: 'soft rosy cheeks, a glossy lip and fine brown liner.' },
+  ]);
   async function template(title: string, promptText: string): Promise<string> {
     expect(await harness.run('prompt.create', {
       title, titleKo: '스타일 길이', promptText, useCase: 'brand-ad', textVisibility: 'public', models: ['seedance-2.5'],
