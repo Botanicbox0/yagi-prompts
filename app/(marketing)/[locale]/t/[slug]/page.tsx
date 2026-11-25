@@ -179,19 +179,24 @@ export default async function TemplatePage({ params }: RouteParams) {
       }
     : null;
   const petOnly = makeInputs !== null && makeInputs.pet && !makeInputs.selfie;
-  const teaserRecipe = recipe ? recipeTeaser(recipe) : null;
+  const openToAll = recipe !== null && card.origin === 'studio' && card.lock === null;
+  const visibleRecipe = openToAll ? recipe : recipe ? recipeTeaser(recipe) : null;
   // Story-first (founder, 2026-10-29): the result, then how it was made, then "one selfie and it's
   // you" with the make box — the recipe sits in the column under the title, ahead of any cost.
-  const recipeFirst = teaserRecipe?.presentation === 'story-first' && Boolean(teaserRecipe.steps);
-  const howItWasMade = teaserRecipe ? (
+  const recipeFirst = visibleRecipe?.presentation === 'story-first' && Boolean(visibleRecipe.steps);
+  const howItWasMade = visibleRecipe ? (
     <HowItWasMade
-      recipe={teaserRecipe}
+      recipe={visibleRecipe}
       copy={mr}
       compact={recipeFirst}
-      gate={{
-        accessEndpoint: `/api/renders/access?template=${encodeURIComponent(card.slug)}&locale=${locale}`,
-        signinHref: signInHref(`${templateHref(locale, slug)}#how`, locale),
-      }}
+      {...(openToAll
+        ? {}
+        : {
+            gate: {
+              accessEndpoint: `/api/renders/access?template=${encodeURIComponent(card.slug)}&locale=${locale}`,
+              signinHref: signInHref(`${templateHref(locale, slug)}#how`, locale),
+            },
+          })}
     />
   ) : null;
 
@@ -396,6 +401,7 @@ export default async function TemplatePage({ params }: RouteParams) {
                     shopOpen={shopOpen}
                     accessEndpoint={`/api/renders/access?template=${encodeURIComponent(card.slug)}&locale=${locale}`}
                     signinHref={signInHref(`${templateHref(locale, slug)}#how`, locale)}
+                    {...(openToAll ? { initialUnlocked: recipe } : {})}
                   />
                 ) : null}
 
