@@ -194,6 +194,8 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
       'platform_creators',
       'platform_credit_ledger',
       'platform_format_assets',
+      // docs/CREATOR-PLATFORM.md (0192, 2026-11-25) — the studio's own formats' recipe revisions, append-only, server only.
+      'platform_format_revisions',
       'platform_formats',
       'platform_image_offers',
       'platform_messages',
@@ -410,6 +412,39 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
     expect(glue).toContain('revoke all on public.%I from anon, authenticated');
     expect(glue).not.toMatch(/create\s+policy|grant\s+(select|insert|update|delete|all)/i);
     expect(readFileSync(join(MIGRATIONS_DIR, '0190_core_template_look.sql'), 'utf8').startsWith('-- 클라우드 적용 필요')).toBe(true);
+  });
+
+  it('0192/0193 — the format recipe revision: the guard keeps its name, the record is append-only and server-only, twice is safe', async () => {
+    const db = await freshDb();
+    // The trigger still calls the one function, which now reads the transaction-local setting.
+    const { rows: guard } = await db.query<{ tgname: string; src: string }>(
+      `select t.tgname, p.prosrc as src from pg_trigger t join pg_proc p on p.oid = t.tgfoid
+        where t.tgrelid = 'public.prompt_items'::regclass and p.proname = 'platform_private_format'`,
+    );
+    expect(guard.map((g) => g.tgname)).toEqual(['platform_private_format_guard']);
+    expect(guard[0]!.src).toContain("current_setting('app.format_revision', true)");
+    expect(guard[0]!.src).toContain("c.payout = 'company'");
+    expect(guard[0]!.src).toContain('a.created_at = transaction_timestamp()');
+    const { rows: immutable } = await db.query<{ n: number }>(
+      "select count(*)::int as n from pg_trigger where tgrelid = 'public.platform_format_revisions'::regclass and tgname = 'platform_format_revisions_immutable'",
+    );
+    expect(immutable[0]!.n).toBe(1);
+    await db.exec(readFileSync(join(MIGRATIONS_DIR, '0192_core_format_revision.sql'), 'utf8'));
+    expect((await db.query<{ n: number }>("select count(*)::int as n from pg_trigger where tgrelid = 'public.platform_format_revisions'::regclass and not tgisinternal")).rows[0]!.n).toBe(1);
+    await db.close();
+
+    const glue = readFileSync(join(MIGRATIONS_DIR, '0193_glue_format_revision.sql'), 'utf8');
+    expect(glue).toContain("'platform_format_revisions'");
+    expect(glue).toContain('enable row level security');
+    expect(glue).toContain('force row level security');
+    expect(glue).toContain('revoke all on public.%I from public,anon,authenticated');
+    expect(glue).toContain('revoke all on function platform_private_format() from public,anon,authenticated');
+    expect(glue).toContain('alter function platform_private_format() set search_path=public,pg_temp');
+    expect(glue).not.toMatch(/grant[^;]*(update|delete)[^;]*platform_format_revisions/i);
+    expect(glue).not.toMatch(/create\s+policy/i);
+    for (const file of ['0192_core_format_revision.sql', '0193_glue_format_revision.sql']) {
+      expect(readFileSync(join(MIGRATIONS_DIR, file), 'utf8').startsWith('-- 클라우드 적용 필요'), file).toBe(true);
+    }
   });
 
   it('forces deny-all RLS on EVERY table in the glue migration (§6 security posture)', async () => {

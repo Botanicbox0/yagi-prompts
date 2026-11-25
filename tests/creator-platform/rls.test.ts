@@ -8,8 +8,11 @@ describe('creator-platform direct database access',()=>{
    await db.exec(await readFile('supabase/migrations/0131_glue_creator_platform.sql','utf8'));
    await db.exec(await readFile('supabase/migrations/0138_glue_creator_onboarding.sql','utf8'));
    await db.exec(await readFile('supabase/migrations/0142_glue_maker_recipes.sql','utf8'));
+   // 0193 (2026-11-25): the studio's own formats' recipe revisions, server-only like the rest.
+   await db.exec(await readFile('supabase/migrations/0193_glue_format_revision.sql','utf8'));
    const tables=await db.query<{tablename:string}>('select tablename from pg_tables where schemaname=\'public\' and tablename like \'platform_%\'');
-   expect(tables.rows.length).toBe(16);
+   expect(tables.rows.length).toBe(17);
+   expect(tables.rows.map(r=>r.tablename)).toContain('platform_format_revisions');
    for(const role of ['anon','authenticated']) {
     await db.exec(`set role ${role}`);
     for(const {tablename} of tables.rows)await expect(db.query(`select * from ${tablename}`)).rejects.toThrow();

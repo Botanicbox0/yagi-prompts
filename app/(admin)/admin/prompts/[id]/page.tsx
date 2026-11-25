@@ -38,6 +38,8 @@ import { declaredPartKeysOfPrompt, partLabel } from '@/lib/template-director/par
 import { templateCardStyling, templateCompileSource } from '@/lib/template-director/compile-prompts';
 import { recipeSchemaReady } from '@/lib/recipes/repo';
 import { TemplateStylingPanel } from '@/components/admin/template-styling-panel';
+import { FormatRevisionPanel } from '@/components/admin/format-revision-panel';
+import { loadFormatRevisionView } from '@/lib/creator-platform/format-revision';
 
 /**
  * `/admin/prompts/{id}` — one prompt, everything you can do to it (2026-08-15).
@@ -247,6 +249,9 @@ export default async function AdminPromptItemPage({
         recipeReady: await recipeSchemaReady(sql),
       };
   const cardStyling = templateCardStyling({ promptText: row.promptText, ...stylingSource, cast: row.cast });
+  // docs/CREATOR-PLATFORM.md (2026-11-25): the audited recipe text revision — only for an accepted format the studio's
+  // own company-payout account owns (null for every other template, a creative's format included).
+  const revisionView = sql === null || row.audience === 'brand' ? null : await loadFormatRevisionView(sql, row.id);
 
   // docs/PERSONAL-STUDIO.md §3.4.4 (T1a): a film whose saved prompt declares parts gets the marks editor (a short
   // description and an example-video range per part, `prompt.marks`) under the editor, with the same lock line.
@@ -381,6 +386,17 @@ export default async function AdminPromptItemPage({
       </Panel>
 
       {row.audience !== 'brand' && <TemplateStylingPanel op="prompt.declareStyling" row={row} source={stylingSource} dict={dict} back={back} />}
+      {revisionView && (
+        <FormatRevisionPanel
+          op="format.reviseRecipe"
+          templateId={row.id}
+          view={revisionView}
+          dict={dict}
+          locale={locale}
+          back={back}
+          detail={one(query, 'err') ? one(query, 'detail') : null}
+        />
+      )}
     </AdminShell>
   );
 }

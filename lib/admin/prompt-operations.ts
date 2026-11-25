@@ -776,7 +776,14 @@ const declareStyling: AdminOperation<z.infer<typeof DeclareStyling>> = {
       if (plan.recipeChanged) {
         const { rows: formats } = await tx.query<{ ready: boolean }>("select to_regclass('public.platform_formats') is not null as ready");
         if (formats[0]?.ready === true) {
-          const { rows: owned } = await tx.query<{ id: string }>('select template_id as id from platform_formats where template_id = $1 limit 1', [input.id]);
+          const { rows: owned } = await tx.query<{ id: string; payout: string | null }>(
+            `select f.template_id as id, to_jsonb(c.*)->>'payout' as payout from platform_formats f
+               left join platform_creators c on c.user_id = f.user_id where f.template_id = $1 limit 1`,
+            [input.id],
+          );
+          // The studio's own company-payout format is refused here too (this stays the studio originals' tool), but it
+          // has its own door: the audited recipe text revision on the same page (`format.reviseRecipe`).
+          if (owned[0]?.payout === 'company') return fail('invalid', "declareStyling: the studio's own format — write the block into its result steps with the recipe text revision panel (레시피 문구 개정, format.reviseRecipe)");
           if (owned.length > 0) return fail('invalid', "declareStyling: a creative's format keeps its own recipe; ask them to declare it");
         }
       }
