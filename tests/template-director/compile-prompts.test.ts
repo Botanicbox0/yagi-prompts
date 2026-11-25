@@ -150,7 +150,8 @@ describe('prompt.declareStyling — the plan', () => {
     if (!plan.ok) throw new Error(plan.detail);
     expect(plan.recipeChanged).toBe(true);
     expect(plan.texts).toBe(3);
-    expect(plan.styling).toEqual({ styled: ['hair'], photo: ['outfit'] });
+    // Rule 3 (2026-11-25): the makeup the block leaves out follows the photo.
+    expect(plan.styling).toEqual({ styled: ['hair'], photo: ['outfit', 'makeup'] });
     expect(plan.promptText).toBe(`Frame one of @image1.\n\n${PHOTO_OUTFIT}`);
     const written = plan.recipe as Recipe;
     expect(written.steps.map((s) => s.prompt)).toEqual([`Frame one of {{selfie}}.\n\n${PHOTO_OUTFIT}`, `Frame two of {{selfie}}.\n\n${PHOTO_OUTFIT}`]);

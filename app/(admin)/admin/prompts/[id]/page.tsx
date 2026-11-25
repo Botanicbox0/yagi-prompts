@@ -35,7 +35,7 @@ import { adminMediaPath, promptAdminRef } from '@/lib/media/admin-authorize';
 import { KEYFRAMES_MAX, loadPromptKeyframesBySlug, splitKeyframes } from '@/lib/prompts/keyframes';
 import { parsePromptMedia } from '@/lib/prompts/schemas';
 import { declaredPartKeysOfPrompt, partLabel } from '@/lib/template-director/parts-view';
-import { templateCardStyling } from '@/lib/template-director/compile-prompts';
+import { templateCardStyling, templateCompileSource } from '@/lib/template-director/compile-prompts';
 import { recipeSchemaReady } from '@/lib/recipes/repo';
 import { TemplateStylingPanel } from '@/components/admin/template-styling-panel';
 
@@ -363,7 +363,14 @@ export default async function AdminPromptItemPage({
           data-prompt-published={row.slug}
         >
           <input type="hidden" name="id" value={row.id} />
-          <PromptFields row={row} dict={dict} {...(look !== null ? { look } : {})} />
+          {/* §3.4.9, rule 3: a recipe template's styling is declared in its steps (the panel below), not in this text. */}
+          <PromptFields
+            row={row}
+            dict={dict}
+            {...(look !== null ? { look } : {})}
+            recipeTemplate={templateCompileSource({ promptText: row.promptText, ...stylingSource }).kind === 'recipe'}
+          />
+
           <div>
             <button type="submit" className={BUTTON_PRIMARY}>
               {a.saveEdits}

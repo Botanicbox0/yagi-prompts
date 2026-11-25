@@ -25,19 +25,26 @@ type Labels = {
   draftSavedAt?: string;
   /** docs/PERSONAL-STUDIO.md §3.3 (C3): the sentences a lock-block refusal is said in (`lockRefusalCopy`). */
   lockCopy?: LockRefusalCopy;
+  /** docs/PERSONAL-STUDIO.md §3.4.9, rule 3: a person template without a styling block, and the block to copy. */
+  stylingRequired?: string;
+  stylingExample?: string;
 };
 
 /**
  * What a refused create says. A lock-block refusal (`/admin/do` hands its reason back on the prompt field) is said in
- * the same sentences as on the template's page; every other answer keeps its one line.
+ * the same sentences as on the template's page; a missing styling block (rule 3) in its sentence with the block to
+ * copy; every other answer keeps its one line.
  */
 export function refusalMessage(
   result: { ok?: unknown; code?: unknown; field?: unknown; detail?: unknown },
   labels: Labels,
-): { message: string; lock: LockRefusalLines | null } {
+): { message: string; lock: LockRefusalLines | null; example?: string | null } {
   if (result.field === 'promptText' && typeof result.detail === 'string' && labels.lockCopy) {
     const lock = lockRefusalLines(result.detail, labels.lockCopy);
     if (lock !== null) return { message: lock.title, lock };
+  }
+  if (result.code === 'stylingRequired') {
+    return { message: labels.stylingRequired ?? labels.invalid, lock: null, example: labels.stylingExample ?? null };
   }
   const message =
     result.field === 'useCase' ? labels.useCase
@@ -155,6 +162,7 @@ export function PromptCreateFeedback({ children, labels }: { children: ReactNode
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
   const [lock, setLock] = useState<LockRefusalLines | null>(null);
+  const [example, setExample] = useState<string | null>(null);
   const [restoredTime, setRestoredTime] = useState<string | null>(null);
   const alertRef = useRef<HTMLDivElement>(null);
 
@@ -166,6 +174,9 @@ export function PromptCreateFeedback({ children, labels }: { children: ReactNode
       const form = wrapperRef.current?.querySelector('form');
       if (!form) return;
       restoreFormFromDraft(form, draft);
+      // Fields set from the draft fire no event; listeners already mounted (the styling helper, which hides once the
+      // restored prompt declares its styling) hear the restore like typing. Autosave is attached after this effect.
+      form.dispatchEvent(new Event('input', { bubbles: true }));
       setRestoredTime(draft.savedAt ? formatIsoTime(draft.savedAt) : '');
     } catch {
       // private mode or storage blocked
@@ -238,9 +249,10 @@ export function PromptCreateFeedback({ children, labels }: { children: ReactNode
     }
   }
 
-  function showError(message: string, lockLines: LockRefusalLines | null = null) {
+  function showError(message: string, lockLines: LockRefusalLines | null = null, exampleBlock: string | null = null) {
     setError(message);
     setLock(lockLines);
+    setExample(exampleBlock);
     requestAnimationFrame(() => {
       alertRef.current?.focus();
       alertRef.current?.scrollIntoView({ block: 'nearest' });
@@ -262,6 +274,7 @@ export function PromptCreateFeedback({ children, labels }: { children: ReactNode
     setPending(true);
     setError('');
     setLock(null);
+    setExample(null);
     let navigating = false;
     try {
       const response = await fetch(form.action, {
@@ -285,7 +298,7 @@ export function PromptCreateFeedback({ children, labels }: { children: ReactNode
       }
       if (result.ok === false) {
         const refusal = refusalMessage(result, labels);
-        showError(refusal.message, refusal.lock);
+        showError(refusal.message, refusal.lock, refusal.example ?? null);
       } else {
         showError(labels.uncertain);
       }
@@ -326,7 +339,13 @@ export function PromptCreateFeedback({ children, labels }: { children: ReactNode
         </div>
       )}
       {error && <div ref={alertRef} role="alert" tabIndex={-1} className="mb-4 border border-accent p-3 font-mono text-[0.75rem]">
-        {lock ? <LockRefusalNotice lines={lock} /> : <p>{error}</p>}<p className="mt-1 opacity-60">{labels.retained}</p>
+        {lock ? <LockRefusalNotice lines={lock} /> : <p>{error}</p>}
+        {example && (
+          <pre data-refused-field="promptText" data-styling-required className="mt-2 overflow-auto border border-hairline p-2 font-mono text-[0.72rem] whitespace-pre-wrap select-all">
+            {example}
+          </pre>
+        )}
+        <p className="mt-1 opacity-60">{labels.retained}</p>
       </div>}
       {pending && <p role="status" className="mb-3 font-mono text-[0.75rem]">{labels.publishing}</p>}
       <fieldset disabled={pending} className="min-w-0 border-0 p-0" aria-busy={pending}>{children}</fieldset>

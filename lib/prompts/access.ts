@@ -7,6 +7,7 @@ import { decideUnlockPanel, type UnlockPanel } from '@/lib/cookies/wallet';
 import { toPromptCard, type PromptCard } from './catalog';
 import { loadPromptById, loadPromptBySlug, loadRelatedPrompts, type PromptRow } from './repo';
 import { shapePrompt, type ShapedPrompt } from './shape';
+import { publicPromptText } from '@/lib/template-director/public-text';
 
 /**
  * PLAN §13.2/§13.3 — the prompts gate, as a pure function of (db × viewer × slug).
@@ -162,5 +163,6 @@ export async function authorizePromptCopy(
       return viewer.tier === 'anon' ? { status: 'unauthorized' } : { status: 'forbidden' };
     }
   }
-  return { status: 'ok', id: row.id, slug: row.slug, text: row.promptText };
+  // docs/PERSONAL-STUDIO.md §3.3–§3.4.9: what is copied leaves out the compiler's lock and styling blocks.
+  return { status: 'ok', id: row.id, slug: row.slug, text: publicPromptText(row.promptText) };
 }

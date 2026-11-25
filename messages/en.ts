@@ -5802,7 +5802,7 @@ export const en = {
     setAspect: 'Aspect',
     setFramesHeading: 'Frames',
     setDropZone: 'Drop {min}–{max} images at once. Add a prompt JSON and the prompts fill in by file name.',
-    setPromptHint: 'Call the customer’s photo Image 1 or @image1 in each prompt. A set cannot carry other reference images.',
+    setPromptHint: 'Call the customer’s photo Image 1 or @image1 in each prompt. A set cannot carry other reference images. End every frame’s prompt with a Template styling: block saying whether the template sets the hair and makeup or follows the photo, or the set is not published.',
     setFrameLabel: 'Frame {n}',
     setThumbnail: 'Main image',
     setMoveUp: 'Up',
@@ -5864,8 +5864,21 @@ export const en = {
     templateStylingDryRunNote: 'The no-model fallback text. A real order has the model rewrite it. Nothing is charged.',
     templateStylingDryRunCase: 'From the photo: {parts}',
     templateStylingField: 'Styling block',
-    templateStylingDeclareHint: 'Paste one block: it is written into the main text and every step prompt an order reads, together. Save it empty to remove it everywhere.',
+    templateStylingDeclareHint: 'Paste one block: it is written into the main text and every step prompt an order reads, together. Save it empty to remove it everywhere. A "Styled by the template" description names only the template\'s style: one that says to follow the photo (photo, reference, Image 1) is not saved. A part that follows the photo gets a "- Taken from the photo: " line; a hair or makeup part with no line follows the photo too.',
     templateStylingDeclare: 'Save styling',
+    /** docs/PERSONAL-STUDIO.md §3.4.9, rule 3 (2026-11-25): a new person template says how its hair and makeup are made. */
+    templateStylingMissing:
+      'No styling block. This template still saves as it is; after review, say whether the template sets the hair and makeup or follows the buyer’s photo. A new template cannot be created without the block.',
+    stylingRequiredExample: 'Example block (the hair and the makeup both follow the buyer’s photo). Paste it at the end of the prompt, after a blank line.',
+    stylingHelper: {
+      heading: 'Who sets the hair and makeup?',
+      hint: 'Anything you leave alone follows the buyer’s photo. Pick, then press "Add to prompt" to put the styling block at the end of the prompt below.',
+      photo: 'Buyer’s photo (default)',
+      template: 'Set by the template',
+      notePlaceholder: 'The template’s look, short, in English. e.g. a sleek low bun',
+      insert: 'Add to prompt',
+      noteInvalid: 'Describe it in English, up to 120 characters, with no @ handle and nothing about following the photo.',
+    },
     /** docs/PERSONAL-STUDIO.md §3.4.4 (T1a): the marks editor on a template with a lock block (`prompt.marks`). */
     templateMarks: {
       heading: 'Fixed parts: descriptions and ranges',
@@ -5905,10 +5918,12 @@ export const en = {
     stylingProblemSecondHeader: 'Line {line}: a second styling block. A prompt can have only one.',
     stylingProblemDuplicatePart: 'Line {line}: this part is already declared above. One line per part.',
     stylingProblemLockedPart: 'Line {line}: this part is also in the lock block. A part is either locked or styled, not both.',
+    stylingProblemPhotoClause:
+      'Line {line}: the description of a "Styled by the template" line says to follow the photo (photo, reference, Image 1). When a buyer keeps their own look, the whole description becomes an exclusion, so name only the template\'s style. Write a part that follows the photo as its own "- Taken from the photo: " line.',
     stylingProblemTooManyLines: 'The block has {count} styling lines. Up to {max} are allowed.',
     /** {max}: lines per block, {tail}: characters per description, {keys}: the parts a line may name. */
     stylingRules:
-      'A block starts with the line Template styling: and each line under it is either "- Styled by the template: " followed by one part, a dash and how the template styles it (up to {tail} characters, no @ handle), or "- Taken from the photo: " followed by one part. End the block with a blank line. Up to {max} lines, one per part. Parts: {keys}',
+      'A block starts with the line Template styling: and each line under it is either "- Styled by the template: " followed by one part, a dash and how the template styles it (the template\'s style only, up to {tail} characters, no @ handle and nothing about following the photo), or "- Taken from the photo: " followed by one part. End the block with a blank line. Up to {max} lines, one per part. Parts: {keys}',
     promptInputsRetained: 'Your entries and attached files are still here on this page.',
     promptDraftRestored: 'Your saved draft for this template has been restored.',
     promptDraftDiscard: 'Clear saved draft',
@@ -6088,6 +6103,7 @@ export const en = {
     errAssetIncomplete: 'An asset is missing its hash or its staged file. Upload it again.',
     errStorage: 'The stored file could not be read.',
     errUpload: 'That upload was refused — check the size, the length and the file type.',
+    errStylingRequired: 'Say whether the template sets the hair and makeup, or follows the buyer’s photo.',
     errNotPublishable: 'Not ready to publish — the detail below says exactly what is missing.',
     errDeadlineNotPassed: 'Placements open after the deadline, not before.',
     errDuplicatePlacement: 'That place is already taken in this contest.',

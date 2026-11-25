@@ -2,6 +2,7 @@ import type { AssetRef } from '@/lib/content/schemas';
 import { canView, type Tier, type Visibility } from '@/lib/content/visibility';
 import { promptGalleryRef, promptMediaPath, promptMediaRef } from './links';
 import { parsePromptMedia, type MediaKind, type PromptSource, type TemplateMedium } from './schemas';
+import { publicPromptText } from '@/lib/template-director/public-text';
 
 /**
  * PLAN §13.1 — "Gating doctrine unchanged: `pro` prompt text never enters any payload for
@@ -242,7 +243,8 @@ export function shapePrompt(
   return {
     ...base,
     locked: false,
-    text: row.promptText,
+    // docs/PERSONAL-STUDIO.md §3.3–§3.4.9: the lock and styling blocks are the compiler's, never reader copy.
+    text: publicPromptText(row.promptText),
     process: row.processMd ?? null,
     processKo: row.processMdKo ?? null,
   };

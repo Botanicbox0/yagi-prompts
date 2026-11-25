@@ -123,6 +123,11 @@ export type AdminErrorCode =
   /** §13.1 caps: a posted file the server refused (size, duration or type). */
   | 'upload'
   /**
+   * docs/PERSONAL-STUDIO.md §3.4.9 — rule 3: a new person template (and every frame of a new image set) must say
+   * whether the template sets the hair and makeup or follows the buyer's photo (a `Template styling:` block).
+   */
+  | 'stylingRequired'
+  /**
    * §14 contests. Three genuinely distinct refusals, each with its own next action:
    *   notPublishable    — the contest is missing something a published contest must have
    *   deadlineNotPassed — placements are a post-deadline act (§14.1)

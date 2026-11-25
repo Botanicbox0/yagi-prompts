@@ -70,6 +70,7 @@ export default async function AdminImageSetNewPage() {
               errBraces: a.setErrBraces, errManifest: a.setErrManifest, errFile: a.setErrFile, uploading: a.setFrameUploading, done: a.setFrameDone,
               failed: a.setFrameFailed, invalid: a.errInvalid, upload: a.mediaUploadFailed, session: a.mediaUploadSession,
               uncertain: a.promptPublishUncertain, retained: a.promptInputsRetained, publishing: a.promptPublishing,
+              stylingRequired: a.errStylingRequired,
             }}
           />
         </OpForm>

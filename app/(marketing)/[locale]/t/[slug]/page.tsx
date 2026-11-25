@@ -45,6 +45,7 @@ import { cachedTypicalWaitMinutes } from '@/lib/twings/cached-typical-wait';
 import { cachedPublicRecipe } from '@/lib/recipes/cached-public';
 import { cachedMakeInputs } from '@/lib/renders/cached-make-inputs';
 import { recipeTeaser } from '@/lib/recipes/public';
+import { publicRecipeText } from '@/lib/template-director/public-text';
 import { HowItWasMade } from '@/components/recipes/how-it-was-made';
 import { RecipeActions } from '@/components/recipes/recipe-actions';
 import { MakeLauncher } from '@/components/templates/make-launcher';
@@ -127,7 +128,8 @@ export default async function TemplatePage({ params }: RouteParams) {
   // One gate: the static HTML carries the teaser (the intro, the opening of step 1 and its BGM line); a
   // signed-in member gets the rest — every prompt, the tips, the files — from /api/renders/access.
   const mr = dict.makerRecipe;
-  const recipe = await cachedPublicRecipe(card.id, { selfie: mr.selfieLabel, reference: mr.referenceLabel, step: mr.stepResultLabel, pet: dict.cast.photo.petTitle, partner: dict.cast.photo.partnerTitle });
+  // docs/PERSONAL-STUDIO.md §3.3–§3.4.9: the step prompts a reader sees leave out the compiler's lock and styling blocks.
+  const recipe = publicRecipeText(await cachedPublicRecipe(card.id, { selfie: mr.selfieLabel, reference: mr.referenceLabel, step: mr.stepResultLabel, pet: dict.cast.photo.petTitle, partner: dict.cast.photo.partnerTitle }));
   // docs/CAST-CATEGORIES.md §3: what the make card asks for (selfie · pet · partner). Null = a pet or
   // couple template without a matching recipe — shown, but not offered for making.
   const [makeInputs, storedKeyframes] = await Promise.all([
