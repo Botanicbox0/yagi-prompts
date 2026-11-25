@@ -14,17 +14,26 @@
  */
 import "./rail/rail.css";
 import { useCallback, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
-import { STUDIO_ASSET_ROLES, type StudioAssetKind, type StudioAssetRole, type StudioAssetView, type StudioState } from "@/lib/brand-studio/contracts";
+import {
+  STUDIO_ASSET_ROLES,
+  type BrandProjectFilesScope,
+  type StudioAssetKind,
+  type StudioAssetRole,
+  type StudioAssetView,
+  type StudioState,
+} from "@/lib/brand-studio/contracts";
 import type { Dictionary } from "@/lib/i18n/dictionaries";
-import { isFailure, uploadProblem, type StudioApi } from "./api";
+import { createStudioApi, isFailure, uploadProblem, type StudioApi } from "./api";
 import {
   buildHubEntries,
+  entryMatchesAsset,
   familySize,
   filterHubEntries,
   filterProjectView,
   groupByProject,
   groupCount,
   hubActions,
+  resolveHubEntry,
   type HubAction,
   type HubActionCopy,
   type HubDeliverable,
@@ -33,6 +42,9 @@ import {
   type HubProjectLinks,
   type HubSection,
 } from "./asset-hub-model";
+import { AssetHubSpine, type AssetHubSpineProps, type SingleMoveRequest, type SpineScopeSeed } from "./asset-hub-spine";
+import type { SpineHubTab, SpineMutationKind } from "./asset-hub-spine/model";
+import type { ScopeTileSelectOpts } from "./asset-hub-spine/scope-view";
 import { ProjectPickDialog } from "./asset-hub-project";
 import { HubDetail, HubLinkTile, HubTile } from "./asset-hub-tile";
 import { listedJobs } from "./store";
@@ -52,6 +64,7 @@ import { StorageMeterCard, storageIsQuiet } from "./storage-meter";
 import { useStudio } from "./use-studio";
 
 export { buildHubEntries, filterHubEntries, filterProjectView, groupByProject, hubActions, humanTitle, similarityScore } from "./asset-hub-model";
+export type { AssetHubSpineProps };
 export type { HubAction, HubDeliverable, HubEntry, HubProjectGroup, HubProjectLinks, HubProjectView, HubSection } from "./asset-hub-model";
 
 /** Link target for a project group in the asset hub (`?film=` while brand project spine is open, `?project=` otherwise). */
@@ -71,6 +84,15 @@ const KINDS = ["all", "image", "video", "audio"] as const;
 /** A project's cover row shows at most this many pictures (fewer on narrow screens, by CSS). */
 const COVERS = 6;
 
+export interface BrandAssetHubSpineInitial extends SpineScopeSeed {
+  tab?: SpineHubTab;
+  openedScope?: BrandProjectFilesScope | null;
+  query?: string;
+  scopeQuery?: string;
+  menuKey?: string;
+  detailKey?: string;
+}
+
 export interface BrandAssetHubProps {
   organizationId: string;
   studioCopy: StudioCopy;
@@ -86,6 +108,12 @@ export interface BrandAssetHubProps {
   canOpenStudio?: boolean;
   /** Brand project spine open: video studio film links use `?film=` instead of `?project=` (§4.5). */
   useFilmParam?: boolean;
+  /** Regrouped assets view (slice 2b); omitted when the spine is closed or overview failed. */
+  spine?: AssetHubSpineProps;
+  /** Optional initial `모든 파일` view override for deterministic SSR tests (§6). */
+  initialAllView?: HubSection;
+  /** Optional initial spine tab / opened scope / tile state for deterministic SSR tests (§6). */
+  initialSpine?: BrandAssetHubSpineInitial;
   /** Optional test injection so server/unit tests render without network calls. */
   injectedLibrary?: StudioLibrary;
   api?: StudioApi;
@@ -102,10 +130,62 @@ export function BrandAssetHub({
   deliverables,
   canOpenStudio = true,
   useFilmParam = false,
+  spine,
+  initialAllView,
+  initialSpine,
   injectedLibrary,
   api,
 }: BrandAssetHubProps) {
-  const studio = useStudio({ organizationId, initialState, api });
+  const spineOn = Boolean(spine);
+  const loadStateReqSeqRef = useRef(0);
+  const settledLoadStateRef = useRef<{ seq: number; state: StudioState } | null>(null);
+  const deletedAssetIdsRef = useRef<Map<string, number>>(new Map());
+  const rawStudioApi = useMemo(() => api ?? createStudioApi({ organizationId }), [api, organizationId]);
+  const studioApi = useMemo<StudioApi>(() => {
+    if (!spineOn) return rawStudioApi;
+    return {
+      ...rawStudioApi,
+      loadState: async (options) => {
+        const reqSeq = ++loadStateReqSeqRef.current;
+        const result = await rawStudioApi.loadState(options);
+        if (isFailure(result)) return result;
+        const settled = settledLoadStateRef.current;
+        // Guard against an older in-flight state load (e.g. from move) overwriting a newer settled reload (e.g. delete's refreshSilently).
+        if (settled && reqSeq < settled.seq) {
+          return settled.state;
+        }
+        let fresh = result;
+        if (deletedAssetIdsRef.current.size > 0) {
+          const filteredAssets = result.assets.filter((asset) => {
+            const deletedAtSeq = deletedAssetIdsRef.current.get(asset.id);
+            if (deletedAtSeq === undefined) return true;
+            if (reqSeq <= deletedAtSeq) return false;
+            deletedAssetIdsRef.current.delete(asset.id);
+            return true;
+          });
+          if (filteredAssets.length !== result.assets.length) {
+            fresh = { ...result, assets: filteredAssets };
+          }
+          for (const [id, deletedAtSeq] of deletedAssetIdsRef.current) {
+            if (reqSeq > deletedAtSeq) deletedAssetIdsRef.current.delete(id);
+          }
+        }
+        settledLoadStateRef.current = { seq: reqSeq, state: fresh };
+        return fresh;
+      },
+      call: async (operation, input) => {
+        const res = await rawStudioApi.call(operation, input);
+        if (operation === "asset.delete" && !isFailure(res)) {
+          const assetId = (input as { assetId?: unknown }).assetId;
+          if (typeof assetId === "string" && assetId) {
+            deletedAssetIdsRef.current.set(assetId, loadStateReqSeqRef.current);
+          }
+        }
+        return res;
+      },
+    };
+  }, [rawStudioApi, spineOn]);
+  const studio = useStudio({ organizationId, initialState, api: studioApi });
   const liveLibrary = useStudioLibrary(organizationId);
   const library = injectedLibrary ?? liveLibrary;
   const state = studio.store.state;
@@ -117,17 +197,33 @@ export function BrandAssetHub({
   const h = libraryCopy.hub;
 
   // Null until a tab is chosen: the page then opens by project when there is a project to show, else on everything.
-  const [section, setSection] = useState<HubSection | null>(null);
+  const [section, setSection] = useState<HubSection | null>(() => (spine && initialAllView ? initialAllView : null));
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [kindFilter, setKindFilter] = useState<"all" | StudioAssetKind>("all");
   const [roleFilter, setRoleFilter] = useState<"all" | StudioAssetRole>("all");
-  const [similarKey, setSimilarKey] = useState<string | null>(null);
+  const [similarEntry, setSimilarEntry] = useState<HubEntry | null>(null);
   const [openFolderId, setOpenFolderId] = useState<string | null>(null);
   const [creatingFolder, setCreatingFolder] = useState(false);
   const [folderMenu, setFolderMenu] = useState<string | null>(null);
-  const [tileMenu, setTileMenu] = useState<string | null>(null);
-  const [detailKey, setDetailKey] = useState<string | null>(null);
+  const [tileMenu, setTileMenu] = useState<string | null>(() => (spine && initialSpine?.menuKey) ? initialSpine.menuKey : null);
+  const [detailEntry, setDetailEntry] = useState<HubEntry | null>(() => {
+    if (!spine || !initialSpine?.detailKey) return null;
+    const pool = [
+      ...buildHubEntries(assets, jobs, h.sourceGenerated),
+      ...(initialSpine.page ? buildHubEntries(initialSpine.page.assets, initialSpine.page.jobs, h.sourceGenerated) : []),
+      ...(initialSpine.state ? buildHubEntries(initialSpine.state.assets, initialSpine.state.jobs, h.sourceGenerated) : []),
+    ];
+    return pool.find((e) => e.key === initialSpine.detailKey) ?? null;
+  });
+  const [detailScopeKey, setDetailScopeKey] = useState<string | undefined>(() => {
+    if (!spine || !initialSpine?.detailKey) return undefined;
+    if (initialSpine.openedScope?.kind === "project") return `project:${initialSpine.openedScope.brandProjectId}`;
+    return initialSpine.tab;
+  });
+  const [singleMove, setSingleMove] = useState<SingleMoveRequest | null>(null);
+  const [forceAllNonce, setForceAllNonce] = useState(0);
+  const [mutationSignal, setMutationSignal] = useState<{ seq: number; kind: SpineMutationKind } | null>(null);
   const [editing, setEditing] = useState<StudioAssetView | null>(null);
   const [picking, setPicking] = useState<HubEntry | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -138,8 +234,14 @@ export function BrandAssetHub({
   useShareReviewEvent(organizationId, setShareTarget);
 
   const entries = useMemo(() => buildHubEntries(assets, jobs, h.sourceGenerated), [assets, jobs, h.sourceGenerated]);
-  const similarAnchor = useMemo(() => (similarKey ? entries.find((e) => e.key === similarKey) ?? null : null), [entries, similarKey]);
-  const detail = useMemo(() => (detailKey ? entries.find((e) => e.key === detailKey) ?? null : null), [entries, detailKey]);
+  const similarAnchor = useMemo(
+    () => resolveHubEntry(entries, similarEntry?.key ?? null, similarEntry, spineOn),
+    [entries, similarEntry, spineOn],
+  );
+  const detail = useMemo(
+    () => resolveHubEntry(entries, detailEntry?.key ?? null, detailEntry, spineOn),
+    [detailEntry, entries, spineOn],
+  );
 
   // Present only while runs can belong to a project (`BRAND_STUDIO_PROJECTS` and migration 0091).
   const studioProjects = state?.projects;
@@ -154,7 +256,15 @@ export function BrandAssetHub({
   }, [projectLinks, studioProjects]);
   const projectView = useMemo(() => groupByProject(entries, links, deliverables), [deliverables, entries, links]);
   const hasProjects = projectView.groups.length > 0;
-  const active: HubSection = section === null || (section === "projects" && !hasProjects) ? (hasProjects ? "projects" : "all") : section;
+  const active: HubSection = spine
+    ? section === null || section === "projects"
+      ? "all"
+      : section
+    : section === null || (section === "projects" && !hasProjects)
+      ? hasProjects
+        ? "projects"
+        : "all"
+      : section;
 
   // Studio results carry no role, so the role filter (and its control) does not apply on that tab.
   const activeRole = active === "generated" ? "all" : roleFilter;
@@ -202,9 +312,33 @@ export function BrandAssetHub({
       canOpenStudio,
       canCreate,
       copy: actionCopy,
-      // A run that holds several results says so in the menu: they move together.
-      projectLabel: canAssign ? (item) => (movesWith(item) > 1 ? fill(libraryCopy.projects.assignMany, { n: movesWith(item) }) : libraryCopy.projects.assign) : null,
+      // Under spine, projectMove replaces the legacy job-only project picker on both runs and library entries.
+      projectLabel: spine
+        ? null
+        : canAssign
+          ? (item) => (movesWith(item) > 1 ? fill(libraryCopy.projects.assignMany, { n: movesWith(item) }) : libraryCopy.projects.assign)
+          : null,
+      moveProjectLabel: spine?.canMove ? spine.copy.move : null,
     });
+
+  const projectIdForScope = (entry: HubEntry, scopeKey?: string): string | null | undefined => {
+    if (scopeKey?.startsWith("project:")) return scopeKey.slice("project:".length);
+    if (scopeKey === "brand_materials" || scopeKey === "unfiled") return null;
+    if (entry.asset && "brandProjectId" in entry.asset) return entry.asset.brandProjectId;
+    if (entry.jobId) {
+      const matched = jobs.find((j) => j.id === entry.jobId);
+      if (matched && "brandProjectId" in matched) return matched.brandProjectId;
+    }
+    return undefined;
+  };
+
+  const triggerSpineMutation = useCallback(
+    (kind: SpineMutationKind) => {
+      if (!spine) return;
+      setMutationSignal((cur) => ({ seq: (cur?.seq ?? 0) + 1, kind }));
+    },
+    [spine],
+  );
 
   const handleFiles = useCallback(
     async (files: File[]) => {
@@ -214,6 +348,7 @@ export function BrandAssetHub({
         setNotice(studioUploadErrorLine(studioCopy, "storage_quota_exceeded", reason));
         return;
       }
+      let uploadedCount = 0;
       for (const file of files) {
         const problem = uploadProblem(file);
         if (problem) {
@@ -222,9 +357,11 @@ export function BrandAssetHub({
         }
         const res = await studio.upload(file);
         if (isFailure(res)) setNotice(studioUploadErrorLine(studioCopy, res.code, res.reason));
+        else uploadedCount += 1;
       }
+      if (uploadedCount > 0) triggerSpineMutation("upload");
     },
-    [state?.storage?.uploadApproved, studio, studioCopy, uploadBlocked],
+    [state?.storage?.uploadApproved, studio, studioCopy, triggerSpineMutation, uploadBlocked],
   );
 
   const onDrop = (event: DragEvent<HTMLDivElement>) => {
@@ -235,15 +372,23 @@ export function BrandAssetHub({
   };
 
   /** The actions that change something on this page (the ones with an address are plain links). */
-  const runAction = (entry: HubEntry, action: HubAction) => {
+  const runAction = (entry: HubEntry, action: HubAction, scopeKey?: string) => {
     setTileMenu(null);
-    setDetailKey(null);
+    setDetailEntry(null);
+    setDetailScopeKey(undefined);
     if (action.key === "similar") {
-      // Related items are ranked across everything, so the by-project view hands over to the full grid.
-      if (active === "projects") setSection("all");
-      setSimilarKey((cur) => (cur === entry.key ? null : entry.key));
+      // Related items are ranked across everything, so the by-project or scoped view hands over to the full grid.
+      if (spine) {
+        setSection("all");
+        setForceAllNonce((n) => n + 1);
+      } else if (active === "projects") {
+        setSection("all");
+      }
+      setSimilarEntry((cur) => (cur?.key === entry.key ? null : entry));
     } else if (action.key === "edit" && entry.asset) {
       setEditing(entry.asset);
+    } else if (action.key === "projectMove" && spine) {
+      setSingleMove({ entry, projectId: projectIdForScope(entry, scopeKey) });
     } else if (action.key === "project" && entry.jobId) {
       setPicking(entry);
     } else if (action.key === "share") {
@@ -321,7 +466,7 @@ export function BrandAssetHub({
   const projectHref = (group: HubProjectGroup): string | null =>
     assetHubProjectHref(organizationId, group, canOpenStudio, useFilmParam);
   /** `scope` keeps one open menu when the same file is drawn in two places (two projects, or a project and the strip). */
-  const tile = (entry: HubEntry, scope: string, compact = false) => {
+  const tile = (entry: HubEntry, scope: string, compact = false, opts?: { soundMarker?: boolean; select?: ScopeTileSelectOpts }) => {
     const name = nameOf(entry);
     const { main, more } = actionsOf(entry);
     const menuKey = `${scope}|${entry.key}`;
@@ -336,14 +481,19 @@ export function BrandAssetHub({
         more={more}
         moreLabel={fill(libraryCopy.uploads.more, { name })}
         compact={compact}
+        soundMarker={opts?.soundMarker}
+        selecting={opts?.select?.selecting}
+        selected={opts?.select?.selected}
+        onToggleSelect={opts?.select?.onToggleSelect}
         menuOpen={tileMenu === menuKey}
         onMenu={(open) => setTileMenu(open ? menuKey : null)}
         onOpen={() => {
           setTileMenu(null);
-          setDetailKey(entry.key);
+          setDetailEntry(entry);
+          setDetailScopeKey(scope);
         }}
         onLike={() => void library.toggleLike(entry.source)}
-        onAction={(action) => runAction(entry, action)}
+        onAction={(action) => runAction(entry, action, scope)}
       />
     );
   };
@@ -356,87 +506,30 @@ export function BrandAssetHub({
     </section>
   );
 
-  return (
-    <div
-      className={`${s.hub} ${dropActive ? s.dropActive : ""}`}
-      data-brand-library
-      data-brand-asset-hub
-      onDragOver={(e) => {
-        if (canCreate && Array.from(e.dataTransfer.types).includes("Files")) {
-          e.preventDefault();
-          setDropActive(true);
-        }
-      }}
-      onDragLeave={(e) => {
-        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropActive(false);
-      }}
-      onDrop={onDrop}
-    >
-      <header className={s.head}>
-        <div className={s.titleRow}>
-          <h1 className={s.title}>{libraryCopy.label}</h1>
-          {totalCount > 0 && (
-            <span className={s.countChip} data-library-total>
-              {totalCount}
-            </span>
-          )}
-        </div>
-        <div className={s.headSide}>
-          {storage && storageQuiet && <StorageMeterCard storage={storage} copy={libraryCopy.storage} locale={hubLocale} compact />}
-          <div className={s.headActions}>
-            {canOpenStudio && (
-              <a className={s.ghostBtn} href={studioHref} data-asset-hub-open-studio>
-                {h.openStudio}
-              </a>
-            )}
-            {canCreate && (
-              <>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime,audio/mpeg,audio/wav"
-                  hidden
-                  onChange={(e) => {
-                    const picked = e.target.files ? Array.from(e.target.files) : [];
-                    e.target.value = "";
-                    if (picked.length) void handleFiles(picked);
-                  }}
-                />
-                <button type="button" className={s.primaryBtn} disabled={uploading || uploadBlocked} onClick={pickFiles} data-asset-hub-upload>
-                  {uploading ? fill(libraryCopy.uploads.uploading, { n: studio.uploads.length }) : h.uploadAction}
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-      </header>
+  const emptyActionsFor = (allowUpload: boolean) =>
+    canOpenStudio || allowUpload ? (
+      <div className={s.emptyActions}>
+        {allowUpload && (
+          <button type="button" className={s.ghostBtn} disabled={uploading || uploadBlocked} onClick={pickFiles} data-asset-hub-empty-upload>
+            {h.uploadAction}
+          </button>
+        )}
+        {canOpenStudio && (
+          <a className={s.ghostBtn} href={studioHref}>
+            {h.openStudio}
+          </a>
+        )}
+      </div>
+    ) : null;
 
-      {storage && !storageQuiet && <StorageMeterCard storage={storage} copy={libraryCopy.storage} locale={hubLocale} />}
-
-      <section className={s.toolbar} aria-label={h.sectionsLabel}>
-        <div className={s.segTrack} role="tablist" aria-label={h.sectionsLabel}>
-          {sections.map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              role="tab"
-              className={s.segBtn}
-              aria-selected={active === tab.id}
-              data-asset-hub-tab={tab.id}
-              onClick={() => {
-                setSection(tab.id);
-                setOpenGroup(null);
-              }}
-            >
-              <span>{tab.label}</span>
-              {typeof tab.count === "number" && tab.count > 0 && <span className={s.segNum}>{tab.count}</span>}
-            </button>
-          ))}
-        </div>
-
+  // One filter + body fragment shared between today's page and the spine's `모든 파일` tab so filters, search,
+  // similar chip, empty states and grid behavior can never drift between the two paths (Fix 0-2, Fix 2-7).
+  const renderAllFilters = (viewControl: ReactNode) =>
+    spine || gridSection ? (
+      <div className={s.filters}>
+        {viewControl}
         {gridSection && (
-          <div className={s.filters}>
+          <>
             <span className={s.selectWrap} data-active={kindFilter !== "all" ? "" : undefined}>
               <select
                 className={s.select}
@@ -487,15 +580,19 @@ export function BrandAssetHub({
                 </button>
               )}
             </div>
-          </div>
+          </>
         )}
-      </section>
+      </div>
+    ) : null;
+
+  const renderAllBody = () => (
+    <>
 
       {similarAnchor && gridSection && (
         <div className={s.similarBar} data-asset-hub-similar-active={similarAnchor.key}>
           {(similarAnchor.thumbUrl || similarAnchor.kind === "image") && <img className={s.similarThumb} src={similarAnchor.thumbUrl ?? similarAnchor.url} alt="" />}
           <span className={s.similarText}>{fill(h.similarChip, { name: nameOf(similarAnchor) })}</span>
-          <button type="button" className={s.quietBtn} onClick={() => setSimilarKey(null)}>
+          <button type="button" className={s.quietBtn} onClick={() => setSimilarEntry(null)}>
             {h.clearSimilar}
           </button>
         </div>
@@ -610,25 +707,143 @@ export function BrandAssetHub({
                     ? libraryCopy.liked.empty
                     : h.emptyAll}
           </p>
-          {!filtering && !similarAnchor && (canOpenStudio || emptyCanUpload) && (
-            <div className={s.emptyActions}>
-              {emptyCanUpload && (
-                <button type="button" className={s.ghostBtn} disabled={uploading || uploadBlocked} onClick={pickFiles} data-asset-hub-empty-upload>
-                  {h.uploadAction}
-                </button>
-              )}
-              {canOpenStudio && (
-                <a className={s.ghostBtn} href={studioHref}>
-                  {h.openStudio}
-                </a>
-              )}
-            </div>
-          )}
+          {!filtering && !similarAnchor && emptyActionsFor(emptyCanUpload)}
         </section>
       ) : (
         <ul className={s.grid} data-asset-hub-grid>
           {filtered.map((entry) => tile(entry, "all"))}
         </ul>
+      )}
+    </>
+  );
+
+  return (
+    <div
+      className={`${s.hub} ${dropActive ? s.dropActive : ""}`}
+      data-brand-library
+      data-brand-asset-hub
+      onDragOver={(e) => {
+        if (canCreate && Array.from(e.dataTransfer.types).includes("Files")) {
+          e.preventDefault();
+          setDropActive(true);
+        }
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropActive(false);
+      }}
+      onDrop={onDrop}
+    >
+      <header className={s.head}>
+        <div className={s.titleRow}>
+          <h1 className={s.title}>{libraryCopy.label}</h1>
+          {totalCount > 0 && (
+            <span className={s.countChip} data-library-total>
+              {totalCount}
+            </span>
+          )}
+        </div>
+        <div className={s.headSide}>
+          {storage && storageQuiet && <StorageMeterCard storage={storage} copy={libraryCopy.storage} locale={hubLocale} compact />}
+          <div className={s.headActions}>
+            {canOpenStudio && (
+              <a className={s.ghostBtn} href={studioHref} data-asset-hub-open-studio>
+                {h.openStudio}
+              </a>
+            )}
+            {canCreate && (
+              <>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime,audio/mpeg,audio/wav"
+                  hidden
+                  onChange={(e) => {
+                    const picked = e.target.files ? Array.from(e.target.files) : [];
+                    e.target.value = "";
+                    if (picked.length) void handleFiles(picked);
+                  }}
+                />
+                <button type="button" className={s.primaryBtn} disabled={uploading || uploadBlocked} onClick={pickFiles} data-asset-hub-upload>
+                  {uploading ? fill(libraryCopy.uploads.uploading, { n: studio.uploads.length }) : h.uploadAction}
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      </header>
+
+      {storage && !storageQuiet && <StorageMeterCard storage={storage} copy={libraryCopy.storage} locale={hubLocale} />}
+
+      {spine ? (
+        <AssetHubSpine
+          organizationId={organizationId}
+          locale={hubLocale}
+          studioCopy={studioCopy}
+          libraryCopy={libraryCopy}
+          state={state}
+          loadFailed={loadFailed}
+          notice={notice}
+          onRetryLoad={() => void studio.load()}
+          onNotice={setNotice}
+          deliverables={deliverables ?? []}
+          canOpenStudio={canOpenStudio}
+          api={studioApi}
+          likedKeys={library.liked}
+          spine={spine}
+          renderAllFilters={renderAllFilters}
+          renderAllBody={renderAllBody}
+          allView={active}
+          availableSections={sections.map((tab) => tab.id)}
+          onAllViewChange={(next) => {
+            setSection(next);
+            setOpenGroup(null);
+          }}
+          mutationSignal={mutationSignal}
+          onReloadStudioState={() => void studio.load()}
+          emptyActions={emptyActionsFor(canCreate)}
+          forceAllNonce={forceAllNonce}
+          filmHref={(filmId) => assetHubProjectHref(organizationId, { id: filmId, origin: "self" }, canOpenStudio, true)}
+          renderScopeTile={(entry, scopeKey, selectOpts) =>
+            tile(entry, scopeKey, false, {
+              soundMarker: entry.kind === "audio" && entry.origin === "generated",
+              select: selectOpts,
+            })
+          }
+          singleMove={singleMove}
+          onCloseSingleMove={() => setSingleMove(null)}
+          initialTab={initialSpine?.tab}
+          initialOpenedScope={initialSpine?.openedScope}
+          initialQuery={initialSpine?.query}
+          initialScopeQuery={initialSpine?.scopeQuery}
+          initialScopeSeed={initialSpine}
+        />
+      ) : (
+        <>
+          <section className={s.toolbar} aria-label={h.sectionsLabel}>
+            <div className={s.segTrack} role="tablist" aria-label={h.sectionsLabel}>
+              {sections.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  role="tab"
+                  className={s.segBtn}
+                  aria-selected={active === tab.id}
+                  data-asset-hub-tab={tab.id}
+                  onClick={() => {
+                    setSection(tab.id);
+                    setOpenGroup(null);
+                  }}
+                >
+                  <span>{tab.label}</span>
+                  {typeof tab.count === "number" && tab.count > 0 && <span className={s.segNum}>{tab.count}</span>}
+                </button>
+              ))}
+            </div>
+            {renderAllFilters(null)}
+          </section>
+          {renderAllBody()}
+        </>
       )}
 
       {detail && (
@@ -640,8 +855,11 @@ export function BrandAssetHub({
           liked={library.liked.has(detail.key)}
           {...actionsOf(detail)}
           onLike={() => void library.toggleLike(detail.source)}
-          onAction={(action) => runAction(detail, action)}
-          onClose={() => setDetailKey(null)}
+          onAction={(action) => runAction(detail, action, detailScopeKey)}
+          onClose={() => {
+            setDetailEntry(null);
+            setDetailScopeKey(undefined);
+          }}
         />
       )}
       {editing && (
@@ -649,8 +867,20 @@ export function BrandAssetHub({
           key={editing.id}
           asset={editing}
           copy={libraryCopy}
-          onUpdate={(assetId, patch) => studio.updateAsset({ assetId, ...patch })}
-          onDelete={(assetId) => studio.deleteAsset(assetId)}
+          onUpdate={async (assetId, patch) => {
+            const res = await studio.updateAsset({ assetId, ...patch });
+            if (!isFailure(res)) triggerSpineMutation("role");
+            return res;
+          }}
+          onDelete={async (assetId) => {
+            const res = await studio.deleteAsset(assetId);
+            if (!isFailure(res)) {
+              setDetailEntry((cur) => (entryMatchesAsset(cur, assetId) ? null : cur));
+              setSimilarEntry((cur) => (entryMatchesAsset(cur, assetId) ? null : cur));
+              triggerSpineMutation("delete");
+            }
+            return res;
+          }}
           onClose={() => setEditing(null)}
           returnFocus={() => document.querySelector<HTMLElement>(`[data-asset-hub-card="a:${editing.id}"] [data-asset-hub-open]`)}
         />

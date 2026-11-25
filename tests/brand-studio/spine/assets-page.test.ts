@@ -264,7 +264,8 @@ describe('project.overview', () => {
     // Covers: image and video results only, newest first, at most the named limit.
     expect(group(w.P1).covers.map((c) => c.outputId).sort()).toEqual([w.r1.outputs[0], w.r1.outputs[1], w.r2.outputs[0]].sort());
     expect(group(w.P1).covers.every((c) => c.kind === 'image' || c.kind === 'video')).toBe(true);
-    expect(answer.unfiled.covers.length).toBe(BRAND_PROJECT_LIMITS.overviewCovers);
+    // 미분류 holds four image and video results here (2 + 2), fewer than the limit.
+    expect(answer.unfiled.covers.length).toBe(Math.min(4, BRAND_PROJECT_LIMITS.overviewCovers));
     expect(answer.brandMaterials.covers.map((a) => a.id).sort()).toEqual([w.u3, w.u6, w.u7, w.u8].sort());
     for (const asset of answer.brandMaterials.covers) expect(asset.brandProjectId).toBeNull();
     // Nothing of the other organization, by id, title or address.
@@ -273,11 +274,11 @@ describe('project.overview', () => {
     for (const never of [w.H, 'Hidden by staff', w.A, 'Archived']) expect(answer.projects.some((g) => g.project.id === never || g.project.title === never)).toBe(false);
   });
 
-  it('covers are the wall’s media addresses, newest first, at most four', async () => {
+  it('covers are the wall’s media addresses, newest first, at most the named limit', async () => {
     open();
     const P = await selfProject('Covers');
     const made: string[] = [];
-    for (let i = 0; i < 6; i += 1) {
+    for (let i = 0; i < BRAND_PROJECT_LIMITS.overviewCovers + 2; i += 1) {
       const r = await run('image');
       await fileIn('brand_studio_jobs', r.jobId, P);
       await at('brand_studio_outputs', r.outputs[0]!, `2026-11-0${i + 1}T00:00:00.000Z`);
