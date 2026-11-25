@@ -14,6 +14,7 @@
  */
 import "./rail/rail.css";
 import { useCallback, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
+import { WorkspaceBell } from "@/components/brand-workspace/bell";
 import {
   STUDIO_ASSET_ROLES,
   type BrandProjectFilesScope,
@@ -769,6 +770,7 @@ export function BrandAssetHub({
                 </button>
               </>
             )}
+            <WorkspaceBell />
           </div>
         </div>
       </header>

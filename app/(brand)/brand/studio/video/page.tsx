@@ -25,6 +25,7 @@ import { billingPlanCatalogue } from "@/lib/brands/billing-page-data";
 import { ProjectChip, ProjectGoneNotice, ProjectSpineProvider } from "@/components/brand-studio/project-chip";
 // Imported here, not through the client module: a server component cannot read a class map a client module exports.
 import projectChipStyles from "@/components/brand-studio/project-chip/project-chip.module.css";
+import { WorkspaceBell } from "@/components/brand-workspace/bell";
 import { VideoStudioWorkspace } from "@/components/brand-studio/video/workspace";
 import s from "@/components/brand-studio/video/video.module.css";
 import { scopedHref } from "@/lib/brands/workspace/selection";
@@ -237,6 +238,7 @@ export default async function StudioVideoPage({
           )}
           {/* Allowance line and mobile asset toggle are placed here by VideoStudioWorkspace. */}
           <div className="bs-head-slot" data-studio-head-slot />
+          <WorkspaceBell />
         </div>
       </header>
       {effectiveSpine ? <ProjectGoneNotice /> : null}

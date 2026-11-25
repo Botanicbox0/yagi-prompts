@@ -28,13 +28,29 @@ import type { RoomsShellCopy } from '@/messages/rooms-shell';
 import type { StudioShellCopy } from '@/messages/studio-shell';
 import type { RailSummary } from '../rail-activity';
 import { FirstRunChecklist } from './first-run-checklist';
+import { WorkspaceBell } from '../bell';
 import { HomePrompt, HomeStarterButton, HomeWallTile, type HomePromptCopy } from './home-actions';
+import { HomeProjectCards, topRowClassName, type ProjectCardsCopy, type SpineHomeProps } from './project-cards';
 import s from './home.module.css';
 
 /** How many waiting drafts get a line of their own before the rest fold into "모두 보기". */
 const REVIEW_LINES = 2;
 
-export interface WorkspaceHomeProps {
+type BaseHomeCopy = {
+  home: BrandHomeCopy;
+  shell: StudioShellCopy;
+  roomsNav: RoomsShellCopy['nav'];
+  inbox: RoomsChatCopy['inbox'];
+  prompt: Pick<HomePromptCopy, 'label' | 'placeholder'>;
+  activeStatus: string;
+  /** The asset hub's own name, for the wall's one link out (shown where the brand has the hub). */
+  allAssets: string;
+  closedRequestDraft?: string;
+  closedRequestOrgFallback?: string;
+  billingCustomer?: BrandBillingCopy['customer'];
+};
+
+type WorkspaceHomeBaseProps = {
   organizationId: string;
   organizationName: string;
   locale: 'ko' | 'en';
@@ -57,20 +73,19 @@ export interface WorkspaceHomeProps {
   checklist?: FirstRunChecklistState | null;
   canOpenBilling?: boolean;
   planCatalogue?: readonly BillingPlanCatalogueItem[];
-  copy: {
-    home: BrandHomeCopy;
-    shell: StudioShellCopy;
-    roomsNav: RoomsShellCopy['nav'];
-    inbox: RoomsChatCopy['inbox'];
-    prompt: Pick<HomePromptCopy, 'label' | 'placeholder'>;
-    activeStatus: string;
-    /** The asset hub's own name, for the wall's one link out (shown where the brand has the hub). */
-    allAssets: string;
-    closedRequestDraft?: string;
-    closedRequestOrgFallback?: string;
-    billingCustomer?: BrandBillingCopy['customer'];
-  };
-}
+};
+
+export type WorkspaceHomeProps =
+  | (WorkspaceHomeBaseProps & {
+      /** Brand project spine (slice 3a): omitted when closed or non-member. */
+      spineHome?: undefined;
+      copy: BaseHomeCopy & Partial<ProjectCardsCopy>;
+    })
+  | (WorkspaceHomeBaseProps & {
+      /** Brand project spine (slice 3a): requires all four spine copy groups when present. */
+      spineHome: SpineHomeProps;
+      copy: BaseHomeCopy & ProjectCardsCopy;
+    });
 
 const Chevron = ({ className }: { className?: string }) => (
   <svg viewBox="0 0 20 20" aria-hidden="true" className={className}>
@@ -104,13 +119,33 @@ export function WorkspaceHome(props: WorkspaceHomeProps) {
   const heading = interpolate(h.heading, { name: props.organizationName });
   const hasAssets = layout.tools.some((tool) => tool.key === 'assets');
   const wall = homeWallRows(props.results, homeTileRatio);
+  const spineHome = props.spineHome;
+  const spineCopy: ProjectCardsCopy | null = props.spineHome
+    ? {
+        projectHome: props.copy.projectHome,
+        projectSpine: props.copy.projectSpine,
+        libraryHub: props.copy.libraryHub,
+        roomsOverview: props.copy.roomsOverview,
+      }
+    : null;
+  const showWorkWall = !spineHome || spineHome.cards.projects.length === 0;
+  const headingNode = (
+    <h1 className={s.name} title={heading}>
+      {heading}
+    </h1>
+  );
 
   return (
     <div className={s.home} data-workspace-home={organizationId} data-follows-rail-mode="" data-home-mode="make" data-home-read-only={props.readOnly ? 'true' : undefined} data-home-state={hasResults ? 'content' : 'empty'}>
       {/* The page's heading is the workspace's name, said quietly: the prompt bar is what the eye lands on. */}
-      <h1 className={s.name} title={heading}>
-        {heading}
-      </h1>
+      {spineHome ? (
+        <div className={topRowClassName} data-home-top-row="">
+          {headingNode}
+          <WorkspaceBell />
+        </div>
+      ) : (
+        headingNode
+      )}
       {props.viewerNote ? (
         <p className={s.note} data-home-viewer-note>
           {h.viewerNote}
@@ -126,56 +161,67 @@ export function WorkspaceHome(props: WorkspaceHomeProps) {
         />
       )}
 
-      {/* What waits, one line each; a line exists only while there is something to say. Each group names itself. */}
-      <div className={s.lines} data-home-lines>
-        {reviewCount > 0 ? (
-          <div className={s.lineGroup} data-home-reviews={reviewCount}>
+      {spineHome && spineCopy ? (
+        <HomeProjectCards
+          organizationId={organizationId}
+          locale={props.locale}
+          spineHome={spineHome}
+          requestHref={spineHome.canCreate && layout.team.key !== 'projects' ? scope(layout.team.path) : null}
+          requestActionKey={layout.team.key !== 'projects' ? layout.team.key : undefined}
+          copy={spineCopy}
+        />
+      ) : (
+        /* What waits, one line each; a line exists only while there is something to say. Each group names itself. */
+        <div className={s.lines} data-home-lines>
+          {reviewCount > 0 ? (
+            <div className={s.lineGroup} data-home-reviews={reviewCount}>
+              <h2 className={s.lineLabel}>
+                <span>{copy.inbox.alertsHeading}</span>
+                <span className={s.count}>{reviewCount}</span>
+              </h2>
+              <ul className={s.lineRows}>
+                {shownReviews.map((alert) => (
+                  <li key={alert.id}>
+                    <a href={alertHref(alert)} className={s.line} data-home-review={alert.kind}>
+                      <span className={s.lineTitle}>{alert.title || alert.projectTitle}</span>
+                      <span className={s.lineMeta}>
+                        {alert.projectTitle && alert.title ? <span className={s.lineProject}>{alert.projectTitle}</span> : null}
+                        <span>{alertLine(alert)}</span>
+                      </span>
+                      <Chevron className={s.lineArrow} />
+                    </a>
+                  </li>
+                ))}
+                {reviewCount > shownReviews.length ? (
+                  <li>
+                    <a href={scope('/brand/rooms')} className={s.lineMore} data-home-reviews-more>
+                      {interpolate(h.reviewMore, { count: reviewCount })}
+                    </a>
+                  </li>
+                ) : null}
+              </ul>
+            </div>
+          ) : null}
+          <div className={s.lineGroup} data-home-team={layout.team.key}>
             <h2 className={s.lineLabel}>
-              <span>{copy.inbox.alertsHeading}</span>
-              <span className={s.count}>{reviewCount}</span>
+              <span>{copy.roomsNav.groupTeam}</span>
             </h2>
-            <ul className={s.lineRows}>
-              {shownReviews.map((alert) => (
-                <li key={alert.id}>
-                  <a href={alertHref(alert)} className={s.line} data-home-review={alert.kind}>
-                    <span className={s.lineTitle}>{alert.title || alert.projectTitle}</span>
-                    <span className={s.lineMeta}>
-                      {alert.projectTitle && alert.title ? <span className={s.lineProject}>{alert.projectTitle}</span> : null}
-                      <span>{alertLine(alert)}</span>
-                    </span>
-                    <Chevron className={s.lineArrow} />
-                  </a>
-                </li>
-              ))}
-              {reviewCount > shownReviews.length ? (
-                <li>
-                  <a href={scope('/brand/rooms')} className={s.lineMore} data-home-reviews-more>
-                    {interpolate(h.reviewMore, { count: reviewCount })}
-                  </a>
-                </li>
-              ) : null}
-            </ul>
-          </div>
-        ) : null}
-        <div className={s.lineGroup} data-home-team={layout.team.key}>
-          <h2 className={s.lineLabel}>
-            <span>{copy.roomsNav.groupTeam}</span>
-          </h2>
-          <div className={s.teamRow}>
-            {teamFact ? (
-              <a href={scope('/brand')} className={s.line} data-home-team-facts>
-                <span className={`${s.lineTitle} ${s.fact}`}>{teamFact}</span>
+            <div className={s.teamRow}>
+              {teamFact ? (
+                <a href={scope('/brand')} className={s.line} data-home-team-facts>
+                  <span className={`${s.lineTitle} ${s.fact}`}>{teamFact}</span>
+                </a>
+              ) : (
+                <p className={s.teamSay}>{teamLine}</p>
+              )}
+              <a href={scope(layout.team.path)} className={`${s.textLink} ${s.rowAction}`} data-home-action={layout.team.key}>
+                {teamName}
+                <Chevron className={s.lineArrow} />
               </a>
-            ) : (
-              <p className={s.teamSay}>{teamLine}</p>
-            )}
-            <a href={scope(layout.team.path)} className={`${s.textLink} ${s.rowAction}`} data-home-action={layout.team.key}>
-              {teamName}
-              <Chevron className={s.lineArrow} />
-            </a>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {!props.readOnly && props.checklist?.show ? (
         <FirstRunChecklist
@@ -193,78 +239,80 @@ export function WorkspaceHome(props: WorkspaceHomeProps) {
         />
       ) : null}
 
-      {hasResults ? (
-        <section className={s.work} aria-labelledby="workspace-home-recent" data-home-results={props.results.length}>
-          <div className={s.workHead}>
-            <h2 id="workspace-home-recent" className={s.workTitle}>
-              {h.recentTitle}
-            </h2>
-            {hasAssets ? (
-              <a href={scope('/brand/library')} className={s.textLink} data-home-action="assets">
-                {copy.allAssets}
-              </a>
-            ) : null}
-          </div>
-          <div className={s.wall} data-home-wall>
-            {wall.map((row, index) => (
-              <ul key={index} className={s.wallRow} data-home-wall-row={row.items.length}>
-                {row.items.map(({ item, ratio }) => (
-                  <li key={item.outputId} style={{ flexGrow: ratio, aspectRatio: String(ratio) }}>
-                    <HomeWallTile
-                      href={item.href}
-                      kind={item.kind}
-                      src={item.src}
-                      clip={item.clip}
-                      play={item.play}
-                      seconds={item.seconds}
-                      label={item.kind === 'video' ? h.result.video : h.result.image}
-                    />
-                  </li>
-                ))}
-                {/* A short last row keeps a full row's height: the rest of the line stays open. */}
-                {row.rest > 0 ? <li aria-hidden="true" className={s.wallRest} style={{ flexGrow: row.rest }} /> : null}
-              </ul>
-            ))}
-          </div>
-        </section>
-      ) : (
-        <section className={s.work} aria-labelledby="workspace-home-starters" data-home-starters>
-          <div className={s.workHead}>
-            <h2 id="workspace-home-starters" className={s.workTitle}>
-              {h.starters.title}
-            </h2>
-          </div>
-          <ul className={s.starters}>
-            {HOME_STARTERS.map((starter) => (
-              <li key={starter.key}>
-                {props.readOnly ? (
-                  <a href={studioHref[starter.medium]} className={s.starter} data-home-starter={starter.key} data-medium={starter.medium}>
-                    <span className={s.starterPicture}>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={starter.picture} alt="" loading="lazy" decoding="async" />
-                    </span>
-                    <span className={s.starterText}>
-                      <span className={s.starterName}>
-                        <span className={s.starterMeta}>{h.prompt.medium[starter.medium]}</span>
-                        {h.starters[starter.key].name}
+      {showWorkWall ? (
+        hasResults ? (
+          <section className={s.work} aria-labelledby="workspace-home-recent" data-home-results={props.results.length}>
+            <div className={s.workHead}>
+              <h2 id="workspace-home-recent" className={s.workTitle}>
+                {h.recentTitle}
+              </h2>
+              {hasAssets ? (
+                <a href={scope('/brand/library')} className={s.textLink} data-home-action="assets">
+                  {copy.allAssets}
+                </a>
+              ) : null}
+            </div>
+            <div className={s.wall} data-home-wall>
+              {wall.map((row, index) => (
+                <ul key={index} className={s.wallRow} data-home-wall-row={row.items.length}>
+                  {row.items.map(({ item, ratio }) => (
+                    <li key={item.outputId} style={{ flexGrow: ratio, aspectRatio: String(ratio) }}>
+                      <HomeWallTile
+                        href={item.href}
+                        kind={item.kind}
+                        src={item.src}
+                        clip={item.clip}
+                        play={item.play}
+                        seconds={item.seconds}
+                        label={item.kind === 'video' ? h.result.video : h.result.image}
+                      />
+                    </li>
+                  ))}
+                  {/* A short last row keeps a full row's height: the rest of the line stays open. */}
+                  {row.rest > 0 ? <li aria-hidden="true" className={s.wallRest} style={{ flexGrow: row.rest }} /> : null}
+                </ul>
+              ))}
+            </div>
+          </section>
+        ) : (
+          <section className={s.work} aria-labelledby="workspace-home-starters" data-home-starters>
+            <div className={s.workHead}>
+              <h2 id="workspace-home-starters" className={s.workTitle}>
+                {h.starters.title}
+              </h2>
+            </div>
+            <ul className={s.starters}>
+              {HOME_STARTERS.map((starter) => (
+                <li key={starter.key}>
+                  {props.readOnly ? (
+                    <a href={studioHref[starter.medium]} className={s.starter} data-home-starter={starter.key} data-medium={starter.medium}>
+                      <span className={s.starterPicture}>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={starter.picture} alt="" loading="lazy" decoding="async" />
                       </span>
-                      <span className={s.starterPrompt}>{h.starters[starter.key].prompt}</span>
-                    </span>
-                  </a>
-                ) : (
-                  <HomeStarterButton
-                    starter={{ ...starter, name: h.starters[starter.key].name, prompt: h.starters[starter.key].prompt }}
-                    organizationId={organizationId}
-                    href={studioHref[starter.medium]}
-                    mediumLabel={h.prompt.medium[starter.medium]}
-                    actionLabel={h.prompt.button}
-                  />
-                )}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+                      <span className={s.starterText}>
+                        <span className={s.starterName}>
+                          <span className={s.starterMeta}>{h.prompt.medium[starter.medium]}</span>
+                          {h.starters[starter.key].name}
+                        </span>
+                        <span className={s.starterPrompt}>{h.starters[starter.key].prompt}</span>
+                      </span>
+                    </a>
+                  ) : (
+                    <HomeStarterButton
+                      starter={{ ...starter, name: h.starters[starter.key].name, prompt: h.starters[starter.key].prompt }}
+                      organizationId={organizationId}
+                      href={studioHref[starter.medium]}
+                      mediumLabel={h.prompt.medium[starter.medium]}
+                      actionLabel={h.prompt.button}
+                    />
+                  )}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )
+      ) : null}
     </div>
   );
 }

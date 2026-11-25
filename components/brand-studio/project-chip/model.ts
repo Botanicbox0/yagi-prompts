@@ -44,7 +44,7 @@ export function formatRelativeTime(iso: string, locale: StudioLocale, now = new 
   const tag = locale === "ko" ? "ko-KR" : "en-US";
   const rtf = new Intl.RelativeTimeFormat(tag, { numeric: "auto" });
 
-  if (absSec < 60) return rtf.format(0, "minute");
+  if (absSec < 60) return rtf.format(0, "second");
   if (absSec < 3600) return rtf.format(Math.round(diffMs / 60_000), "minute");
   if (absSec < 86_400) return rtf.format(Math.round(diffMs / 3_600_000), "hour");
   const days = Math.round(diffMs / 86_400_000);
