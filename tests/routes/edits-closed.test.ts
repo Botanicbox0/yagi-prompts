@@ -144,3 +144,52 @@ describe('a template with no room for edits', () => {
     expect(open.status).not.toBe(409);
   });
 });
+
+describe('an edit too long for the template it is for', () => {
+  const NOTE = JSON.stringify({ audioMode: 'bgm', bgmMood: 'cinematic', userMessage: `모든 컷에서 ${'가'.repeat(990)}` });
+  const SHORT = JSON.stringify({ audioMode: 'ambient', userMessage: '검은 가죽 재킷을 입혀 주세요.' });
+
+  it('every order entry answers edit_too_long (422) before anything exists; a short edit and a roomy template go on', async () => {
+    const tight = await template(13_900);
+    expect(await loadTemplateEditsClosed(h.sql, tight)).toBe(false);
+    const order = await orderPOST(new NextRequest(`${ORIGIN}/api/billing/toss/orders`, { method: 'POST', headers: { origin: ORIGIN }, body: form(tight, { directorSpec: NOTE }) }));
+    expect(order.status).toBe(422);
+    expect(await codeOf(order)).toBe('edit_too_long');
+    mocks.viewer.mockResolvedValue(ADMIN_VIEWER);
+    const free = await rendersPOST(new NextRequest(`${ORIGIN}/api/renders`, { method: 'POST', body: form(tight, { directorSpec: NOTE }) }));
+    expect(await codeOf(free)).toBe('edit_too_long');
+    mocks.viewer.mockResolvedValue(buyer);
+    const iap = await iapPOST(new NextRequest(`${ORIGIN}/api/mobile/iap/renders`, { method: 'POST', headers: { 'user-agent': 'Mozilla/5.0 TwingsIOS/1.0' }, body: form(tight, { directorSpec: NOTE, requestId: randomUUID() }) }));
+    expect(await codeOf(iap)).toBe('edit_too_long');
+    expect(await count('billing_payments')).toBe(0);
+    expect(await count('render_jobs')).toBe(0);
+
+    const short = await orderPOST(new NextRequest(`${ORIGIN}/api/billing/toss/orders`, { method: 'POST', headers: { origin: ORIGIN }, body: form(tight, { directorSpec: SHORT }) }));
+    expect(await codeOf(short.clone())).not.toBe('edit_too_long');
+    const roomy = await orderPOST(new NextRequest(`${ORIGIN}/api/billing/toss/orders`, { method: 'POST', headers: { origin: ORIGIN }, body: form(await template(9_000), { directorSpec: NOTE }) }));
+    expect(await codeOf(roomy.clone())).not.toBe('edit_too_long');
+  });
+
+  it('the director leaves the sheet as it was and says too_long when a turn would not fit', async () => {
+    vi.stubEnv('TWINGS_PERSONAL_EDIT_SHEET', 'on');
+    vi.stubEnv('GEMINI_API_KEY', '');
+    const line = (c: string) => `${c} ${'w'.repeat(117)}`;
+    const prior = { sheet: { change: [], keep: Array.from({ length: 6 }, (_, i) => line(`k${i}`)), exclude: Array.from({ length: 4 }, (_, i) => line(`e${i}`)) }, turns: [], question: null, asked: false };
+    const turn = (slug: string) => {
+      const data = new FormData();
+      data.set('template', slug);
+      data.set('message', 'Put me in a red dress');
+      data.set('locale', 'ko');
+      data.set('sheet', JSON.stringify(prior));
+      return directorPOST(new NextRequest(`${ORIGIN}/api/template-director`, { method: 'POST', headers: { origin: ORIGIN }, body: data }));
+    };
+    const refused = await turn(await template(13_900));
+    expect(refused.status).toBe(422);
+    expect(await refused.json()).toEqual({ ok: false, code: 'too_long', message: '요청이 길어 이 템플릿에 다 담을 수 없어요. 고칠 내용을 줄여 주세요.' });
+    const roomy = await turn(await template(9_000));
+    expect(roomy.status).toBe(200);
+    const body = (await roomy.json()) as { turn: { sheet: { change: unknown[] }; changed: boolean } };
+    expect(body.turn.changed).toBe(true);
+    expect(body.turn.sheet.change.length).toBeGreaterThan(0);
+  });
+});

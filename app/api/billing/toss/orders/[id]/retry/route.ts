@@ -8,6 +8,8 @@ import {
 } from '@/lib/billing/toss-runtime';
 import { retryTossOrder } from '@/lib/billing/toss-service';
 import { copyRetryPhotos, planRetryPhotos } from '@/lib/renders/cast-form';
+import { ORDER_EDIT_REFUSAL_STATUS, specEditRefusal } from '@/lib/prompts/edits-closed';
+import { parseDirectorSpecInput } from '@/lib/template-director/schema';
 
 export const dynamic = 'force-dynamic';
 type Context = { params: Promise<{ id: string }> };
@@ -42,6 +44,14 @@ export async function POST(request: Request, { params }: Context) {
     const deps = await getTossContext();
     if (!deps) return json({ ok: false, code: 'unavailable' }, 503);
     const id = (await params).id;
+    // Founder 2026-11-25 — the old order's edit is checked again against the template as it is now (its text may have
+    // changed since): an edit it cannot take is refused before the new order exists.
+    const { rows: prior } = await deps.sql.query<{ slug: string | null; spec: unknown }>(
+      "select to_jsonb(b.*)->>'template_slug' as slug, to_jsonb(b.*)->'director_spec' as spec from billing_payments b where id = $1 and user_id = $2",
+      [id, viewer.userId],
+    );
+    const refusal = prior[0]?.slug ? await specEditRefusal(deps.sql, prior[0].slug, parseDirectorSpecInput(prior[0].spec)) : null;
+    if (refusal) return json({ ok: false, code: refusal }, ORDER_EDIT_REFUSAL_STATUS[refusal]);
     // docs/CAST-CATEGORIES.md §3: a pet or couple order's second photo is bound to the old render_ref.
     // A solo order (plan 'solo') goes straight to the retry, exactly as before.
     const plan = await planRetryPhotos(deps.sql, viewer.userId, id);

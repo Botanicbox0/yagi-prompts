@@ -4248,6 +4248,7 @@ export const en = {
         partner_screen: 'A photo of a screen or a printed picture cannot be used.',
         partner_check_unavailable: 'We could not check the photo. Upload it again in a moment.',
         edits_closed: "This template is at full length, so it can't take change requests.",
+        edit_too_long: "That's more than this template can hold. Please shorten your changes.",
         generic: 'Could not start. Try again in a moment.',
       },
     },
@@ -6254,6 +6255,8 @@ export const en = {
     },
     /** Live line when a request asked to change only fixed parts: nothing was added. */
     refusedLocked: "That part is fixed and can't be changed.",
+    /** Founder 2026-11-25 — an edit that would not fit the clip (Seedance 2.5: 15,000 characters). Provisional. */
+    tooLong: "That's more than this template can hold. Please shorten your changes.",
     /** Live line when a request was added but the part of it about fixed parts was left out. */
     updatedLocked: 'Added what can be changed. Fixed parts stay as they are.',
     /** Example in the request box on a template with fixed parts: a change it allows (an expression), nothing fixed. */

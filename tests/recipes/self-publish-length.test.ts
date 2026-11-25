@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
 import { administerPlatform } from '@/lib/creator-platform/admin';
 import { makerAction } from '@/lib/recipes/maker';
+import { engineStepPrompt, type Recipe } from '@/lib/recipes/schema';
 import { saveMakerProfile } from '@/lib/makers/profile';
 import { createLocalRenderStore, type RenderStore } from '@/lib/renders/store';
 import { ADMIN_VIEWER, viewerOf } from '@/tests/helpers/admin';
@@ -53,15 +54,21 @@ describe('a creative template and the 15,000-character clip limit', () => {
     return id;
   };
 
-  it('refuses to publish or submit a 15,001-character clip, and lets exactly 15,000 through to the next check', async () => {
-    const over = await draft(15_001);
-    expect(await code(makerAction(deps(), creative, { action: 'publish', id: over, rights: true }, open))).toBe('recipe_invalid');
-    expect(await code(makerAction(deps(), creative, { action: 'submit', id: over, rights: true }, open))).toBe('recipe_invalid');
+  it('refuses to publish or submit a clip the engine would read as more than 15,000, and lets exactly 15,000 through', async () => {
+    // As the engine reads it: `{{selfie}}` becomes "Image 1" and a person line is added.
+    const probe = film(100) as unknown as Recipe;
+    const overhead = engineStepPrompt(probe, probe.steps[0]!).length - 100;
+    // Written at 15,000 it goes out longer than 15,000; one character over the exact length too.
+    for (const chars of [15_000, 15_000 - overhead + 1]) {
+      const over = await draft(chars);
+      expect(await code(makerAction(deps(), creative, { action: 'publish', id: over, rights: true }, open))).toBe('recipe_invalid');
+      expect(await code(makerAction(deps(), creative, { action: 'submit', id: over, rights: true }, open))).toBe('recipe_invalid');
+    }
     const { rows } = await h.sql.query<{ n: number }>("select count(*)::int as n from prompt_items where title = 'Long take'");
     expect(rows[0]!.n).toBe(0);
 
     // The recipe passes; what stops it now is the missing example file, not its length.
-    const exact = await draft(15_000);
+    const exact = await draft(15_000 - overhead);
     expect(await code(makerAction(deps(), creative, { action: 'publish', id: exact, rights: true }, open))).toBe('example_file_required');
   });
 });

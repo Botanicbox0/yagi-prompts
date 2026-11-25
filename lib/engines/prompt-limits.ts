@@ -64,16 +64,16 @@ export function editHeadroom(engine: string | null | undefined, compiledSourceLe
 }
 
 /**
- * Below this headroom a template takes no change requests (founder 2026-11-25: a paid edit must never be dropped).
- * It is the most the deterministic compile can add for the fullest edit the caps allow, measured on a short base with
- * the template's styling block, both parts kept as the buyer's own, the three reference photos and BGM:
- *   chips path (TWINGS_PERSONAL_EDIT_SHEET off, today's production): 4,990 solo, 5,193 couple — hair 400 + makeup
- *     400 + outfit 600 + prop 400 overrides, 4 shot edits of 500, 12 exclusions of 120, plus headers, reference lines,
- *     own-style rules, the audio and skin contracts;
- *   sheet path (flag on): 3,466 solo — 6 change lines, 6 keep and 4 exclude lines of 120, plus the same additions.
- * Rounded up to 5,200 so either path fits (tests/template-director/edit-headroom.test.ts re-measures both).
+ * Below this headroom nothing useful fits, so a template takes no change requests at all (founder 2026-11-25). Above
+ * it every edit is checked one by one before payment (lib/prompts/prompt-length.ts `editFit`), so this floor is only
+ * the smallest useful edit: ONE styled part switched to "내 사진 그대로". Measured on the deterministic compile of a
+ * short base whose styling block styles hair, makeup and outfit with 120-character lines (the tail cap): hair 896,
+ * makeup 814 — the part's rule line, its exclusion with the template's 120-character description, and the skin and
+ * audio contracts the sanitizer appends to any edited prompt. Solo, because that is how the render compiles: a couple
+ * or pet template always runs as a recipe, and the recipe pass hands the compile no cast. Rounded up to 1,000
+ * (tests/template-director/edit-headroom.test.ts re-measures it).
  */
-export const EDIT_HEADROOM_MIN_CHARS = 5_200;
+export const EDIT_HEADROOM_MIN_CHARS = 1_000;
 
 /** One clip's room for edits (lib/prompts/prompt-length.ts `templateEditHeadroom`). */
 export interface ClipHeadroom {

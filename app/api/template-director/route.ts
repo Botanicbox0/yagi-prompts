@@ -4,7 +4,9 @@ import { getSqlRunner } from '@/lib/db/connect';
 import { personalEditSheetOpen } from '@/lib/flags';
 import { isLocale } from '@/lib/i18n/config';
 import { loadPromptBySlug } from '@/lib/prompts/repo';
-import { promptRowEditsClosed } from '@/lib/prompts/edits-closed';
+import { promptRowLengthInput } from '@/lib/prompts/edits-closed';
+import { editFit, templateEditsClosed } from '@/lib/prompts/prompt-length';
+import { getDictionary } from '@/lib/i18n/dictionaries';
 import {
   DIRECTOR_DEFAULT_REFERENCE_MESSAGE_EN,
   DIRECTOR_DEFAULT_REFERENCE_MESSAGE_KO,
@@ -25,6 +27,7 @@ import {
   type DirectorReferenceAttachment,
   type PersonalAudioMode,
   type PersonalBgmMood,
+  type PersonalDirectorSpec,
 } from '@/lib/template-director/schema';
 
 export const dynamic = 'force-dynamic';
@@ -96,7 +99,8 @@ export async function POST(request: Request): Promise<NextResponse> {
     return json({ ok: false, code: 'not_found' }, 404);
   }
   // Founder 2026-11-25 — a template with no room for edits takes no change requests (its page shows no director).
-  if (await promptRowEditsClosed(sql, template)) return json({ ok: false, code: 'edits_closed' }, 409);
+  const lengthInput = await promptRowLengthInput(sql, template);
+  if (lengthInput && templateEditsClosed(lengthInput)) return json({ ok: false, code: 'edits_closed' }, 409);
 
   // docs/PERSONAL-STUDIO.md §3.3 — the template's own locks, read from its prompt. Without a `Template locks:` block
   // this is NO_LOCKS and every branch below that uses it is skipped: the turn and the answer are exactly as before.
@@ -166,11 +170,31 @@ export async function POST(request: Request): Promise<NextResponse> {
   // The answer names the locked parts (the public projection only) so the screen can show them; absent without locks.
   const lockField = locks.any ? { locks: publicLocks(locks) } : {};
 
+  // Founder 2026-11-25 — a turn that changes the sheet or the chips is applied only if the edit, compiled the way the
+  // fallback compiles it, still fits the clip (lib/prompts/prompt-length.ts `editFit`). Otherwise nothing changes: the
+  // sheet and the chips stay as they were, and the screen says so (`too_long`).
+  const refs = {
+    hasOutfitRef: references.some((ref) => ref.slotName === 'look_ref'),
+    hasPropRef: references.some((ref) => ref.slotName === 'prop_ref'),
+    hasSceneRef: references.some((ref) => ref.slotName === 'scene_ref'),
+  };
+  const tooLong = (result: DirectorChatTurnResult): boolean => {
+    if (!lengthInput) return false;
+    const changes = sheetState ? result.changed === true && result.sheet !== undefined : result.approved && result.summaryChips.length > 0;
+    if (!changes) return false;
+    const spec = (sheetState
+      ? { audioMode, bgmMood, sheet: result.sheet }
+      : { audioMode, bgmMood, userMessage: null, summaryChips: result.summaryChips, structuredIntent: null }) as PersonalDirectorSpec;
+    return !editFit(lengthInput, spec, refs).fits;
+  };
+  const tooLongAnswer = () => json({ ok: false, code: 'too_long', message: getDictionary(locale).editSheet.tooLong }, 422);
+
   const config = directorConfigFromEnv();
   if (config) {
     try {
       const director = createFlashTemplateDirector(config);
       const result = settle(await director.runChatTurn(turnInput));
+      if (tooLong(result)) return tooLongAnswer();
       return json({ ok: true, model: director.model, turn: toClientDirectorTurnResponse(result), ...lockField }, 200);
     } catch {
       // Fall back to deterministic Stage 1 parser if Gemini API is temporarily unreachable.
@@ -178,5 +202,6 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   const fallback = settle(runHeuristicDirectorTurn({ ...turnInput, audioMode, bgmMood }));
+  if (tooLong(fallback)) return tooLongAnswer();
   return json({ ok: true, model: 'heuristic', turn: toClientDirectorTurnResponse(fallback), ...lockField }, 200);
 }

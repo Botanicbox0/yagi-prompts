@@ -9,7 +9,7 @@ import { createTossOrder } from '@/lib/billing/toss-service';
 import { canStartRender } from '@/lib/renders/service';
 import { bindOrderPhotos, orderPhotos, type OrderPhotosFailure } from '@/lib/renders/cast-form';
 import { parseDirectorSpecInput } from '@/lib/template-director/schema';
-import { ordersEditOnClosedTemplate } from '@/lib/prompts/edits-closed';
+import { ORDER_EDIT_REFUSAL_STATUS, orderEditRefusal } from '@/lib/prompts/edits-closed';
 import { parseSelectedFrames } from '@/lib/twings/selective-frames';
 
 /**
@@ -43,9 +43,10 @@ export async function POST(request: Request) {
     const deps = await getTossContext();
     if (!deps) return json({ ok: false, code: 'unavailable' }, 503);
     const form = await request.formData();
-    // Founder 2026-11-25 — a template with no room for edits refuses a request carrying one: no order, nothing charged.
+    // Founder 2026-11-25 — an edit the template cannot take (no room at all, or this one too long): no order, nothing charged.
     const directorSpec = parseDirectorSpecInput(form.get('directorSpec'));
-    if (await ordersEditOnClosedTemplate(deps.sql, form, directorSpec)) return json({ ok: false, code: 'edits_closed' }, 409);
+    const editRefusal = await orderEditRefusal(deps.sql, form, directorSpec);
+    if (editRefusal) return json({ ok: false, code: editRefusal }, ORDER_EDIT_REFUSAL_STATUS[editRefusal]);
     // docs/CAST-CATEGORIES.md §3: which photo the order carries — the saved selfie (solo, couple,
     // person + pet) or the pet (pet-only) — and the second photo, if the template takes one.
     // A solo template keeps exactly the old rule: the saved selfie or `selfie_required`.

@@ -70,7 +70,8 @@ describe('the personal compile fits the clip it is for', () => {
       expect(result.prompt).toContain(LOCKS);
       expect(result.prompt).toContain(STYLING);
       expect(overWarnings(warn)).toHaveLength(1);
-      expect(overWarnings(warn)[0]![1]).toEqual({ engine: 'engine' in engine ? 'seedance-2.5' : null, chars: unguarded.prompt.length });
+      // An order passes the fit check first, so reaching this is `unexpected` (founder 2026-11-25).
+      expect(overWarnings(warn)[0]![1]).toEqual({ engine: 'engine' in engine ? 'seedance-2.5' : null, chars: unguarded.prompt.length, unexpected: true });
     }
   });
 

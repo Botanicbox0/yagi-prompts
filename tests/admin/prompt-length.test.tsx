@@ -6,6 +6,7 @@ import { getDictionary } from '@/lib/i18n/dictionaries';
 import { interpolate } from '@/lib/i18n/format';
 import { loadPromptBySlug } from '@/lib/prompts/repo';
 import { loadOverLimitTemplates } from '@/lib/prompts/prompt-length';
+import { buildRenderPrompt } from '@/lib/renders/prompt';
 import { TEMPLATE_STYLING_DEFAULT_BLOCK, renderStylingBlock } from '@/lib/template-director/styling';
 import { adminHarness, upload, type AdminHarness } from '../helpers/admin';
 import { runner } from '../helpers/pglite';
@@ -34,11 +35,16 @@ import AdminPromptsPage from '@/app/(admin)/admin/prompts/page';
  * Filler text only (the repo is public).
  */
 
-/** A person template's text of exactly `total` characters, its styling block (rule 3, required on create) included. */
+/** The identity line the render adds to a text that does not name the photo (counted by the gate since 2026-11-25). */
+const LINE = buildRenderPrompt({ promptText: 'A woman walks.', medium: 'video', hasPhoto: true }).text.length - 'A woman walks.'.length;
+/**
+ * A person template's text that the render hands over as exactly `total` characters: its styling block (rule 3,
+ * required on create) included, the render's identity line counted.
+ */
 const fill = (total: number): string => {
   const head = 'A woman walks through a white studio while the camera pushes in slowly on her face. ';
   const tail = `\n\n${TEMPLATE_STYLING_DEFAULT_BLOCK}`;
-  return `${head}${'x'.repeat(total - head.length - tail.length)}${tail}`;
+  return `${head}${'x'.repeat(total - LINE - head.length - tail.length)}${tail}`;
 };
 const dict = getDictionary('ko');
 const a = dict.admin;
@@ -83,7 +89,7 @@ describe('the 15,000-character gate on admin templates', () => {
 
   it('publishes a 15,000-character Seedance 2.5 prompt and refuses 15,001, writing nothing', async () => {
     const id = await created('Exact limit', fill(15_000));
-    expect((await textOf(id)).prompt_text).toHaveLength(15_000);
+    expect((await textOf(id)).prompt_text).toBe(fill(15_000));
     expect(await harness.run('prompt.create', authoring('One over', fill(15_001)))).toEqual({ ok: false, code: 'invalid', detail: refusal('15,001') });
     expect(await loadPromptBySlug(sql(), 'one-over')).toBeNull();
     // A 10-second Seedance 2.0 template has no verified limit; a 20-second one renders on 2.5 and is held to it.
@@ -114,21 +120,21 @@ describe('the 15,000-character gate on admin templates', () => {
 
   it('shows the room each clip leaves for edits, and says when a template takes no change requests', async () => {
     const roomy = await page(await created('Roomy walk', fill(9_000)));
-    expect(roomy).toMatch(/수정 여유 5,[0-9]{3}자/);
+    expect(roomy).toContain('수정 여유 6,000자');
     expect(roomy).not.toContain('data-prompt-edits-closed');
     const full = await page(await created('Full walk', fill(14_879)));
-    expect(full).toMatch(/수정 여유 [0-9]{1,3}자/);
+    expect(full).toContain('수정 여유 121자');
     expect(full).toContain('data-prompt-edits-closed');
-    expect(full).toContain(interpolate(a.promptEditsClosed, { min: '5,200' }));
+    expect(full).toContain(interpolate(a.promptEditsClosed, { min: '1,000' }));
   });
 
   it('lets an older over-limit template be shortened, never lengthened, and keeps it on sale untouched', async () => {
     const id = await legacy('Old long', 20_000);
     expect((await textOf(id)).status).toBe('published');
     expect(await edit(id, fill(20_500))).toEqual({ ok: false, code: 'invalid', detail: refusal('20,500') });
-    expect((await textOf(id)).prompt_text).toHaveLength(20_000);
+    expect((await textOf(id)).prompt_text).toBe(fill(20_000));
     expect(await edit(id, fill(19_000))).toMatchObject({ ok: true, code: 'saved' });
-    expect((await textOf(id)).prompt_text).toHaveLength(19_000);
+    expect((await textOf(id)).prompt_text).toBe(fill(19_000));
     // A save that keeps the text (a new title here) is never refused for its length.
     expect(await edit(id, fill(19_000), 'Old long renamed')).toMatchObject({ ok: true, code: 'saved' });
     expect(await edit(id, fill(15_000))).toMatchObject({ ok: true, code: 'saved' });

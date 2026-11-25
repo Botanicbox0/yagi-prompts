@@ -15,7 +15,7 @@ import {
 import { renderHref } from '@/lib/renders/share';
 import { getRenderStore } from '@/lib/renders/store';
 import { parseDirectorSpecInput } from '@/lib/template-director/schema';
-import { ordersEditOnClosedTemplate } from '@/lib/prompts/edits-closed';
+import { ORDER_EDIT_REFUSAL_STATUS, orderEditRefusal } from '@/lib/prompts/edits-closed';
 import { parseSelectedFrames } from '@/lib/twings/selective-frames';
 
 export const dynamic = 'force-dynamic';
@@ -82,9 +82,10 @@ export async function POST(request: Request): Promise<NextResponse> {
     return json({ ok: false, code: 'bad_request' }, 400);
   }
 
-  // Founder 2026-11-25 — a template with no room for edits refuses a request carrying one, before any credit is spent.
+  // Founder 2026-11-25 — an edit the template cannot take (no room at all, or this one too long) is refused before any credit is spent.
   const directorSpec = parseDirectorSpecInput(form.get('directorSpec'));
-  if (await ordersEditOnClosedTemplate(sql, form, directorSpec)) return json({ ok: false, code: 'edits_closed' }, 409);
+  const editRefusal = await orderEditRefusal(sql, form, directorSpec);
+  if (editRefusal) return json({ ok: false, code: editRefusal }, ORDER_EDIT_REFUSAL_STATUS[editRefusal]);
 
   const photo = form.get('photo');
   const rawLocale = form.get('locale');

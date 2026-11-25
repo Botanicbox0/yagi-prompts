@@ -2099,39 +2099,29 @@ function rewriteErrorCode(error: unknown): string {
  * The rewrite is tried twice; after that the deterministic compiler builds the prompt and the path says
  * `deterministic_fallback` so the caller can record it (docs/PERSONAL-STUDIO.md §4 #4).
  */
-export async function compileDirectorPromptDetailed(
-  rawInput: {
-    basePrompt: string;
-    medium: 'image' | 'video';
-    cast?: 'solo' | 'couple' | 'pet';
-    hasPersonSlot?: boolean;
-    hasOutfitRef?: boolean;
-    hasPropRef?: boolean;
-    hasSceneRef?: boolean;
-    directorSpec?: PersonalDirectorSpec | null;
-    referenceSlots?: readonly DirectorRewriteInput['referenceSlots'][number][];
-    /** The engine (the model) this clip renders on; it sets how long the compiled text may be (`compiledPromptLimit`). */
-    engine?: string | null;
-  },
-  deps: { env?: Record<string, string | undefined>; fetch?: typeof fetch } = {}
-): Promise<DirectorCompileResult> {
-  // A customised prompt longer than the engine takes is never cut: the template's own text goes whole, the result says
-  // `over_limit`, with one warning. Its lock and styling blocks are in that text, so neither is ever dropped.
-  const limit = compiledPromptLimit(rawInput);
-  const fits = (text: string): boolean => limit === null || text.length <= limit;
-  const overLimit = (text: string): DirectorCompileResult => {
-    console.warn(DIRECTOR_OVER_ENGINE_LIMIT_LOG_TAG, { engine: rawInput.engine ?? null, chars: text.length });
-    return { prompt: rawInput.basePrompt, path: 'over_limit' };
-  };
+export interface DirectorCompileInput {
+  basePrompt: string;
+  medium: 'image' | 'video';
+  cast?: 'solo' | 'couple' | 'pet';
+  hasPersonSlot?: boolean;
+  hasOutfitRef?: boolean;
+  hasPropRef?: boolean;
+  hasSceneRef?: boolean;
+  directorSpec?: PersonalDirectorSpec | null;
+  referenceSlots?: readonly DirectorRewriteInput['referenceSlots'][number][];
+  /** The engine (the model) this clip renders on; it sets how long the compiled text may be (`compiledPromptLimit`). */
+  engine?: string | null;
+}
+
+/** What every compile path reads first: the template's locks and styling, the locked and own-style input, the sheet. */
+function prepareCompile(rawInput: DirectorCompileInput, env: Record<string, string | undefined>) {
   // docs/PERSONAL-STUDIO.md §3.3 — the template's locks come from its own prompt text. A base prompt without the
   // `Template locks:` header gives NO_LOCKS, and every branch below that reads `locks` checks `locks.any` first.
   const locks = parseTemplateLocks(rawInput.basePrompt);
-  const env = deps.env ?? process.env;
   // docs/PERSONAL-STUDIO.md §3.4.9 — the template's styling comes from its own prompt text too. Without a valid
   // `Template styling:` block: no own part, no uses, the same input (every branch below checks `own`/`uses` first).
   const styling = parseTemplateStyling(rawInput.basePrompt);
-  const owned = ownCompileInput(locks.any ? lockCompileInput(rawInput, locks) : rawInput, styling, locks, env);
-  const { input, own, uses } = owned;
+  const { input, own, uses } = ownCompileInput(locks.any ? lockCompileInput(rawInput, locks) : rawInput, styling, locks, env);
   const spec = input.directorSpec ?? null;
   // docs/PERSONAL-STUDIO.md §2.3 — with a sheet, chips, intent and note are ignored; the flag off = the chips path.
   const sheet = activePersonalSheet(spec, env, locks);
@@ -2148,6 +2138,34 @@ export async function compileDirectorPromptDetailed(
             input.hasPropRef ||
             input.hasSceneRef
         )) || own.length > 0;
+  return { locks, styling, input, own, uses, spec, sheet, hasCustomization };
+}
+
+/**
+ * Founder 2026-11-25 — the text the deterministic compile hands over for this input: exactly what the fallback after a
+ * failed rewrite sends (the base unchanged when nothing is asked). Pure, no model call; the order's fit check
+ * (lib/prompts/prompt-length.ts `editFit`) measures this, so an accepted edit always fits.
+ */
+export function deterministicDirectorPrompt(rawInput: DirectorCompileInput, env: Record<string, string | undefined> = process.env): string {
+  const { locks, input, own, hasCustomization } = prepareCompile(rawInput, env);
+  return hasCustomization ? deterministicCompile(input, env, locks, own) : input.basePrompt;
+}
+
+export async function compileDirectorPromptDetailed(
+  rawInput: DirectorCompileInput,
+  deps: { env?: Record<string, string | undefined>; fetch?: typeof fetch } = {}
+): Promise<DirectorCompileResult> {
+  // A customised prompt longer than the engine takes is never cut: the template's own text goes whole, the result says
+  // `over_limit`, with one warning. Its lock and styling blocks are in that text, so neither is ever dropped. An order
+  // passes the fit check first (the deterministic text fits), so this is a defensive branch: `unexpected`.
+  const limit = compiledPromptLimit(rawInput);
+  const fits = (text: string): boolean => limit === null || text.length <= limit;
+  const overLimit = (text: string): DirectorCompileResult => {
+    console.warn(DIRECTOR_OVER_ENGINE_LIMIT_LOG_TAG, { engine: rawInput.engine ?? null, chars: text.length, unexpected: true });
+    return { prompt: rawInput.basePrompt, path: 'over_limit' };
+  };
+  const env = deps.env ?? process.env;
+  const { locks, styling, input, own, uses, spec, sheet, hasCustomization } = prepareCompile(rawInput, env);
   if (!hasCustomization) return { prompt: input.basePrompt, path: 'unchanged' };
   const sheetMark: { sheet?: true } = sheet ? { sheet: true } : {};
 

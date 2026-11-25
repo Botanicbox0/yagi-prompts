@@ -4,8 +4,8 @@ import type { Dictionary } from '@/messages/en';
 import { interpolate } from '@/lib/i18n/format';
 import { isRoyalty, quoteRecipeBase, ROYALTY_DEFAULT_KRW, ROYALTY_MAX_KRW, ROYALTY_STEP_KRW } from '@/lib/recipes/pricing';
 import { makeEarning } from '@/lib/twings/template-price';
-import { exportRecipe, INTRO_MAX, MAX_RECIPE_BYTES, MAX_RECIPE_STEPS, NOTE_MAX, OUTRO_MAX, PARTNER_SLOT, parseRecipe, PET_SLOT, recipeMedium, SELFIE_SLOT, type Recipe, type RecipeIssue } from '@/lib/recipes/schema';
-import { promptCharLimit } from '@/lib/engines/prompt-limits';
+import { engineStepPrompt, exportRecipe, INTRO_MAX, MAX_RECIPE_BYTES, MAX_RECIPE_STEPS, NOTE_MAX, OUTRO_MAX, PARTNER_SLOT, parseRecipe, PET_SLOT, recipeMedium, SELFIE_SLOT, type Recipe, type RecipeIssue } from '@/lib/recipes/schema';
+import { promptCharLimit, verifiedPromptCharLimit } from '@/lib/engines/prompt-limits';
 import { BUTTON, BUTTON_OUTLINE, FIELD, HINT, PANEL } from '@/components/creators/styles';
 import { KeyframePicker } from './keyframe-picker';
 import type { VideoKeyframe } from '@/lib/prompts/keyframes';
@@ -331,7 +331,7 @@ export function RecipeEditor({ copy, formatId, draft, engines, aspects, hasSelfi
             const durations = Array.from({ length: (engine.maxDuration ?? 15) - (engine.minDuration ?? 4) + 1 }, (_, i) => (engine.minDuration ?? 4) + i);
             const removable = (medium === 'carousel' && steps.length > 1) || (medium === 'video' && step.kind === 'image');
             // One step is one clip, held to its own engine's limit; a longer text stays as written and is flagged.
-            const limit = promptCharLimit(step.engine), written = recipe.steps[index]?.prompt.trim().length ?? 0, over = written > limit;
+            const limit = promptCharLimit(step.engine), written = sentLength(recipe, index), over = written > limit;
             const count = (n: number) => n.toLocaleString(locale === 'ko' ? 'ko-KR' : 'en-US');
             return <div key={index} data-recipe-step={`step${index + 1}`} data-step-kind={step.kind} className="space-y-3 border-t border-hairline pt-4 first:border-t-0 first:pt-0">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -531,6 +531,22 @@ export function toRecipe(steps: StepState[], medium: EditorMedium, references: E
   const intro = notes?.intro.trim(), outro = notes?.outro.trim();
   const written = intro || outro ? { notes: { ...(intro ? { intro } : {}), ...(outro ? { outro } : {}) } } : {};
   return { version: 2, slots, steps: built, output, ...written } as unknown as Recipe;
+}
+
+/**
+ * A step's length as the recipe rules count it: on an engine with a verified limit (Seedance 2.5), as the engine reads
+ * it, its person line included (founder 2026-11-25); elsewhere as written.
+ */
+function sentLength(recipe: Recipe, index: number): number {
+  const step = recipe.steps[index];
+  if (!step) return 0;
+  const written = step.prompt.trim();
+  if (verifiedPromptCharLimit(step.engine) === null) return written.length;
+  try {
+    return engineStepPrompt(recipe, { ...step, prompt: written }).length;
+  } catch {
+    return written.length;
+  }
 }
 
 /** A stored or imported recipe → editor state, naming each maker file by its place in this draft's files. */

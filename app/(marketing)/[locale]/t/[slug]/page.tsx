@@ -175,6 +175,7 @@ export default async function TemplatePage({ params }: RouteParams) {
           outfitPhoto: e.styleOutfitPhoto,
           outfitPhotoCta: e.styleOutfitPhotoCta,
           outfitAttached: e.styleOutfitAttached,
+          tooLong: e.tooLong,
         },
       }
     : null;
@@ -488,6 +489,8 @@ export default async function TemplatePage({ params }: RouteParams) {
                             ...(card.styling ? { styling: card.styling, lockCopy: dict.editSheet } : {}),
                             // Founder 2026-11-25 — a template with no room left for edits: one line, no edit panel.
                             ...(card.editsClosed ? { editsClosed: t.editsClosed } : {}),
+                            // …and, with room, the numbers that tell which "내 사진 그대로" switch still fits.
+                            ...(card.editRoom ? { editRoom: card.editRoom } : {}),
                             ...(makeParts ? { parts: makeParts } : {}),
                             // docs/PERSONAL-STUDIO.md §3.4.10 — a one-style template's mismatch line, above the button.
                             ...(templateLook ? { templateLook: { look: templateLook, note: dict.templateLook.mismatch } } : {}),

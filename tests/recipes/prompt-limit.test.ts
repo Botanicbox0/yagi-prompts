@@ -7,6 +7,7 @@ import {
   MAX_STUDIO_RECIPE_BYTES,
   NOTE_MAX,
   OUTRO_MAX,
+  engineStepPrompt,
   exportRecipe,
   parseRecipe,
   setPromptTooLong,
@@ -53,21 +54,34 @@ const carousel = (frames: number, prompt: string, notes = false): Recipe => ({
   ...(notes ? { notes: { intro: '가'.repeat(INTRO_MAX), outro: '가'.repeat(OUTRO_MAX) } } : {}),
 }) as Recipe;
 
+/** What the engine reads beyond the written film step (its references renamed, its person line added). */
+const filmOverhead = (head: string, make: (prompt: string) => Recipe, at: number): number => {
+  const probe = make(fill(head, 100));
+  return engineStepPrompt(probe, probe.steps[at]!).length - 100;
+};
+/** A film step that the engine reads as exactly `sent` characters. */
+const filmSent = (sent: number, char = 'x'): string => fill('{{selfie}} ', sent - filmOverhead('{{selfie}} ', (p) => film('seedance-2.5', p), 0), char);
+const stillFilmSent = (sent: number, char = 'x'): string =>
+  fill('{{still}} ', sent - filmOverhead('{{still}} ', (p) => stillThenFilm('{{selfie}} stands in a white studio.', p), 1), char);
+
 describe('a step prompt is held to its own engine', () => {
-  it('takes a Seedance 2.5 clip of exactly 15,000 characters, in English or Korean, and refuses 15,001', () => {
+  it('takes a Seedance 2.5 clip the engine reads as exactly 15,000 characters, in English or Korean, and refuses one more', () => {
     for (const char of ['x', '가']) {
-      const exact = fill('{{selfie}} ', SEEDANCE_25_PROMPT_CHARS, char);
-      expect(exact).toHaveLength(15_000);
-      expect(codes(film('seedance-2.5', exact)), char).toEqual([]);
-      expect(codes(film('seedance-2.5', exact), true), char).toEqual([]);
-      expect(codes(film('seedance-2.5', `${exact}${char}`)), char).toContain('shape');
+      const exact = film('seedance-2.5', filmSent(SEEDANCE_25_PROMPT_CHARS, char));
+      expect(engineStepPrompt(exact, exact.steps[0]!)).toHaveLength(15_000);
+      expect(codes(exact), char).toEqual([]);
+      expect(codes(exact, true), char).toEqual([]);
+      expect(codes(film('seedance-2.5', `${filmSent(SEEDANCE_25_PROMPT_CHARS, char)}${char}`)), char).toContain('shape');
+      // Written at exactly 15,000, it would go out longer (its person line): refused (founder 2026-11-25).
+      expect(codes(film('seedance-2.5', fill('{{selfie}} ', SEEDANCE_25_PROMPT_CHARS, char))), char).toContain('shape');
     }
   });
 
   it('counts per clip, not per recipe: an image step and a film each at their own limit pass together', () => {
     // main allows one film per recipe (image → film); several clips per recipe arrive with the multi-part branch.
-    const recipe = stillThenFilm(fill('{{selfie}} ', DEFAULT_PROMPT_CHARS, '가'), fill('{{still}} ', SEEDANCE_25_PROMPT_CHARS, '가'));
-    expect(recipe.steps[0]!.prompt.length + recipe.steps[1]!.prompt.length).toBe(23_000);
+    const recipe = stillThenFilm(fill('{{selfie}} ', DEFAULT_PROMPT_CHARS, '가'), stillFilmSent(SEEDANCE_25_PROMPT_CHARS, '가'));
+    expect(engineStepPrompt(recipe, recipe.steps[1]!)).toHaveLength(15_000);
+    expect(recipe.steps[0]!.prompt.length + recipe.steps[1]!.prompt.length).toBeGreaterThan(22_000);
     expect(codes(recipe)).toEqual([]);
   });
 
@@ -91,7 +105,7 @@ describe('the recipe byte caps admit the largest legitimate recipe', () => {
   // UTF-8 bytes (Buffer.byteLength), as before: a Korean syllable is 3 bytes, so 15,000 of them are 45,000 bytes.
   const largest = [
     ['ten Korean frames at the image limit, every note full', carousel(MAX_RECIPE_STEPS, fill('{{selfie}} ', DEFAULT_PROMPT_CHARS, '가'), true)],
-    ['a Korean still and a Korean 15,000-character film, every note full', stillThenFilm(fill('{{selfie}} ', DEFAULT_PROMPT_CHARS, '가'), fill('{{still}} ', SEEDANCE_25_PROMPT_CHARS, '가'), true)],
+    ['a Korean still and a Korean 15,000-character film, every note full', stillThenFilm(fill('{{selfie}} ', DEFAULT_PROMPT_CHARS, '가'), stillFilmSent(SEEDANCE_25_PROMPT_CHARS, '가'), true)],
   ] as const;
 
   it.each(largest)('%s', (_name, recipe) => {

@@ -7,12 +7,14 @@ import {
   PERSONAL_BGM_MOODS,
   TEMPLATE_KEEP_LINE_PREFIX,
   compileDirectorPromptDetailed,
+  deterministicDirectorPrompt,
   parseTemplateLocks,
   parseTemplateStyling,
   renderStylingBlock,
 } from '@/lib/template-director';
 import { EDIT_HEADROOM_MIN_CHARS, SEEDANCE_25_PROMPT_CHARS, editHeadroom } from '@/lib/engines/prompt-limits';
-import { templateEditHeadroom, templateEditsClosed } from '@/lib/prompts/prompt-length';
+import { editFit, templateCompileClips, templateEditHeadroom, templateEditRoom, templateEditsClosed } from '@/lib/prompts/prompt-length';
+import type { PersonalDirectorSpec } from '@/lib/template-director/schema';
 import { toPromptCard } from '@/lib/prompts/catalog';
 import type { PromptRow } from '@/lib/prompts/repo';
 
@@ -113,34 +115,112 @@ describe('edit headroom', () => {
     expect(templateEditsClosed({ ...film(14_879), engine: 'seedance-2.0' })).toBe(false);
   });
 
-  it('is at least what the fullest edit adds on either deterministic path (re-measured from the caps)', async () => {
-    const short = `Shot 1 (0-3s): she walks.\nShot 2 (3-6s): she turns.\n\n${STYLING}`;
-    const t = (n: number, c: string) => `${c} ${'w'.repeat(n - 2)}`.slice(0, n);
-    const refs = { hasOutfitRef: true, hasPropRef: true, hasSceneRef: true };
+  it('the floor is one "내 사진 그대로" switch at its largest (re-measured: 120-character styled lines, solo as the render compiles)', () => {
+    const tail = (c: string) => `${c} ${'w'.repeat(117)}.`.slice(0, 120);
+    const styled = renderStylingBlock([{ part: 'hair', from: 'template', note: tail('h') }, { part: 'makeup', from: 'template', note: tail('m') }, { part: 'outfit', from: 'template', note: tail('o') }]);
+    const short = `Shot 1 (0-3s): @Image 1 walks.\nShot 2 (3-6s): she turns.\n\n${styled}`;
     let most = 0;
-    for (const cast of ['solo', 'couple'] as const) {
-      for (const bgmMood of PERSONAL_BGM_MOODS) {
-        const sheet = {
-          change: DIRECTOR_EDITABLE_SLOTS.map((slot, i) => ({ text: t(120, `c${i}`), slot, shots: { from: 1, to: 12 } })),
-          keep: Array.from({ length: 6 }, (_, i) => t(120, `k${i}`)),
-          exclude: Array.from({ length: 4 }, (_, i) => t(120, `e${i}`)),
-        };
-        const intent = {
-          hairOverrideEn: t(400, 'h'), makeupOverrideEn: t(400, 'm'), outfitOverrideEn: t(600, 'o'), propOverrideEn: t(400, 'p'),
-          shotEdits: [1, 2, 3, 4].map((n) => ({ shotIndex: n, actionEn: t(500, `s${n}`) })),
-          strictExclusionsEn: Array.from({ length: 12 }, (_, i) => t(120, `x${i}`)),
-        };
-        const own = ['hair', 'makeup'] as ('hair' | 'makeup')[];
-        const runs = [
-          await compileDirectorPromptDetailed({ basePrompt: short, medium: 'video', cast, engine: 'seedance-2.0', directorSpec: { audioMode: 'bgm', bgmMood, sheet, own }, ...refs }, { env: { TWINGS_PERSONAL_EDIT_SHEET: 'on' } }),
-          await compileDirectorPromptDetailed({ basePrompt: short, medium: 'video', cast, engine: 'seedance-2.0', directorSpec: { audioMode: 'bgm', bgmMood, structuredIntent: intent, own }, ...refs }, { env: {} }),
-          await compileDirectorPromptDetailed({ basePrompt: short, medium: 'video', cast, engine: 'seedance-2.0', directorSpec: { audioMode: 'bgm', bgmMood, userMessage: t(1000, 'n'), own }, ...refs }, { env: {} }),
-        ];
-        for (const run of runs) most = Math.max(most, run.prompt.length - short.length);
+    for (const cast of ['solo'] as const) {
+      for (const part of ['hair', 'makeup'] as const) {
+        const out = deterministicDirectorPrompt({ basePrompt: short, medium: 'video', cast, hasPersonSlot: true, directorSpec: { audioMode: 'ambient', own: [part] } as PersonalDirectorSpec }, {});
+        most = Math.max(most, out.length - short.length);
       }
     }
-    expect(most).toBeGreaterThan(3_000);
+    expect(most).toBeGreaterThan(600);
     expect(most).toBeLessThanOrEqual(EDIT_HEADROOM_MIN_CHARS);
+    expect(EDIT_HEADROOM_MIN_CHARS - most).toBeLessThan(150);
+  });
+});
+
+/** A seeded generator, so the property run is the same every time. */
+function rng(seed: number): () => number {
+  let s = seed >>> 0;
+  return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 2 ** 32);
+}
+
+describe('the per-request fit check', () => {
+  const template = (chars: number) => ({ promptText: base(chars), medium: 'video', engine: 'seedance-2.5', runtimeSeconds: 10, cast: 'solo' as const });
+  const SHEET_ON = { TWINGS_PERSONAL_EDIT_SHEET: 'on' } as const;
+  const t = (n: number, c: string) => `${c} ${'w'.repeat(Math.max(0, n - 2))}`.slice(0, n);
+
+  function spec(next: () => number): { spec: PersonalDirectorSpec; refs: { hasOutfitRef: boolean; hasPropRef: boolean; hasSceneRef: boolean }; env: Record<string, string> } {
+    const pick = <T,>(items: readonly T[]): T => items[Math.floor(next() * items.length)]!;
+    const own = (['hair', 'makeup'] as const).filter(() => next() < 0.4);
+    const bgm = next() < 0.3;
+    const audio = { audioMode: bgm ? 'bgm' : 'ambient', bgmMood: bgm ? pick(PERSONAL_BGM_MOODS) : null } as const;
+    const refs = { hasOutfitRef: next() < 0.2, hasPropRef: next() < 0.2, hasSceneRef: next() < 0.2 };
+    const kind = pick(['sheet', 'note', 'chips', 'own'] as const);
+    if (kind === 'sheet') {
+      const sheet = {
+        change: Array.from({ length: Math.floor(next() * 7) }, (_, i) => ({ text: t(1 + Math.floor(next() * 120), `c${i}`), slot: pick(DIRECTOR_EDITABLE_SLOTS) })),
+        keep: Array.from({ length: Math.floor(next() * 7) }, (_, i) => t(1 + Math.floor(next() * 120), `k${i}`)),
+        exclude: Array.from({ length: Math.floor(next() * 5) }, (_, i) => t(1 + Math.floor(next() * 120), `e${i}`)),
+      };
+      return { spec: { ...audio, sheet, own } as PersonalDirectorSpec, refs, env: SHEET_ON };
+    }
+    if (kind === 'note') return { spec: { ...audio, userMessage: t(1 + Math.floor(next() * 1000), 'n'), own } as PersonalDirectorSpec, refs, env: {} };
+    if (kind === 'chips') {
+      const chips = DIRECTOR_EDITABLE_SLOTS.filter(() => next() < 0.5).map((slot) => ({ slot, labelKo: slot, summaryKo: t(1 + Math.floor(next() * 200), 's') }));
+      return { spec: { ...audio, summaryChips: chips, own } as PersonalDirectorSpec, refs, env: {} };
+    }
+    return { spec: { ...audio, own: own.length ? own : ['hair'] } as PersonalDirectorSpec, refs, env: {} };
+  }
+
+  it('any edit it accepts compiles, on the deterministic path and after a failed rewrite, to the same text within the limit', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const next = rng(20261125);
+    const failing = vi.fn(async () => new Response('down', { status: 500 }));
+    let accepted = 0, refused = 0;
+    for (const chars of [13_854, 14_000, 14_300, 14_600, 14_879, 14_920, 9_000]) {
+      const input = template(chars);
+      const clip = templateCompileClips(input)[0]!;
+      for (let i = 0; i < 40; i += 1) {
+        const { spec: s, refs, env } = spec(next);
+        const fit = editFit(input, s, refs, env);
+        if (templateEditsClosed(input) || !fit.fits) { refused += 1; continue; }
+        accepted += 1;
+        const render = { basePrompt: clip.base, medium: 'video' as const, cast: 'solo' as const, hasPersonSlot: true, ...refs, directorSpec: s };
+        const deterministic = await compileDirectorPromptDetailed(render, { env });
+        const fallback = await compileDirectorPromptDetailed(render, { env: { ...env, ...KEY }, fetch: failing as unknown as typeof fetch });
+        for (const out of [deterministic, fallback]) {
+          expect(out.path).not.toBe('over_limit');
+          expect(out.prompt.length).toBeLessThanOrEqual(SEEDANCE_25_PROMPT_CHARS);
+          expect(out.prompt.length).toBe(fit.clips[0]!.chars);
+          expect(out.prompt).toContain(LOCKS);
+        }
+      }
+    }
+    expect(accepted).toBeGreaterThan(20);
+    expect(refused).toBeGreaterThan(20);
+  });
+
+  it('measures what an edit adds: a short one fits a 13,854-character template, a long one does not', () => {
+    const input = template(13_854);
+    expect(editFit(input, { audioMode: 'ambient', userMessage: 'Give her a black leather jacket.' } as PersonalDirectorSpec).fits).toBe(true);
+    expect(editFit(input, { audioMode: 'bgm', bgmMood: 'cinematic', userMessage: t(1000, 'n') } as PersonalDirectorSpec).fits).toBe(false);
+  });
+});
+
+describe('the three templates the founder named (a three-line styling block)', () => {
+  const three = renderStylingBlock([
+    { part: 'hair', from: 'template', note: 'a sleek low bun with a centre part.' },
+    { part: 'makeup', from: 'template', note: 'soft rosy cheeks and a glossy lip.' },
+    { part: 'outfit', from: 'template', note: 'a cream knit cardigan over a white tee.' },
+  ]);
+  const text = (chars: number, namesPhoto: boolean) => {
+    const head = namesPhoto ? 'Shot 1 (0-3s): @Image 1 walks down a quiet street at dusk.\n' : 'Shot 1 (0-3s): she walks down a quiet street at dusk.\n';
+    const tail = `\n\n${three}`;
+    return `${head}${'x'.repeat(chars - head.length - tail.length)}${tail}`;
+  };
+  it.each([14_879, 14_920, 13_854])('%i characters', (chars) => {
+    for (const namesPhoto of [false, true]) {
+      const input = { promptText: text(chars, namesPhoto), medium: 'video', engine: 'seedance-2.5', runtimeSeconds: 10, cast: 'solo' as const };
+      const room = templateEditRoom(input)!;
+      const closed = templateEditsClosed(input);
+      const hairFits = editFit(input, { audioMode: 'ambient', own: ['hair'] } as PersonalDirectorSpec).fits;
+      console.log(`FOUNDER ${chars} namesPhoto=${namesPhoto} headroom=${room.headroom} closed=${closed} own=${JSON.stringify(room.own)} hairSwitchFits=${hairFits}`);
+      expect(closed).toBe(room.headroom < EDIT_HEADROOM_MIN_CHARS);
+    }
   });
 });
 
@@ -157,5 +237,17 @@ describe('the catalogue card', () => {
     expect(toPromptCard(row(base(14_879))).editsClosed).toBe(true);
     const open = toPromptCard(row(base(9_000)));
     expect('editsClosed' in open).toBe(false);
+    expect('editRoom' in open).toBe(false);
+  });
+
+  it('carries the room numbers only when not every "내 사진 그대로" switch fits together', () => {
+    const tight = toPromptCard(row(base(13_854)));
+    expect('editsClosed' in tight).toBe(false);
+    const room = tight.editRoom!;
+    expect(room.headroom).toBe(SEEDANCE_25_PROMPT_CHARS - templateCompileClips({ promptText: base(13_854), medium: 'video', engine: 'seedance-2.5', runtimeSeconds: 10 })[0]!.base.length);
+    expect(room.own.hair! + room.own.makeup!).toBeGreaterThan(room.headroom);
+    expect(Math.min(room.own.hair!, room.own.makeup!)).toBeLessThanOrEqual(room.headroom);
+    // Names and numbers only.
+    expect(JSON.stringify(room)).not.toMatch(/bun|cheeks|Shot/);
   });
 });

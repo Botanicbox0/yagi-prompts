@@ -172,6 +172,11 @@ export interface StudioLive {
    * where the director panel would be, and the parts card offers no own-style choice. Absent = exactly as before.
    */
   editsClosed?: string;
+  /**
+   * Founder 2026-11-25 — the template's room for edits and what each "내 사진 그대로" switch adds (numbers only, from
+   * `PromptCard.editRoom`): a switch that would not fit is disabled with the parts card's `tooLong` line.
+   */
+  editRoom?: { headroom: number; own: Partial<Record<OwnStylePart, number>> };
   labels: {
     badge: string;
     /** Operators render for real without a charge (founder, 2026-09-10). */
@@ -433,6 +438,16 @@ export function TwingsStudio({
   const insufficientUsage = monthlyUsePercent !== null && (subscription?.remainingPercent ?? 0) < monthlyUsePercent;
   // §3.4.9 (S2): what the customer's edits change explicitly wins over the choice (the server rule, `ownChoiceFor`).
   const partRowsLive = live?.parts?.rows ?? [];
+  // Founder 2026-11-25 — a "내 사진 그대로" switch that, with the switches already made, would not fit the clip.
+  const editRoom = live?.editRoom;
+  const mineBlocked: OwnStylePart[] = editRoom
+    ? (['hair', 'makeup'] as const).filter((part) => {
+        const cost = editRoom.own[part];
+        if (cost === undefined) return false;
+        const others = (['hair', 'makeup'] as const).filter((other) => other !== part && styleChoices[other] === 'mine');
+        return cost + others.reduce((sum, other) => sum + (editRoom.own[other] ?? 0), 0) > editRoom.headroom;
+      })
+    : [];
   const overriddenParts = live?.parts
     ? explicitStyleParts(directorDraft.directorSpec, { sheet: live.editSheet ? directorDraft.directorSpec?.sheet ?? null : null })
     : [];
@@ -1078,6 +1093,7 @@ export function TwingsStudio({
                   choices={styleChoices}
                   {...(monthly || live.editsClosed ? {} : { onChoose: (part: OwnStylePart, choice: StyleChoice) => setStyleChoices((current) => ({ ...current, [part]: choice })) })}
                   overridden={overriddenParts}
+                  mineBlocked={mineBlocked}
                   outfitPhoto={{
                     open: !editorOpen && !live.editsClosed && !locksFromPublic(live.locks).refs.includes('look_ref'),
                     attached: Boolean(directorDraft.slotFiles.look_ref),

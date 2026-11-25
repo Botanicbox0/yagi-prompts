@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { IMAGE_ASPECTS, IMAGE_ENGINES, VIDEO_ASPECTS, engineProvider, isEngineId, isImageEngine, isVideoEngine, normalizeLegacyEngineId, type EngineId } from '@/lib/images/engines';
 import { videoEngineSpec } from '@/lib/video/models';
-import { MAX_ENGINE_PROMPT_CHARS, promptCharLimit } from '@/lib/engines/prompt-limits';
+import { MAX_ENGINE_PROMPT_CHARS, promptCharLimit, verifiedPromptCharLimit } from '@/lib/engines/prompt-limits';
 
 /**
  * Recipe v2 — a maker template as steps and slots (docs/PLATFORM-2.0.md §7.3).
@@ -377,6 +377,13 @@ export function parseRecipe(raw: unknown, options: ParseRecipeOptions = {}): Rec
     }
     seen.set(step.id, step);
   });
+  // Founder 2026-11-25: on an engine with a verified limit a step is also counted as the engine reads it (its person
+  // line included, lib/engines/prompt-limits.ts), so a step written at exactly 15,000 cannot go out longer.
+  for (const step of recipe.steps) {
+    const limit = verifiedPromptCharLimit(step.engine);
+    const flagged = issues.some((issue) => issue.code === 'shape' && issue.step === step.id);
+    if (limit !== null && !flagged && engineStepPrompt(recipe, step).length > limit) issues.push({ code: 'shape', step: step.id });
+  }
   const personSlotSet = personSlots(recipe);
   for (const [name] of slots) if (!used.has(name)) issues.push(personSlotSet.has(name) ? { code: 'no_identity' } : { code: 'unused_slot', slot: name });
 

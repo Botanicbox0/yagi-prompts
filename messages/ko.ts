@@ -4236,6 +4236,7 @@ export const ko: Dictionary = {
         partner_screen: '화면이나 인쇄물을 찍은 사진은 쓸 수 없어요.',
         partner_check_unavailable: '사진을 확인하지 못했어요. 잠시 뒤에 다시 올려 주세요.',
         edits_closed: '이 템플릿은 길이가 꽉 차 있어 수정 요청을 받지 않아요.',
+        edit_too_long: '요청이 길어 이 템플릿에 다 담을 수 없어요. 고칠 내용을 줄여 주세요.',
         generic: '시작하지 못했습니다. 잠시 후 다시 시도해 주세요.',
       },
     },
@@ -6179,6 +6180,8 @@ export const ko: Dictionary = {
       sound: '소리',
     },
     refusedLocked: '고정된 부분이라 바꿀 수 없어요.',
+    // Founder 2026-11-25 — an edit that would not fit the clip (Seedance 2.5: 15,000 characters). Provisional wording.
+    tooLong: '요청이 길어 이 템플릿에 다 담을 수 없어요. 고칠 내용을 줄여 주세요.',
     updatedLocked: '바꿀 수 있는 것만 고칠 내용에 담았어요. 고정된 부분은 그대로 둬요.',
     lockedPlaceholder: '예: 마지막에 카메라를 보며 살짝 웃게 해 주세요',
     // docs/PERSONAL-STUDIO.md §3.4.9 (S2) — the make card's styled hair and makeup choice. Provisional wording.

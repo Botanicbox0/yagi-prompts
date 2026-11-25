@@ -61,3 +61,29 @@ describe('the make card of a template with no room for edits', () => {
     expect(closed).toContain('data-template-parts');
   });
 });
+
+describe('the make card of a template with little room', () => {
+  it('disables a "내 사진 그대로" switch that would not fit, with the too-long line, and leaves the one that fits', () => {
+    const parts = {
+      ...live.parts!,
+      rows: [
+        { key: 'hair', state: 'styled' as const, label: '헤어', desc: null, choice: true },
+        { key: 'makeup', state: 'styled' as const, label: '메이크업', desc: null, choice: true },
+      ],
+      copy: { ...live.parts!.copy, tooLong: e.tooLong },
+    };
+    const html = studio({ parts, editRoom: { headroom: 850, own: { hair: 896, makeup: 814 } } });
+    expect(html).toContain('data-style-blocked="hair"');
+    expect(html).not.toContain('data-style-blocked="makeup"');
+    expect(html).toContain(e.tooLong);
+    const hairMine = /data-style-option="hair:mine"[^>]*>\s*(<input[^>]*>)/.exec(html)?.[1] ?? '';
+    const makeupMine = /data-style-option="makeup:mine"[^>]*>\s*(<input[^>]*>)/.exec(html)?.[1] ?? '';
+    expect(hairMine).toMatch(/ disabled=""/);
+    expect(makeupMine).toMatch(/^<input/);
+    expect(makeupMine).not.toMatch(/ disabled=""/);
+    // With room for both, nothing is disabled and nothing extra is said.
+    const roomy = studio({ parts, editRoom: { headroom: 5_000, own: { hair: 896, makeup: 814 } } });
+    expect(roomy).not.toContain('data-style-blocked');
+    expect(roomy).not.toContain(e.tooLong);
+  });
+});
