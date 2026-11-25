@@ -47,6 +47,8 @@
   **`sidebar` 분기의 마크업과 CSS는 한 글자도 바꾸지 않는다**(하드라인).
 - 레일: 접힘 72px(아이콘 + hover 툴팁) ↔ 펼침 232px(아이콘 + 이름). 맨 아래 토글. 상태는
   `localStorage` `twings_brand_rail_v1`(`{ expanded: boolean }`), 순서는 기존 `twings_brand_nav_order_v1`.
+  편집 스튜디오(`/brand/studio/editor`, `/brand/studio/compose`)는 저장값과 상관없이 접힌 채 열리고, 거기서의
+  토글은 그 방문에만 해당해 쿠키·localStorage에 쓰지 않는다(대표 요청 2026-11-25, `rail-model.ts` `railEditorRoute`).
 - 항목(기본 순서): 이미지 `/brand/studio` · 영상 `/brand/studio/video` · 리뷰 `/brand/studio/review` ·
   캠페인 `/brand` · 크리에이터 `/brand/creators`(열려 있을 때) · 에셋 `/brand/library` · 브랜드 키트 `/brand/identity`.
   아래쪽: 팀 `/brand/members` · 설정 `/brand/settings` · 언어 · 로그아웃.

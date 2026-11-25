@@ -6,6 +6,8 @@
  * (navigation.tsx decides; the `sidebar` and `topbar` modes are untouched). Collapsed it is a 72px
  * icon column with tooltips; expanded, 232px with names. The state lives in localStorage
  * (`twings_brand_rail_v1`) and a cookie mirror the layout reads, so the first paint has the right width.
+ * The editing studio (`/brand/studio/editor`, `/brand/studio/compose`) opens folded whatever is stored: there
+ * the toggle changes that visit only and writes nothing (rail-model.ts `railShownExpanded`).
  *
  * Everything here is presentation: every page and API authorizes on its own, so a hidden link is never
  * what keeps someone out.
@@ -60,7 +62,9 @@ import {
   parseRailState,
   railActive,
   railCreateLinks,
+  railEditorRoute,
   railItems,
+  railShownExpanded,
   type RailCreateKey,
   type RailItemId,
 } from './rail-model';
@@ -163,7 +167,28 @@ export function RailNavigation(props: RailNavigationProps) {
   const { copy, scope, studio, canCreate, locale } = props;
   const path = usePathname() ?? '/brand';
   const router = useRouter();
-  const [expanded, setExpanded] = useState(props.initialExpanded);
+  // The stored preference (cookie + localStorage), and the editing studio's own state for this visit.
+  const [preference, setPreference] = useState(props.initialExpanded);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const onEditor = railEditorRoute(path);
+  // A client-side move into or out of the editing studio keeps this rail mounted (the layout is not rendered
+  // again): adjust while rendering, so the first commit of the new page already has its width, and every
+  // arrival in the editor starts folded.
+  const [wasOnEditor, setWasOnEditor] = useState(onEditor);
+  if (wasOnEditor !== onEditor) {
+    setWasOnEditor(onEditor);
+    setEditorOpen(false);
+  }
+  const expanded = railShownExpanded({ path, preference, editorOpen });
+  /** A person's choice: stored outside the editing studio, this visit's own inside it. */
+  const setExpanded = (next: boolean) => {
+    if (onEditor) {
+      setEditorOpen(next);
+      return;
+    }
+    setPreference(next);
+    writeExpanded(next);
+  };
   const [order, setOrder] = useState<string[]>([]);
   const [reordering, setReordering] = useState(false);
   const [dragged, setDragged] = useState<RailItemId | null>(null);
@@ -186,13 +211,14 @@ export function RailNavigation(props: RailNavigationProps) {
   const unread = useRoomUnread({ organizationId: props.organizationId, enabled: nav !== null });
 
   // What this browser chose last time (the cookie may be missing on a first visit after an update).
-  // `initialExpanded` comes from the server once per page, so this runs once.
+  // `initialExpanded` comes from the server once per page, so this runs once. It brings the cookie back in
+  // line with storage (no new choice); on the editing studio the folded visit state stays what shows.
   const initialExpanded = props.initialExpanded;
   useEffect(() => {
     try {
       const stored = parseRailState(window.localStorage.getItem(RAIL_STORAGE_KEY));
       if (stored && stored.expanded !== initialExpanded) {
-        setExpanded(stored.expanded);
+        setPreference(stored.expanded);
         writeExpanded(stored.expanded);
       }
       setOrder(parseOrder(window.localStorage.getItem(NAV_ORDER_STORAGE_KEY)));
@@ -286,10 +312,7 @@ export function RailNavigation(props: RailNavigationProps) {
 
   /** 순서 편집 from the workspace menu: the arrows need the names, so the rail opens first. */
   const startReordering = () => {
-    if (!expanded) {
-      setExpanded(true);
-      writeExpanded(true);
-    }
+    if (!expanded) setExpanded(true);
     setTip(null);
     setReordering(true);
   };
@@ -300,7 +323,6 @@ export function RailNavigation(props: RailNavigationProps) {
   const toggle = () => {
     const next = !expanded;
     setExpanded(next);
-    writeExpanded(next);
     setTip(null);
     if (!next) setReordering(false);
   };
