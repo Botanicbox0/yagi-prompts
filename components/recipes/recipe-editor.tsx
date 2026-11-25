@@ -4,13 +4,15 @@ import type { Dictionary } from '@/messages/en';
 import { interpolate } from '@/lib/i18n/format';
 import { isRoyalty, quoteRecipeBase, ROYALTY_DEFAULT_KRW, ROYALTY_MAX_KRW, ROYALTY_STEP_KRW } from '@/lib/recipes/pricing';
 import { makeEarning } from '@/lib/twings/template-price';
-import { engineStepPrompt, exportRecipe, INTRO_MAX, MAX_RECIPE_BYTES, MAX_RECIPE_STEPS, NOTE_MAX, OUTRO_MAX, PARTNER_SLOT, parseRecipe, PET_SLOT, recipeMedium, SELFIE_SLOT, type Recipe, type RecipeGuideStep, type RecipeIssue } from '@/lib/recipes/schema';
+import { engineStepPrompt, exportRecipe, INTRO_MAX, MAX_RECIPE_BYTES, OUTRO_MAX, PARTNER_SLOT, parseRecipe, PET_SLOT, recipeMedium, SELFIE_SLOT, type Recipe, type RecipeGuideStep, type RecipeIssue } from '@/lib/recipes/schema';
 import { EDITOR_CASTS, type EditorCast } from '@/lib/recipes/editor-casts';
-import { promptCharLimit, verifiedPromptCharLimit } from '@/lib/engines/prompt-limits';
+import { verifiedPromptCharLimit } from '@/lib/engines/prompt-limits';
 import { BUTTON, BUTTON_OUTLINE, FIELD, HINT, PANEL } from '@/components/creators/styles';
 import { KeyframePicker } from './keyframe-picker';
 import type { VideoKeyframe } from '@/lib/prompts/keyframes';
 import { imageTestRecipe } from '@/lib/recipes/test-render';
+import { guideDraftsToGuideInput, guideFromRecipe, type GuideCardDraft } from './guide-editor';
+import { RecipeStepsWorkbench } from './recipe-steps-workbench';
 
 /**
  * The maker recipe editor (docs/PLATFORM-2.0.md §7.4): editor on the left, the template page preview
@@ -77,7 +79,7 @@ export function RecipeEditor({ copy, formatId, draft, engines, aspects, hasSelfi
   const offered = EDITOR_CASTS.filter((c) => c === 'solo' || casts.includes(c) || c === initial?.cast);
   const [steps, setSteps] = useState<StepState[]>(initial?.steps ?? [newStep('video')]);
   const [notes, setNotes] = useState<RecipeNotes>(initial?.notes ?? { intro: '', outro: '' });
-  const [guide, setGuide] = useState<RecipeGuideStep[] | undefined>(initial?.guide);
+  const [guideCards, setGuideCards] = useState<GuideCardDraft[]>(() => guideFromRecipe(draft?.recipe, draft?.files ?? [], label));
   const [title, setTitle] = useState(draft?.title ?? '');
   const [titleKo, setTitleKo] = useState(draft?.titleKo ?? '');
   const [example, setExample] = useState(draft?.exampleUrl ?? '');
@@ -98,7 +100,7 @@ export function RecipeEditor({ copy, formatId, draft, engines, aspects, hasSelfi
   useEffect(() => setReady(true), []);
   const editable = status === null || status === 'draft';
 
-  const recipe = useMemo(() => toRecipe(steps, medium, references, label, notes, cast, guide), [steps, medium, references, label, notes, cast, guide]);
+  const recipe = useMemo(() => toRecipe(steps, medium, references, label, notes, cast, guideDraftsToGuideInput(guideCards)), [steps, medium, references, label, notes, cast, guideCards]);
   const checked = useMemo(() => parseRecipe(recipe), [recipe]);
   const quote = checked.ok && isRoyalty(royalty) ? quoteRecipeBase(checked.recipe, royalty) : null;
   const won = (n: number) => interpolate(copy.royaltyValue, { amount: n.toLocaleString(locale === 'ko' ? 'ko-KR' : 'en-US') });
@@ -205,9 +207,10 @@ export function RecipeEditor({ copy, formatId, draft, engines, aspects, hasSelfi
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file || file.size > MAX_RECIPE_BYTES) { if (file) setNotice({ tone: 'error', text: copy.importFailed }); return; }
-    const loaded = fromRecipe(await file.text(), files, label);
+    const text = await file.text();
+    const loaded = fromRecipe(text, files, label);
     if (!loaded) { setNotice({ tone: 'error', text: copy.importFailed }); return; }
-    setMedium(loaded.medium); setSteps(loaded.steps); setNotes(loaded.notes); setCast(loaded.cast); setGuide(loaded.guide);
+    setMedium(loaded.medium); setSteps(loaded.steps); setNotes(loaded.notes); setCast(loaded.cast); setGuideCards(guideFromRecipe(text, files, label));
     setNotice(loaded.missingFile ? { tone: 'error', text: copy.importMissingFile } : null);
   }
 
@@ -244,6 +247,7 @@ export function RecipeEditor({ copy, formatId, draft, engines, aspects, hasSelfi
       <p className="text-xs opacity-60">{interpolate(copy.stepLabel, { n: String(i + 1) })} · {step.kind === 'image' ? copy.stepImage : copy.stepVideo}</p>
       <p className="whitespace-pre-wrap break-words rounded-lg bg-on-surface/5 p-3 text-xs leading-relaxed">{step.text || '…'}</p>
     </div>) : null}
+    {disclosure.prompts && guideCards.length > 0 ? <p className="text-xs text-[#71717A] tabular-nums">{interpolate(copy.how.clipCount, { n: String(guideCards.length) })}</p> : null}
     {disclosure.assets && references.length ? <ul className="flex flex-wrap gap-2">{references.map((f, i) => <li key={f.id}><FileThumb file={f} alt={label.reference(i + 1)} /></li>)}</ul> : null}
     {!disclosure.prompts && !disclosure.assets ? <p className="text-xs opacity-60">{copy.previewPrivate}</p> : null}
   </section>;
@@ -256,7 +260,7 @@ export function RecipeEditor({ copy, formatId, draft, engines, aspects, hasSelfi
     <span className={`${BUTTON} w-full`} aria-disabled="true">{copy.previewMake}</span>
   </section>;
 
-  return <div data-recipe-editor data-recipe-status={status ?? 'new'} className="grid items-start gap-8 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+  return <div data-recipe-editor data-recipe-status={status ?? 'new'} className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_19rem] xl:grid-cols-[minmax(0,1fr)_22rem]">
     <noscript><p className="rounded-xl border border-hairline p-4 text-sm">{copy.needsScript}</p></noscript>
     <div className="space-y-6">
       {notice ? <p role={notice.tone === 'error' ? 'alert' : 'status'} className={`rounded-xl border p-4 text-sm ${notice.tone === 'error' ? 'border-accent' : 'border-hairline'}`}>{notice.text}</p> : null}
@@ -324,50 +328,39 @@ export function RecipeEditor({ copy, formatId, draft, engines, aspects, hasSelfi
           </label>
           <label className={`${BUTTON_OUTLINE} cursor-pointer`}>{busy === 'upload' ? copy.uploading : copy.upload}<input type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime,audio/mpeg,audio/wav,audio/mp4,audio/aac" className="sr-only" onChange={(e) => void upload('reference', e)} /></label>
         </section>
+      </fieldset>
 
-        <section className={PANEL}>
-          <h2 className="text-lg font-semibold">{copy.steps}</h2>
-          {steps.map((step, index) => {
-            const options = step.kind === 'image' ? imageEngines : videoEngines;
-            const engine = options.find((e) => e.id === step.engine) ?? options[0]!;
-            const durations = Array.from({ length: (engine.maxDuration ?? 15) - (engine.minDuration ?? 4) + 1 }, (_, i) => (engine.minDuration ?? 4) + i);
-            const removable = (medium === 'carousel' && steps.length > 1) || (medium === 'video' && step.kind === 'image');
-            // One step is one clip, held to its own engine's limit; a longer text stays as written and is flagged.
-            const limit = promptCharLimit(step.engine), written = sentLength(recipe, index), over = written > limit;
-            const count = (n: number) => n.toLocaleString(locale === 'ko' ? 'ko-KR' : 'en-US');
-            return <div key={index} data-recipe-step={`step${index + 1}`} data-step-kind={step.kind} className="space-y-3 border-t border-hairline pt-4 first:border-t-0 first:pt-0">
-              <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <h3 className="font-semibold">{interpolate(copy.stepLabel, { n: String(index + 1) })} · {step.kind === 'image' ? copy.stepImage : copy.stepVideo}</h3>
-                {removable ? <button type="button" onClick={() => setSteps((current) => current.filter((_, i) => i !== index))} className="text-xs underline underline-offset-4">{copy.removeStep}</button> : null}
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <label className="block text-sm">{copy.engine}<select value={engine.id} onChange={(e) => update(index, { engine: e.target.value })} className={FIELD}>{options.map((e) => <option key={e.id} value={e.id}>{e.label}</option>)}</select></label>
-                <label className="block text-sm">{copy.aspect}<select value={step.aspect} onChange={(e) => update(index, { aspect: e.target.value })} className={FIELD}>{(step.kind === 'image' ? aspects.image : aspects.video).map((a) => <option key={a} value={a}>{a}</option>)}</select></label>
-                {step.kind === 'video' ? <>
-                  <label className="block text-sm">{copy.duration}<select value={step.duration} onChange={(e) => update(index, { duration: Number(e.target.value) })} className={FIELD}>{durations.map((d) => <option key={d} value={d}>{d}</option>)}</select></label>
-                  <label className="block text-sm">{copy.resolution}<select value={step.resolution} onChange={(e) => update(index, { resolution: e.target.value as '720p' | '1080p' })} className={FIELD}>{(engine.resolutions ?? ['720p']).map((r) => <option key={r} value={r}>{r}</option>)}</select></label>
-                </> : null}
-              </div>
-              <div className="space-y-2">
-                <p className="text-sm">{copy.prompt}</p>
-                <div className="flex flex-wrap gap-2" aria-label={copy.insert}>
-                  {[...castTokens(cast, label), ...references.map((_, i) => label.reference(i + 1)), ...steps.slice(0, index).filter((s) => s.kind === 'image').map((_, i) => label.step(i + 1))].map((token) =>
-                    <button key={token} type="button" data-insert-token={token} onClick={() => insert(index, token)} className="inline-flex min-h-9 items-center rounded-full border border-hairline px-3 text-xs">{token}</button>)}
-                </div>
-                <textarea ref={(node) => { textareas.current[index] = node; }} value={step.text} onChange={(e) => update(index, { text: e.target.value })} rows={6} maxLength={limit} aria-invalid={over ? true : undefined} aria-label={`${interpolate(copy.stepLabel, { n: String(index + 1) })} ${copy.prompt}`} className={FIELD} autoComplete="off" spellCheck={false} />
-                <span data-recipe-prompt-count={written} data-recipe-prompt-limit={limit} data-over={over ? 'true' : undefined} className={`${HINT} tabular-nums${over ? ' text-accent' : ''}`}>{interpolate(copy.promptCount, { n: count(written), max: count(limit) })}</span>
-                <span className={HINT}>{copy.promptHint}</span>
-              </div>
-              <label className="block text-sm" data-recipe-step-note={index + 1}>{copy.note}
-                <textarea value={step.note ?? ''} onChange={(e) => update(index, { note: e.target.value })} rows={2} maxLength={NOTE_MAX} className={FIELD} />
-                <span className={HINT}>{copy.noteHint}</span>
-              </label>
-            </div>;
-          })}
-          {medium === 'video' && !steps.some((s) => s.kind === 'image') ? <button type="button" onClick={() => setSteps((current) => [newStep('image'), ...current])} className={BUTTON_OUTLINE}>{copy.addImageStep}</button> : null}
-          {medium === 'carousel' && steps.length < MAX_RECIPE_STEPS ? <button type="button" onClick={() => setSteps((current) => [...current, newStep('image')])} className={BUTTON_OUTLINE}>{copy.addFrame}</button> : null}
-        </section>
+      <RecipeStepsWorkbench
+        copy={copy}
+        locale={locale}
+        medium={medium}
+        disabled={disabled}
+        steps={steps}
+        guideCards={guideCards}
+        recipe={recipe}
+        engines={engines}
+        aspects={aspects}
+        tokensForStep={(stepIndex) => [
+          ...castTokens(cast, label),
+          ...references.map((_, i) => label.reference(i + 1)),
+          ...steps.slice(0, stepIndex).filter((s) => s.kind === 'image').map((_, i) => label.step(i + 1)),
+        ]}
+        clipTokens={[
+          ...castTokens(cast, label),
+          ...references.flatMap((_, i) => (`ref${i + 1}` in recipe.slots ? [label.reference(i + 1)] : [])),
+          ...steps.filter((s) => s.kind === 'image').map((_, i) => label.step(i + 1)),
+        ]}
+        stepSentLength={(index) => sentLength(recipe, index)}
+        textareasRef={textareas}
+        onUpdateStep={update}
+        onRemoveStep={(index) => setSteps((current) => current.filter((_, i) => i !== index))}
+        onAddImageStep={() => setSteps((current) => [newStep('image'), ...current])}
+        onAddFrame={() => setSteps((current) => [...current, newStep('image')])}
+        onInsertStepToken={insert}
+        onChangeGuideCards={setGuideCards}
+      />
 
+      <fieldset disabled={disabled} className="space-y-6">
         <section className={PANEL}>
           <h2 className="text-lg font-semibold">{copy.example}</h2>
           <p className="text-xs leading-relaxed opacity-60">{copy.exampleHint}</p>
@@ -525,7 +518,28 @@ export function toRecipe(steps: StepState[], medium: EditorMedium, references: E
   const output = medium === 'carousel' ? { frames: built.map((s) => s.id) } : { from: built[built.length - 1]?.id ?? 'step1' };
   const intro = notes?.intro.trim(), outro = notes?.outro.trim();
   const written = intro || outro ? { notes: { ...(intro ? { intro } : {}), ...(outro ? { outro } : {}) } } : {};
-  const preservedGuide = guide?.length ? { guide: guide.map((item) => ({ ...item })) } : {};
+  const imageStepIds = new Set(built.filter((s) => s.kind === 'image').map((s) => s.id));
+  const guidePairs = pairs.filter(([, name]) => name in slots || imageStepIds.has(name));
+  const guidePattern = guidePairs.length
+    ? new RegExp(guidePairs.map(([text]) => escape(text)).sort((a, b) => b.length - a.length).join('|'), 'g')
+    : null;
+  const guideNames = new Map(guidePairs);
+  const preservedGuide = guide?.length
+    ? {
+        guide: guide.map((item) => {
+          const meta = item.meta?.trim();
+          const note = item.note?.trim();
+          const prompt = guidePattern ? item.prompt.replace(guidePattern, (match) => `{{${guideNames.get(match)!}}}`) : item.prompt;
+          return {
+            title: item.title.trim(),
+            kind: item.kind,
+            ...(meta ? { meta } : {}),
+            prompt,
+            ...(note ? { note } : {}),
+          };
+        }),
+      }
+    : {};
   return { version: 2, slots, steps: built, output, ...written, ...preservedGuide } as unknown as Recipe;
 }
 

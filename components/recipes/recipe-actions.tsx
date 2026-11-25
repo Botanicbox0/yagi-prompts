@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import type { Dictionary } from '@/messages/en';
 import type { PublicRecipe } from '@/lib/recipes/public';
 import { CopyPrompt } from './copy-prompt';
+import { useRecipeAccess } from './recipe-access-context';
 
 export type RecipeActionLabels = Dictionary['makerRecipe']['actions'] & { copied: string };
 
@@ -51,17 +52,19 @@ export function RecipeActionsView({ steps, labels: a, makeHref, shopOpen, signin
 }
 
 export function RecipeActions({ accessEndpoint, initialUnlocked = null, ...props }: RecipeActionsProps) {
-  const [unlocked, setUnlocked] = useState<PublicRecipe | null>(initialUnlocked);
+  const shared = useRecipeAccess();
+  const [standaloneUnlocked, setStandaloneUnlocked] = useState<PublicRecipe | null>(initialUnlocked);
   useEffect(() => {
-    if (initialUnlocked) return;
+    if (initialUnlocked || shared !== null) return;
     let cancelled = false;
     fetch(accessEndpoint, { credentials: 'same-origin' })
       .then((res) => (res.ok ? res.json() : null))
       .then((data: { signedIn?: boolean; recipe?: PublicRecipe | null } | null) => {
-        if (!cancelled && data?.signedIn && data.recipe?.steps?.length) setUnlocked(data.recipe);
+        if (!cancelled && data?.signedIn && data.recipe?.steps?.length) setStandaloneUnlocked(data.recipe);
       })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [accessEndpoint, initialUnlocked]);
+  }, [accessEndpoint, initialUnlocked, shared]);
+  const unlocked = initialUnlocked ?? (shared !== null ? (shared.unlockedRecipe?.steps?.length ? shared.unlockedRecipe : null) : standaloneUnlocked);
   return <RecipeActionsView {...props} unlocked={unlocked} />;
 }

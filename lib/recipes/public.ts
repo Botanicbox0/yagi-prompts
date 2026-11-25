@@ -31,6 +31,7 @@ import { SELFIE_SLOT, creatorSlotNames, displayStepPrompt, parseRecipe, type Rec
 export type RecipeInput = { kind: 'selfie' } | { kind: 'pet' } | { kind: 'partner' } | { kind: 'reference'; n: number } | { kind: 'step'; n: number };
 export interface PublicRecipeStep { n: number; kind: 'image' | 'video'; engine: string; inputs: RecipeInput[]; prompt: string; note: string | null }
 export interface PublicRecipeGuideStep { n: number; title: string; kind: 'image' | 'video'; meta: string | null; prompt: string; note: string | null }
+export interface PublicRecipeGuideOutline { n: number; title: string }
 export interface PublicRecipeFile {
   n: number;
   kind: 'image' | 'video' | 'audio';
@@ -44,6 +45,7 @@ export interface PublicRecipe {
   outro: string | null;
   steps: PublicRecipeStep[] | null;
   guide?: PublicRecipeGuideStep[] | null;
+  guideOutline?: PublicRecipeGuideOutline[];
   files: PublicRecipeFile[] | null;
 }
 export interface PublicRecipeLabels { selfie: string; reference: string; step: string; pet?: string; partner?: string }
@@ -131,6 +133,9 @@ function teaserPrompt(prompt: string): string {
 export function recipeTeaser(recipe: PublicRecipe): PublicRecipe | null {
   if (!recipe.steps && !recipe.files?.length) return null;
   const first = recipe.steps?.[0] ?? null;
+  const guideOutline = recipe.guide?.length
+    ? recipe.guide.map((item): PublicRecipeGuideOutline => ({ n: item.n, title: item.title }))
+    : null;
   return {
     presentation: recipe.presentation,
     intro: recipe.intro,
@@ -140,6 +145,7 @@ export function recipeTeaser(recipe: PublicRecipe): PublicRecipe | null {
       inputs: first.inputs.map((input): RecipeInput => (input.kind === 'selfie' || input.kind === 'pet' || input.kind === 'partner' ? { kind: input.kind } : { kind: input.kind, n: input.n })),
       prompt: teaserPrompt(first.prompt), note: null,
     }] : null,
+    ...(guideOutline ? { guideOutline } : {}),
     files: null,
   };
 }
