@@ -4,7 +4,8 @@ import type { Dictionary } from '@/messages/en';
 import { interpolate } from '@/lib/i18n/format';
 import { isRoyalty, quoteRecipeBase, ROYALTY_DEFAULT_KRW, ROYALTY_MAX_KRW, ROYALTY_STEP_KRW } from '@/lib/recipes/pricing';
 import { makeEarning } from '@/lib/twings/template-price';
-import { engineStepPrompt, exportRecipe, INTRO_MAX, MAX_RECIPE_BYTES, MAX_RECIPE_STEPS, NOTE_MAX, OUTRO_MAX, PARTNER_SLOT, parseRecipe, PET_SLOT, recipeMedium, SELFIE_SLOT, type Recipe, type RecipeIssue } from '@/lib/recipes/schema';
+import { engineStepPrompt, exportRecipe, INTRO_MAX, MAX_RECIPE_BYTES, MAX_RECIPE_STEPS, NOTE_MAX, OUTRO_MAX, PARTNER_SLOT, parseRecipe, PET_SLOT, recipeMedium, SELFIE_SLOT, type Recipe, type RecipeGuideStep, type RecipeIssue } from '@/lib/recipes/schema';
+import { EDITOR_CASTS, type EditorCast } from '@/lib/recipes/editor-casts';
 import { promptCharLimit, verifiedPromptCharLimit } from '@/lib/engines/prompt-limits';
 import { BUTTON, BUTTON_OUTLINE, FIELD, HINT, PANEL } from '@/components/creators/styles';
 import { KeyframePicker } from './keyframe-picker';
@@ -76,6 +77,7 @@ export function RecipeEditor({ copy, formatId, draft, engines, aspects, hasSelfi
   const offered = EDITOR_CASTS.filter((c) => c === 'solo' || casts.includes(c) || c === initial?.cast);
   const [steps, setSteps] = useState<StepState[]>(initial?.steps ?? [newStep('video')]);
   const [notes, setNotes] = useState<RecipeNotes>(initial?.notes ?? { intro: '', outro: '' });
+  const [guide, setGuide] = useState<RecipeGuideStep[] | undefined>(initial?.guide);
   const [title, setTitle] = useState(draft?.title ?? '');
   const [titleKo, setTitleKo] = useState(draft?.titleKo ?? '');
   const [example, setExample] = useState(draft?.exampleUrl ?? '');
@@ -96,7 +98,7 @@ export function RecipeEditor({ copy, formatId, draft, engines, aspects, hasSelfi
   useEffect(() => setReady(true), []);
   const editable = status === null || status === 'draft';
 
-  const recipe = useMemo(() => toRecipe(steps, medium, references, label, notes, cast), [steps, medium, references, label, notes, cast]);
+  const recipe = useMemo(() => toRecipe(steps, medium, references, label, notes, cast, guide), [steps, medium, references, label, notes, cast, guide]);
   const checked = useMemo(() => parseRecipe(recipe), [recipe]);
   const quote = checked.ok && isRoyalty(royalty) ? quoteRecipeBase(checked.recipe, royalty) : null;
   const won = (n: number) => interpolate(copy.royaltyValue, { amount: n.toLocaleString(locale === 'ko' ? 'ko-KR' : 'en-US') });
@@ -205,7 +207,7 @@ export function RecipeEditor({ copy, formatId, draft, engines, aspects, hasSelfi
     if (!file || file.size > MAX_RECIPE_BYTES) { if (file) setNotice({ tone: 'error', text: copy.importFailed }); return; }
     const loaded = fromRecipe(await file.text(), files, label);
     if (!loaded) { setNotice({ tone: 'error', text: copy.importFailed }); return; }
-    setMedium(loaded.medium); setSteps(loaded.steps); setNotes(loaded.notes); setCast(loaded.cast);
+    setMedium(loaded.medium); setSteps(loaded.steps); setNotes(loaded.notes); setCast(loaded.cast); setGuide(loaded.guide);
     setNotice(loaded.missingFile ? { tone: 'error', text: copy.importMissingFile } : null);
   }
 
@@ -485,13 +487,6 @@ function FileThumb({ file, alt, large = false }: { file: EditorFile; alt: string
 
 type Labels = { selfie: string; pet?: string; partner?: string; reference: (n: number) => string; step: (n: number) => string };
 
-/** docs/CAST-CATEGORIES.md §3 — the four shapes a creative picks from; each fixes the customer's photo slots. */
-export const EDITOR_CASTS = ['solo', 'pet', 'pet_with_me', 'couple'] as const;
-export type EditorCast = (typeof EDITOR_CASTS)[number];
-/** The casts a creative may pick, by the server's flags (pet and couple templates stay off until opened). */
-export function editorCasts(open: { pet: boolean; couple: boolean }): EditorCast[] {
-  return EDITOR_CASTS.filter((c) => c === 'solo' || (c === 'couple' ? open.couple : open.pet));
-}
 const USER_SLOT = { kind: 'image', source: 'user', required: true } as const;
 function castSlots(cast: EditorCast): Array<[string, Record<string, unknown>]> {
   if (cast === 'pet') return [[PET_SLOT, { ...USER_SLOT, role: 'pet' }]];
@@ -505,7 +500,7 @@ export function castTokens(cast: EditorCast, label: Labels): string[] {
 }
 
 /** Editor state → the §7.3 recipe. Inputs are the references a prompt mentions, in order of first mention. */
-export function toRecipe(steps: StepState[], medium: EditorMedium, references: EditorFile[], label: Labels, notes?: RecipeNotes, cast: EditorCast = 'solo'): Recipe {
+export function toRecipe(steps: StepState[], medium: EditorMedium, references: EditorFile[], label: Labels, notes?: RecipeNotes, cast: EditorCast = 'solo', guide?: RecipeGuideStep[]): Recipe {
   const customer = castSlots(cast);
   const pairs: Array<[string, string]> = [...customer.map(([name], i) => [castTokens(cast, label)[i]!, name] as [string, string]), ...references.map((_, i) => [label.reference(i + 1), `ref${i + 1}`] as [string, string])];
   let images = 0;
@@ -530,7 +525,8 @@ export function toRecipe(steps: StepState[], medium: EditorMedium, references: E
   const output = medium === 'carousel' ? { frames: built.map((s) => s.id) } : { from: built[built.length - 1]?.id ?? 'step1' };
   const intro = notes?.intro.trim(), outro = notes?.outro.trim();
   const written = intro || outro ? { notes: { ...(intro ? { intro } : {}), ...(outro ? { outro } : {}) } } : {};
-  return { version: 2, slots, steps: built, output, ...written } as unknown as Recipe;
+  const preservedGuide = guide?.length ? { guide: guide.map((item) => ({ ...item })) } : {};
+  return { version: 2, slots, steps: built, output, ...written, ...preservedGuide } as unknown as Recipe;
 }
 
 /**
@@ -550,7 +546,7 @@ function sentLength(recipe: Recipe, index: number): number {
 }
 
 /** A stored or imported recipe → editor state, naming each maker file by its place in this draft's files. */
-export function fromRecipe(raw: unknown, files: EditorFile[], label: Labels): { medium: EditorMedium; steps: StepState[]; missingFile: boolean; notes: RecipeNotes; cast: EditorCast } | null {
+export function fromRecipe(raw: unknown, files: EditorFile[], label: Labels): { medium: EditorMedium; steps: StepState[]; missingFile: boolean; notes: RecipeNotes; cast: EditorCast; guide?: RecipeGuideStep[] } | null {
   if (raw === null || raw === undefined) return null;
   const checked = parseRecipe(raw);
   // A draft may be saved mid-edit; read what parses and let the checks list say the rest.
@@ -581,7 +577,10 @@ export function fromRecipe(raw: unknown, files: EditorFile[], label: Labels): { 
   const notes = { intro: typeof recipe.notes?.intro === 'string' ? recipe.notes.intro : '', outro: typeof recipe.notes?.outro === 'string' ? recipe.notes.outro : '' };
   const roles = Object.values(recipe.slots).map((slot) => slot.role);
   const cast: EditorCast = roles.includes('partner') ? 'couple' : roles.includes('pet') ? (recipe.slots[SELFIE_SLOT] ? 'pet_with_me' : 'pet') : 'solo';
-  return { medium: checked.ok ? recipeMedium(recipe) : 'frames' in recipe.output ? 'carousel' : recipe.steps.some((s) => s.kind === 'video') ? 'video' : 'image', steps, missingFile, notes, cast };
+  const guide = Array.isArray(recipe.guide) && recipe.guide.length > 0
+    ? recipe.guide.filter((item): item is RecipeGuideStep => typeof item === 'object' && item !== null).map((item) => ({ ...item }))
+    : undefined;
+  return { medium: checked.ok ? recipeMedium(recipe) : 'frames' in recipe.output ? 'carousel' : recipe.steps.some((s) => s.kind === 'video') ? 'video' : 'image', steps, missingFile, notes, cast, ...(guide?.length ? { guide } : {}) };
 }
 
 function lenient(raw: unknown): Recipe | null {
