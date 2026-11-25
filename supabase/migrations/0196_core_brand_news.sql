@@ -120,8 +120,9 @@ create table if not exists brand_announcement_dismissals (
 -- A person's dismissals go with their profile (account deletion cascades through this index).
 create index if not exists idx_brand_announcement_dismissals_user on brand_announcement_dismissals (user_id);
 
--- Closed from the moment they exist, before glue 0197 lands: no browser role may read or write either table even if
--- the glue is applied later in the session (0178's shape). 0197 then sets the server role's exact grants.
+-- Closed from the moment they exist (0178's shape): row level security on and forced with no policy is what keeps the
+-- browser roles out until glue 0197 lands (on Supabase their default grants go to anon and authenticated directly,
+-- so the revoke from public alone would not). 0197 then revokes them and sets the server role's exact grants.
 alter table brand_announcements enable row level security;
 alter table brand_announcements force row level security;
 revoke all on brand_announcements from public;

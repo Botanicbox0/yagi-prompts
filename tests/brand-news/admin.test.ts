@@ -87,7 +87,7 @@ async function banner(width = 1600, height = 400, noisy = false): Promise<File> 
 /* ---------------------------------------------------------------- registry */
 
 describe('the registry', () => {
-  it('adds the three operations, last, under names no other module uses, so every other entry is untouched', () => {
+  it('adds the three operations under names no other module uses, so every other entry is untouched', () => {
     // At this commit the other 186 names equal origin/main's list, in order (checked once against fa208c6e; see the
     // slice report). What is pinned here stays true when later work adds operations of its own.
     const names = ['brandNews.save', 'brandNews.publish', 'brandNews.end'] as const;
