@@ -12,7 +12,9 @@ import { TEAM_PROJECTS } from '@/lib/brands/project-origin';
  *       `TEAM_PROJECTS`, so a brand's own project answers exactly like a missing one (fix round F1);
  *   c — a multi-row read that does not look at `client_visible`, now limited by `TEAM_PROJECTS`
  *       (lib/brands/project-origin.ts);
- *   d — the spine itself, meant to see self rows (lib/brand-studio/brand-projects.ts);
+ *   d — the spine itself, meant to see self rows (lib/brand-studio/brand-projects.ts, and the assets page's member
+ *       reads in lib/brand-studio/brand-project-files.ts, which use only the spine's fragments and are dispatched by
+ *       the studio service alone: tests/brand-studio/spine/assets-page.test.ts);
  *   e — cannot return or count a self row for another stated reason.
  * The test fails when a file appears or disappears, when a listed file gains or loses a line that names the
  * table (classify it here), or when a line of class a / c loses its predicate. Comment lines are not counted.
@@ -20,7 +22,7 @@ import { TEAM_PROJECTS } from '@/lib/brands/project-origin';
 type Cls = 'a' | 'b' | 'c' | 'e';
 type Use = [match: string, cls: Cls, why: string];
 
-const SPINE = new Set(['lib/brand-studio/brand-projects.ts']);
+const SPINE = new Set(['lib/brand-studio/brand-projects.ts', 'lib/brand-studio/brand-project-files.ts']);
 const COMMENTS_ONLY = new Set([
   'lib/brand-studio/contracts.ts',
   'lib/brands/workspace/campaign-terms.ts',

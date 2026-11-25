@@ -28,13 +28,21 @@ import {
   type StudioStateScope,
 } from './contracts';
 import { studioSeat } from './access';
-import { isBrandProjectOperation, runBrandProjectOperation, stateScopeFilter, withBrandProjects, type BrandProjectOperationResult } from './brand-projects';
+import { isBrandProjectRead, runBrandProjectRead, type BrandProjectReadResult } from './brand-project-files';
+import {
+  isBrandProjectOperation,
+  runBrandProjectOperation,
+  stateScopeFilter,
+  withAssetBrandProjects,
+  withBrandProjects,
+  type BrandProjectOperationResult,
+} from './brand-projects';
 import { loadOrganizationStorageSummary, toStudioStorageQuotaView } from '@/lib/brands/storage-quota';
 import { assetFromOutput, completeStudioAsset, deleteStudioAsset, deleteStudioOutput, reserveStudioAsset, updateStudioAsset } from './assets';
 import { handoffToCampaign } from './handoff';
 import { analyzeStudioFilm, cancelStudioJob, createStudioJob, deleteStudioJob, previewStudioPrompt } from './jobs';
 import { createStudioJobGroup } from './job-group';
-import { assignStudioJobProject, liveProjectsOf, studioProjectsReady } from './job-projects';
+import { assignStudioJobProject, keepLiveProjectIds, liveProjectsOf, studioProjectsReady } from './job-projects';
 import { failure, guarded } from './outcome';
 import { saveOutputWaveform } from './sound/waveform-store';
 import { draftLyrics } from './sound/lyrics-draft';
@@ -53,6 +61,7 @@ export function isStudioOperation(value: unknown): value is StudioOperation {
 
 export type StudioOperationResult =
   | BrandProjectOperationResult
+  | BrandProjectReadResult
   | StudioFailure
   | StudioJobCreated
   | StudioJobGroupCreated
@@ -82,8 +91,10 @@ const SELF_STUDIO_OPS: ReadonlySet<StudioOperation> = new Set([
 
 /** One `POST /api/brand-studio` operation. Unknown names are `invalid`. */
 export async function runStudioOperation(deps: StudioDeps, viewer: Viewer, operation: unknown, input: unknown): Promise<StudioOperationResult> {
-  // The brand project spine (./brand-projects.ts): closed for the organization, these answer exactly like an
-  // unknown name; open, each runs the studio gate itself inside its own transaction.
+  // The brand project spine (./brand-projects.ts, and the assets page's reads in ./brand-project-files.ts): closed
+  // for the organization, these answer exactly like an unknown name; open, each runs the spine's member gate
+  // itself inside its own transaction.
+  if (isBrandProjectRead(operation)) return runBrandProjectRead(deps, viewer, operation, input);
   if (isBrandProjectOperation(operation)) return runBrandProjectOperation(deps, viewer, operation, input);
   if (!isStudioOperation(operation)) return failure('invalid');
   // The gate before any input detail is judged: a closed organization gets the same 404 whatever it sent.
@@ -123,14 +134,22 @@ export async function runStudioOperation(deps: StudioDeps, viewer: Viewer, opera
       return talkStudioRevise(deps, viewer, input);
     case 'asset.reserve':
       return reserveStudioAsset(deps, viewer, input);
-    case 'asset.complete':
-      return completeStudioAsset(deps, viewer, input);
-    case 'asset.update':
-      return updateStudioAsset(deps, viewer, input);
+    // The library answers go to the member who sent them (owners and editors): `brandProjectId` is added here,
+    // opt-in, never by the asset functions themselves. Closed for the organization, the answer is untouched.
+    case 'asset.complete': {
+      const done = await completeStudioAsset(deps, viewer, input);
+      return done.ok ? { ...done, asset: (await withAssetBrandProjects(deps.sql, organizationId, [done.asset]))[0]! } : done;
+    }
+    case 'asset.update': {
+      const done = await updateStudioAsset(deps, viewer, input);
+      return done.ok ? { ...done, asset: (await withAssetBrandProjects(deps.sql, organizationId, [done.asset]))[0]! } : done;
+    }
     case 'asset.delete':
       return deleteStudioAsset(deps, viewer, input);
-    case 'asset.from_output':
-      return assetFromOutput(deps, viewer, input);
+    case 'asset.from_output': {
+      const done = await assetFromOutput(deps, viewer, input);
+      return done.ok ? { ...done, asset: (await withAssetBrandProjects(deps.sql, organizationId, [done.asset]))[0]! } : done;
+    }
     case 'output.waveform':
       return saveOutputWaveform(deps, viewer, input);
     case 'lyrics.draft':
@@ -175,20 +194,18 @@ export async function loadStudioState(
       // Runs can belong to a project only with the flag on and migration 0091 applied. A run whose project
       // was deleted or archived reads as being in no project (the row keeps its id).
       const projects = (await studioProjectsReady(deps, sql)) ? await liveProjectsOf(sql, organizationId) : null;
-      const live = new Set(projects?.map((project) => project.id));
-      const built = (await viewsOf(sql, jobs, deps.media)).map((view) => {
-        if (!view.projectId || live.has(view.projectId)) return view;
-        const { projectId: _gone, ...rest } = view;
-        return rest;
-      });
-      // `brandProjectId` is opt-in, for members only (a project guest's answer stays exactly today's).
+      const built = keepLiveProjectIds(await viewsOf(sql, jobs, deps.media), projects);
+      // `brandProjectId` is opt-in, for members only (a project guest's answer stays exactly today's): runs and,
+      // since slice 2a, library entries.
       const views = seat.role === 'guest' ? built : await withBrandProjects(sql, organizationId, built);
+      const library = assets.map((a) => assetView(a, deps.media));
+      const libraryViews = seat.role === 'guest' ? library : await withAssetBrandProjects(sql, organizationId, library);
       return {
         ok: true as const,
         canCreate: seat.canCreate,
         allowance: await allowanceViewWithRefill(sql, organizationId, allowance, { now }),
         storage: toStudioStorageQuotaView(storageSummary),
-        assets: assets.map((a) => assetView(a, deps.media)),
+        assets: libraryViews,
         jobs: views,
         campaigns,
         canRemoveRuns: seat.canCreate && (await jobSoftDeleteReady(sql)),

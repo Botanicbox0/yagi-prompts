@@ -11,7 +11,9 @@
  *    its team projects that are shown to it and still requested or active. Anything else, including a team
  *    project the staff hid, answers `not_found`, exactly like a project that does not exist;
  *  - where new work is filed (`brandProjectForNew`);
- *  - the three operations `project.list`, `project.create`, `project.move`.
+ *  - the three operations `project.list`, `project.create`, `project.move`;
+ *  - where a filed run, upload or film is SHOWN (`SHOWN_PROJECT_JOIN`, `UNFILED_ROWS`, the `with…BrandProjects`
+ *    helpers), which the assets page's reads (./brand-project-files.ts) build on.
  * Every project, run, upload and film id is checked against the organization inside the transaction that writes.
  * The old `brand_studio_jobs.project_id` (`BRAND_STUDIO_PROJECTS`, ./job-projects.ts) is neither read nor written.
  * Nothing here sends an event, a team notice, a mail or a Slack message.
@@ -176,25 +178,29 @@ export async function fileAssetWithRun(sql: SqlRunner, organizationId: string, a
 /* ---------------------------------------------------------------- answers */
 
 /**
- * `brandProjectId` is OPT-IN (default deny): no shared view builder adds it (`jobView` and the films' `toSummary`
- * never do). Only an answer given to a workspace member adds it, through these two helpers: the studio state and
- * poll (members, not project guests), the create answers of `POST /api/brand-studio`, the films' list, read and
- * mutation answers, and the member branch of the sound studio page. Staff who are not members, project guests,
- * MCP and workflows never receive it.
- *
- * What the customer sees (§4.2): the stored filing is kept (a family is never split), but a project that can no
- * longer take new work (hidden by the staff, completed, cancelled) reads as 미분류: `brandProjectId: null`. One
- * query per answer (the stored ids joined to this organization's selectable projects), never one per row.
+ * The SHOWN project of a filed row (`row`: a run, an upload or a film, each with `organization_id` and
+ * `brand_project_id`), as a left join naming it `alias`: the row's project while it can take new work, else no
+ * project row (= 미분류, §4.2 rule 6). Every answer and every count that says where something is filed uses this
+ * join or its complement `UNFILED_ROWS`, never a copy of the rule. Needs migration 0194 (spine code only).
  */
-export async function withBrandProjects<T extends { id: string }>(sql: SqlRunner, organizationId: string, views: T[], env: Env = process.env): Promise<Array<T & { brandProjectId?: string | null }>> {
+export const SHOWN_PROJECT_JOIN = (alias: string, row: string): string =>
+  `left join brand_projects ${alias} on ${alias}.id = ${row}.brand_project_id and ${alias}.organization_id = ${row}.organization_id and ${SELECTABLE_PROJECTS(alias)}`;
+
+type FiledTable = 'brand_studio_jobs' | 'brand_studio_assets' | 'brand_studio_video_projects';
+
+/**
+ * Adds the shown `brandProjectId` to `views` of `table` (one query, never one per row); unchanged while the spine
+ * is closed for the organization (the key is then absent, not null).
+ */
+async function withShownProjects<T extends { id: string }>(sql: SqlRunner, table: FiledTable, organizationId: string, views: T[], env: Env): Promise<Array<T & { brandProjectId?: string | null }>> {
   if (views.length === 0 || !(await brandProjectSpineOpen(sql, organizationId, env))) return views;
   const shown = new Map(
     (
       await sql.query<{ id: string; brand_project_id: string | null }>(
-        `select j.id::text as id, p.id::text as brand_project_id
-           from brand_studio_jobs j
-           left join brand_projects p on p.id = j.brand_project_id and p.organization_id = j.organization_id and ${SELECTABLE_PROJECTS('p')}
-          where j.organization_id = $1 and j.id = any($2::uuid[])`,
+        `select t.id::text as id, p.id::text as brand_project_id
+           from ${table} t
+           ${SHOWN_PROJECT_JOIN('p', 't')}
+          where t.organization_id = $1 and t.id = any($2::uuid[])`,
         [organizationId, views.map((view) => view.id)],
       )
     ).rows.map((row) => [String(row.id).toLowerCase(), row.brand_project_id ? String(row.brand_project_id) : null] as const),
@@ -202,21 +208,33 @@ export async function withBrandProjects<T extends { id: string }>(sql: SqlRunner
   return views.map((view) => (shown.has(view.id.toLowerCase()) ? { ...view, brandProjectId: shown.get(view.id.toLowerCase()) ?? null } : view));
 }
 
+/**
+ * `brandProjectId` is OPT-IN (default deny): no shared view builder adds it (`jobView`, `assetView` and the films'
+ * `toSummary` never do). Only an answer given to a workspace member adds it, through these three helpers: the studio
+ * state and poll (members, not project guests), the create and library answers of `POST /api/brand-studio`, the
+ * films' list, read and mutation answers, the member branch of the sound studio page, and the assets page's reads
+ * (./brand-project-files.ts). Staff who are not members, project guests, MCP and workflows never receive it.
+ *
+ * What the customer sees (§4.2): the stored filing is kept (a family is never split), but a project that can no
+ * longer take new work (hidden by the staff, completed, cancelled) reads as 미분류: `brandProjectId: null`. One
+ * query per answer (the stored ids joined to this organization's selectable projects), never one per row.
+ */
+export async function withBrandProjects<T extends { id: string }>(sql: SqlRunner, organizationId: string, views: T[], env: Env = process.env): Promise<Array<T & { brandProjectId?: string | null }>> {
+  return withShownProjects(sql, 'brand_studio_jobs', organizationId, views, env);
+}
+
 /** The same for films (`brand_studio_video_projects`): members' answers only, null when not selectable. */
 export async function withFilmBrandProjects<T extends { id: string }>(sql: SqlRunner, organizationId: string, films: T[], env: Env = process.env): Promise<Array<T & { brandProjectId?: string | null }>> {
-  if (films.length === 0 || !(await brandProjectSpineOpen(sql, organizationId, env))) return films;
-  const shown = new Map(
-    (
-      await sql.query<{ id: string; brand_project_id: string | null }>(
-        `select f.id::text as id, p.id::text as brand_project_id
-           from brand_studio_video_projects f
-           left join brand_projects p on p.id = f.brand_project_id and p.organization_id = f.organization_id and ${SELECTABLE_PROJECTS('p')}
-          where f.organization_id = $1 and f.id = any($2::uuid[])`,
-        [organizationId, films.map((film) => film.id)],
-      )
-    ).rows.map((row) => [String(row.id).toLowerCase(), row.brand_project_id ? String(row.brand_project_id) : null] as const),
-  );
-  return films.map((film) => (shown.has(film.id.toLowerCase()) ? { ...film, brandProjectId: shown.get(film.id.toLowerCase()) ?? null } : film));
+  return withShownProjects(sql, 'brand_studio_video_projects', organizationId, films, env);
+}
+
+/**
+ * The same for library entries (`brand_studio_assets`, slice 2a): members' answers only (the studio state, the
+ * answers of `asset.complete`, `asset.update` and `asset.from_output`, the assets page's reads), null when not
+ * filed or not selectable. Whether a null entry is 브랜드 자료 or 미분류 is its `role` (`BRAND_MATERIAL_ROLES`).
+ */
+export async function withAssetBrandProjects<T extends { id: string }>(sql: SqlRunner, organizationId: string, assets: T[], env: Env = process.env): Promise<Array<T & { brandProjectId?: string | null }>> {
+  return withShownProjects(sql, 'brand_studio_assets', organizationId, assets, env);
 }
 
 /**
@@ -229,11 +247,15 @@ export function memberSeesBrandProjects(seat: { staff?: boolean; role: string })
 }
 
 /**
- * "미분류" for the runs of the studio state (`alias` = the runs' table): not filed, or filed in a project that can
- * no longer take new work. Needs migration 0194 (spine code only). `$1` must be the organization.
+ * "미분류" for filed rows (`alias` = a run's, an upload's or a film's table): not filed, or filed in a project that can
+ * no longer take new work: the complement of `SHOWN_PROJECT_JOIN`. Needs migration 0194 (spine code only). `$1`
+ * must be the organization.
  */
-export const UNFILED_RUNS = (alias: string): string =>
+export const UNFILED_ROWS = (alias: string): string =>
   `(${alias}.brand_project_id is null or not exists (select 1 from brand_projects sp where sp.id = ${alias}.brand_project_id and sp.organization_id = $1 and ${SELECTABLE_PROJECTS('sp')}))`;
+
+/** `UNFILED_ROWS` for the runs of the studio state (its first use, kept by name). */
+export const UNFILED_RUNS = UNFILED_ROWS;
 
 /**
  * The runs' filter for a scoped studio state load, or null for today's query: no scope, a project guest (the
@@ -318,12 +340,23 @@ export function isBrandProjectOperation(value: unknown): value is BrandProjectOp
 /**
  * Members of the workspace only, through the studio's gate (membership → sandbox hardline → feature policy →
  * role). A project guest (only a `brand_project_members` row) is not a member: for them none of this exists.
+ * Every spine operation seats with this (the assets page's reads too, ./brand-project-files.ts).
  */
-async function spineSeat(sql: SqlRunner, viewer: Viewer, organizationId: string, write: boolean): Promise<StudioSeat> {
+export async function spineSeat(sql: SqlRunner, viewer: Viewer, organizationId: string, write: boolean): Promise<StudioSeat> {
   const seat = await studioSeat(sql, viewer.userId, organizationId, { requireSelfStudio: true });
   if (seat.role === 'guest') throw new StudioDenied('not_found');
   if (write) requireCreate(seat);
   return seat;
+}
+
+/**
+ * The organization a spine operation names, if the spine is open for it; otherwise null, and the caller answers
+ * exactly what an unknown operation answers (`invalid`) before anything else is judged.
+ */
+export async function spineOrganization(sql: SqlRunner, input: unknown): Promise<string | null> {
+  const organizationId = (input as { organizationId?: unknown } | null)?.organizationId;
+  if (typeof organizationId !== 'string' || !UUID.test(organizationId) || !(await brandProjectSpineOpen(sql, organizationId))) return null;
+  return organizationId;
 }
 
 export type BrandProjectOperationResult = StudioBrandProjectList | StudioBrandProjectCreated | StudioBrandProjectMoved | StudioFailure;
@@ -334,8 +367,7 @@ export type BrandProjectOperationResult = StudioBrandProjectList | StudioBrandPr
  * (`invalid`), before anything else is judged.
  */
 export async function runBrandProjectOperation(deps: StudioDeps, viewer: Viewer, operation: BrandProjectOperation, input: unknown): Promise<BrandProjectOperationResult> {
-  const organizationId = (input as { organizationId?: unknown } | null)?.organizationId;
-  if (typeof organizationId !== 'string' || !UUID.test(organizationId) || !(await brandProjectSpineOpen(deps.sql, organizationId))) return failure('invalid');
+  if (!(await spineOrganization(deps.sql, input))) return failure('invalid');
   switch (operation) {
     case 'project.list':
       return listBrandProjects(deps, viewer, input);
@@ -346,6 +378,22 @@ export async function runBrandProjectOperation(deps: StudioDeps, viewer: Viewer,
   }
 }
 
+/**
+ * The projects new work can be filed in, most recent activity first, at most `listMax`: what `project.list` answers
+ * (the assets page's overview lists the very same, ./brand-project-files.ts). It takes the member's seat from
+ * `spineSeat`, not an organization id, so it cannot be called for an organization nobody seated; its importers are
+ * pinned to the spine files (tests/brand-studio/spine/assets-page.test.ts).
+ */
+export async function selectableProjects(sql: SqlRunner, media: StudioMediaStore, seat: StudioSeat): Promise<StudioBrandProject[]> {
+  const rows = (
+    await sql.query<ProjectRow>(`${projectsQuery(`p.organization_id = $1 and ${SELECTABLE_PROJECTS('p')}`)} order by last_activity_at desc, p.id desc limit $2`, [
+      seat.organizationId,
+      BRAND_PROJECT_LIMITS.listMax,
+    ])
+  ).rows;
+  return rows.map((row) => projectView(row, media));
+}
+
 /** `project.list`: the projects new work can be filed in, most recent activity first, at most 100. */
 export async function listBrandProjects(deps: StudioDeps, viewer: Viewer, raw: unknown): Promise<StudioBrandProjectList | StudioFailure> {
   const parsed = BrandProjectListSchema.safeParse(raw);
@@ -353,14 +401,8 @@ export async function listBrandProjects(deps: StudioDeps, viewer: Viewer, raw: u
   const v = parsed.data;
   return guarded(() =>
     deps.sql.transaction(async (sql) => {
-      await spineSeat(sql, viewer, v.organizationId, false);
-      const rows = (
-        await sql.query<ProjectRow>(`${projectsQuery(`p.organization_id = $1 and ${SELECTABLE_PROJECTS('p')}`)} order by last_activity_at desc, p.id desc limit $2`, [
-          v.organizationId,
-          BRAND_PROJECT_LIMITS.listMax,
-        ])
-      ).rows;
-      return { ok: true as const, projects: rows.map((row) => projectView(row, deps.media)) };
+      const seat = await spineSeat(sql, viewer, v.organizationId, false);
+      return { ok: true as const, projects: await selectableProjects(sql, deps.media, seat) };
     }),
   );
 }

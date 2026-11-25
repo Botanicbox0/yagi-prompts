@@ -179,7 +179,7 @@ export function jobView(row: JobRow, outputs: OutputRow[], media: StudioMediaSto
       ? { group: { id: p.group.id, models: p.group.models.map(String) } }
       : {}),
     outputs: outputs
-      .filter((o) => o.job_id === row.id && o.status === 'ready' && !o.deleted_at && o.storage_key)
+      .filter((o) => o.job_id === row.id && isVisibleOutput(o))
       .sort((a, b) => a.idx - b.idx)
       .map((o) => {
         const patch = row.work?.region?.patches?.[String(o.idx)];
@@ -240,16 +240,49 @@ export function resetJobSoftDeleteProbe(): void {
   softDelete = null;
 }
 
-/** The wall leaves out runs a member removed; `''` until the column exists. */
+/*
+ * The rules of what a screen lists, in ONE place: the studio state read and the assets page's counts and pages
+ * (./brand-project-files.ts) build their statements from these, so a count can never disagree with a list.
+ * Without an alias each gives exactly the unqualified text the state read has always sent.
+ */
+const column = (alias: string | undefined, name: string): string => (alias ? `${alias}.${name}` : name);
+
+/** The wall leaves out runs a member removed; `''` until the column exists (`alias`: the runs' table). */
+export async function liveRunsFilter(sql: SqlRunner, alias?: string): Promise<string> {
+  return (await jobSoftDeleteReady(sql)) ? `and ${column(alias, 'deleted_at')} is null` : '';
+}
+
 async function notRemoved(sql: SqlRunner): Promise<string> {
-  return (await jobSoftDeleteReady(sql)) ? 'and deleted_at is null' : '';
+  return liveRunsFilter(sql);
 }
 
 /**
  * Lists of runs leave out the internal strips of "빈 곳 채우기" (`params.purpose = 'fill'`). Reads by id
  * (`jobsByIds`, the poll) still return them, and usage counts them like any other run.
  */
-export const NOT_FILL = "coalesce(params ->> 'purpose', '') <> 'fill'";
+export const notFillRun = (alias?: string): string => `coalesce(${column(alias, 'params')} ->> 'purpose', '') <> 'fill'`;
+export const NOT_FILL = notFillRun();
+
+/** The image wall's runs (the state read's first list): pictures and partial edits, fill strips left out. */
+export const IMAGE_RUNS = (alias?: string): string => `${column(alias, 'kind')} in ('image', 'region_edit') and ${notFillRun(alias)}`;
+
+/** The video wall's runs (the state read's second list): clips, remixes and finals, the editor's export left out. */
+export const VIDEO_RUNS = (alias?: string): string =>
+  `${column(alias, 'kind')} in ('video', 'video_remix', 'video_final') and ${column(alias, 'model')} <> 'compose-1080p'`;
+
+/** The sound studio's runs (music and sound effects). The studio state never lists them; the assets page does. */
+export const SOUND_RUNS = (alias?: string): string => `${column(alias, 'kind')} in ('music', 'sound_effect')`;
+
+/** A result a screen shows (`jobView`'s `outputs`): ready, not deleted, stored. The SQL twin of `isVisibleOutput`. */
+export const VISIBLE_OUTPUT = (alias: string): string =>
+  `${alias}.status = 'ready' and ${alias}.deleted_at is null and coalesce(${alias}.storage_key, '') <> ''`;
+
+export function isVisibleOutput(o: Pick<OutputRow, 'status' | 'deleted_at' | 'storage_key'>): boolean {
+  return o.status === 'ready' && !o.deleted_at && Boolean(o.storage_key);
+}
+
+/** A library entry the panel lists (`assetsOf`): ready and not deleted. */
+export const LIBRARY_ASSETS = (alias?: string): string => `${column(alias, 'status')} = 'ready' and ${column(alias, 'deleted_at')} is null`;
 
 export async function jobsOf(sql: SqlRunner, organizationId: string, limit = 60): Promise<JobRow[]> {
   const live = await notRemoved(sql);
@@ -283,13 +316,13 @@ export async function jobsOfStudioState(
   const [imageJobs, videoJobs] = await Promise.all([
     sql.query<JobRow>(
       `select * from brand_studio_jobs
-        where organization_id = $1 and kind in ('image', 'region_edit') and ${NOT_FILL} ${live}${filed ? ` ${filed}` : ''}
+        where organization_id = $1 and ${IMAGE_RUNS()} ${live}${filed ? ` ${filed}` : ''}
         order by created_at desc, id limit $2`,
       params,
     ),
     sql.query<JobRow>(
       `select * from brand_studio_jobs
-        where organization_id = $1 and kind in ('video', 'video_remix', 'video_final') and model <> 'compose-1080p' ${live}${filed ? ` ${filed}` : ''}
+        where organization_id = $1 and ${VIDEO_RUNS()} ${live}${filed ? ` ${filed}` : ''}
         order by created_at desc, id limit $2`,
       params,
     ),
@@ -325,7 +358,7 @@ export async function viewsOf(sql: SqlRunner, jobs: JobRow[], media: StudioMedia
 export async function assetsOf(sql: SqlRunner, organizationId: string, limit = 600): Promise<AssetRow[]> {
   return (
     await sql.query<AssetRow>(
-      `select * from brand_studio_assets where organization_id = $1 and status = 'ready' and deleted_at is null
+      `select * from brand_studio_assets where organization_id = $1 and ${LIBRARY_ASSETS()}
         order by created_at desc, id limit $2`,
       [organizationId, limit],
     )

@@ -17,6 +17,7 @@ import {
   type AssetRefSchema,
   type AssetReserveSchema,
   type AssetUpdateSchema,
+  type BrandProjectFilesInput,
   type BrandProjectFilingInput,
   type BrandProjectMoveInput,
   type CampaignHandoffSchema,
@@ -39,8 +40,10 @@ import {
   type StudioAssetRole,
   type StudioAssetSaved,
   type StudioBrandProjectCreated,
+  type StudioBrandProjectFiles,
   type StudioBrandProjectList,
   type StudioBrandProjectMoved,
+  type StudioBrandProjectOverview,
   type StudioDone,
   type StudioErrorCode,
   type StudioFailure,
@@ -207,6 +210,20 @@ export function createStudioApi({ organizationId, fetch: fetcher = (...args) => 
         method: "POST",
         headers: json,
         body: JSON.stringify({ operation: "project.move", input: { organizationId, ...input } }),
+      }),
+    /** The assets page's 프로젝트별 tab: every project's counts and covers, then 미분류 and 브랜드 자료 (spine open). */
+    loadBrandProjectOverview: () =>
+      send<StudioBrandProjectOverview>(STUDIO_ENDPOINT, {
+        method: "POST",
+        headers: json,
+        body: JSON.stringify({ operation: "project.overview", input: { organizationId } }),
+      }),
+    /** One scope's files, one page; pass the answer's `next` as `cursor` for the following page (spine open). */
+    listBrandProjectFiles: (input: Omit<BrandProjectFilesInput, "organizationId">) =>
+      send<StudioBrandProjectFiles>(STUDIO_ENDPOINT, {
+        method: "POST",
+        headers: json,
+        body: JSON.stringify({ operation: "project.files", input: { organizationId, ...input } }),
       }),
     /** Library upload. `measure` reads width/height/length in the browser; tests pass a stub. */
     async upload(

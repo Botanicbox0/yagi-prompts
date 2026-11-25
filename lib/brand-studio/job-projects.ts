@@ -12,7 +12,7 @@
 import type { Viewer } from '@/lib/auth/identity';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import { requireCreate, studioSeat, StudioDenied } from './access';
-import { JobAssignProjectSchema, type StudioFailure, type StudioJobProjectAssigned, type StudioProjectRef } from './contracts';
+import { JobAssignProjectSchema, type StudioFailure, type StudioJobProjectAssigned, type StudioJobView, type StudioProjectRef } from './contracts';
 import { failure, guarded } from './outcome';
 import { NOT_FILL } from './repo';
 import type { StudioDeps } from './types';
@@ -56,6 +56,20 @@ export async function liveProjectsOf(sql: SqlRunner, organizationId: string): Pr
     if ((error as { code?: string } | null)?.code === '42P01') return [];
     throw error;
   }
+}
+
+/**
+ * Run views as a screen gets them: a run whose project was deleted or archived (or the feature is closed:
+ * `projects` null) reads as being in no project (the row keeps its id). The studio state and the assets page's
+ * pages (./brand-project-files.ts) shape their runs with this one function.
+ */
+export function keepLiveProjectIds(views: StudioJobView[], projects: StudioProjectRef[] | null): StudioJobView[] {
+  const live = new Set(projects?.map((project) => project.id));
+  return views.map((view) => {
+    if (!view.projectId || live.has(view.projectId)) return view;
+    const { projectId: _gone, ...rest } = view;
+    return rest;
+  });
 }
 
 async function liveProject(sql: SqlRunner, organizationId: string, projectId: string): Promise<boolean> {

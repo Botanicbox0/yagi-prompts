@@ -11,6 +11,7 @@ import { z } from 'zod';
 import type { StudioStorageQuotaView } from '@/lib/brands/storage-quota-format';
 import type { UploadLimitReason } from '@/lib/brands/upload-limits-format';
 import type { AllowanceRefillView, AllowanceWindowView } from './allowance-window';
+import type { VideoProjectSummary } from './video-projects/contracts';
 import { STUDIO_IMAGE_BACKGROUNDS, STUDIO_IMAGE_QUALITIES, type StudioImageQuality } from './models';
 import { LYRIC_STRUCTURES } from './sound/lyrics';
 import type { LyricsModel } from './sound/lyrics-model';
@@ -674,6 +675,12 @@ export const BRAND_PROJECT_LIMITS = {
    * counted. A team request has its own count of 20 over team projects only (lib/brands/workspace/service.ts).
    */
   createPerDay: 20,
+  /** `project.overview`: cover tiles per group (the newest image and video results; for 브랜드 자료, the newest files). */
+  overviewCovers: 4,
+  /** `project.files`: items per page (a run with all its results, a library entry or a film is one item). */
+  filesPage: 40,
+  /** `project.files`: the longest cursor accepted. */
+  cursorMax: 200,
 } as const;
 
 /** `project.list`: the projects new work can be filed in, most recent activity first. */
@@ -726,6 +733,54 @@ export interface BrandProjectFilingInput {
 
 /** The studio state load's optional scope (spine open; members only): one project's runs, or the unfiled ones. */
 export type StudioStateScope = { kind: 'project'; brandProjectId: string } | { kind: 'unfiled' };
+
+/**
+ * The assets page's two reads, by project (docs/BRAND-PROJECT-SPINE.md §7, slice 2a; lib/brand-studio/brand-project-files.ts):
+ * `project.overview` (the 프로젝트별 tab in one answer) and `project.files` (one scope's files, page by page). Members
+ * of the workspace only, through the same gate as `project.list`; while the spine is closed for the organization
+ * both answer exactly like an unknown operation (`{ ok: false, code: 'invalid' }`, HTTP 400).
+ */
+export const BRAND_PROJECT_READS = ['project.overview', 'project.files'] as const;
+export type BrandProjectRead = (typeof BRAND_PROJECT_READS)[number];
+
+/**
+ * An upload with one of these roles and no project (or a project that can no longer take new work) is 브랜드 자료
+ * (§3.2, §7). With no role or `other` and no project, it is 미분류. In a project, it is that project's file whatever
+ * its role.
+ */
+export const BRAND_MATERIAL_ROLES = ['product', 'person', 'logo', 'style', 'place'] as const satisfies readonly StudioAssetRole[];
+export type BrandMaterialRole = (typeof BRAND_MATERIAL_ROLES)[number];
+
+/**
+ * What `project.files` can be narrowed to: results of image runs, of video runs, of sound runs (`music`,
+ * `sound_effect`), library entries (`upload`: every `StudioAssetView`, saved results included) and films.
+ */
+export const BRAND_PROJECT_FILE_KINDS = ['image', 'video', 'sound', 'upload', 'film'] as const;
+export type BrandProjectFileKind = (typeof BRAND_PROJECT_FILE_KINDS)[number];
+
+/** `project.files`' scope: one selectable project, 미분류, or 브랜드 자료. */
+export type BrandProjectFilesScope = { kind: 'project'; brandProjectId: string } | { kind: 'unfiled' } | { kind: 'brand_materials' };
+
+/** `project.overview`: the organization only. */
+export const BrandProjectOverviewSchema = z.object({ organizationId: Id });
+export type BrandProjectOverviewInput = z.input<typeof BrandProjectOverviewSchema>;
+
+/**
+ * `project.files`: one scope, optionally one kind, newest first; `cursor` is the previous page's `next`. Everything
+ * but `organizationId` is judged after the seat (malformed: `invalid`; a project that is not selectable:
+ * `not_found`), as the scoped state read does, so a caller who is not seated gets the seat's answer whatever they sent.
+ */
+export const BrandProjectFilesSchema = z.object({
+  organizationId: Id,
+  scope: z.discriminatedUnion('kind', [
+    z.object({ kind: z.literal('project'), brandProjectId: z.string().max(64) }),
+    z.object({ kind: z.literal('unfiled') }),
+    z.object({ kind: z.literal('brand_materials') }),
+  ]),
+  kind: z.enum(BRAND_PROJECT_FILE_KINDS).optional(),
+  cursor: z.string().min(1).max(BRAND_PROJECT_LIMITS.cursorMax).optional(),
+});
+export type BrandProjectFilesInput = z.input<typeof BrandProjectFilesSchema>;
 
 /** Save a result into the library. Same bytes twice returns the existing asset. */
 export const AssetFromOutputSchema = z.object({
@@ -811,6 +866,13 @@ export interface StudioAssetView {
    */
   durationMs?: number;
   source: StudioAssetSource;
+  /**
+   * The brand project this file is filed in (null = none: 미분류 or 브랜드 자료 by its `role`, see
+   * `BRAND_MATERIAL_ROLES`), by the same rule as runs: null also when its project can no longer take new work.
+   * Present only in answers to workspace members while the brand project spine is open for the organization;
+   * absent (not null) for project guests, MCP, workflows and whenever the spine is closed.
+   */
+  brandProjectId?: string | null;
   createdAt: string;
 }
 
@@ -1052,6 +1114,72 @@ export interface StudioBrandProjectMoved {
   jobIds: string[];
   assetIds: string[];
   filmIds: string[];
+}
+
+/** Counts of one group of the assets page: results by run medium, library entries, films (`project.files` kinds). */
+export type StudioBrandProjectCounts = Record<BrandProjectFileKind, number>;
+
+/** A cover tile: one image or video result, with the wall's media addresses (as `StudioOutputView`). */
+export interface StudioBrandProjectCover {
+  outputId: string;
+  jobId: string;
+  kind: 'image' | 'video';
+  url: string;
+  thumbUrl: string | null;
+  width: number | null;
+  height: number | null;
+  createdAt: string;
+}
+
+/** One project's group on the 프로젝트별 tab. */
+export interface StudioBrandProjectGroup {
+  /** Exactly the project as `project.list` answers it. */
+  project: StudioBrandProject;
+  counts: StudioBrandProjectCounts;
+  /** At most `BRAND_PROJECT_LIMITS.overviewCovers`, newest first. */
+  covers: StudioBrandProjectCover[];
+}
+
+/**
+ * `project.overview`: every project `project.list` lists (same set, same order), then 미분류 and 브랜드 자료. Each count
+ * equals the number of items `project.files` returns for that scope and kind over all its pages (a result is one
+ * item: count `outputs` of the job views).
+ */
+export interface StudioBrandProjectOverview {
+  ok: true;
+  projects: StudioBrandProjectGroup[];
+  unfiled: { counts: StudioBrandProjectCounts; covers: StudioBrandProjectCover[] };
+  brandMaterials: {
+    /** Library entries with no (selectable) project and a role of `BRAND_MATERIAL_ROLES`. */
+    count: number;
+    byRole: Record<BrandMaterialRole, number>;
+    /** The newest few (`BRAND_PROJECT_LIMITS.overviewCovers`), as the panel shows a library entry. */
+    covers: StudioAssetView[];
+  };
+}
+
+/** One item of a `project.files` page: which list holds its view. */
+export interface BrandProjectFileItem {
+  type: 'job' | 'asset' | 'film';
+  id: string;
+}
+
+/**
+ * `project.files`: one page, newest first (by the run's, the entry's or the film's creation), at most
+ * `BRAND_PROJECT_LIMITS.filesPage` items. A run comes with every result a screen shows (its `outputs`), so a run
+ * never straddles two pages. `next` is the cursor of the following page; null on the last one.
+ */
+export interface StudioBrandProjectFiles {
+  ok: true;
+  /** The page in order. */
+  items: BrandProjectFileItem[];
+  /** The page's runs, in page order, as the studio state builds them. */
+  jobs: StudioJobView[];
+  /** The page's library entries, in page order. */
+  assets: StudioAssetView[];
+  /** The page's films, in page order, as the films' list builds them. */
+  films: VideoProjectSummary[];
+  next: string | null;
 }
 
 /** `job.assign_project`: every run that moved (the run and its family) and where they are now. */
