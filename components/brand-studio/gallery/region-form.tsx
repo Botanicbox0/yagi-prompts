@@ -14,7 +14,7 @@ import type { StudioImageModel } from "@/lib/brand-studio/models";
 import { credits, fill, type StudioCopy, type StudioLocale } from "../copy";
 import { StudioIcon } from "../icons";
 import { REF_DRAG_TYPE, acceptsDrag, decodeRefDrag, startRefDrag, type RefSource, type TrayItem } from "../refs";
-import { centeredBox } from "../region-math";
+import { centeredBox, regionInputFrame } from "../region-math";
 
 /** The kinds a partial-edit reference can be (docs/BRAND-STUDIO-V3.md §4). */
 export const REGION_ROLES = ["logo", "product", "person", "style"] as const satisfies readonly StudioAssetRole[];
@@ -35,9 +35,17 @@ export function cropStyle(box: RegionBox, size: { width: number | null; height: 
   };
 }
 
+/** The customer's selection inside the preview, as a quiet outline (fractions of the preview frame). */
+export function selectionStyle(selection: RegionBox): Record<string, string> {
+  const pct = (v: number) => `${(v * 100).toFixed(3)}%`;
+  return { left: pct(selection.x), top: pct(selection.y), width: pct(selection.w), height: pct(selection.h) };
+}
+
 export interface RegionFormProps {
   picture: { url: string; width: number | null; height: number | null };
   box: RegionBox | null;
+  /** The one region engine (v2): image 1 is the window around the box, not the box. */
+  wide?: boolean;
   copy: StudioCopy;
   locale: StudioLocale;
   models: readonly StudioImageModel[];
@@ -147,7 +155,14 @@ export function RegionForm(props: RegionFormProps) {
       ) : (
         <div className="bs-region-inputs" data-studio-region-inputs>
           <figure className="bs-region-preview" data-studio-region-preview>
-            <span className="bs-region-crop" role="img" aria-label={r.preview} style={cropStyle(box, props.picture, props.picture.url)} />
+            {(() => {
+              const input = regionInputFrame(props.picture, box, Boolean(props.wide));
+              return (
+                <span className="bs-region-crop" role="img" aria-label={r.preview} style={cropStyle(input.frame, props.picture, props.picture.url)}>
+                  {input.selection && <span className="bs-region-select" data-studio-region-select aria-hidden="true" style={selectionStyle(input.selection)} />}
+                </span>
+              );
+            })()}
             <figcaption>
               <span className="bs-thumb-n bs-num">1</span>
               <span className="bs-label">{r.preview}</span>

@@ -157,6 +157,9 @@ textarea.bs-field { resize: vertical; }
   .bs-dock { background: rgba(24, 24, 27, 0.88); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); }
 }
 .bs-dock[data-drop-target] { border-color: var(--ys-ink); box-shadow: 0 0 0 1px var(--ys-ink); }
+/* Something it takes is being dragged over the page (video studio): a quiet dashed line says "drop here". */
+.bs-dock[data-drop-ready] { border-style: dashed; border-color: var(--ys-ink-muted); }
+.bs-tray[data-drop-ready] .bs-tray-hint, .bs-tray[data-drop-target] .bs-tray-hint { color: var(--ys-ink); }
 /* Collapsed 1-line floating pill when Video Studio's Sequence Rail expands to full timeline height. */
 .bs-dock.bs-dock-collapsed { display: inline-flex; width: auto; max-width: min(560px, calc(100vw - 32px)); min-height: 44px; align-items: center; gap: 10px; padding: 6px 16px 6px 10px; border: 1px solid var(--ys-line-strong); border-radius: 9999px; color: var(--ys-ink); font: inherit; font-size: 13.5px; font-weight: 600; letter-spacing: -0.02em; cursor: pointer; transition: transform 160ms var(--ys-ease), border-color 160ms var(--ys-ease), background-color 160ms var(--ys-ease); }
 .bs-dock.bs-dock-collapsed:hover { background: var(--ys-surface); border-color: var(--ys-ink); box-shadow: none; }
@@ -441,7 +444,8 @@ textarea.bs-field { resize: vertical; }
 .bs-region-inputs { display: grid; grid-template-columns: 104px minmax(0, 1fr); gap: 14px; align-items: start; padding: 12px; border-radius: 16px; background: var(--ys-subtle-bg); }
 .bs-region-preview { display: grid; justify-items: center; gap: 4px; margin: 0; }
 .bs-region-preview figcaption { display: grid; justify-items: center; gap: 0; }
-.bs-region-crop { display: block; width: min(104px, calc(120px * var(--crop-r, 1))); border-radius: 10px; background-color: var(--ys-media-bg); background-repeat: no-repeat; box-shadow: 0 0 0 1.5px var(--ys-ink); }
+.bs-region-crop { position: relative; display: block; width: min(104px, calc(120px * var(--crop-r, 1))); border-radius: 10px; background-color: var(--ys-media-bg); background-repeat: no-repeat; box-shadow: 0 0 0 1.5px var(--ys-ink); }
+.bs-region-select { position: absolute; border-radius: 2px; box-shadow: inset 0 0 0 1px var(--ys-ink), inset 0 0 0 2px var(--ys-canvas); pointer-events: none; }
 .bs-region-refs { display: grid; gap: 6px; min-width: 0; }
 .bs-region-ref-list { display: flex; flex-wrap: wrap; gap: 10px; margin: 0; padding: 0; list-style: none; }
 .bs-region-ref { position: relative; display: grid; justify-items: center; gap: 2px; }
@@ -1001,6 +1005,9 @@ button.bs-sibling:focus-visible { outline: 2px solid var(--ys-focus); outline-of
 .bs-talk-field { display: grid; gap: 2px; padding: 8px 6px 6px 12px; border-radius: var(--ys-r-control); background: var(--ys-panel); box-shadow: inset 0 0 0 1px var(--ys-hairline); }
 .bs-talk-field:focus-within { box-shadow: inset 0 0 0 1.5px var(--ys-ink); }
 .bs-talk-box[data-dragging] .bs-talk-field { box-shadow: inset 0 0 0 1.5px var(--ys-accent); }
+/* A file is being dragged over the page: the box is where it goes (quiet until the pointer reaches it). */
+.bs-talk-box[data-drop-ready] .bs-talk-field { box-shadow: inset 0 0 0 1px var(--ys-ink-muted); }
+.bs-talk-box[data-dragging] .bs-revise-drop { border-color: var(--ys-accent); color: var(--ys-ink); font-weight: 600; }
 .bs-talk-input { display: block; width: 100%; min-height: calc(1.55em + 4px); max-height: calc(5 * 1.55em + 4px); margin: 0; padding: 2px 6px 2px 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; color: var(--ys-ink); font: inherit; font-size: 14px; line-height: 1.55; resize: none; overflow-y: auto; outline: none; }
 .bs-talk-input:focus, .bs-talk-input:focus-visible { outline: none; box-shadow: none; }
 .bs-talk-field-tools { display: flex; align-items: center; gap: 2px; margin-left: -8px; }

@@ -12,16 +12,19 @@
  */
 import {
   STUDIO_LIMITS,
+  STUDIO_REVISE_MATERIALS_MAX,
   type ReviseMark,
   type StudioJobCreated,
   type StudioReviseMode,
   type StudioReviseTalk,
+  type StudioAssetSaved,
   type StudioTalkKind,
 } from "@/lib/brand-studio/contracts";
+import type { UploadLimitReason } from "@/lib/brands/upload-limits-format";
 import { emptySheet, sheetRequest, type ReviseQuestion, type ReviseSheet } from "@/lib/brand-studio/revision/sheet";
-import { isFailure, type ApiResult } from "./api";
+import { isFailure, uploadProblem, type ApiResult } from "./api";
 import { newRequestId } from "./copy";
-import { toReferences, type TrayItem } from "./refs";
+import { toReferences, trayItemFromAsset, type TrayItem } from "./refs";
 import { toWireMarks, type MarkState } from "./revise-marks";
 
 /** One line of the thread. */
@@ -55,6 +58,8 @@ export interface TalkState {
   pending: { text: string; answering?: { option?: number; decide?: boolean } } | null;
   /** An error code from the server (not a reading failure), or null. */
   note: string | null;
+  /** Why the last attachment did not land (not kept between visits); a later clean upload clears it. */
+  uploadNote?: TalkUploadNote | null;
   clipKnown: boolean;
 }
 
@@ -120,8 +125,73 @@ export const initialTalkState = (version = 2): TalkState => ({
   marks: [],
   pending: null,
   note: null,
+  uploadNote: null,
   clipKnown: false,
 });
+
+/** Why an attachment did not land: an upload failure code (with its limit reason) or "attach_full". */
+export interface TalkUploadNote {
+  code: string;
+  reason?: UploadLimitReason;
+}
+
+/** What an upload for the conversation brought back: the attachments, and the first reason one did not come. */
+export interface TalkUpload {
+  added: TrayItem[];
+  failure: TalkUploadNote | null;
+}
+
+/** Pictures and clips: what the conversation takes (the "+" picker's accept list is the same kinds). */
+const takesKind = (type: string) => type.startsWith("image/") || type.startsWith("video/");
+
+/**
+ * Uploads files for the conversation, one after another, with the studio's own checks: a wrong kind is
+ * `unsupported_file` and never sent, a file over its size limit `file_too_large` (uploadProblem), and a
+ * refusal from the server keeps its code and reason (storage, quota, network). The first failure is reported.
+ */
+export async function uploadForTalk<F extends { type: string; size: number }>(
+  files: readonly F[],
+  send: (file: F) => Promise<ApiResult<StudioAssetSaved>>,
+): Promise<TalkUpload> {
+  const added: TrayItem[] = [];
+  let failure: TalkUploadNote | null = null;
+  for (const file of files) {
+    if (!takesKind(file.type)) {
+      failure ??= { code: "unsupported_file" };
+      continue;
+    }
+    const problem = uploadProblem(file);
+    if (problem) {
+      failure ??= { code: problem };
+      continue;
+    }
+    const result = await send(file);
+    if (isFailure(result)) {
+      failure ??= { code: result.code, ...(result.reason ? { reason: result.reason } : {}) };
+      continue;
+    }
+    added.push(trayItemFromAsset(result.asset));
+  }
+  return { added, failure };
+}
+
+/** The "+" button's limit, and the count it compares (pictures sent in the thread and attached now). */
+export const TALK_ATTACH_MAX = STUDIO_LIMITS.referencesMax - 1 + STUDIO_REVISE_MATERIALS_MAX;
+export const talkAttachedCount = (state: Pick<TalkState, "thread" | "references">) =>
+  state.thread.reduce((n, i) => n + (i.from === "customer" ? i.references.length : 0), 0) + state.references.length;
+export const talkBusy = (state: Pick<TalkState, "phase">) =>
+  state.phase === "reading" || state.phase === "slow" || state.phase === "making" || state.phase === "loading";
+
+/**
+ * Whether files may be attached now: the same guards as the "+" button (off while uploading or busy, and at
+ * the limit), so a drop never uploads what the conversation would then cut off.
+ */
+export function talkFilesRefusal(state: Pick<TalkState, "phase" | "thread" | "references" | "materials">, uploading: boolean): "busy" | "attach_full" | null {
+  if (uploading || talkBusy(state)) return "busy";
+  // Full: the "+" button's count, or no room left for a picture nor a clip (nothing could land).
+  const noRoom = state.references.length >= STUDIO_LIMITS.referencesMax - 1 && state.materials.length >= STUDIO_REVISE_MATERIALS_MAX;
+  return talkAttachedCount(state) >= TALK_ATTACH_MAX || noRoom ? "attach_full" : null;
+}
 
 let seq = 0;
 const nextId = () => `t${Date.now().toString(36)}${(seq += 1).toString(36)}`;
@@ -295,6 +365,28 @@ export function createTalkFlow(deps: TalkDeps & { fallbackVersion?: number }) {
     },
     setMaterials(materials: TrayItem[]) {
       set({ materials });
+    },
+    /**
+     * What came back from an upload (the "+" or a drop, `uploadForTalk`): pictures join the references, clips
+     * the materials, each up to its limit. The first reason a file did not come back is said (never dropped in
+     * silence); an upload that brought everything clears an earlier note.
+     */
+    attachUploads({ added, failure }: TalkUpload) {
+      const images = added.filter((a) => a.kind === "image");
+      const videos = added.filter((a) => a.kind === "video");
+      const patch: Partial<TalkState> = { uploadNote: failure };
+      const references = [...state.references, ...images.filter((a) => !state.references.some((r) => r.key === a.key))];
+      const materials = [...state.materials, ...videos.filter((a) => !state.materials.some((m) => m.key === a.key))];
+      if (images.length) patch.references = references.slice(0, STUDIO_LIMITS.referencesMax - 1);
+      if (videos.length) patch.materials = materials.slice(0, STUDIO_REVISE_MATERIALS_MAX);
+      // Something that came back but did not fit is said with the conversation's limit line, never dropped silently.
+      const cut = references.length > STUDIO_LIMITS.referencesMax - 1 || materials.length > STUDIO_REVISE_MATERIALS_MAX;
+      if (!failure && cut) patch.uploadNote = { code: "attach_full" };
+      set(patch);
+    },
+    /** A note about attaching that did not come from an upload ("attach_full", or an upload that threw). */
+    noteUpload(note: TalkUploadNote | null) {
+      set({ uploadNote: note }, false);
     },
     setMarks(marks: MarkState[]) {
       set({ marks });

@@ -112,6 +112,15 @@ export interface ShareReviewDialogProps {
 
 const EXPIRY_OPTIONS = [7, 14, 30] as const;
 
+/** True when the dialog is shown as a modal; a browser that does not know `:modal` throws, and then it is not. */
+function isModal(dialog: HTMLDialogElement): boolean {
+  try {
+    return dialog.matches(":modal");
+  } catch {
+    return false;
+  }
+}
+
 async function postBridge(operation: string, input: Record<string, unknown>): Promise<Record<string, unknown>> {
   const res = await fetch("/api/brand-studio/share-bridge", {
     method: "POST",
@@ -129,10 +138,27 @@ const DIALOG_STYLES = `
   z-index: 90;
   display: grid;
   place-items: center;
+  width: auto;
+  height: auto;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  border: 0;
   padding: 16px;
+  overflow: hidden;
+  color: inherit;
   background: rgba(9, 9, 11, 0.36);
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
+}
+.srd-backdrop:not([open]) {
+  display: none;
+}
+.srd-backdrop::backdrop {
+  background: transparent;
+}
+.srd-backdrop:focus {
+  outline: none;
 }
 .srd-modal {
   width: min(580px, calc(100vw - 32px));
@@ -472,12 +498,31 @@ export function ShareReviewDialog({ target, locale = "ko", onClose, onNavigate }
     };
   }, [target.assetId, target.organizationId, target.outputId, target.reviewId, target.title]);
 
+  // The window is a native modal dialog: it opens in the top layer, above the image viewer (itself a modal
+  // dialog), which stays inert behind it. Focus goes into it; on close it goes back to what opened it.
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    const opener = typeof document !== "undefined" && document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    if (dialog && typeof dialog.showModal === "function" && !dialog.open) {
+      dialog.showModal();
+      dialog.tabIndex = -1;
+      dialog.focus({ preventScroll: true });
+    }
+    return () => {
+      if (dialog?.open) dialog.close();
+      if (opener?.isConnected) opener.focus({ preventScroll: true });
+    };
+  }, []);
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.stopPropagation();
-        onClose();
-      }
+      if (event.key !== "Escape") return;
+      // Shown as a modal, Escape reaches only the topmost dialog (this one) as its `cancel`; closing here as
+      // well would hand that same key to the dialog behind it. Without one (no native dialog) the key closes it.
+      if (dialogRef.current?.open && isModal(dialogRef.current)) return;
+      event.stopPropagation();
+      onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -588,15 +633,24 @@ export function ShareReviewDialog({ target, locale = "ko", onClose, onNavigate }
   };
 
   const content = (
-    <div
+    <dialog
+      ref={dialogRef}
       className="srd-backdrop"
       data-share-review-dialog
+      aria-labelledby={headingId}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
+      onCancel={(e) => {
+        e.preventDefault();
+        onClose();
+      }}
+      // Keys pressed in this window are its own: nothing behind it (the viewer's arrows and Space, a sequence's
+      // Delete) acts on them while it is open.
+      onKeyDown={(e) => e.stopPropagation()}
     >
       <style>{DIALOG_STYLES}</style>
-      <div className="srd-modal" role="dialog" aria-modal="true" aria-labelledby={headingId}>
+      <div className="srd-modal">
         <div className="srd-head">
           <h2 id={headingId} className="srd-title">
             {c.heading}
@@ -778,7 +832,7 @@ export function ShareReviewDialog({ target, locale = "ko", onClose, onNavigate }
           </p>
         )}
       </div>
-    </div>
+    </dialog>
   );
 
   if (typeof document !== "undefined" && document.body) {

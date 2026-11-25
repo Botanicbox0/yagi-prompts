@@ -976,6 +976,7 @@ function ViewerContent({
           <RegionForm
             picture={{ url: file.url, width: file.width, height: file.height }}
             box={box}
+            wide={fixedModel}
             copy={copy}
             locale={locale}
             models={support.models}

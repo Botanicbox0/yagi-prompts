@@ -357,7 +357,7 @@ describe("LibraryRail & Oplux RegionEditPanel entry points", () => {
     removeFromFolder: async () => true,
   });
 
-  it("exposes 부분 수정 and 꾸미기 on image items in Uploads and Liked tabs with zero solid buttons", () => {
+  it("exposes 부분 수정 and 디테일 편집 on image items in Uploads and Liked tabs with zero solid buttons", () => {
     const libCopy = getDictionary("ko").studioLibrary;
     const uploadsHtml = renderToStaticMarkup(
       <LibraryRail
