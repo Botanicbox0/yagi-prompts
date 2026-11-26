@@ -17,8 +17,9 @@
  */
 import { STUDIO_LIMITS, type StudioAssetView, type StudioJobView, type StudioOutputView, type StudioReference } from "@/lib/brand-studio/contracts";
 import type { MentionKind } from "@/lib/brand-studio/enhancer/mentions";
-import { draftFromJob, type DockDraft } from "./dock-model";
+import { dockControls, draftFromJob, type DockDraft } from "./dock-model";
 import { reusableModels, withModels } from "./group-model";
+import { shieldedDesignFromJob, type ShieldedDockDesign } from "./prompt-pictures";
 import { trayItemFromAsset, trayItemFromOutput, type RefSource, type TrayItem } from "./refs";
 import type { LayerEditorRegionPreset } from "./seams";
 
@@ -63,8 +64,8 @@ export function restoreTray(
 }
 
 /** The Architect switch a run was sent with: on when a sentence was written for it (automatically or read first). */
-export function architectWasOn(job: Pick<StudioJobView, "finalPrompt">): boolean {
-  return job.finalPrompt !== null;
+export function architectWasOn(job: Pick<StudioJobView, "finalPrompt" | "architect">): boolean {
+  return job.architect ?? job.finalPrompt !== null;
 }
 
 export type ReusePlan =
@@ -75,6 +76,8 @@ export type ReusePlan =
       missing: MissingReference[];
       /** A video run's reviewed sentence: it comes back in the field, the typed words kept for "원래 문장으로". */
       reviewed: { original: string; improved: string } | null;
+      /** A shielded reviewed video run: the dock shows its pictures and sends `reviewedFrom`. */
+      shieldedReviewed?: ShieldedDockDesign;
     }
   | {
       to: "region";
@@ -115,6 +118,7 @@ export function planReuse(
   // Video runs: as before ("설정 다시 쓰기" brings back the sentence that was read and the typed words).
   const reviewed = job.reviewed && job.finalPrompt ? job.finalPrompt.slice(0, STUDIO_LIMITS.promptMax) : null;
   const next = draftFromJob(job, ctx.current);
+  const shieldedReviewed = !reviewed ? shieldedDesignFromJob(job, dockControls(next).model.id) : null;
   const { items, missing } = restoreTray(job.references, ctx.lookup, ctx.outputName, "any");
   return {
     to: "dock",
@@ -122,6 +126,7 @@ export function planReuse(
     tray: items,
     missing,
     reviewed: reviewed ? { original: job.prompt, improved: reviewed } : null,
+    ...(shieldedReviewed ? { shieldedReviewed } : {}),
   };
 }
 

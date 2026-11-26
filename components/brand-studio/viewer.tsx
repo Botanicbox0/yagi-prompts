@@ -32,6 +32,7 @@ import { ReviseForm, VersionPanel, VersionStrip, type ReviseSupport } from "./re
 import { MoreButton, ReviseTalk, SheetCard, type TalkSupport } from "./revise-talk";
 import { savedTalkOutputs } from "./revise-talk-store";
 import { chainOf, versionOf, type ChainVersion } from "./revision-model";
+import { PromptDetails, PromptPictureView, sentPromptMode, type PromptPictureLoader } from "./prompt-pictures";
 
 export type ViewerItem = { type: "output"; output: StudioOutputView; job: StudioJobView } | { type: "asset"; asset: StudioAssetView };
 
@@ -129,6 +130,7 @@ export interface ViewerProps {
   actions: ViewerActions;
   /** Server-gated 보내기 prop (omitted/null when closed, staff, or project guest). */
   send?: (ViewerSendProp & { transport?: SendTransport }) | null;
+  fetchPromptPicture?: PromptPictureLoader;
 }
 
 export const itemKey = (item: ViewerItem) => (item.type === "output" ? `o:${item.output.id}` : `a:${item.asset.id}`);
@@ -436,6 +438,7 @@ function ViewerContent({
   item: openedItem,
   copy,
   locale = "ko",
+  organizationId = "",
   organizationName,
   billingCopy,
   planCatalogue,
@@ -453,6 +456,7 @@ function ViewerContent({
   onOpenOutput,
   actions,
   send = null,
+  fetchPromptPicture,
   onRegion,
   comparing: comparingModels = false,
   onCompare,
@@ -553,7 +557,8 @@ function ViewerContent({
   // "프롬프트 복사": the typed words (a partial edit's instruction), else an image run's sent sentence.
   const promptText = job ? promptToCopy(job) : null;
   const sentCopy = Boolean(job && sentPromptCopyable(job));
-  const protectedSent = Boolean(job?.finalPrompt) && !sentCopy;
+  const sentMode = job && !sentCopy ? sentPromptMode(job) : null;
+  const protectedSent = (sentMode?.kind === "pictures" || Boolean(job?.finalPrompt)) && !sentCopy;
   // Only a partial edit compares against what it was made from (a final or a clip version also has a parent).
   const parent = job?.kind === "region_edit" ? parentOf(job.parentOutputId) : null;
   const parentAsset = job?.kind === "region_edit" && !parent && parentAssetOf ? parentAssetOf(job.parentAssetId) : null;
@@ -783,7 +788,8 @@ function ViewerContent({
     <div className="bs-prompt-block" data-studio-prompt-block>
     {/* A preset workflow run: what was sent is a server-side text, never shown, and its settings are not reused. */}
     {!job.preset && (
-    <details className="bs-prompt-details" data-studio-prompt-details>
+    <PromptDetails>{(promptOpen) => (
+      <>
       <summary>{v.promptToggle}</summary>
       <div className="bs-prompt-head">
         <p className="bs-label" id={`${id}-typed`}>{v.yourPrompt}</p>
@@ -799,6 +805,18 @@ function ViewerContent({
         )}
       </div>
       {/* A video run's sentence is read here, not copied: no selection (CSS), no copy, cut, drag or context menu. */}
+      {sentMode?.kind === "pictures" ? (
+        <PromptPictureView
+          active={promptOpen}
+          organizationId={organizationId}
+          kind="run"
+          jobId={sentMode.jobId}
+          version={sentMode.version}
+          pages={sentMode.pages}
+          copy={copy}
+          fetchPicture={fetchPromptPicture}
+        />
+      ) : (
       <p
         data-no-copy={protectedSent ? "" : undefined}
         onCopy={protectedSent ? (event) => event.preventDefault() : undefined}
@@ -806,8 +824,9 @@ function ViewerContent({
         onDragStart={protectedSent ? (event) => event.preventDefault() : undefined}
         onContextMenu={protectedSent ? (event) => event.preventDefault() : undefined}
       >
-        {job.finalPrompt ?? v.notEnhanced}
+        {sentMode?.kind === "not_designed" ? v.notEnhanced : (job.finalPrompt ?? v.notEnhanced)}
       </p>
+      )}
       {canGenerate && job.kind !== "video_final" && (
         <button
           type="button"
@@ -820,7 +839,8 @@ function ViewerContent({
           {job.kind === "region_edit" ? v.reuseRegion : v.reuse}
         </button>
       )}
-    </details>
+      </>
+    )}</PromptDetails>
     )}
     {/* One press, without opening: the typed words (a partial edit's instruction). Hidden while open. */}
     {promptText && (

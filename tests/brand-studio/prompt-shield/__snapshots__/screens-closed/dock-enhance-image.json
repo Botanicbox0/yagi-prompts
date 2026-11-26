@@ -1,0 +1,23 @@
+{
+  "draft": {
+    "medium": "image",
+    "model": "seedream-5.5",
+    "prompt": "Enhanced image sentence for seedream",
+    "aspect": "4:3",
+    "resolution": "2K",
+    "quality": "",
+    "count": 1,
+    "seconds": 5,
+    "audio": "native",
+    "enhance": true,
+    "method": "reference",
+    "keep": [
+      "camera",
+      "timing"
+    ],
+    "change": ""
+  },
+  "enhanced": true,
+  "notice": null,
+  "message": null
+}

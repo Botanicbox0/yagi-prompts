@@ -8,7 +8,7 @@
  * (`enhance: false`), so nothing is rewritten twice and the run records both.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { STUDIO_LIMITS, type StudioErrorCode, type StudioPromptPreview } from "@/lib/brand-studio/contracts";
+import { STUDIO_LIMITS, type StudioErrorCode, type StudioJobCreate, type StudioPromptPreview } from "@/lib/brand-studio/contracts";
 import type { StudioMedium } from "@/lib/brand-studio/models";
 import { isFailure, type ApiResult } from "./api";
 import { errorLine, fill, newRequestId, type StudioCopy } from "./copy";
@@ -16,13 +16,16 @@ import type { ReferenceVideoProblem } from "@/lib/brand-studio/reference-video";
 import {
   attachRefusal,
   buildMultiClipJobs,
+  dockControls,
   draftAfterAttach,
   enhancePreviewInput,
   initialDraft,
+  remixActive,
   type DockDraft,
   type DockProblem,
   type FilmLimits,
 } from "./dock-model";
+import { reconcileShieldedDesign, shieldedDesignFromEnhance, type ShieldedDockDesign } from "./prompt-pictures";
 import {
   addToTray,
   mentionLabel,
@@ -250,7 +253,7 @@ export function useDock({
   /** Brand project spine only: embedded in the press fingerprint so switching projects never drops a key. */
   brandProjectId?: string | null;
 }) {
-  const [draft, setDraft] = useState<DockDraft>(() => initialDraft(mode ?? initialMedium));
+  const [draft, setDraftState] = useState<DockDraft>(() => initialDraft(mode ?? initialMedium));
   const [tray, setTray] = useState<TrayItem[]>([]);
   const [feedback, setFeedback] = useState<{
     message: string | null;
@@ -268,6 +271,13 @@ export function useDock({
   const [busy, setBusy] = useState(false);
   const [enhancing, setEnhancing] = useState(false);
   const [enhanced, setEnhanced] = useState<Enhanced | null>(null);
+  const [shieldedDesign, setShieldedState] = useState<ShieldedDockDesign | null>(null);
+  const latestShielded = useRef(shieldedDesign);
+  latestShielded.current = shieldedDesign;
+  const setShielded = useCallback((next: ShieldedDockDesign | null) => {
+    latestShielded.current = next;
+    setShieldedState(next);
+  }, []);
   /**
    * Several image models picked and "설계하기" pressed: one tab per model with its own sentence (the typed
    * words stay in `draft.prompt`), and the tab the field shows. Null for the single bar.
@@ -289,10 +299,37 @@ export function useDock({
   latest.current = tray;
   const latestDraft = useRef(draft);
   latestDraft.current = draft;
+  const commitDraft = useCallback((next: DockDraft) => {
+    latestDraft.current = next;
+    setDraftState(next);
+  }, []);
   const latestEnhanced = useRef(enhanced);
   latestEnhanced.current = enhanced;
   // The image screen only: a pick of several models is remembered in this browser (group-model.ts).
   const remembers = (mode ?? initialMedium) === "image";
+
+  const setDraft = useCallback(
+    (next: DockDraft | ((current: DockDraft) => DockDraft)) => {
+      const active = latestShielded.current;
+      if (!active) {
+        setDraftState(next);
+        return;
+      }
+      const resolved = typeof next === "function" ? next(latestDraft.current) : next;
+      commitDraft(resolved);
+      const check = reconcileShieldedDesign(active, {
+        prompt: resolved.prompt,
+        model: dockControls(resolved).model.id,
+        medium: resolved.medium,
+        remix: remixActive(resolved, latest.current),
+      });
+      if (!check.design) {
+        setShielded(null);
+        if (check.dropped === "typed_changed" && resolved.enhance) setNotice(copy.dock.designedStale);
+      }
+    },
+    [commitDraft, copy.dock.designedStale, setShielded],
+  );
 
   /**
    * The model pick changed (the menu's checks, or one model picked alone). Shared options every model does
@@ -329,8 +366,18 @@ export function useDock({
         nextEnhanced = reviewed ? { original: ownBefore, improved: text } : null;
       }
       const draftNext = { ...next, prompt };
-      latestDraft.current = draftNext;
-      setDraft(draftNext);
+      commitDraft(draftNext);
+      if (
+        latestShielded.current &&
+        !reconcileShieldedDesign(latestShielded.current, {
+          prompt,
+          model: dockControls(draftNext).model.id,
+          medium: draftNext.medium,
+          remix: remixActive(draftNext, latest.current),
+        }).design
+      ) {
+        setShielded(null);
+      }
       for (const id of [...designTokens.current.keys()]) if (!nextTabs?.[id]) designTokens.current.delete(id);
       latestTabs.current = nextTabs;
       setTabs(nextTabs);
@@ -344,7 +391,7 @@ export function useDock({
       }
       if (remembers && options.remember !== false) writeStoredPick(localStore(), organizationId, picked);
     },
-    [copy, organizationId, remembers],
+    [commitDraft, copy, organizationId, remembers, setMessage, setShielded],
   );
 
   // A pick of several models made earlier in this browser comes back after a reload (image screen only).
@@ -382,8 +429,7 @@ export function useDock({
     // The home's sentence lands in the bar exactly as before: one model, the default one. A pick of several
     // restored from this browser gives way, and stays remembered for the next visit without a hand-off.
     if (isGroupDraft(latestDraft.current)) setModels([initialDraft(mode ?? initialMedium).model], { quiet: true, remember: false });
-    latestDraft.current = { ...latestDraft.current, prompt };
-    setDraft((current) => (current.prompt.trim() ? current : { ...current, prompt }));
+    setDraftState((current) => (current.prompt.trim() ? current : { ...current, prompt }));
     window.requestAnimationFrame(() => window.requestAnimationFrame(focusDockPromptEnd));
   }, [initialMedium, mode, organizationId, prefillCanCreate, prefillReady, setModels]);
 
@@ -400,15 +446,18 @@ export function useDock({
       setNotice(null);
       const prevMedium = latestDraft.current.medium;
       const switched = draftAfterAttach(latestDraft.current, item, Boolean(mode), next.items);
+      if (!next.full && latestShielded.current && remixActive(switched, next.items)) {
+        setShielded(null);
+      }
       if (!next.full && switched !== latestDraft.current) {
         latestDraft.current = switched;
-        setDraft((current) => draftAfterAttach(current, item, Boolean(mode), next.items));
+        setDraftState((current) => draftAfterAttach(current, item, Boolean(mode), next.items));
         if (!mode && switched.medium !== prevMedium) {
           setNotice(copy.dock.switchedToVideo);
         }
       }
     },
-    [copy, mode, setDraft],
+    [copy, mode, setMessage, setShielded],
   );
 
   /** ✕ on a thumbnail. */
@@ -464,7 +513,7 @@ export function useDock({
       draft,
       tray,
       { organizationId, requestIds: ["probe-0", "probe-1", "probe-2", "probe-3"] },
-      { ownWords, sheet },
+      { ownWords, sheet, shielded: shieldedDesign },
     );
     if (!probe.ok) {
       setMessage(problemLine(probe.problem, copy));
@@ -480,12 +529,21 @@ export function useDock({
     setNotice(null);
 
     if (probe.inputs.length === 1) {
-      const result = await studio.createJob({ ...probe.inputs[0]!, requestId: ids[0]! });
+      const result = await studio.createJob({ ...probe.inputs[0]!, requestId: ids[0]! } as StudioJobCreate);
       setBusy(false);
       if (isFailure(result)) {
         if ((result as { projectGone?: boolean }).projectGone) {
           clearPressIds(press.current, brandProjectId);
           return false;
+        }
+        const held = latestShielded.current;
+        if (
+          held &&
+          (result.code === "conflict" ||
+            (held.kind === "fromJob" && (result.code === "not_found" || result.code === "invalid")))
+        ) {
+          setShielded(null);
+          clearPressIds(press.current, brandProjectId);
         }
         setMessage(errorLine(copy, result.code), result.code);
         return false;
@@ -495,7 +553,7 @@ export function useDock({
     }
 
     const results = await Promise.all(
-      probe.inputs.map((jobInput, idx) => studio.createJob({ ...jobInput, requestId: ids[idx]! })),
+      probe.inputs.map((jobInput, idx) => studio.createJob({ ...jobInput, requestId: ids[idx]! } as StudioJobCreate)),
     );
     setBusy(false);
     const failed = results.find(isFailure);
@@ -509,7 +567,7 @@ export function useDock({
     }
     clearPressIds(press.current, brandProjectId);
     return true;
-  }, [brandProjectId, busy, copy, designing, draft, enhancing, organizationId, ownWords, studio, submitGroup, tray]);
+  }, [brandProjectId, busy, copy, designing, draft, enhancing, organizationId, ownWords, setMessage, setShielded, shieldedDesign, studio, submitGroup, tray]);
 
   /**
    * Several models: one design per model, in parallel, each with that model's own profile. Each tab fills
@@ -580,17 +638,32 @@ export function useDock({
     const result = await studio.enhancePrompt(preview.input);
     setEnhancing(false);
     // A reference moved while it was designed: the answer numbers the old order, so it is not taken.
-    const improved = singleDesign.current === token ? designedSentence(result) : null;
+    const stale = singleDesign.current !== token;
+    const shielded = stale ? null : shieldedDesignFromEnhance(result, { typed: original, model: preview.input.model });
+    if (shielded) {
+      if (
+        latestDraft.current.prompt !== original ||
+        dockControls(latestDraft.current).model.id !== preview.input.model ||
+        remixActive(latestDraft.current, latest.current)
+      ) {
+        return;
+      }
+      setEnhanced(null);
+      setShielded(shielded);
+      setNotice(null);
+      return;
+    }
+    const improved = stale ? null : designedSentence(result);
     if (!improved) {
       setNotice(copy.dock.enhanceFailed);
       return;
     }
     // The customer may have kept typing elsewhere; only replace the sentence that was sent.
     if (latestDraft.current.prompt !== original) return;
-    setDraft((current) => (current.prompt === original ? { ...current, prompt: improved } : current));
+    setDraftState((current) => (current.prompt === original ? { ...current, prompt: improved } : current));
     setEnhanced({ original: own, improved });
     setNotice(null);
-  }, [copy, designGroup, designing, draft, enhanced, enhancing, organizationId, studio, tray]);
+  }, [copy, designGroup, designing, draft, enhanced, enhancing, organizationId, setMessage, setShielded, studio, tray]);
 
   /** Drops every model's tab: the field shows the typed words again (they never left `draft.prompt`). */
   const dropTabs = useCallback(() => {
@@ -605,10 +678,15 @@ export function useDock({
       dropTabs();
       return;
     }
+    if (latestShielded.current) {
+      setShielded(null);
+      setNotice(null);
+      return;
+    }
     if (!enhanced) return;
-    setDraft((current) => ({ ...current, prompt: enhanced.original }));
+    setDraftState((current) => ({ ...current, prompt: enhanced.original }));
     setEnhanced(null);
-  }, [dropTabs, enhanced]);
+  }, [dropTabs, enhanced, setShielded]);
 
   /** The field's words while tabs are shown: the active model's own sentence. */
   const setTabText = useCallback((text: string) => {
@@ -626,11 +704,11 @@ export function useDock({
    */
   const reuse = useCallback(
     (plan: DockReusePlan) => {
-      latestDraft.current = plan.draft;
+      commitDraft(plan.draft);
       latest.current = plan.tray;
-      setDraft(plan.draft);
       setTray(plan.tray);
       setEnhanced(plan.reviewed);
+      setShielded(plan.shieldedReviewed ?? null);
       setMessage(null);
       setNotice(missingReferencesLine(plan.missing, copy));
       press.current.clear();
@@ -638,7 +716,7 @@ export function useDock({
       if (latestTabs.current) dropTabs();
       if (remembers && plan.draft.medium === "image") writeStoredPick(localStore(), organizationId, pickedModels(plan.draft));
     },
-    [copy, dropTabs, organizationId, remembers, setDraft],
+    [commitDraft, copy, dropTabs, organizationId, remembers, setMessage, setShielded],
   );
 
   /**
@@ -656,7 +734,11 @@ export function useDock({
     const draftNext = { ...draftNow, prompt: renumber(draftNow.prompt), change: renumber(draftNow.change) };
     if (draftNext.prompt !== draftNow.prompt || draftNext.change !== draftNow.change) {
       latestDraft.current = draftNext;
-      setDraft((current) => ({ ...current, prompt: renumber(current.prompt), change: renumber(current.change) }));
+      setDraftState((current) => ({ ...current, prompt: renumber(current.prompt), change: renumber(current.change) }));
+    }
+    if (latestShielded.current) {
+      setShielded(null);
+      if (draftNext.prompt !== draftNow.prompt && draftNext.enhance) setNotice(copy.dock.designedStale);
     }
     const kept = latestEnhanced.current;
     if (kept) {
@@ -673,7 +755,7 @@ export function useDock({
       latestTabs.current = next;
       setTabs(next);
     }
-  }, []);
+  }, [copy.dock.designedStale, setShielded]);
 
   const groupTabs = tabs && activeTab && tabs[activeTab] ? { tabs, active: activeTab } : null;
 
@@ -696,7 +778,7 @@ export function useDock({
     submit,
     reuse,
     enhancing: enhancing || designing,
-    enhanced: ownWords !== null || groupTabs !== null,
+    enhanced: shieldedDesign ?? (ownWords !== null || groupTabs !== null),
     enhanceNow,
     undoEnhance,
     /** Several image models (group-model.ts): the pick, its tabs after "설계하기", and what they do. */
