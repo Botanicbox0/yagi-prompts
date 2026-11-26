@@ -85,12 +85,15 @@ export function InstagramEmbed({
       ) : (
         <div className="bg-[#F4F4F5]">
           <div className="mx-auto w-full max-w-[25rem]">
+            {/* Instagram's reported MEASURE height is its layout height; its player can overflow it,
+                so disable scrolling to clip the embed the same way Instagram's official embed.js does. */}
             <iframe
               ref={iframeRef}
               data-instagram-iframe
               src={parsed.embedUrl}
               title={labels.placeholderLabel}
               loading="lazy"
+              scrolling="no"
               referrerPolicy="no-referrer"
               sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
               style={measuredHeight !== null ? { height: `${measuredHeight}px` } : undefined}
