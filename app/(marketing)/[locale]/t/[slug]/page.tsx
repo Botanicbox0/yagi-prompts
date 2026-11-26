@@ -61,7 +61,7 @@ import { partRows, templatePartsView } from '@/lib/template-director/parts-view'
 import { makerBlogOpen } from '@/lib/posts/flag';
 import { cachedTemplateOriginalInstagram, cachedTemplateStories } from '@/lib/posts/cached-public';
 import { TemplateStories } from '@/components/posts/template-stories';
-import { InstagramEmbed } from '@/components/posts/instagram-embed';
+import { InstagramLink } from '@/components/posts/instagram-link';
 
 /**
  * `/[locale]/t/[slug]` — one template, which is also where it is made (docs/TEMPLATES-IA.md §2).
@@ -666,13 +666,11 @@ export default async function TemplatePage({ params }: RouteParams) {
                   {dict.makerBlog.originalPostHeading}
                 </h2>
                 <div className="mt-5 max-w-detail">
-                  <InstagramEmbed
+                  <InstagramLink
                     url={originalInstagram.url}
                     labels={{
                       placeholderLabel: dict.makerBlog.instagramPlaceholderLabel,
-                      showEmbed: dict.makerBlog.instagramShowEmbed,
-                      openExternal: dict.makerBlog.instagramOpenExternal,
-                      fallback: dict.makerBlog.instagramFallback,
+                      open: dict.makerBlog.instagramShowEmbed,
                     }}
                   />
                 </div>
