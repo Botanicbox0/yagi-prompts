@@ -680,9 +680,10 @@ async function readAll(ctx: Ctx, input: unknown): Promise<SendReadAllDone> {
   ).rows.map((row) => String(row.id).toLowerCase());
   const marked = rows.slice(0, SEND_LIMITS.readAllMax);
   if (marked.length > 0) {
+    // In id order, so two "모두 읽음" of the same person at once take the marks' keys in the same order (no deadlock).
     await ctx.sql.query(
       `insert into brand_room_thread_reads (organization_id, root_message_id, user_id, last_read_at)
-         select $1, unnest($2::uuid[]), $3, now()
+         select $1, r.id, $3, now() from unnest($2::uuid[]) as r(id) order by r.id
        on conflict (root_message_id, user_id)
          do update set last_read_at = greatest(brand_room_thread_reads.last_read_at, excluded.last_read_at)`,
       [ctx.organizationId, marked, ctx.me],
