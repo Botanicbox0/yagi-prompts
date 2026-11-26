@@ -20,7 +20,8 @@
  *     (`SEND_LIMITS.linesPerInvitation`) are checked before anything is written (`invite_limit`).
  *  5. Each address: an active member is named like any mention; a live organization invitation is reused (nothing new is
  *     sent); the sender's own address is refused; anything else gets a new invitation. All in the line's transaction,
- *     under the organization row `for update` (the lock order of every invitation writer), so two lines inviting one
+ *     under the organization row `for key share` (which holds off every invitation writer's `for update`) and the
+ *     organization's invitation lock (an advisory lock that queues inviting lines; ./send.ts), so two lines inviting one
  *     new address make one invitation, and an address that joined meanwhile is named instead.
  *  9. The invited address is personal data: in a line's answer only its writer and the organization's owners see it
  *     (`inviteChips`); it is never in a log, a notice, the bell, or a line's text (a body that carries an invited address
@@ -104,7 +105,7 @@ export interface IssuedInvite {
 const EMPTY_PLAN = (): InvitePlan => ({ emails: [], members: new Map(), reuse: new Map(), create: [] });
 
 /**
- * Before the line is written (`send.post`/`send.reply` with `invites`), under the organization row `for update`: what each
+ * Before the line is written (`send.post`/`send.reply` with `invites`), under the organization's locks: what each
  * address becomes (decision 5), and every refusal, so that a refused request writes and sends nothing. Answers the
  * line's mentions with the members' ids added. Refusals: a viewer (`forbidden`); a body carrying an invited address, the
  * sender's own address, or more people than a line may name (`invalid`); the daily cap or one invitation's waiting lines
@@ -361,7 +362,9 @@ export function sendInviteAcceptHooks(env: Env = process.env): BrandSendInviteHo
   /**
    * Open for this organization, asked before the hooks' savepoints so that a closed switch costs no statement at all
    * (the acceptance is then statement for statement what it was). Past the environment, only the remembered
-   * `information_schema` probes run here; should one fail, the hook answers closed (and logs no text).
+   * `information_schema` probes can run here (a statement only on a server instance's first call). Should such a
+   * statement fail in the database, the acceptance fails as on any database error; the catch covers errors raised
+   * outside the database, and then the hook answers closed (and logs no text).
    */
   const openForAcceptance = async (sql: SqlRunner, organizationId: string): Promise<boolean> => {
     if (!brandSendInviteOpen(env)) return false;

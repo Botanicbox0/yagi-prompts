@@ -95,16 +95,17 @@ describe('the invitation mail', () => {
 });
 
 describe('what it costs (statements, local recording)', () => {
-  it('a line with one new address: an open plain send plus a fixed set (own address, members, live invitations, daily count, the invitation, the waiting row)', async () => {
+  it('a line with one new address: an open plain send plus a fixed set (the invitation lock, own address, members, live invitations, daily count, the invitation, the waiting row)', async () => {
     const plain: string[] = [];
     await runRoomOperation({ sql: recording(w.f.sql, plain), media: w.deps.media }, as(w.f.ids.owner), 'send.post', { organizationId: w.f.orgId, requestId: randomUUID(), file: { kind: 'output', outputId: file }, body: 'plain' });
     const inviting: string[] = [];
     await post(recording(w.f.sql, inviting), null, as(w.f.ids.owner), ['cost@example.com']);
     const strip = (texts: string[]) => texts.filter((t) => !/information_schema/.test(t));
     const added = strip(inviting).length - strip(plain).length;
-    // own address (1), members by address (1), live invitations (1), the daily count (1), storeInvitation (2: withdraw a
-    // stale one, insert), the waiting row (1) = 7. (The root's chips, one statement, are read for any line while open.)
-    expect(added).toBe(7);
+    // the organization's invitation lock (1), own address and seat (1), members by address (1), live invitations (1), the
+    // daily count (1), storeInvitation (2: withdraw a stale one, insert), the waiting row (1) = 8. (The root's chips, one
+    // statement, are read for any line while open.)
+    expect(added).toBe(8);
     expect(strip(inviting).filter((t) => /brand_room_pending_mentions/.test(t))).toHaveLength(2);
   });
 

@@ -149,15 +149,17 @@ export async function runSendOperation(deps: SendDeps, viewer: Viewer, operation
       // for the organization row the move holds (no deadlock). Writers do not block each other: `for key share`
       // conflicts only with `for update`.
       // A line that invites someone (slice 4c; a well-formed input with at least one address, from an owner or editor)
-      // takes the row `for no key update` instead. That conflicts with the `for update` every invitation writer takes
-      // first (the members page, the team's form, the room invitations, acceptance, revocation) and with another inviting
-      // line, so it is the only invitation writer of the organization until it commits: two lines inviting one new address
-      // make one invitation, and an address cannot join between this line's decision and its write. It does not conflict
-      // with `for key share` (slice 4a's sends, and every foreign key that points at the organization), so it never waits
-      // on, or blocks, a colleague's ordinary write that holds a profile row (no new deadlock).
+      // takes the same `for key share`, which already waits for and holds off the `for update` every invitation writer
+      // takes first (the members page, the team's form, the room invitations, acceptance, revocation): an address cannot
+      // join, and the daily count cannot move, between this line's decision and its write. Then a transaction-scoped
+      // advisory lock per organization queues inviting lines behind each other, so two lines inviting one new address make
+      // one invitation. No other row lock is added: the line keeps slice 4a's lock profile exactly (no new deadlock with a
+      // writer that holds a profile and then updates the organization row).
       if (WRITES.has(operation)) {
-        if (invitesOpen && mayInvite(seat) && invitingInput(operation, input)) await sql.query('select id from brand_organizations where id = $1 for no key update', [organizationId]);
-        else await sql.query('select id from brand_organizations where id = $1 for key share', [organizationId]);
+        await sql.query('select id from brand_organizations where id = $1 for key share', [organizationId]);
+        if (invitesOpen && mayInvite(seat) && invitingInput(operation, input)) {
+          await sql.query("select pg_advisory_xact_lock(hashtextextended('brand-send-invite:' || $1::text, 0))", [organizationId]);
+        }
       }
       switch (operation) {
         case 'send.post':
