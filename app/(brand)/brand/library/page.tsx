@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { pickSendCopy, type ViewerSendProp } from "@/components/brand-send/model";
 import { BrandAssetHub } from "@/components/brand-studio/asset-hub";
+import { parseLibraryProjectsFilter } from "@/components/brand-studio/asset-hub-spine/model";
 import { brandContext } from "@/components/brand-workspace/context";
 import { loadBrandWorkspace } from "@/lib/brands/workspace/service";
 import { WorkspacePreview } from "@/components/brand-workspace/preview";
@@ -30,12 +31,23 @@ export async function generateMetadata({
   return { title: dict.studioLibrary.label };
 }
 
+const PROJECT_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+function parseProjectParam(raw: string | string[] | undefined): string | null {
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  const clean = value?.trim().toLowerCase();
+  return clean && PROJECT_UUID_RE.test(clean) ? clean : null;
+}
+
 export default async function ContentLibrary({
   searchParams,
 }: {
-  searchParams: Promise<{ organizationId?: string | string[] }>;
+  searchParams: Promise<{ organizationId?: string | string[]; projects?: string | string[]; project?: string | string[] }>;
 }) {
-  const [{ organizationId }, { sql, viewer, verifiedEmail, b, dict, locale }] = await Promise.all([searchParams, brandContext()]);
+  const [{ organizationId, projects, project }, { sql, viewer, verifiedEmail, b, dict, locale }] = await Promise.all([
+    searchParams,
+    brandContext(),
+  ]);
   if (!sql) return <p role="alert">{b.unavailable}</p>;
   const { selection, choice } = await brandScope({ sql, verifiedEmail }, viewer, organizationId);
   if (selection.state === "unavailable") return <BrandUnavailable b={b} />;
@@ -69,24 +81,54 @@ export default async function ContentLibrary({
         ? { ...sendBase, invite: true }
         : sendBase;
     const canTransact = typeof (sql as { transaction?: unknown }).transaction === "function";
+    const projectsFilter = parseLibraryProjectsFilter(projects);
+    const requestedProjectId = spineOpen ? parseProjectParam(project) : null;
     // The studio state, project links and (when spine is open) project overview are read side by side;
     // all pass the same seat check (membership, the sandbox hardline, the feature policy).
     const deps = canTransact ? await studioRuntimeDeps(sql) : null;
-    const [loaded, links, overviewResult] = canTransact
+    const [loaded, links, overviewResult, projectFilesResult] = canTransact
       ? await Promise.all([
           loadStudioState(deps!, viewer, choice.id).catch(() => null),
           loadAssetProjectLinks({ sql }, viewer, choice.id).catch(() => null),
           spineOpen
-            ? runStudioOperation(deps!, viewer, "project.overview", { organizationId: choice.id }).catch(() => null)
+            ? runStudioOperation(deps!, viewer, "project.overview", { organizationId: choice.id, filter: projectsFilter }).catch(() => null)
+            : Promise.resolve(null),
+          spineOpen && requestedProjectId
+            ? runStudioOperation(deps!, viewer, "project.files", {
+                organizationId: choice.id,
+                scope: { kind: "project", brandProjectId: requestedProjectId },
+              }).catch(() => null)
             : Promise.resolve(null),
         ])
-      : [null, null, null];
+      : [null, null, null, null];
     const initialState = loaded && loaded.ok ? loaded : null;
     const projectLinks = initialState && links && links.ok ? { self: links.self, team: links.team } : null;
     const overview =
       spineOpen && overviewResult && overviewResult.ok && "brandMaterials" in overviewResult
         ? overviewResult
         : null;
+    const initialProjectPage =
+      spineOpen &&
+      overview &&
+      projectFilesResult &&
+      projectFilesResult.ok &&
+      "items" in projectFilesResult &&
+      "films" in projectFilesResult
+        ? projectFilesResult
+        : null;
+    let initialProjectGroup =
+      initialProjectPage && requestedProjectId && overview
+        ? overview.projects.find((g) => g.project.id.toLowerCase() === requestedProjectId) ?? null
+        : null;
+    if (initialProjectPage && requestedProjectId && !initialProjectGroup && projectsFilter !== "all") {
+      const allOverviewRes = await runStudioOperation(deps!, viewer, "project.overview", {
+        organizationId: choice.id,
+        filter: "all",
+      }).catch(() => null);
+      if (allOverviewRes && allOverviewRes.ok && "brandMaterials" in allOverviewRes) {
+        initialProjectGroup = allOverviewRes.projects.find((g) => g.project.id.toLowerCase() === requestedProjectId) ?? null;
+      }
+    }
     const orgLogo = choice.logoUrl
       ? {
           url: choice.logoUrl,
@@ -96,12 +138,22 @@ export default async function ContentLibrary({
     const spine = overview
       ? {
           overview,
+          filter: projectsFilter,
           canMove: initialState ? initialState.canCreate : false,
           copy: dict.projectSpine,
           filmMeta: dict.studioVideo.workspace.projects.meta,
           orgLogo,
+          ...(initialProjectGroup ? { initialProjectGroup } : {}),
         }
       : undefined;
+    const initialSpine =
+      spine && initialProjectPage && requestedProjectId
+        ? {
+            tab: "by_project" as const,
+            openedScope: { kind: "project" as const, brandProjectId: requestedProjectId },
+            page: initialProjectPage,
+          }
+        : undefined;
     const deliverables = contents.map(({ p, c }) => ({
       id: c.id,
       projectId: p.id,
@@ -143,6 +195,7 @@ export default async function ContentLibrary({
           canOpenStudio={canOpenStudio}
           {...(spineOpen ? { useFilmParam: true } : {})}
           {...(spine ? { spine } : {})}
+          {...(initialSpine ? { initialSpine } : {})}
           {...(send ? { send } : {})}
         />
       </>

@@ -9,15 +9,19 @@ import {
   type BrandProjectFileItem,
   type BrandProjectFileKind,
   type BrandProjectFilesScope,
+  type BrandProjectViewFilter,
   type StudioAssetView,
+  type StudioBrandProject,
   type StudioBrandProjectCounts,
   type StudioBrandProjectFiles,
   type StudioBrandProjectGroup,
   type StudioBrandProjectOverview,
   type StudioJobView,
+  type StudioOutputView,
 } from "@/lib/brand-studio/contracts";
 import type { VideoProjectSummary } from "@/lib/brand-studio/video-projects/contracts";
 import { buildHubEntries, filterHubEntries, type HubDeliverable, type HubEntry, type HubSection } from "../asset-hub-model";
+import { errorLine, type StudioCopy } from "../copy";
 import type { MoveDialogScope } from "../project-chip/model";
 
 export type SpineHubTab = "by_project" | "brand_materials" | "unfiled" | "all";
@@ -89,11 +93,13 @@ export function buildSpineTabs(
   ];
 }
 
-/** Opens on 프로젝트별 whenever there is at least one project or 브랜드 자료 (including `orgLogo`), else 모든 파일 (§5.2, Batch D). */
+/** Opens on 프로젝트별 whenever there is at least one visible/finished project or 브랜드 자료 (including `orgLogo`), else 모든 파일 (§5.2, Batch D, R-A). */
 export function initialSpineTab(overview: StudioBrandProjectOverview, hasOrgLogo = false): SpineHubTab {
   if (
     overview.projects.length > 0 ||
-    brandMaterialsCountsWithLogo(overview.brandMaterials, hasOrgLogo).count > 0
+    brandMaterialsCountsWithLogo(overview.brandMaterials, hasOrgLogo).count > 0 ||
+    (overview.totals !== undefined && overview.totals.all > 0) ||
+    (overview.finished !== undefined && sumProjectCounts(overview.finished.counts) > 0)
   ) {
     return "by_project";
   }
@@ -574,7 +580,7 @@ export function collectScopeMoveInput(
   };
 }
 
-export type SpineMutationKind = "move" | "upload" | "delete" | "role";
+export type SpineMutationKind = "move" | "upload" | "delete" | "role" | "result_delete";
 
 export interface SpineRefreshPlan {
   reloadOverview: boolean;
@@ -583,15 +589,15 @@ export interface SpineRefreshPlan {
 }
 
 /**
- * Pure post-mutation refresh plan (§5.6, Fix 4-7, Fix 5-2):
+ * Pure post-mutation refresh plan (§5.6, Fix 4-7, Fix 5-2, R-A):
  * - Re-reads `project.overview` once and restarts an open scope from page 1.
- * - Re-reads `studio` state for `move` and `role`; skips `reloadStudioState` on `delete` and `upload`
+ * - Re-reads `studio` state for `move`, `role`, and `result_delete`; skips `reloadStudioState` on `delete` and `upload`
  *   because `studio.deleteAsset` and `studio.upload` already call `refreshSilently()`.
  */
 export function planSpineRefresh(kind: SpineMutationKind, hasOpenScope: boolean): SpineRefreshPlan {
   return {
     reloadOverview: true,
-    reloadStudioState: kind === "move" || kind === "role",
+    reloadStudioState: kind === "move" || kind === "role" || kind === "result_delete",
     restartOpenScope: hasOpenScope,
   };
 }
@@ -772,4 +778,254 @@ export function singleEntryMoveInput(
             ? { kind: "brand_materials" }
             : { kind: "unknown" },
   };
+}
+
+export interface LibraryProjectsSwitchItem {
+  key: BrandProjectViewFilter;
+  label: string;
+  count: number;
+  href: string;
+  current: boolean;
+}
+
+export interface LibraryProjectsSwitch {
+  active: LibraryProjectsSwitchItem;
+  all: LibraryProjectsSwitchItem;
+}
+
+/** Parses `?projects=all` on `/brand/library` (absent or anything else -> `'active'`). */
+export function parseLibraryProjectsFilter(raw: string | string[] | undefined): BrandProjectViewFilter {
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  return value === "all" ? "all" : "active";
+}
+
+/** Builds the `진행 중 N / 전체 M` link switch for the assets by-project view when `totals` shows finished projects exist. */
+export function libraryProjectsSwitch(
+  overview: Pick<StudioBrandProjectOverview, "totals">,
+  filter: BrandProjectViewFilter,
+  organizationId: string,
+  labels: { active: string; all: string },
+): LibraryProjectsSwitch | null {
+  if (!overview.totals || overview.totals.active === overview.totals.all) return null;
+  const activeHref = `/brand/library?organizationId=${encodeURIComponent(organizationId)}`;
+  return {
+    active: {
+      key: "active",
+      label: labels.active,
+      count: overview.totals.active,
+      href: activeHref,
+      current: filter === "active",
+    },
+    all: {
+      key: "all",
+      label: labels.all,
+      count: overview.totals.all,
+      href: `${activeHref}&projects=all`,
+      current: filter === "all",
+    },
+  };
+}
+
+/** Whether an overview group belongs to a finished project (`selectable: false` or non-open `status`). */
+export function isFinishedProjectGroup(
+  group: Pick<StudioBrandProjectGroup, "status" | "selectable"> | null | undefined,
+): boolean {
+  if (!group) return false;
+  return group.selectable === false || (group.status !== undefined && group.status !== "open");
+}
+
+/** Quiet mark shown beside a finished project group/scope title; `null` when active or legacy shape. */
+export function projectGroupStatusMark(
+  group: Pick<StudioBrandProjectGroup, "status" | "selectable"> | null | undefined,
+  finishedMark: string,
+): string | null {
+  return isFinishedProjectGroup(group) ? finishedMark : null;
+}
+
+/**
+ * Orders overview project groups for the assets by-project view (R-A §2.2):
+ * on `all`, active groups keep server activity order first and finished groups follow in server activity order.
+ */
+export function orderOverviewProjects(
+  projects: readonly StudioBrandProjectGroup[],
+  filter: BrandProjectViewFilter,
+): StudioBrandProjectGroup[] {
+  if (filter !== "all") return [...projects];
+  const active: StudioBrandProjectGroup[] = [];
+  const finished: StudioBrandProjectGroup[] = [];
+  for (const group of projects) {
+    if (isFinishedProjectGroup(group)) finished.push(group);
+    else active.push(group);
+  }
+  return [...active, ...finished];
+}
+
+/** Quiet `finishedFiles` link at the end of `진행 중` when finished projects hold files (`overview.finished.counts` total > 0). */
+export function finishedFilesSummary(
+  overview: Pick<StudioBrandProjectOverview, "finished">,
+  filter: BrandProjectViewFilter,
+  organizationId: string,
+): { count: number; href: string } | null {
+  if (filter === "all" || !overview.finished) return null;
+  const count = sumProjectCounts(overview.finished.counts);
+  if (count <= 0) return null;
+  return {
+    count,
+    href: `/brand/library?organizationId=${encodeURIComponent(organizationId)}&projects=all`,
+  };
+}
+
+/** Excludes finished projects from `MoveToProjectDialog` targets (cannot move INTO finished projects). */
+export function selectableMoveProjects(projects: readonly StudioBrandProjectGroup[]): StudioBrandProject[] {
+  return projects.filter((group) => !isFinishedProjectGroup(group)).map((group) => group.project);
+}
+
+/** Capabilities and banners for an opened project scope: finished projects hide add-work controls but keep view/download/send/move-out. */
+export function finishedScopeControls(isFinished: boolean): {
+  showFinishedHint: boolean;
+  canAddWork: boolean;
+  canView: boolean;
+  canDownload: boolean;
+  canSend: boolean;
+  canMoveOut: boolean;
+} {
+  return {
+    showFinishedHint: isFinished,
+    canAddWork: !isFinished,
+    canView: true,
+    canDownload: true,
+    canSend: true,
+    canMoveOut: true,
+  };
+}
+
+export type ScopeControls = ReturnType<typeof finishedScopeControls>;
+
+function overviewHasFinishedFiles(overview: Pick<StudioBrandProjectOverview, "finished" | "totals">): boolean {
+  if (overview.finished && sumProjectCounts(overview.finished.counts) > 0) return true;
+  return Boolean(overview.totals && overview.totals.all > overview.totals.active);
+}
+
+function findSelectableProjectId(
+  projectId: string | null | undefined,
+  moveTargets: readonly Pick<StudioBrandProject, "id">[],
+): string | undefined {
+  if (typeof projectId !== "string" || !projectId) return undefined;
+  const normalized = projectId.toLowerCase();
+  const match = moveTargets.find((project) => project.id.toLowerCase() === normalized);
+  return match ? match.id : undefined;
+}
+
+/**
+ * Resolves `MoveToProjectDialog` `currentScope` for an opened `ScopeView` (Fix round 2):
+ * finished or non-selectable projects map to `{ kind: "unknown" }` so opening the dialog sends 0 preview requests.
+ */
+export function resolveScopeDialogScope(
+  scopeKind: BrandProjectFilesScope["kind"],
+  brandProjectId: string,
+  isFinished: boolean,
+  moveTargets: readonly Pick<StudioBrandProject, "id">[],
+): MoveDialogScope {
+  if (scopeKind === "brand_materials") return { kind: "brand_materials" };
+  if (scopeKind === "unfiled") return { kind: "unfiled" };
+  if (isFinished) return { kind: "unknown" };
+  const activeId = findSelectableProjectId(brandProjectId, moveTargets);
+  return activeId ? { kind: "project", id: activeId } : { kind: "unknown" };
+}
+
+/**
+ * Resolves the current project id for single-file `MoveToProjectDialog` (R-A Fix 4 & Fix round 2):
+ * - Finished or non-selectable projects always return `undefined` (`{ kind: "unknown" }`) so opening the dialog sends 0 preview requests.
+ * - Active projects continue returning their canonical id (`{ kind: "project", id }`).
+ * - On `모든 파일`, finished project covers also return `undefined` (never finished id and never false `미분류`).
+ */
+export function resolveSingleMoveProjectId(
+  entry: Pick<HubEntry, "jobId" | "asset" | "output">,
+  reportedProjectId: string | null | undefined,
+  ctx: {
+    activeTab: SpineHubTab;
+    openedScope: BrandProjectFilesScope | null;
+    overview: StudioBrandProjectOverview;
+    initialProjectGroup?: StudioBrandProjectGroup | null;
+  },
+): string | null | undefined {
+  const moveTargets = selectableMoveProjects(ctx.overview.projects);
+  if (ctx.activeTab === "by_project" && ctx.openedScope?.kind === "project") {
+    return findSelectableProjectId(ctx.openedScope.brandProjectId, moveTargets);
+  }
+  if (ctx.activeTab === "brand_materials" || ctx.activeTab === "unfiled") {
+    return null;
+  }
+  if (typeof reportedProjectId === "string" && reportedProjectId) {
+    return findSelectableProjectId(reportedProjectId, moveTargets);
+  }
+  if (!entry.jobId && entry.asset && classifyLibraryEntry(entry.asset).scope === "brand_materials") {
+    return null;
+  }
+
+  const outputId = entry.output?.id.toLowerCase() ?? null;
+  const jobId = entry.jobId?.toLowerCase() ?? null;
+  const matchesCover = (cover: { outputId: string; jobId: string }) =>
+    (outputId !== null && cover.outputId.toLowerCase() === outputId) ||
+    (jobId !== null && cover.jobId.toLowerCase() === jobId);
+
+  if (outputId !== null || jobId !== null) {
+    for (const group of ctx.overview.projects) {
+      if (group.covers.some(matchesCover)) {
+        return isFinishedProjectGroup(group)
+          ? undefined
+          : findSelectableProjectId(group.project.id, moveTargets);
+      }
+    }
+    if (ctx.initialProjectGroup?.covers.some(matchesCover)) {
+      return isFinishedProjectGroup(ctx.initialProjectGroup)
+        ? undefined
+        : findSelectableProjectId(ctx.initialProjectGroup.project.id, moveTargets);
+    }
+    if (ctx.overview.unfiled.covers.some(matchesCover)) {
+      return null;
+    }
+  }
+
+  if (overviewHasFinishedFiles(ctx.overview)) {
+    return undefined;
+  }
+  return reportedProjectId;
+}
+
+/**
+ * Pure plan for deleting one generated result from the assets page (R-A Fix 1):
+ * includes `withSavedCopy` and `deleteBoth` ONLY when an asset in loaded studio state pairs
+ * with this result via both `output.savedAssetId === asset.id` and `asset.sourceOutputId === output.id`
+ * (never when `savedAssetId` points at a deduplicated genuine upload or missing studio state).
+ */
+export function planResultDelete(
+  output: Pick<StudioOutputView, "id" | "savedAssetId">,
+  assets?: readonly Pick<StudioAssetView, "id" | "sourceOutputId">[] | null,
+): {
+  outputId: string;
+  withSavedCopy: boolean;
+  showDeleteBothLine: boolean;
+} {
+  const savedId = output.savedAssetId?.toLowerCase();
+  const outputId = output.id.toLowerCase();
+  const hasPairedCopy = Boolean(
+    savedId &&
+      assets?.some(
+        (asset) =>
+          asset.id.toLowerCase() === savedId &&
+          typeof asset.sourceOutputId === "string" &&
+          asset.sourceOutputId.toLowerCase() === outputId,
+      ),
+  );
+  return {
+    outputId: output.id,
+    withSavedCopy: hasPairedCopy,
+    showDeleteBothLine: hasPairedCopy,
+  };
+}
+
+/** Customer-facing error sentence for a failed result delete (`conflict` maps to the existing busy message). */
+export function resultDeleteErrorMessage(code: string | null | undefined, studioCopy: StudioCopy): string {
+  return code === "conflict" ? studioCopy.viewer.deleteBusy : errorLine(studioCopy, code);
 }

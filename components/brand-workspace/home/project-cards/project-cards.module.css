@@ -25,9 +25,65 @@
 
 .sectionHead {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: 10px 12px;
   margin-bottom: 14px;
+}
+
+.switchTrack {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--ys-r-pill);
+  background: var(--ys-raised);
+}
+
+:global(.bw-main) a.switchLink.switchLink,
+.switchLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: var(--ys-r-pill);
+  color: var(--ys-ink-secondary);
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 20px;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background-color var(--ys-dur) var(--ys-ease), color var(--ys-dur) var(--ys-ease);
+}
+
+:global(.bw-main) a.switchLink.switchLink:hover,
+.switchLink:hover {
+  color: var(--ys-ink);
+  text-decoration: none;
+}
+
+:global(.bw-main) a.switchLink.switchLink[aria-current='page'],
+.switchLink[aria-current='page'] {
+  background: var(--ys-active-bg);
+  color: var(--ys-active-fg);
+  font-weight: 600;
+}
+
+.switchLink:focus-visible {
+  outline: 2px solid var(--ys-focus);
+  outline-offset: 2px;
+}
+
+.switchNum {
+  color: var(--ys-ink-muted);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.switchLink[aria-current='page'] .switchNum {
+  color: inherit;
+  opacity: 0.62;
 }
 
 .sectionTitle {
@@ -251,6 +307,18 @@
   text-underline-offset: 4px;
 }
 
+.cardStatus {
+  flex: none;
+  padding: 2px 7px;
+  border: 1px solid var(--ys-line);
+  border-radius: var(--ys-r-pill);
+  color: var(--ys-ink-muted);
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
 .cardUnread {
   display: inline-grid;
   place-items: center;
@@ -371,6 +439,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .switchLink,
   .cover:not([data-cover-layout='empty'])::after {
     transition: none;
   }

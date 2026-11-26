@@ -53,6 +53,10 @@ vi.mock('@/lib/brand-studio/service', async (importOriginal) => {
       if (mocks.failCards) throw new Error('simulated cards failure');
       return actual.loadProjectCards(...args);
     },
+    runStudioOperation: async (...args: Parameters<typeof actual.runStudioOperation>) => {
+      if (args[2] === 'project.cards' && mocks.failCards) throw new Error('simulated cards failure');
+      return actual.runStudioOperation(...args);
+    },
   };
 });
 

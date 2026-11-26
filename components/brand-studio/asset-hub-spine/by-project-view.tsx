@@ -5,6 +5,7 @@
  */
 import { useMemo, type ReactNode } from "react";
 import type {
+  BrandProjectViewFilter,
   StudioAssetView,
   StudioBrandProjectCover,
   StudioBrandProjectOverview,
@@ -24,14 +25,20 @@ import {
   deliverableCountsByProject,
   fallbackCovers,
   filterOverviewProjects,
+  finishedFilesSummary,
   formatGroupCounts,
   groupBrandMaterialsLine,
+  isFinishedProjectGroup,
+  orderOverviewProjects,
+  projectGroupStatusMark,
   sumProjectCounts,
   type GroupCountLabels,
   type SpineOrgLogo,
 } from "./model";
 
 export interface ByProjectViewProps {
+  organizationId?: string;
+  filter?: BrandProjectViewFilter;
   overview: StudioBrandProjectOverview;
   libraryCopy: Dictionary["studioLibrary"];
   projectSpineCopy: Dictionary["projectSpine"];
@@ -121,6 +128,8 @@ function CoverRow({
 }
 
 export function ByProjectView({
+  organizationId = "",
+  filter = "active",
   overview,
   libraryCopy,
   projectSpineCopy,
@@ -180,9 +189,17 @@ export function ByProjectView({
   }, [materialsCounts.count, orgLogo, overview.brandMaterials.covers, state?.assets]);
 
   const deliverableCounts = useMemo(() => deliverableCountsByProject(deliverables), [deliverables]);
+  const orderedProjects = useMemo(
+    () => orderOverviewProjects(overview.projects, filter),
+    [filter, overview.projects],
+  );
   const filteredProjects = useMemo(
-    () => filterOverviewProjects(overview.projects, query),
-    [overview.projects, query],
+    () => filterOverviewProjects(orderedProjects, query),
+    [orderedProjects, query],
+  );
+  const finishedSummary = useMemo(
+    () => (organizationId ? finishedFilesSummary(overview, filter, organizationId) : null),
+    [filter, organizationId, overview],
   );
 
   const showMaterials = materialsCounts.count > 0;
@@ -190,7 +207,7 @@ export function ByProjectView({
   const showUnfiled = unfiledTotal > 0;
   const hasQuery = Boolean(query.trim());
 
-  if (!showMaterials && overview.projects.length === 0 && !showUnfiled) {
+  if (!showMaterials && overview.projects.length === 0 && !showUnfiled && !finishedSummary) {
     return (
       <section className={s.empty} data-asset-hub-empty="by_project">
         <p>{hasQuery ? libraryCopy.uploads.noMatch : h.emptyAll}</p>
@@ -287,6 +304,8 @@ export function ByProjectView({
           const teamDeliverables = origin === "team" ? (deliverableCounts.get(group.project.id) ?? 0) : 0;
           const countsText = formatGroupCounts(group.counts, origin, countLabels, teamDeliverables);
           const isEmpty = sumProjectCounts(group.counts) + teamDeliverables === 0;
+          const finished = isFinishedProjectGroup(group);
+          const statusMark = projectGroupStatusMark(group, spineCopy.finishedMark);
           const uploadCovers =
             group.covers.length === 0 && !isEmpty
               ? fallbackCovers(state?.assets ?? [], group.project.id, 6)
@@ -298,6 +317,7 @@ export function ByProjectView({
               className={sp.group}
               data-asset-hub-group={group.project.id}
               data-origin={origin}
+              data-finished={finished ? "" : undefined}
             >
               <div className={sp.groupHead}>
                 <h2 className={sp.groupTitle}>
@@ -309,6 +329,11 @@ export function ByProjectView({
                     group.project.title
                   )}
                 </h2>
+                {statusMark && (
+                  <span className={sp.statusMark} data-asset-hub-group-status={group.status ?? "finished"}>
+                    {statusMark}
+                  </span>
+                )}
                 <span className={sp.groupMeta}>
                   <span>{originLabel}</span>
                   {countsText && (
@@ -419,6 +444,14 @@ export function ByProjectView({
             onSelect={onOpenUnfiled}
           />
         </section>
+      )}
+
+      {finishedSummary && (
+        <div className={sp.finishedFooter} data-asset-hub-finished-files={finishedSummary.count}>
+          <a className={sp.finishedLink} href={finishedSummary.href} data-asset-hub-finished-link="">
+            {fill(spineCopy.finishedFiles, { n: finishedSummary.count })}
+          </a>
+        </div>
       )}
     </div>
   );

@@ -1825,6 +1825,9 @@ export const ko: Dictionary = {
   /** 브랜드 프로젝트 홈 · 알림 종 (docs/BRAND-PROJECT-SPINE.md §5, §8.1). 대표 확인 대기. */
   projectHome: {
     blockTitle: '프로젝트',
+    viewActive: '진행 중',
+    viewAll: '전체',
+    finishedMark: '끝난 프로젝트',
     requestTeam: '야기 팀에 의뢰하기',
     guideNoProject: '프로젝트로 묶으면 파일을 한곳에서 볼 수 있어요.',
     unfiledLine: '프로젝트 없이 만든 파일 {n}개',

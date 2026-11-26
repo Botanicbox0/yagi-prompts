@@ -713,11 +713,11 @@ describe('Slice 3a §6 & fix-round-1 source guards', () => {
     }
   });
 
-  it('app/(brand)/brand/home/page.tsx is the only file under app/ and components/ naming loadProjectCards, and only api.ts names loadBrandProjectCards', () => {
+  it('routes app/(brand)/brand/home/page.tsx project.cards read with filter and keeps loadBrandProjectCards confined to api.ts', () => {
     const files = [...under('app'), ...under('components')];
-    expect(files.filter((f) => /\bloadProjectCards\b/.test(readFileSync(path.join(ROOT, f), 'utf8')))).toEqual([
-      'app/(brand)/brand/home/page.tsx',
-    ]);
+    expect(files.filter((f) => /\bloadProjectCards\b/.test(readFileSync(path.join(ROOT, f), 'utf8')))).toEqual([]);
+    const homePageSrc = readFileSync(path.join(ROOT, 'app/(brand)/brand/home/page.tsx'), 'utf8');
+    expect(homePageSrc).toMatch(/runStudioOperation\([\s\S]*'project\.cards'[\s\S]*filter:/);
     expect(files.filter((f) => /\bloadBrandProjectCards\b/.test(readFileSync(path.join(ROOT, f), 'utf8')))).toEqual([
       'components/brand-studio/api.ts',
     ]);

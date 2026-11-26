@@ -8,7 +8,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type {
   BrandProjectFilesScope,
+  BrandProjectViewFilter,
   StudioBrandProjectFiles,
+  StudioBrandProjectGroup,
   StudioBrandProjectOverview,
   StudioState,
 } from "@/lib/brand-studio/contracts";
@@ -18,19 +20,25 @@ import type { HubDeliverable, HubEntry, HubSection } from "../asset-hub-model";
 import s from "../asset-hub.module.css";
 import type { StudioCopy, StudioLocale } from "../copy";
 import { MoveToProjectDialog } from "../project-chip";
+import sp from "./asset-hub-spine.module.css";
 import { ByProjectView } from "./by-project-view";
 import {
   IDLE_OVERVIEW_RELOAD,
   buildAllViewOptions,
   buildSpineTabs,
   initialSpineTab,
+  libraryProjectsSwitch,
+  parseLibraryProjectsFilter,
   planSpineRefresh,
   requestOverviewReload,
+  resolveSingleMoveProjectId,
   scopeMarker,
+  selectableMoveProjects,
   settleOverviewReload,
   singleEntryMoveInput,
   singleMoveReturnSelectors,
   type OverviewReloadState,
+  type ScopeControls,
   type ScopeKindFilter,
   type ScopePageState,
   type ScopeRoleFilter,
@@ -44,6 +52,7 @@ export type { SpineOrgLogo };
 
 const BRAND_MATERIALS_SCOPE: BrandProjectFilesScope = Object.freeze({ kind: "brand_materials" });
 const UNFILED_SCOPE: BrandProjectFilesScope = Object.freeze({ kind: "unfiled" });
+const EMPTY_FILM_IDS: readonly string[] = Object.freeze([]);
 
 export interface SpineScopeSeed {
   page?: StudioBrandProjectFiles | null;
@@ -61,10 +70,12 @@ export interface SingleMoveRequest {
 
 export interface AssetHubSpineProps {
   overview: StudioBrandProjectOverview;
+  filter?: BrandProjectViewFilter;
   canMove: boolean;
   copy: Dictionary["projectSpine"];
   filmMeta: string;
   orgLogo?: SpineOrgLogo | null;
+  initialProjectGroup?: StudioBrandProjectGroup | null;
 }
 
 export interface AssetHubSpineViewProps {
@@ -94,7 +105,7 @@ export interface AssetHubSpineViewProps {
   emptyActions?: ReactNode;
   forceAllNonce?: number;
   filmHref?(filmId: string): string | null;
-  renderScopeTile(entry: HubEntry, scopeKey: string, selectOpts?: ScopeTileSelectOpts): ReactNode;
+  renderScopeTile(entry: HubEntry, scopeKey: string, selectOpts?: ScopeTileSelectOpts, controls?: ScopeControls): ReactNode;
   singleMove?: SingleMoveRequest | null;
   onCloseSingleMove?(): void;
   /** Optional initial state overrides for deterministic SSR tests (§6). */
@@ -141,7 +152,16 @@ export function AssetHubSpine({
   initialScopeQuery = "",
   initialScopeSeed,
 }: AssetHubSpineViewProps) {
-  const { overview: initialOverview, canMove, copy: projectSpineCopy, filmMeta, orgLogo = null } = spine;
+  const {
+    overview: initialOverview,
+    filter: overviewFilter,
+    canMove,
+    copy: projectSpineCopy,
+    filmMeta,
+    orgLogo = null,
+    initialProjectGroup = null,
+  } = spine;
+  const activeFilter = parseLibraryProjectsFilter(overviewFilter);
   const h = libraryCopy.hub;
   const spineCopy = h.spine;
   const viewLocale: StudioLocale = locale ?? (libraryCopy.label === "Assets" ? "en" : "ko");
@@ -161,6 +181,7 @@ export function AssetHubSpine({
     if (initialTab === "brand_materials" || initialTab === "unfiled") return initialTab;
     return null;
   });
+  const [seedConsumed, setSeedConsumed] = useState(false);
   const [query, setQuery] = useState(initialQuery);
   const [scopeQuery, setScopeQuery] = useState(initialScopeQuery);
   const [unfiledSelecting, setUnfiledSelecting] = useState(false);
@@ -181,7 +202,7 @@ export function AssetHubSpine({
 
   const kickOverviewRead = useCallback(() => {
     void api
-      .loadBrandProjectOverview()
+      .loadBrandProjectOverview(overviewFilter ? { filter: overviewFilter } : undefined)
       .then((res) => {
         if (mountedRef.current && res.ok) setOverview(res);
       })
@@ -195,7 +216,7 @@ export function AssetHubSpine({
         overviewReloadRef.current = next;
         if (startRead) kickOverviewRead();
       });
-  }, [api]);
+  }, [api, overviewFilter]);
 
   const reloadOverviewOnce = useCallback(() => {
     const { next, startRead } = requestOverviewReload(overviewReloadRef.current);
@@ -287,6 +308,7 @@ export function AssetHubSpine({
 
   const openProjectScope = (projectId: string) => {
     onNotice(null);
+    setSeedConsumed(true);
     setActiveTab("by_project");
     setOpenedScope({ kind: "project", brandProjectId: projectId });
     setScopeQuery("");
@@ -295,6 +317,7 @@ export function AssetHubSpine({
 
   const selectTab = (tabId: SpineHubTab) => {
     onNotice(null);
+    setSeedConsumed(true);
     setActiveTab(tabId);
     setOpenedScope(null);
     setScopeQuery("");
@@ -325,16 +348,36 @@ export function AssetHubSpine({
   );
 
   const seedPropsFor = (scope: BrandProjectFilesScope): SpineScopeSeed | undefined =>
-    initialScopeSeed && seedScopeId === scopeMarker(scope) ? initialScopeSeed : undefined;
+    !seedConsumed && initialScopeSeed && seedScopeId === scopeMarker(scope) ? initialScopeSeed : undefined;
 
   const projectSeed = openedScope?.kind === "project" ? seedPropsFor(openedScope) : undefined;
   const materialsSeed = seedPropsFor(BRAND_MATERIALS_SCOPE);
   const unfiledSeed = seedPropsFor(UNFILED_SCOPE);
-  const projectList = useMemo(() => overview.projects.map((g) => g.project), [overview.projects]);
-  const singleMoveInput =
-    canMove && singleMove
-      ? singleEntryMoveInput(singleMove.entry, singleMove.projectId, activeTab === "brand_materials")
-      : null;
+  const projectList = useMemo(() => selectableMoveProjects(overview.projects), [overview.projects]);
+  const projectsSwitch = useMemo(
+    () =>
+      libraryProjectsSwitch(overview, activeFilter, organizationId, {
+        active: spineCopy.viewActive,
+        all: spineCopy.viewAll,
+      }),
+    [activeFilter, organizationId, overview, spineCopy.viewActive, spineCopy.viewAll],
+  );
+  const singleMoveInput = useMemo(
+    () =>
+      canMove && singleMove
+        ? singleEntryMoveInput(
+            singleMove.entry,
+            resolveSingleMoveProjectId(singleMove.entry, singleMove.projectId, {
+              activeTab,
+              openedScope,
+              overview,
+              initialProjectGroup,
+            }),
+            activeTab === "brand_materials",
+          )
+        : null,
+    [canMove, singleMove, activeTab, openedScope, overview, initialProjectGroup],
+  );
 
   return (
     <>
@@ -358,6 +401,22 @@ export function AssetHubSpine({
 
         {activeTab === "by_project" && !openedScope ? (
           <div className={s.filters}>
+            {projectsSwitch && (
+              <div className={sp.switchTrack} role="group" aria-label={spineCopy.tabByProject} data-asset-hub-projects-switch="">
+                {[projectsSwitch.active, projectsSwitch.all].map((item) => (
+                  <a
+                    key={item.key}
+                    href={item.href}
+                    className={sp.switchLink}
+                    aria-current={item.current ? "page" : undefined}
+                    data-projects-filter={item.key}
+                  >
+                    <span>{item.label}</span>
+                    <span className={sp.switchNum}>{item.count}</span>
+                  </a>
+                ))}
+              </div>
+            )}
             <div className={s.searchWrap}>
               <input
                 type="search"
@@ -423,6 +482,7 @@ export function AssetHubSpine({
             deliverables={deliverables}
             refreshNonce={scopeRefreshNonce}
             onBack={() => {
+              setSeedConsumed(true);
               setOpenedScope(null);
               setScopeQuery("");
             }}
@@ -430,6 +490,7 @@ export function AssetHubSpine({
             onMoved={handleMoved}
             filmHref={filmHref}
             renderTile={renderScopeTile}
+            fallbackProjectGroup={initialProjectGroup}
             initialPage={projectSeed?.page}
             initialState={projectSeed?.state}
             initialKind={projectSeed?.kind}
@@ -439,6 +500,8 @@ export function AssetHubSpine({
           />
         ) : (
           <ByProjectView
+            organizationId={organizationId}
+            filter={activeFilter}
             overview={overview}
             libraryCopy={libraryCopy}
             projectSpineCopy={projectSpineCopy}
@@ -535,7 +598,7 @@ export function AssetHubSpine({
           currentScope={singleMoveInput.currentScope}
           jobIds={singleMoveInput.jobIds}
           assetIds={singleMoveInput.assetIds}
-          filmIds={[]}
+          filmIds={EMPTY_FILM_IDS}
           locale={viewLocale}
           copy={projectSpineCopy}
           onMove={api.moveToBrandProject}
@@ -548,7 +611,7 @@ export function AssetHubSpine({
             if (typeof document === "undefined") return null;
             const selectors = singleMoveReturnSelectors(singleMove.entry.key);
             const menuBtn = document.querySelector<HTMLElement>(selectors.menu);
-            if (menuBtn && menuBtn.getClientRects().length > 0) return menuBtn;
+            if (menuBtn && (typeof menuBtn.getClientRects !== "function" || menuBtn.getClientRects().length > 0)) return menuBtn;
             return document.querySelector<HTMLElement>(selectors.open);
           }}
         />

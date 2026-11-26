@@ -1871,7 +1871,7 @@ describe("/brand/library page.tsx spine prop gating (§5.1)", () => {
     const ownerHtml = renderToStaticMarkup(
       (await ContentLibrary({ searchParams: Promise.resolve({ organizationId: ORG }) })) as ReactElement,
     );
-    expect(pageStub.runOpSpy).toHaveBeenCalledWith("project.overview", { organizationId: ORG });
+    expect(pageStub.runOpSpy).toHaveBeenCalledWith("project.overview", { organizationId: ORG, filter: "active" });
     expect(ownerHtml).toContain("data-asset-hub-spine");
     expect(ownerHtml).toContain("data-asset-hub-unfiled-move");
 
