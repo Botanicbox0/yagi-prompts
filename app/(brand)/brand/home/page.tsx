@@ -7,6 +7,7 @@ import { brandScope, selectedAccess } from '@/components/brand-workspace/scope';
 import { StaffNotice, adminOrganizationHref } from '@/components/brand-workspace/staff-notice';
 import { WorkspaceHome } from '@/components/brand-workspace/home/home-view';
 import { type SpineHomeProps } from '@/components/brand-workspace/home/project-cards';
+import { parseProjectsFilter } from '@/components/brand-workspace/home/project-cards/model';
 import { WorkspaceTeamHome, type TeamHomeProject } from '@/components/brand-workspace/home/team-home';
 import { roomsOpenFor } from '@/components/brand-rooms/room/visibility';
 import type { RoomAlertItem } from '@/components/brand-rooms/seams';
@@ -18,7 +19,7 @@ import { studioEnv } from '@/lib/brand-studio/env';
 import { createStudioMediaStore } from '@/lib/brand-studio/media-store';
 import { jobsOf, viewsOf } from '@/lib/brand-studio/repo';
 import { studioRuntimeDeps } from '@/lib/brand-studio/runtime';
-import { loadProjectCards } from '@/lib/brand-studio/service';
+import { runStudioOperation } from '@/lib/brand-studio/service';
 import { allowanceViewWithRefill } from '@/lib/brand-studio/allowance-refill';
 import { allowanceView, loadAllowance } from '@/lib/brand-studio/usage';
 import { billingPlanCatalogue } from '@/lib/brands/billing-page-data';
@@ -75,9 +76,9 @@ export async function generateMetadata({
 export default async function BrandWorkspaceHome({
   searchParams,
 }: {
-  searchParams: Promise<{ organizationId?: string | string[] }>;
+  searchParams: Promise<{ organizationId?: string | string[]; projects?: string | string[] }>;
 }) {
-  const [{ organizationId }, { sql, viewer, verifiedEmail, dict, locale, b, brandHost }] = await Promise.all([
+  const [{ organizationId, projects }, { sql, viewer, verifiedEmail, dict, locale, b, brandHost }] = await Promise.all([
     searchParams,
     brandContext(),
   ]);
@@ -161,9 +162,16 @@ export default async function BrandWorkspaceHome({
   const readOnly = choice.role === 'viewer' || access.staff;
   const media = createStudioMediaStore();
   const studioLocale: 'ko' | 'en' = locale === 'en' ? 'en' : 'ko';
+  const projectsFilter = parseProjectsFilter(projects);
   const spineCardsPromise = memberSeesBrandProjects({ staff: access.staff, role: choice.role })
     ? brandProjectSpineOpen(sql, choice.id)
-        .then((open) => (open ? studioRuntimeDeps(sql).then((deps) => loadProjectCards(deps, viewer, choice.id)) : null))
+        .then((open) =>
+          open
+            ? studioRuntimeDeps(sql).then((deps) =>
+                runStudioOperation(deps, viewer, 'project.cards', { organizationId: choice.id, filter: projectsFilter }),
+              )
+            : null,
+        )
         .catch(() => null)
     : Promise.resolve(null);
   // Every read is scoped to the brand the guard above resolved for this account.
@@ -177,10 +185,18 @@ export default async function BrandWorkspaceHome({
     spineCardsPromise,
     loadHomeAnnouncement({ sql }, viewer, { organizationId: choice.id, mode, locale: studioLocale }).catch(() => null),
   ]);
-  const spineHome: SpineHomeProps | undefined =
-    spineCards && spineCards.ok
-      ? { cards: spineCards, canCreate: !access.staff && (choice.role === 'owner' || choice.role === 'editor'), roomsOpen: rooms }
-      : undefined;
+  const cards =
+    spineCards && spineCards.ok && 'projects' in spineCards && 'unfiled' in spineCards && !('brandMaterials' in spineCards)
+      ? spineCards
+      : null;
+  const spineHome: SpineHomeProps | undefined = cards
+    ? {
+        cards,
+        canCreate: !access.staff && (choice.role === 'owner' || choice.role === 'editor'),
+        roomsOpen: rooms,
+        filter: projectsFilter,
+      }
+    : undefined;
   const checklistCookie = (await cookies()).get(homeChecklistDismissCookieName(choice.id))?.value;
   const checklistDismissed = readChecklistDismissedFromCookie(choice.id, checklistCookie);
   const checklist =

@@ -6,7 +6,7 @@
  * Pointer hover or keyboard focus brings up a quiet foot with the item's name, one main action and a
  * "more" menu. Touch screens have no hover, so a tap opens the sheet, which lists every action.
  */
-import { useEffect, useRef, useState, type CSSProperties, type SyntheticEvent } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode, type SyntheticEvent } from "react";
 import type { SendTransport } from "@/components/brand-rooms/chat/transport";
 import { FileSendButton, FileSendHost, FileSendPanelSlot, FileSendShareLabel, SendPageScope, isSendEscapeRecent } from "@/components/brand-send/file-send";
 import type { SendLocale, ViewerSendProp } from "@/components/brand-send/model";
@@ -255,6 +255,7 @@ export interface HubDetailProps {
   onClose(): void;
   send?: (ViewerSendProp & { locale?: SendLocale; transport?: SendTransport }) | null;
   sendJob?: Pick<StudioJobView, "kind" | "model" | "purpose"> | null;
+  resultDelete?: ReactNode;
 }
 
 /** The sheet a tile opens: the item at full size, what it is, and every action (the touch path). */
@@ -270,6 +271,7 @@ export function HubDetail({
   onClose,
   send,
   sendJob,
+  resultDelete,
 }: HubDetailProps) {
   const ref = useModal();
   const film = useRef<HTMLVideoElement>(null);
@@ -368,6 +370,7 @@ export function HubDetail({
           </div>
           {send && <FileSendPanelSlot />}
           </FileSendHost>
+          {resultDelete}
         </div>
       </div>
     </dialog>

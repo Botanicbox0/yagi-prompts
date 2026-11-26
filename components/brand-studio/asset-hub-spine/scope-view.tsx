@@ -11,6 +11,7 @@ import type {
   BrandProjectFilesScope,
   StudioBrandProjectCounts,
   StudioBrandProjectFiles,
+  StudioBrandProjectGroup,
   StudioBrandProjectOverview,
 } from "@/lib/brand-studio/contracts";
 import type { VideoProjectSummary } from "@/lib/brand-studio/video-projects/contracts";
@@ -31,19 +32,25 @@ import {
   collectScopeMoveInput,
   filmTileAspectRatio,
   filterTeamDeliverables,
+  finishedScopeControls,
   formatGroupCounts,
   freezeScopeMoveSnapshot,
   initialScopePageState,
+  isFinishedProjectGroup,
   mergeScopeTiles,
+  projectGroupStatusMark,
+  resolveScopeDialogScope,
   scopeEmptyMessage,
   scopeMarker,
   scopePageReducer,
+  selectableMoveProjects,
   shouldCloseScopeOnFailure,
   shouldReadScopeFirstPage,
   sumProjectCounts,
   toggleScopeSelection,
   type ScopeFirstPageCursor,
   type ScopeKindFilter,
+  type ScopeControls,
   type ScopeMoveSnapshot,
   type ScopePageState,
   type ScopeRoleFilter,
@@ -89,7 +96,8 @@ export interface ScopeViewProps {
   onMoved?(projectId: string | null, toast: string): void;
   onStopSelecting?(): void;
   filmHref?(filmId: string): string | null;
-  renderTile(entry: HubEntry, scopeKey: string, selectOpts?: ScopeTileSelectOpts): ReactNode;
+  renderTile(entry: HubEntry, scopeKey: string, selectOpts?: ScopeTileSelectOpts, controls?: ScopeControls): ReactNode;
+  fallbackProjectGroup?: StudioBrandProjectGroup | null;
   /** Optional deterministic state overrides for SSR tests (§6). */
   initialPage?: StudioBrandProjectFiles | null;
   initialState?: ScopePageState;
@@ -210,6 +218,7 @@ export function ScopeView({
   onStopSelecting,
   filmHref,
   renderTile,
+  fallbackProjectGroup = null,
   initialPage = null,
   initialState,
   initialKind = "all",
@@ -349,7 +358,14 @@ export function ScopeView({
     fetchFirstPage(scopeRef.current, kindFilter);
   };
 
-  const projectGroup = isProject ? overview.projects.find((g) => g.project.id === scopeBrandProjectId) ?? null : null;
+  const normalizedScopeId = scopeBrandProjectId.toLowerCase();
+  const projectGroup = isProject
+    ? overview.projects.find((g) => g.project.id.toLowerCase() === normalizedScopeId) ??
+      (fallbackProjectGroup?.project.id.toLowerCase() === normalizedScopeId ? fallbackProjectGroup : null)
+    : null;
+  const isFinished = isProject && isFinishedProjectGroup(projectGroup);
+  const statusMark = isProject ? projectGroupStatusMark(projectGroup, spineCopy.finishedMark) : null;
+  const scopePolicy = finishedScopeControls(isFinished);
   const countLabels = useMemo(
     () => ({
       image: h.kinds.image,
@@ -429,15 +445,10 @@ export function ScopeView({
     [selectedKeys, tiles],
   );
 
-  const projectList = useMemo(() => overview.projects.map((g) => g.project), [overview.projects]);
+  const projectList = useMemo(() => selectableMoveProjects(overview.projects), [overview.projects]);
   const currentDialogScope = useMemo(
-    () =>
-      scope.kind === "project"
-        ? ({ kind: "project", id: scopeBrandProjectId } as const)
-        : scope.kind === "brand_materials"
-          ? ({ kind: "brand_materials" } as const)
-          : ({ kind: "unfiled" } as const),
-    [scope.kind, scopeBrandProjectId],
+    () => resolveScopeDialogScope(scope.kind, scopeBrandProjectId, isFinished, projectList),
+    [scope.kind, scopeBrandProjectId, isFinished, projectList],
   );
 
   const leaveSelection = () => {
@@ -468,11 +479,15 @@ export function ScopeView({
     const selectOpts: ScopeTileSelectOpts | undefined = canMove
       ? { selecting, selected, onToggleSelect: () => toggleTileSelection(entry.key) }
       : undefined;
-    return renderTile(entry, scopeId, selectOpts);
+    return renderTile(entry, scopeId, selectOpts, scopePolicy);
   };
 
   const resolveFilmHref = (filmId: string) =>
-    filmHref ? filmHref(filmId) : defaultFilmHref(organizationId, filmId, canOpenStudio);
+    !scopePolicy.canAddWork
+      ? null
+      : filmHref
+        ? filmHref(filmId)
+        : defaultFilmHref(organizationId, filmId, canOpenStudio);
 
   const headerTitle = isProject
     ? (projectGroup?.project.title ?? "")
@@ -499,12 +514,13 @@ export function ScopeView({
     pageState.phase === "failed" ||
     (pageState.phase === "not_found" && !shouldCloseScopeOnFailure(scope, pageState.phase));
   const isInitialFailed = isErrorPhase && !hasVisibleTiles;
-  const canToggleSelect = canMove && (tiles.length > 0 || selecting);
+  const canToggleSelect = canMove && scopePolicy.canMoveOut && (tiles.length > 0 || selecting);
 
   return (
     <section
       className={sp.group}
       data-asset-hub-scope={scopeId}
+      data-finished={isFinished ? "" : undefined}
       data-selecting={selecting ? "true" : undefined}
     >
       <div className={sp.placeholderHead}>
@@ -528,6 +544,11 @@ export function ScopeView({
             headerTitle
           )}
         </h2>
+        {statusMark && (
+          <span className={sp.statusMark} data-asset-hub-scope-status={projectGroup?.status ?? "finished"}>
+            {statusMark}
+          </span>
+        )}
         <span className={sp.groupMeta}>{headerMeta}</span>
         {canToggleSelect && (
           <div className={sp.groupActions}>
@@ -545,6 +566,12 @@ export function ScopeView({
           </div>
         )}
       </div>
+
+      {scopePolicy.showFinishedHint && (
+        <p className={sp.finishedHint} data-asset-hub-finished-hint="">
+          {spineCopy.finishedHint}
+        </p>
+      )}
 
       {canMove && selecting && (
         <div className={s.selectBar} role="toolbar" aria-label={spineCopy.selectStart}>

@@ -8,6 +8,7 @@ import { formatRelativeTime } from '@/components/brand-studio/project-chip/model
 import {
   BRAND_PROJECT_CARD_LIMITS,
   type BrandProjectFileKind,
+  type BrandProjectViewFilter,
   type StudioBrandProjectCard,
   type StudioBrandProjectCardCover,
   type StudioBrandProjectCards,
@@ -22,6 +23,20 @@ export interface SpineHomeProps {
   cards: StudioBrandProjectCards;
   canCreate: boolean;
   roomsOpen: boolean;
+  filter?: BrandProjectViewFilter;
+}
+
+export interface HomeProjectsSwitchItem {
+  key: BrandProjectViewFilter;
+  label: string;
+  count: number;
+  href: string;
+  current: boolean;
+}
+
+export interface HomeProjectsSwitch {
+  active: HomeProjectsSwitchItem;
+  all: HomeProjectsSwitchItem;
 }
 
 export type ProjectHomeCopy = Dictionary['projectHome'];
@@ -238,12 +253,68 @@ export function studioProjectHref(organizationId: string, projectId: string): st
   return `${scopedHref('/brand/studio', { id: organizationId })}&project=${encodeURIComponent(projectId)}`;
 }
 
-/** Link target for a project card: team projects open their room (or project page while rooms are closed); own projects open the image studio. */
+/** Address that opens the assets page filtered directly to a finished own brand project. */
+function libraryProjectHref(organizationId: string, projectId: string): string {
+  const base = scopedHref('/brand/library', { id: organizationId });
+  return `${base}${base.includes('?') ? '&' : '?'}project=${encodeURIComponent(projectId)}`;
+}
+
+/** Parses `?projects=all` on the home address (absent or anything else -> `'active'`). */
+export function parseProjectsFilter(raw: string | string[] | undefined): BrandProjectViewFilter {
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  return value === 'all' ? 'all' : 'active';
+}
+
+/** Whether a home project card represents a finished project (`selectable: false` or non-open `status`). */
+export function isFinishedCard(card: Pick<StudioBrandProjectCard, 'status' | 'selectable'>): boolean {
+  return card.selectable === false || (card.status !== undefined && card.status !== 'open');
+}
+
+/** Quiet mark shown beside finished cards' titles on `전체`; `null` for active cards or legacy responses without status. */
+export function cardStatusMark(
+  card: Pick<StudioBrandProjectCard, 'status' | 'selectable'>,
+  copy: Pick<ProjectHomeCopy, 'finishedMark'>,
+): string | null {
+  return isFinishedCard(card) ? copy.finishedMark : null;
+}
+
+/** Builds the `진행 중 N / 전체 M` link switch from `totals`, or `null` when `totals` is absent or no finished projects exist. */
+export function homeProjectsSwitch(
+  cards: Pick<StudioBrandProjectCards, 'totals'>,
+  filter: BrandProjectViewFilter,
+  organizationId: string,
+  copy: Pick<ProjectHomeCopy, 'viewActive' | 'viewAll'>,
+): HomeProjectsSwitch | null {
+  if (!cards.totals || cards.totals.active === cards.totals.all) return null;
+  const activeHref = scopedHref('/brand/home', { id: organizationId });
+  const allHref = `${activeHref}${activeHref.includes('?') ? '&' : '?'}projects=all`;
+  return {
+    active: {
+      key: 'active',
+      label: copy.viewActive,
+      count: cards.totals.active,
+      href: activeHref,
+      current: filter === 'active',
+    },
+    all: {
+      key: 'all',
+      label: copy.viewAll,
+      count: cards.totals.all,
+      href: allHref,
+      current: filter === 'all',
+    },
+  };
+}
+
+/** Link target for a project card: team projects open their room (or project page while rooms are closed); finished own projects open the assets project scope; active own projects open the image studio. */
 export function cardHref(card: StudioBrandProjectCard, organizationId: string, roomsOpen: boolean): string {
   if (card.project.origin === 'team') {
     return roomsOpen
       ? roomHref(card.project.id, organizationId)
       : scopedHref(`/brand/projects/${encodeURIComponent(card.project.id)}`, { id: organizationId });
+  }
+  if (isFinishedCard(card)) {
+    return libraryProjectHref(organizationId, card.project.id);
   }
   return studioProjectHref(organizationId, card.project.id);
 }

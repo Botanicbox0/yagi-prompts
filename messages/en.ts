@@ -1814,6 +1814,9 @@ export const en = {
   /** Brand project home & notification bell (docs/BRAND-PROJECT-SPINE.md §5, §8.1). Pending founder confirmation. */
   projectHome: {
     blockTitle: 'Projects',
+    viewActive: 'Active',
+    viewAll: 'All',
+    finishedMark: 'Finished',
     requestTeam: 'Request the YAGI team',
     guideNoProject: 'Group work into a project to see its files in one place.',
     unfiledLine: '{n} files created without a project',

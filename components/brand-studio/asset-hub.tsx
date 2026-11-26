@@ -48,7 +48,9 @@ import {
   type HubSection,
 } from "./asset-hub-model";
 import { AssetHubSpine, type AssetHubSpineProps, type SingleMoveRequest, type SpineScopeSeed } from "./asset-hub-spine";
-import type { SpineHubTab, SpineMutationKind } from "./asset-hub-spine/model";
+import type { ScopeControls, SpineHubTab, SpineMutationKind } from "./asset-hub-spine/model";
+import { applyScopeControlsToActions, finishedScopeControlsForKey } from "./asset-hub-spine/scope-actions";
+import { SpineResultDelete } from "./asset-hub-spine/result-delete";
 import type { ScopeTileSelectOpts } from "./asset-hub-spine/scope-view";
 import { ProjectPickDialog } from "./asset-hub-project";
 import { HubDetail, HubLinkTile, HubTile } from "./asset-hub-tile";
@@ -188,6 +190,9 @@ export function BrandAssetHub({
           if (typeof assetId === "string" && assetId) {
             deletedAssetIdsRef.current.set(assetId, loadStateReqSeqRef.current);
           }
+        }
+        if (operation === "output.delete" && !isFailure(res) && "savedCopyId" in res && typeof res.savedCopyId === "string" && res.savedCopyId) {
+          deletedAssetIdsRef.current.set(res.savedCopyId, loadStateReqSeqRef.current);
         }
         return res;
       },
@@ -475,9 +480,9 @@ export function BrandAssetHub({
   const projectHref = (group: HubProjectGroup): string | null =>
     assetHubProjectHref(organizationId, group, canOpenStudio, useFilmParam);
   /** `scope` keeps one open menu when the same file is drawn in two places (two projects, or a project and the strip). */
-  const tile = (entry: HubEntry, scope: string, compact = false, opts?: { soundMarker?: boolean; select?: ScopeTileSelectOpts }) => {
+  const tile = (entry: HubEntry, scope: string, compact = false, opts?: { soundMarker?: boolean; select?: ScopeTileSelectOpts; controls?: ScopeControls }) => {
     const name = nameOf(entry);
-    const { main, more } = actionsOf(entry, send?.copy.externalLink);
+    const { main, more } = applyScopeControlsToActions(actionsOf(entry, send?.copy.externalLink), opts?.controls);
     const menuKey = `${scope}|${entry.key}`;
     return (
       <HubTile
@@ -733,7 +738,9 @@ export function BrandAssetHub({
       copy={libraryCopy}
       name={nameOf(detail)}
       liked={library.liked.has(detail.key)}
-      {...actionsOf(detail, send?.copy.externalLink)}
+      {...(spine && detailScopeKey
+        ? applyScopeControlsToActions(actionsOf(detail, send?.copy.externalLink), finishedScopeControlsForKey(detailScopeKey, spine.overview, spine.initialProjectGroup))
+        : actionsOf(detail, send?.copy.externalLink))}
       onLike={() => void library.toggleLike(detail.source)}
       onAction={(action) => runAction(detail, action, detailScopeKey)}
       onClose={() => {
@@ -744,6 +751,25 @@ export function BrandAssetHub({
         ? {
             send,
             sendJob: findHubEntryJob(detail, state?.jobs, initialSpine?.page?.jobs, initialSpine?.state?.jobs),
+          }
+        : {})}
+      {...(spine && canCreate && detail.output
+        ? {
+            resultDelete: (
+              <SpineResultDelete
+                output={detail.output}
+                assets={state ? assets : initialSpine?.state?.assets}
+                api={studioApi}
+                studioCopy={studioCopy}
+                spineCopy={libraryCopy.hub.spine}
+                onDeleted={() => {
+                  setDetailEntry(null);
+                  setDetailScopeKey(undefined);
+                  setSimilarEntry((cur) => (cur?.key === detail.key ? null : cur));
+                  triggerSpineMutation("result_delete");
+                }}
+              />
+            ),
           }
         : {})}
     />
@@ -837,10 +863,11 @@ export function BrandAssetHub({
           emptyActions={emptyActionsFor(canCreate)}
           forceAllNonce={forceAllNonce}
           filmHref={(filmId) => assetHubProjectHref(organizationId, { id: filmId, origin: "self" }, canOpenStudio, true)}
-          renderScopeTile={(entry, scopeKey, selectOpts) =>
+          renderScopeTile={(entry, scopeKey, selectOpts, controls) =>
             tile(entry, scopeKey, false, {
               soundMarker: entry.kind === "audio" && entry.origin === "generated",
               select: selectOpts,
+              controls,
             })
           }
           singleMove={singleMove}

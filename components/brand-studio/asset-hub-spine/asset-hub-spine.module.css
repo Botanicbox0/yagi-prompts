@@ -463,6 +463,196 @@
   min-height: 120px;
 }
 
+/* ------------------------------------------------------------------ R-A switch, finished markers & result delete */
+
+.switchTrack {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--ys-r-pill);
+  background: var(--ys-raised);
+}
+
+:global(.bw-main) a.switchLink.switchLink,
+.switchLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 28px;
+  padding: 0 11px;
+  border-radius: var(--ys-r-pill);
+  color: var(--ys-ink-secondary);
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 20px;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background-color var(--ys-dur) var(--ys-ease), color var(--ys-dur) var(--ys-ease);
+}
+
+:global(.bw-main) a.switchLink.switchLink:hover,
+.switchLink:hover {
+  color: var(--ys-ink);
+  text-decoration: none;
+}
+
+:global(.bw-main) a.switchLink.switchLink[aria-current="page"],
+.switchLink[aria-current="page"] {
+  background: var(--ys-active-bg);
+  color: var(--ys-active-fg);
+  font-weight: 600;
+}
+
+.switchLink:focus-visible,
+.finishedLink:focus-visible,
+.resultDeleteBtn:focus-visible,
+.resultDeleteConfirmBtn:focus-visible {
+  outline: 2px solid var(--ys-focus);
+  outline-offset: 2px;
+}
+
+.switchNum {
+  color: var(--ys-ink-muted);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.switchLink[aria-current="page"] .switchNum {
+  color: inherit;
+  opacity: 0.62;
+}
+
+.statusMark {
+  flex: none;
+  padding: 2px 8px;
+  border: 1px solid var(--ys-line);
+  border-radius: var(--ys-r-pill);
+  color: var(--ys-ink-muted);
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.finishedFooter {
+  padding-top: 8px;
+  border-top: 1px solid var(--ys-hairline);
+}
+
+:global(.bw-main) a.finishedLink.finishedLink,
+.finishedLink {
+  display: inline-block;
+  color: var(--ys-ink-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 20px;
+  text-decoration: underline;
+  text-decoration-color: var(--ys-line-strong);
+  text-underline-offset: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+:global(.bw-main) a.finishedLink.finishedLink:hover,
+.finishedLink:hover {
+  color: var(--ys-ink);
+  text-decoration-color: var(--ys-ink);
+}
+
+.finishedHint {
+  margin: 0;
+  padding: 10px 14px;
+  border: 1px solid var(--ys-hairline);
+  border-radius: 12px;
+  background: var(--ys-surface);
+  color: var(--ys-ink-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.resultDeleteWrap {
+  display: grid;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--ys-hairline);
+}
+
+.resultDeleteBtn {
+  width: 100%;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--ys-line);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ys-ink-secondary);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: color var(--ys-dur) var(--ys-ease), border-color var(--ys-dur) var(--ys-ease);
+}
+
+.resultDeleteBtn:hover {
+  border-color: var(--ys-line-strong);
+  color: var(--ys-danger);
+}
+
+.resultDeleteConfirm {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--ys-line);
+  border-radius: 12px;
+  background: var(--ys-surface);
+}
+
+.resultDeleteLead,
+.resultDeleteExtra,
+.resultDeleteError {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.resultDeleteLead {
+  color: var(--ys-ink);
+  font-weight: 500;
+}
+
+.resultDeleteExtra {
+  color: var(--ys-ink-secondary);
+}
+
+.resultDeleteError {
+  color: var(--ys-danger);
+}
+
+.resultDeleteActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.resultDeleteConfirmBtn {
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--ys-danger);
+  border-radius: 8px;
+  background: var(--ys-danger-soft);
+  color: var(--ys-danger);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.resultDeleteConfirmBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 @media (hover: hover) {
   .coverBtn:hover img,
   .materialTile:hover img,
@@ -476,7 +666,9 @@
   .materialTile img,
   .filmLink img,
   .chip,
-  .groupMoreBtn {
+  .groupMoreBtn,
+  .switchLink,
+  .resultDeleteBtn {
     transition: none;
   }
   .coverBtn:hover img,

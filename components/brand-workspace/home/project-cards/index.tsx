@@ -9,8 +9,12 @@ import {
   cardCoverLayout,
   cardHref,
   cardSecondLine,
+  cardStatusMark,
   cardThirdLine,
   cardUnreadBadge,
+  homeProjectsSwitch,
+  isFinishedCard,
+  parseProjectsFilter,
   projectCardsSlice,
   unfiledCoverSlots,
   unfiledTotal,
@@ -85,7 +89,26 @@ export function HomeProjectCards({
   requestActionKey,
   copy,
 }: HomeProjectCardsProps) {
-  const { cards, canCreate, roomsOpen } = spineHome;
+  const { cards, canCreate, roomsOpen, filter } = spineHome;
+  const activeFilter = parseProjectsFilter(filter);
+  const viewSwitch = homeProjectsSwitch(cards, activeFilter, organizationId, copy.projectHome);
+  const switchNode = viewSwitch ? (
+    <div className={pc.switchTrack} role="group" aria-label={copy.projectHome.blockTitle} data-home-projects-switch="">
+      {[viewSwitch.active, viewSwitch.all].map((item) => (
+        <a
+          key={item.key}
+          href={item.href}
+          className={pc.switchLink}
+          aria-current={item.current ? 'page' : undefined}
+          data-projects-filter={item.key}
+        >
+          <span>{item.label}</span>
+          <span className={pc.switchNum}>{item.count}</span>
+        </a>
+      ))}
+    </div>
+  ) : null;
+
   const actions =
     canCreate || requestHref ? (
       <div className={pc.sectionActions}>
@@ -98,20 +121,66 @@ export function HomeProjectCards({
       </div>
     ) : null;
 
-  if (cards.projects.length === 0) {
-    return (
-      <div className={pc.guideLine} data-home-no-projects="">
-        <p className={pc.guideText}>{copy.projectHome.guideNoProject}</p>
-        {actions}
+  const totalUnfiled = unfiledTotal(cards.unfiled.counts);
+  const unfiledThumbs = totalUnfiled > 0 ? unfiledCoverSlots(cards.unfiled.covers) : [];
+  const assetsHref = scopedHref('/brand/library', { id: organizationId });
+  const unfiledNode =
+    totalUnfiled > 0 ? (
+      <div className={pc.unfiled} data-home-unfiled={totalUnfiled}>
+        <span className={pc.unfiledLabel}>{copy.projectSpine.unfiled}</span>
+        {unfiledThumbs.length > 0 ? (
+          <div className={pc.unfiledThumbs}>
+            {unfiledThumbs.map((slot) => (
+              <CoverSlotPicture
+                key={slot.id}
+                slot={slot}
+                imgClassName={pc.unfiledThumb}
+                placeholderClassName={pc.unfiledVideo}
+              />
+            ))}
+          </div>
+        ) : null}
+        <span className={pc.unfiledSay}>{interpolate(copy.projectHome.unfiledLine, { n: totalUnfiled })}</span>
+        {canCreate ? (
+          <a href={assetsHref} className={pc.textAction} data-home-unfiled-move="">
+            {copy.projectSpine.move}
+          </a>
+        ) : null}
       </div>
+    ) : null;
+
+  if (cards.projects.length === 0) {
+    if (!switchNode) {
+      return (
+        <div className={pc.guideLine} data-home-no-projects="">
+          <p className={pc.guideText}>{copy.projectHome.guideNoProject}</p>
+          {actions}
+        </div>
+      );
+    }
+    return (
+      <>
+        <section className={pc.section} aria-labelledby="workspace-home-projects" data-home-projects="">
+          <div className={pc.sectionHead}>
+            <h2 id="workspace-home-projects" className={pc.sectionTitle}>
+              {copy.projectHome.blockTitle}
+            </h2>
+            {switchNode}
+            {actions}
+          </div>
+          <div className={pc.guideLine} data-home-no-projects="">
+            <p className={pc.guideText}>{copy.projectHome.guideNoProject}</p>
+          </div>
+        </section>
+        {unfiledNode}
+      </>
     );
   }
 
   const renderNow = new Date();
   const { shown, hasMore } = projectCardsSlice(cards.projects);
-  const totalUnfiled = unfiledTotal(cards.unfiled.counts);
-  const unfiledThumbs = totalUnfiled > 0 ? unfiledCoverSlots(cards.unfiled.covers) : [];
-  const assetsHref = scopedHref('/brand/library', { id: organizationId });
+  const moreHref =
+    activeFilter === 'all' ? `${assetsHref}${assetsHref.includes('?') ? '&' : '?'}projects=all` : assetsHref;
 
   return (
     <>
@@ -120,6 +189,7 @@ export function HomeProjectCards({
           <h2 id="workspace-home-projects" className={pc.sectionTitle}>
             {copy.projectHome.blockTitle}
           </h2>
+          {switchNode}
           {actions}
         </div>
         <ul className={pc.cards} data-home-cards="">
@@ -128,6 +198,8 @@ export function HomeProjectCards({
             const badge = cardUnreadBadge(card.unread, copy.projectHome);
             const secondLine = cardSecondLine(card, copy);
             const thirdLine = cardThirdLine(card, copy, locale, renderNow);
+            const finished = isFinishedCard(card);
+            const statusMark = cardStatusMark(card, copy.projectHome);
             return (
               <li key={card.project.id}>
                 <a
@@ -135,6 +207,7 @@ export function HomeProjectCards({
                   className={pc.card}
                   data-home-project={card.project.id}
                   data-origin={card.project.origin}
+                  data-finished={finished ? '' : undefined}
                 >
                   <div className={pc.cover} data-cover-layout={cover.mode}>
                     {cover.slots.length === 0 ? (
@@ -153,6 +226,11 @@ export function HomeProjectCards({
                   <div className={pc.cardText}>
                     <div className={pc.cardTitleRow}>
                       <span className={pc.cardTitle}>{card.project.title}</span>
+                      {statusMark ? (
+                        <span className={pc.cardStatus} data-home-project-status={card.status ?? 'finished'}>
+                          {statusMark}
+                        </span>
+                      ) : null}
                       {badge ? (
                         <span className={pc.cardUnread} data-home-project-unread={card.unread}>
                           <span aria-hidden="true">{badge.display}</span>
@@ -176,36 +254,14 @@ export function HomeProjectCards({
         </ul>
         {hasMore ? (
           <div className={pc.moreRow}>
-            <a href={assetsHref} className={pc.textAction} data-home-projects-more="">
+            <a href={moreHref} className={pc.textAction} data-home-projects-more="">
               {copy.libraryHub.projects.seeAll}
             </a>
           </div>
         ) : null}
       </section>
 
-      {totalUnfiled > 0 ? (
-        <div className={pc.unfiled} data-home-unfiled={totalUnfiled}>
-          <span className={pc.unfiledLabel}>{copy.projectSpine.unfiled}</span>
-          {unfiledThumbs.length > 0 ? (
-            <div className={pc.unfiledThumbs}>
-              {unfiledThumbs.map((slot) => (
-                <CoverSlotPicture
-                  key={slot.id}
-                  slot={slot}
-                  imgClassName={pc.unfiledThumb}
-                  placeholderClassName={pc.unfiledVideo}
-                />
-              ))}
-            </div>
-          ) : null}
-          <span className={pc.unfiledSay}>{interpolate(copy.projectHome.unfiledLine, { n: totalUnfiled })}</span>
-          {canCreate ? (
-            <a href={assetsHref} className={pc.textAction} data-home-unfiled-move="">
-              {copy.projectSpine.move}
-            </a>
-          ) : null}
-        </div>
-      ) : null}
+      {unfiledNode}
     </>
   );
 }
