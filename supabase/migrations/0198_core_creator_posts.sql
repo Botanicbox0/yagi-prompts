@@ -1,4 +1,4 @@
--- 클라우드 적용 필요 — TWINGS · core migration 0196 — AI creative blog posts
+-- 클라우드 적용 필요 — TWINGS · core migration 0198 — AI creative blog posts
 --
 -- Additive schema for maker blog posts and the post↔template reverse index used to surface
 -- "이 템플릿 이야기" on template pages. Safe to run multiple times (`if not exists`); alters no

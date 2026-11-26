@@ -408,10 +408,10 @@ describe('maker blog service & public readers', () => {
     expect(templates[0]!.clips[0]!.note).toBe('Keep light soft.');
   });
 
-  it('degrades gracefully when 0196 tables are absent in an older database', async () => {
+  it('degrades gracefully when 0198 tables are absent in an older database', async () => {
     const pre = new PGlite();
     await pre.exec('create schema if not exists auth; create table if not exists auth.users (id uuid primary key);');
-    for (const file of coreMigrationFiles().filter((f) => f < '0196')) {
+    for (const file of coreMigrationFiles().filter((f) => f < '0198')) {
       await pre.exec(readMigration(file));
     }
     const preSql = runner(pre);

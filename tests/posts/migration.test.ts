@@ -5,8 +5,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { PGlite } from '@electric-sql/pglite';
 import { MIGRATIONS_DIR, coreMigrationFiles, expectReject, freshDb, glueMigrationFiles } from '../helpers/pglite';
 
-const CORE = '0196_core_creator_posts.sql';
-const GLUE = '0197_glue_creator_posts.sql';
+const CORE = '0198_core_creator_posts.sql';
+const GLUE = '0199_glue_creator_posts.sql';
 
 let db: PGlite | null = null;
 afterEach(async () => {
@@ -14,7 +14,7 @@ afterEach(async () => {
   db = null;
 });
 
-describe('0196 / 0197 — creator_posts migrations', () => {
+describe('0198 / 0199 — creator_posts migrations', () => {
   it('applies cleanly, is idempotent when run twice, and enforces constraints', async () => {
     db = await freshDb();
     await db.exec(readFileSync(join(MIGRATIONS_DIR, CORE), 'utf8'));
@@ -60,7 +60,7 @@ describe('0196 / 0197 — creator_posts migrations', () => {
     ).toMatch(/slug/i);
   });
 
-  it('locks down both tables in 0197 glue with deny-all RLS and service_role only grants', () => {
+  it('locks down both tables in 0199 glue with deny-all RLS and service_role only grants', () => {
     expect(coreMigrationFiles()).toContain(CORE);
     expect(glueMigrationFiles()).toContain(GLUE);
     for (const file of [CORE, GLUE]) {

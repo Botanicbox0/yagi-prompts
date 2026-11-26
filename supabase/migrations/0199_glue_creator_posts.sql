@@ -1,4 +1,4 @@
--- 클라우드 적용 필요 — TWINGS · glue migration 0197 — pairs with 0196 (AI creative blog posts)
+-- 클라우드 적용 필요 — TWINGS · glue migration 0199 — pairs with 0198 (AI creative blog posts)
 --
 -- Deny-all posture for browser roles (matching 0195): RLS enabled and forced with zero policies,
 -- all privileges revoked from public, anon, and authenticated, and server access granted to

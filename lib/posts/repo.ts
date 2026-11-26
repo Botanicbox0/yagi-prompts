@@ -27,8 +27,8 @@ export class PostError extends Error {
 export const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
- * Migration 0196 probe (`to_regclass`), matching `recipeSchemaReady` / `creativeProfilesReady`.
- * Callers return empty reads and `unavailable` writes before 0196 is applied.
+ * Migration 0198 probe (`to_regclass`), matching `recipeSchemaReady` / `creativeProfilesReady`.
+ * Callers return empty reads and `unavailable` writes before 0198 is applied.
  */
 export async function postsReady(sql: SqlRunner): Promise<boolean> {
   const { rows } = await sql.query<{ ready: boolean }>(
