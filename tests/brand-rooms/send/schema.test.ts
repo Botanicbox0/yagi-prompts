@@ -208,3 +208,60 @@ describe('0199 — glue', () => {
     expect(glue).toContain('revoke all on public.%I from public,anon,authenticated\'');
   });
 });
+
+
+/**
+ * The rollback the slice 4a report gives, statement for statement (docs/BRAND-PROJECT-SPINE.md §8.6): with BRAND_SEND off,
+ * the members lines and their notices go first, then the table, then the checks of 0082 and 0094 come back exactly.
+ */
+export const ROLLBACK_0198 = `
+delete from brand_room_notices where kind = 'member_reply' or channel like 'members%'
+   or message_id in (select id from brand_room_messages where channel like 'members%');
+delete from brand_room_messages where channel like 'members%';
+delete from brand_room_reads where channel like 'members%';
+drop table if exists brand_room_thread_reads;
+drop index if exists idx_brand_room_messages_members_mentions;
+drop index if exists idx_brand_room_messages_members_author;
+alter table brand_room_messages drop constraint if exists brand_room_messages_members_line;
+alter table brand_room_messages drop constraint if exists brand_room_messages_members_ref;
+alter table brand_room_messages drop constraint brand_room_messages_channel;
+alter table brand_room_messages add constraint brand_room_messages_channel check (
+  (project_id is null and channel = 'general') or (project_id is not null and channel = project_id::text));
+alter table brand_room_messages drop constraint brand_room_messages_ref_key;
+alter table brand_room_messages add constraint brand_room_messages_ref_key check (
+  (ref is null) = (ref_key is null) and (ref_key is null or ref_key ~ '^(storyboard|review):[0-9a-f-]{36}(:[0-9a-f-]{36})?$'));
+alter table brand_room_messages drop constraint brand_room_messages_ref_project;
+alter table brand_room_messages add constraint brand_room_messages_ref_project check (ref is null or project_id is not null);
+alter table brand_room_reads drop constraint brand_room_reads_channel;
+alter table brand_room_reads add constraint brand_room_reads_channel check (
+  channel = 'general' or channel ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$');
+alter table brand_room_notices drop constraint if exists brand_room_notices_member_reply;
+alter table brand_room_notices drop constraint if exists brand_room_notices_channel;
+alter table brand_room_notices drop column if exists channel;
+alter table brand_room_notices drop constraint brand_room_notices_general;
+alter table brand_room_notices add constraint brand_room_notices_general check (project_id is not null or kind in ('team_message', 'mention'));
+alter table brand_room_notices drop constraint brand_room_notices_kind;
+alter table brand_room_notices add constraint brand_room_notices_kind check (
+  kind in ('new_version', 'storyboard', 'team_message', 'team_reply', 'mention', 'intake_received'));
+`;
+
+describe('rollback (the report’s statements)', () => {
+  it('removes the members lines first, then restores 0082/0094’s checks exactly, keeping every team row', async () => {
+    const team = await insertLine({ project_id: project, channel: project, author_role: 'studio', body: 'Team line' });
+    await insertLine({ project_id: project, channel: project, ref: { kind: 'review', reviewId: randomUUID() }, ref_key: `review:${randomUUID()}` });
+    const root = await membersRoot();
+    await insertLine({ project_id: project, channel: `members:${project}`, parent_id: root, ...fileRef() });
+    await insertLine({ project_id: null, channel: 'members', ...fileRef('asset') });
+    await db.query('insert into brand_room_thread_reads (organization_id, root_message_id, user_id) values ($1, $2, $3)', [org, root, user]);
+    await db.query("insert into brand_room_notices (organization_id, project_id, recipient_id, kind, message_id, timing, due_at, channel) values ($1, $2, $3, 'mention', $4, 'now', now(), $5)", [org, project, user, root, `members:${project}`]);
+    await db.query("insert into brand_room_notices (organization_id, project_id, recipient_id, kind, message_id, timing, due_at) values ($1, $2, $3, 'team_message', $4, 'bundle', now())", [org, project, user, team]);
+    await db.exec(ROLLBACK_0198);
+    expect((await db.query<{ channel: string }>('select channel from brand_room_messages order by channel')).rows).toEqual([{ channel: project }, { channel: project }]);
+    expect((await db.query<{ kind: string }>('select kind from brand_room_notices')).rows).toEqual([{ kind: 'team_message' }]);
+    expect((await db.query<{ t: string | null }>("select to_regclass('public.brand_room_thread_reads')::text as t")).rows[0]!.t).toBeNull();
+    // The old checks are back: a members line is refused again, and 0198 can be applied once more.
+    expect(await expectReject(() => membersRoot())).toMatch(/brand_room_messages_channel/);
+    await db.exec(readFileSync(join(MIGRATIONS_DIR, CORE), 'utf8'));
+    await membersRoot();
+  });
+});
