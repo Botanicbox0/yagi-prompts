@@ -1,11 +1,18 @@
 'use client';
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { sendTransport, type SendTransport } from '@/components/brand-rooms/chat/transport';
+import {
+  sendInviteTransport,
+  sendTransport,
+  type SendInviteTransport,
+  type SendTransport,
+} from '@/components/brand-rooms/chat/transport';
 import { ROOM_ACTIVITY } from '@/components/brand-rooms/seams';
 import type { SendMessage, SendPerson, SendPosted, SendThreadPage, SendThreadSummary } from '@/lib/brand-rooms/send-contracts';
 import { SendComposer, type SendComposerSubmit } from './composer';
 import { SendFileCardView } from './file-card';
+import { SendInviteChips } from './invite-chips';
+import { extractCopyableInviteTokens } from './invite-model';
 import {
   fileCardInfo,
   formatSendClock,
@@ -34,6 +41,8 @@ export interface SendThreadViewProps {
   locale: SendLocale;
   copy: SendCopy;
   transport?: SendTransport;
+  invite?: boolean;
+  inviteTransport?: SendInviteTransport;
   initialThread?: SendThreadPage | null;
   initialGone?: boolean;
   markSeedRead?: boolean;
@@ -74,6 +83,8 @@ function MessageRow({
   isRoot,
   pending,
   fileCard,
+  invite = false,
+  inviteTokens,
   locale,
   copy,
 }: {
@@ -81,6 +92,8 @@ function MessageRow({
   isRoot: boolean;
   pending: boolean;
   fileCard?: ReactNode;
+  invite?: boolean;
+  inviteTokens?: Readonly<Record<string, string>>;
   locale: SendLocale;
   copy: SendCopy;
 }) {
@@ -123,11 +136,16 @@ function MessageRow({
             ),
           )}
         </p>
+        {invite && message.invites && message.invites.length > 0 ? (
+          <SendInviteChips invites={message.invites} copy={copy} tokensByEmail={inviteTokens} />
+        ) : null}
         {fileCard ? <div className={styles.rootCard}>{fileCard}</div> : null}
       </div>
     </article>
   );
 }
+
+const EMPTY_INVITE_TOKENS: Readonly<Record<string, Record<string, string>>> = {};
 
 export function SendThreadView({
   organizationId,
@@ -135,6 +153,8 @@ export function SendThreadView({
   locale,
   copy,
   transport,
+  invite = false,
+  inviteTransport,
   initialThread = null,
   initialGone = false,
   markSeedRead = false,
@@ -146,10 +166,16 @@ export function SendThreadView({
   onClosed,
 }: SendThreadViewProps) {
   const activeTransport = useMemo(() => transport ?? sendTransport(organizationId), [organizationId, transport]);
+  const activeInviteTransport = useMemo(
+    () => (invite ? (inviteTransport ?? sendInviteTransport(organizationId)) : null),
+    [invite, inviteTransport, organizationId],
+  );
 
   const [state, setState] = useState<ThreadPollState>(() =>
     initialThreadPollState(rootId, initialThread, initialGone, closed, markSeedRead),
   );
+  const [inviteTokensByMsg, setInviteTokensByMsg] =
+    useState<Readonly<Record<string, Record<string, string>>>>(EMPTY_INVITE_TOKENS);
   const stateRef = useRef(state);
   stateRef.current = state;
 
@@ -259,6 +285,7 @@ export function SendThreadView({
   }, [clearTimer, dispatchAction]);
 
   useEffect(() => {
+    setInviteTokensByMsg((prev) => (Object.keys(prev).length === 0 ? prev : EMPTY_INVITE_TOKENS));
     if (orgMountedRef.current !== organizationId) {
       orgMountedRef.current = organizationId;
       peopleCacheRef.current = initialPeopleRef.current ? [...initialPeopleRef.current] : null;
@@ -297,6 +324,14 @@ export function SendThreadView({
     return res;
   }, [activeTransport]);
 
+  const handleLookup = useCallback(
+    async (email: string) => {
+      if (!activeInviteTransport) return { ok: false as const, code: 'invalid' as const };
+      return activeInviteTransport.lookup(email);
+    },
+    [activeInviteTransport],
+  );
+
   const handleReplySend = useCallback(
     async (draft: SendComposerSubmit) => {
       const current = stateRef.current;
@@ -330,14 +365,23 @@ export function SendThreadView({
         createdAt: new Date().toISOString(),
       });
 
-      let result: Awaited<ReturnType<SendTransport['reply']>>;
+      let result: Awaited<ReturnType<SendInviteTransport['reply']>>;
       try {
-        result = await activeTransport.reply({
-          rootId,
-          body: draft.body,
-          mentions: draft.mentions,
-          requestId: draft.requestId,
-        });
+        result =
+          invite && draft.invites && draft.invites.length > 0 && activeInviteTransport
+            ? await activeInviteTransport.reply({
+                rootId,
+                body: draft.body,
+                mentions: draft.mentions,
+                invites: draft.invites,
+                requestId: draft.requestId,
+              })
+            : await activeTransport.reply({
+                rootId,
+                body: draft.body,
+                mentions: draft.mentions,
+                requestId: draft.requestId,
+              });
       } catch (err) {
         if (mountedRef.current) {
           dispatchAction({ type: 'drop_reply', requestId: draft.requestId });
@@ -347,6 +391,12 @@ export function SendThreadView({
 
       if (!mountedRef.current) return result;
       if (result.ok) {
+        if (invite && result.invited) {
+          const tokens = extractCopyableInviteTokens(result.invited);
+          if (Object.keys(tokens).length > 0) {
+            setInviteTokensByMsg((prev) => ({ ...prev, [result.message.id]: tokens }));
+          }
+        }
         dispatchAction({ type: 'apply_reply', posted: result, requestId: draft.requestId });
         onReplyPostedRef.current?.(result);
         if (typeof window !== 'undefined') {
@@ -358,7 +408,7 @@ export function SendThreadView({
       dispatchAction({ type: 'drop_reply', requestId: draft.requestId });
       return result;
     },
-    [activeTransport, dispatchAction, rootId],
+    [activeInviteTransport, activeTransport, dispatchAction, invite, rootId],
   );
 
   const streamRef = useRef<HTMLDivElement>(null);
@@ -529,6 +579,8 @@ export function SendThreadView({
                 fileCard={
                   item.isRoot ? <SendFileCardView file={thread.file} organizationId={organizationId} copy={copy} /> : undefined
                 }
+                invite={invite}
+                inviteTokens={invite ? inviteTokensByMsg[item.message.id] : undefined}
                 locale={locale}
                 copy={copy}
               />
@@ -550,6 +602,8 @@ export function SendThreadView({
             placeholder={copy.replyPlaceholder}
             hint={copy.composerHint}
             refusalContext="compose_reply"
+            invite={invite}
+            lookupAddress={invite ? handleLookup : undefined}
             initialPeople={initialPeople}
             loadPeople={handleLoadPeople}
             onSend={handleReplySend}

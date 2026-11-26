@@ -8,6 +8,7 @@ import { brandScope } from "@/components/brand-workspace/scope";
 import { BrandUnavailable } from "@/components/brand-workspace/brand-unavailable";
 import { StaffNotice } from "@/components/brand-workspace/staff-notice";
 import { brandSendOpenFor, brandSendSwitchesOn } from "@/lib/brand-rooms/members-channel";
+import { brandSendInviteOpenFor } from "@/lib/brand-rooms/send-invite";
 import { loadAssetProjectLinks } from "@/lib/brand-studio/asset-projects";
 import { brandProjectSpineOpen, memberSeesBrandProjects } from "@/lib/brand-studio/brand-projects";
 import { studioRuntimeDeps } from "@/lib/brand-studio/runtime";
@@ -56,13 +57,17 @@ export default async function ContentLibrary({
   if (choice && hubVisible) {
     const isMemberSeat = memberSeesBrandProjects({ staff: choice.role === "studio", role: choice.role });
     const spineOpen = isMemberSeat && (await brandProjectSpineOpen(sql, choice.id));
-    const send: ViewerSendProp | null =
+    const sendBase: ViewerSendProp | null =
       spineOpen &&
       brandSendSwitchesOn() &&
       isMemberSeat &&
       (await brandSendOpenFor(sql, choice.id).catch(() => false))
         ? { organizationId: choice.id, copy: pickSendCopy(dict), locale: isKo ? "ko" : "en" }
         : null;
+    const send: ViewerSendProp | null =
+      sendBase && (await brandSendInviteOpenFor(sql, choice.id).catch(() => false))
+        ? { ...sendBase, invite: true }
+        : sendBase;
     const canTransact = typeof (sql as { transaction?: unknown }).transaction === "function";
     // The studio state, project links and (when spine is open) project overview are read side by side;
     // all pass the same seat check (membership, the sandbox hardline, the feature policy).

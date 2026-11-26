@@ -1874,6 +1874,22 @@ export const ko: Dictionary = {
     threadGone: '이 대화를 더 볼 수 없어요.',
     externalLink: '외부 링크 만들기',
     replyLead: '답글:',
+    /** 초대하고 보내기 (slice 4c, 대표 확인 대기). */
+    inviteHeading: '멤버가 아닌 주소',
+    inviteDesc: '초대장을 보내고 수락하면 메시지가 전달돼요',
+    inviteAction: '초대하고 보내기',
+    chipPending: '초대 수락을 기다려요',
+    chipExpired: '초대가 만료됐어요',
+    chipAccepted: '멤버가 되었지만 메시지는 전달되지 않았어요',
+    chipCount: '{n}명을 초대했어요',
+    inviteRefused: '이 주소로는 초대할 수 없어요.',
+    inviteNotAllowed: '보기 권한만으로는 초대할 수 없어요.',
+    inviteLimit: '오늘 초대 한도를 다 썼어요. 내일 다시 시도해 주세요.',
+    inviteTooMany: '한 번에 3명까지만 초대할 수 있어요.',
+    inviteSelf: '내 주소는 초대할 수 없어요.',
+    inviteLinkCopy: '초대 링크 복사하기',
+    inviteLinkCopied: '링크를 복사했어요',
+    inviteNeedsWords: '메시지를 입력해야 보낼 수 있어요.',
   },
   /** 브랜드 홈 소식 칸 (docs/BRAND-PROJECT-SPINE.md §6, §13). 대표 확인 대기. */
   brandNews: {

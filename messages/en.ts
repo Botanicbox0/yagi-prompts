@@ -1863,6 +1863,22 @@ export const en = {
     threadGone: 'This conversation is no longer available.',
     externalLink: 'Create external link',
     replyLead: 'Reply:',
+    /** Invite and send (slice 4c, pending founder confirmation). */
+    inviteHeading: 'Non-member address',
+    inviteDesc: 'The message will be delivered once the invite is accepted',
+    inviteAction: 'Invite and send',
+    chipPending: 'Pending acceptance',
+    chipExpired: 'Invite expired',
+    chipAccepted: 'Joined but message not delivered',
+    chipCount: '{n} invited',
+    inviteRefused: 'This address cannot be invited',
+    inviteNotAllowed: 'Viewers cannot invite others',
+    inviteLimit: 'Daily invite limit reached. Please try again tomorrow.',
+    inviteTooMany: 'You can invite up to 3 people at once',
+    inviteSelf: 'You cannot invite yourself',
+    inviteLinkCopy: 'Copy invite link',
+    inviteLinkCopied: 'Link copied',
+    inviteNeedsWords: 'Please enter a message to send the invitation.',
   },
   /** Brand home news line (docs/BRAND-PROJECT-SPINE.md §6, §13). Pending founder confirmation. */
   brandNews: {

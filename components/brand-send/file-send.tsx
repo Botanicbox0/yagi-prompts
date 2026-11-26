@@ -11,7 +11,7 @@ import {
   type ReactNode,
   type RefObject,
 } from 'react';
-import type { SendTransport } from '@/components/brand-rooms/chat/transport';
+import type { SendInviteTransport, SendTransport } from '@/components/brand-rooms/chat/transport';
 import type { SendFileRef } from '@/lib/brand-rooms/send-contracts';
 import {
   sendFileRefKey,
@@ -86,7 +86,7 @@ export interface FileSendRenderState {
 }
 
 export interface FileSendProps {
-  send: ViewerSendProp & { locale?: SendLocale; transport?: SendTransport };
+  send: ViewerSendProp & { locale?: SendLocale; transport?: SendTransport; inviteTransport?: SendInviteTransport };
   fileRef: SendFileRef | null;
   locale: SendLocale;
   closeLabel: string;
@@ -182,6 +182,8 @@ export function FileSend({
           copy={send.copy}
           locale={locale}
           transport={send.transport}
+          invite={send.invite}
+          inviteTransport={send.inviteTransport}
           autoFocus
           closeLabel={closeLabel}
           onClose={leave}
@@ -213,7 +215,7 @@ export function FileSendHost({
   panelHidden = false,
   children,
 }: Omit<FileSendProps, 'send'> & {
-  send?: (ViewerSendProp & { locale?: SendLocale; transport?: SendTransport }) | null;
+  send?: (ViewerSendProp & { locale?: SendLocale; transport?: SendTransport; inviteTransport?: SendInviteTransport }) | null;
 }) {
   if (!send) {
     return <>{children}</>;

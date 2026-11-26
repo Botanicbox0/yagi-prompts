@@ -35,6 +35,7 @@ import projectChipStyles from "./project-chip/project-chip.module.css";
 import { WorkspaceBell } from "@/components/brand-workspace/bell";
 import { pickSendCopy, type ViewerSendProp } from "@/components/brand-send/model";
 import { brandSendOpenFor, brandSendSwitchesOn } from "@/lib/brand-rooms/members-channel";
+import { brandSendInviteOpenFor } from "@/lib/brand-rooms/send-invite";
 import { memberSeesBrandProjects } from "@/lib/brand-studio/brand-projects";
 import { StudioApp } from "./studio-app";
 
@@ -93,13 +94,17 @@ export async function brandStudioV2(input: StudioV2Input): Promise<ReactElement>
         .then((loaded) => (loaded.ok ? loaded : null))
         .catch(() => null)
     : undefined;
-  const send: ViewerSendProp | null =
+  const sendBase: ViewerSendProp | null =
     spine &&
     brandSendSwitchesOn() &&
     memberSeesBrandProjects({ staff: input.access.staff, role: choice.role }) &&
     (await brandSendOpenFor(input.deps.sql, choice.id).catch(() => false))
       ? { organizationId: choice.id, copy: pickSendCopy(dict) }
       : null;
+  const send: ViewerSendProp | null =
+    sendBase && (await brandSendInviteOpenFor(input.deps.sql, choice.id).catch(() => false))
+      ? { ...sendBase, invite: true }
+      : sendBase;
 
   const title = <h1 className="bs-title">{copy.title}</h1>;
   const page = (

@@ -1715,8 +1715,16 @@ describe('brand-send Batch A source & CSS invariants (§6)', () => {
       const base = path.basename(file);
       expect(src, base).not.toMatch(/<video\b/);
       expect(src, base).not.toMatch(/type=["']file["']|brc-attach|message\.edit|message\.delete|reaction\.toggle/);
-      if (base !== 'inbox-page.tsx' && base !== 'thread-view.tsx') {
+      if (
+        base !== 'inbox-page.tsx' &&
+        base !== 'thread-view.tsx' &&
+        base !== 'composer.tsx' &&
+        base !== 'invite-chips.tsx'
+      ) {
         expect(src, base).not.toMatch(/\b(setInterval|setTimeout)\b/);
+      }
+      if (base === 'composer.tsx' || base === 'invite-chips.tsx') {
+        expect(src, `${base} cleanup must call clearTimeout`).toMatch(/\bclearTimeout\b/);
       }
 
       // No lib/** imports except `import type` or contract limit constants
