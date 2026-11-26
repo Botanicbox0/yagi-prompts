@@ -290,23 +290,41 @@ describe('reads: a thread, a file’s threads, the members list', () => {
     expect(await code(w, owner(), 'send.file', { file: output(fill.outputId) })).toBe('not_found');
   });
 
-  it('a send takes the organization row before it reads where the file is filed (ordered against a move)', async () => {
+  it('every write takes the organization row first, as the move does (no root, file or mark is touched before it)', async () => {
     const { outputId } = await imageResult(w, w.f.projectId);
-    const texts: string[] = [];
-    const wrap = (inner: SqlRunner): SqlRunner => ({
-      query: (text, params) => {
-        texts.push(text.replace(/\s+/g, ' '));
-        return inner.query(text, params);
-      },
-      transaction: (fn) => inner.transaction((tx) => fn(wrap(tx))),
-    });
+    const rootId = (await send(owner(), output(outputId), 'Root')).thread.rootId;
     const { runRoomOperation } = await import('@/lib/brand-rooms/messages');
-    const { result } = await runRoomOperation({ sql: wrap(w.f.sql), media: w.deps.media }, owner(), 'send.post', { organizationId: w.f.orgId, requestId: randomUUID(), file: output(outputId), body: 'x' });
-    expect(result.ok).toBe(true);
-    const lock = texts.findIndex((t) => /from brand_organizations where id = \$1 for key share/.test(t));
-    const read = texts.findIndex((t) => /from brand_studio_outputs o/.test(t));
-    expect(lock).toBeGreaterThan(-1);
-    expect(read).toBeGreaterThan(lock);
+    const statements = async (operation: string, input: Record<string, unknown>): Promise<string[]> => {
+      const texts: string[] = [];
+      const wrap = (inner: SqlRunner): SqlRunner => ({
+        query: (text, params) => {
+          texts.push(text.replace(/\s+/g, ' '));
+          return inner.query(text, params);
+        },
+        transaction: (fn) => inner.transaction((tx) => fn(wrap(tx))),
+      });
+      const { result } = await runRoomOperation({ sql: wrap(w.f.sql), media: w.deps.media }, editor(), operation, { organizationId: w.f.orgId, ...input });
+      expect(result.ok, operation).toBe(true);
+      return texts;
+    };
+    const lockAt = (texts: string[]) => texts.findIndex((t) => /from brand_organizations where id = \$1 for key share/.test(t));
+    const firstTouch = (texts: string[]) =>
+      texts.findIndex((t) => /from brand_studio_outputs o|from brand_room_messages r where r\.id = \$1|insert into brand_room_thread_reads|insert into brand_room_messages/.test(t));
+    for (const [operation, input] of [
+      ['send.post', { requestId: randomUUID(), file: output(outputId), body: 'x' }],
+      ['send.reply', { requestId: randomUUID(), rootId, body: 'y' }],
+      ['send.thread', { rootId }],
+      ['send.read', { rootId }],
+      ['send.read_all', {}],
+    ] as const) {
+      const texts = await statements(operation, input);
+      expect(lockAt(texts), operation).toBeGreaterThan(-1);
+      if (firstTouch(texts) > -1) expect(firstTouch(texts), operation).toBeGreaterThan(lockAt(texts));
+    }
+    // Pure reads take no lock.
+    for (const [operation, input] of [['send.inbox', {}], ['send.file', { file: output(outputId) }], ['send.people', {}]] as const) {
+      expect(lockAt(await statements(operation, input)), operation).toBe(-1);
+    }
   });
 
   it('a project members are not shown is not named on a card (a team project the staff hid)', async () => {

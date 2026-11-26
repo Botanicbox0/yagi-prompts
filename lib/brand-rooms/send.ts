@@ -115,6 +115,13 @@ export async function runSendOperation(deps: SendDeps, viewer: Viewer, operation
     deps.sql.transaction(async (sql) => {
       const seat = await sendSeat(sql, viewer, organizationId);
       const ctx: Ctx = { sql, media: deps.media, organizationId, me: seat.userId.toLowerCase(), seat };
+      // One lock order for everything that writes a line or a mark, the same as the spine's move (the organization row
+      // first, `for update` there, then the threads' roots): the organization row `for key share` before any root,
+      // file or mark is touched. A send then reads where its file is filed only after any move in progress committed
+      // (or the move waits for it and carries its root), and a reply or a read mark can never hold a root while waiting
+      // for the organization row the move holds (no deadlock). Writers do not block each other: `for key share`
+      // conflicts only with `for update`.
+      if (WRITES.has(operation)) await sql.query('select id from brand_organizations where id = $1 for key share', [organizationId]);
       switch (operation) {
         case 'send.post':
           return post(ctx, input);
@@ -136,6 +143,9 @@ export async function runSendOperation(deps: SendDeps, viewer: Viewer, operation
     }),
   );
 }
+
+/** The operations that write a line or a read mark (`send.thread` marks the thread it opens). */
+const WRITES: ReadonlySet<SendOperation> = new Set<SendOperation>(['send.post', 'send.reply', 'send.thread', 'send.read', 'send.read_all']);
 
 interface Ctx {
   sql: SqlRunner;
@@ -461,11 +471,8 @@ async function post(ctx: Ctx, input: unknown): Promise<SendPosted> {
     return postedAnswer(ctx, String(prior.id).toLowerCase(), String(prior.id).toLowerCase());
   }
   await requireRate(ctx);
-  // The spine's move holds the organization row `for update` while it refiles files and their threads. Taking the row
-  // `for key share` before reading where the file is filed orders this send against any move: a move that started first
-  // commits before the file is read (the root lands in the new channel); a move that starts later waits for this root
-  // and carries it. Sends do not block each other (`for key share` conflicts only with `for update`).
-  await ctx.sql.query('select id from brand_organizations where id = $1 for key share', [ctx.organizationId]);
+  // The organization row is already held `for key share` (`runSendOperation`), so where the file is filed is read only
+  // after any move in progress committed, and a move that starts later waits for this root and carries it.
   const file = await sendableFile(ctx.sql, ctx.organizationId, ref);
   const mentions = await requireMembers(ctx, v.mentions);
   const channel = membersChannelOf(file.projectId);

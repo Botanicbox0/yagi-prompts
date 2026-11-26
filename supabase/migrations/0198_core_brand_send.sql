@@ -27,13 +27,15 @@
 -- output or asset ref, `member_reply` or the new column; the new table is closed to every browser key from the moment
 -- it exists (row level security on and forced, no policy, PUBLIC revoked; glue 0199 revokes the browser roles' table
 -- grants and grants the server role). But once a members line EXISTS, pre-4a code must not serve against this
--- database: its admin rooms overview and organization list would show the line. Safe to deploy the code first: the
+-- database: its admin rooms overview and organization list would show the line, and its notice pass would mail a
+-- pending members mention with a room link. Safe to deploy the code first: the
 -- server keeps 보내기 closed until `brand_room_thread_reads` and `brand_room_notices.channel` exist (a remembered probe,
 -- lib/brand-rooms/members-channel.ts `brandSendTablesReady`), so the table is created LAST in this file.
 --
 -- Rollback (docs/BRAND-PROJECT-SPINE.md §8.6): turn BRAND_SEND off first, then delete the members lines and the notices
 -- about them, BEFORE any pre-4a code serves against this database; only then can the old checks come back (the slice 4a
--- report has the statements). A project deleted by hand takes its members threads with it (0082's project key cascades).
+-- report has the statements). A project deleted by hand takes its members threads with it (0082's project key cascades),
+-- and with them their notices and read marks.
 --
 -- Pairs with glue 0199. Re-runnable: every statement is guarded or idempotent.
 
