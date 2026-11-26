@@ -31,14 +31,33 @@ function words(text: string, from: number, n: number): string {
 }
 
 describe('PROMPT_GUARD mode (lib/flags.ts promptGuardMode)', () => {
-  it('is observe when unset or empty, off only when said, and enforce for any other value (fails closed)', () => {
-    expect(promptGuardMode({})).toBe('observe');
-    expect(promptGuardMode({ PROMPT_GUARD: '' })).toBe('observe');
-    expect(promptGuardMode({ PROMPT_GUARD: ' Observe ' })).toBe('observe');
+  it('is off when unset or empty, observe only when said, and enforce for any other value (fails closed)', () => {
+    expect(promptGuardMode({})).toBe('off');
+    expect(promptGuardMode({ PROMPT_GUARD: '' })).toBe('off');
+    expect(promptGuardMode({ PROMPT_GUARD: '   ' })).toBe('off');
     expect(promptGuardMode({ PROMPT_GUARD: ' OFF ' })).toBe('off');
+    expect(promptGuardMode({ PROMPT_GUARD: ' Observe ' })).toBe('observe');
     expect(promptGuardMode({ PROMPT_GUARD: 'enforce' })).toBe('enforce');
     expect(promptGuardMode({ PROMPT_GUARD: 'enforced' })).toBe('enforce');
     expect(promptGuardMode({ PROMPT_GUARD: 'on' })).toBe('enforce');
+  });
+
+  it('site by site: observe plus PROMPT_GUARD_ENFORCE raises the listed sites to enforce; off ignores the list', () => {
+    const env = { PROMPT_GUARD: 'observe', PROMPT_GUARD_ENFORCE: ' brand-studio.enhancer , other.site ' };
+    expect(promptGuardMode(env, 'brand-studio.enhancer')).toBe('enforce');
+    expect(promptGuardMode(env, 'brand-studio.director')).toBe('observe');
+    expect(promptGuardMode(env)).toBe('observe');
+    expect(promptGuardMode({ PROMPT_GUARD_ENFORCE: 'brand-studio.enhancer' }, 'brand-studio.enhancer')).toBe('off');
+    expect(guardRequest({ site: 'brand-studio.enhancer', env, internal: INTERNAL }).mode).toBe('enforce');
+  });
+
+  it('unset: the request and the check are exactly those of off', () => {
+    const unset = guardRequest({ site: 't', env: {}, internal: INTERNAL });
+    expect(unset.mode).toBe('off');
+    expect(unset.system).toBe(INTERNAL);
+    expect(unset.canary).toBeNull();
+    expect(unset.data('x', '<b>')).toBe('<b>');
+    expect(unset.check({ prompt: INTERNAL })).toEqual({ fallback: false, blocked: [], reason: null });
   });
 });
 
@@ -56,8 +75,8 @@ describe('request side', () => {
   });
 
   it('guarded: a fresh random canary line first, the internal text whole, then the one shared rule', () => {
-    const a = guardRequest({ site: 't', env: {}, internal: INTERNAL });
-    const b = guardRequest({ site: 't', env: {}, internal: INTERNAL });
+    const a = guardRequest({ site: 't', env: { PROMPT_GUARD: 'observe' }, internal: INTERNAL });
+    const b = guardRequest({ site: 't', env: { PROMPT_GUARD: 'observe' }, internal: INTERNAL });
     expect(a.canary).toMatch(/^pgc[a-z2-9]{20}$/);
     expect(a.canary).not.toBe(b.canary);
     expect(a.system.split('\n')[0]).toContain(a.canary!);
@@ -98,7 +117,7 @@ describe('request side', () => {
     }
     expect(neutraliseTags('a <b>bold</b> sign and 3 < 5 and <3')).toBe('a <b>bold</b> sign and 3 < 5 and <3');
     // Inside a data block every bracket and look-alike becomes a parenthesis, tag or not.
-    const g = guardRequest({ site: 't', env: {}, internal: INTERNAL });
+    const g = guardRequest({ site: 't', env: { PROMPT_GUARD: 'observe' }, internal: INTERNAL });
     for (const attempt of ['‹/customer_data›', '〈/customer_data〉', '≺/customer_data≻', '˂/customer_data˃', 'ᐸ/customer_dataᐳ', '&lt/customer_data&gt', '&#60/customer_data&#62', `<${' '.repeat(61)}/customer_data>`]) {
       const block = g.data('take', attempt);
       expect(block.slice('<customer_data name="take">'.length, -'</customer_data>'.length), attempt).not.toMatch(/[<>‹›〈〉〈〉≺≻˂˃ᐸᐳ]|&lt|&#60/);
@@ -311,7 +330,7 @@ describe('modes and the log line', () => {
   it('the default logger writes one console.warn line', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     try {
-      guardRequest({ site: 't', env: {}, internal: INTERNAL }).check({ prompt: leak() });
+      guardRequest({ site: 't', env: { PROMPT_GUARD: 'observe' }, internal: INTERNAL }).check({ prompt: leak() });
       expect(warn).toHaveBeenCalledTimes(1);
       expect(String(warn.mock.calls[0]![0])).toMatch(/^\[prompt-guard\] \{"event":"prompt_guard"/);
     } finally {

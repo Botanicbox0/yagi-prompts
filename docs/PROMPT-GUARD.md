@@ -50,14 +50,30 @@ It does not protect against these:
 
 ## 2. Modes (`PROMPT_GUARD`)
 
+**Merged, the guard is off.** With `PROMPT_GUARD` unset (or empty) every request and every answer is byte for
+byte what it was before the guard (`tests/ai-guard/reference-sites-off.test.ts` and
+`reference-paths-off.test.ts` prove it against snapshots taken on origin/main before the change). It does
+nothing until someone sets the variable.
+
 | Value | Request | Answer |
 | --- | --- | --- |
-| `off` | Byte for byte as before the guard: no canary, no added line, no data blocks. | Never checked. |
-| `observe` (default when unset or empty) | Guarded (section 3). | Checked. A refusal writes one log line and the answer goes out as it is, **except an answer carrying the call's canary: that one is always replaced by the site's fallback.** |
+| unset, empty or `off` (the default) | Byte for byte as before the guard: no canary, no added line, no data blocks. | Never checked. |
+| `observe` | Guarded (section 3). | Checked. A refusal writes one log line and the answer goes out as it is, **except an answer carrying the call's canary: that one is always replaced by the site's fallback.** |
 | `enforce` | Guarded. | Checked. A refused field is replaced by the site's existing fallback, and a log line is written. |
 
-Any other non-empty value (a typo such as `enforced`) is read as `enforce`: the switch fails closed.
-`promptGuardMode(env)` reads the server environment the call site was given, so a test sets it per call.
+Any other non-empty value (a typo such as `enforced`) is read as `enforce`: once set, the switch fails closed.
+`PROMPT_GUARD_ENFORCE` lists site ids (comma-separated, for example `brand-studio.enhancer`) that run in
+`enforce` while `PROMPT_GUARD=observe`; with the guard off it changes nothing.
+`promptGuardMode(env, site)` reads the server environment the call site was given, so a test sets it per call.
+
+**Order to switch it on:**
+
+1. A pass with the local model (the coordinator's real-model pass): measure leaks and false positives per site.
+2. `PROMPT_GUARD=observe` in production. The requests change (canary line, shared rule, data blocks); answers
+   change only for a canary hit. Read the `[prompt-guard]` log lines for false positives per site, and add
+   the phrases models echo to that site's allow-list.
+3. Per site, `PROMPT_GUARD_ENFORCE=<site id>` once its log lines show no false positives. `PROMPT_GUARD=enforce`
+   only when every adopted site is ready.
 
 ## 3. The request side
 
@@ -239,7 +255,8 @@ The enhancer also records `prompt_guard_<reason>` as its internal `work.enhancer
 The 8-word run is the coordinator's decision. Every other threshold was set by measurement, at zero refusals:
 
 - **Stored answers of the reference sites.** `tests/ai-guard/measure/` records every check the adopted sites
-  make while the repository's tests run (`vitest.measure.config.ts`), then counts refusals per threshold
+  make while the repository's tests run (`vitest.measure.config.ts`; during a measurement an unset
+  `PROMPT_GUARD` is read as `observe`, so every answer is checked), then counts refusals per threshold
   (`grid.test.ts`). Run on 2026-11-26 over `tests/brand-studio` and the harness's benign controls: 73
   checks, 146 fields, from 16 test files. Refusals per threshold:
 

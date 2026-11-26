@@ -1,5 +1,5 @@
 /**
- * PROMPT_GUARD=off on the two product paths (docs/PROMPT-GUARD.md "Modes"): the free 설계 preview and the
+ * PROMPT_GUARD off (set to `off`, or unset: the default) on the two product paths (docs/PROMPT-GUARD.md "Modes"): the free 설계 preview and the
  * paid run (prepare writes `final_prompt`, the engine moves the job, the allowance is used). The snapshots
  * under `__snapshots__/off-paths/` were written by this file on origin/main 889dcc1e, before the guard
  * existed; with the guard off every request, answer, job column, output, provider request and allowance
@@ -25,6 +25,14 @@ describe('PROMPT_GUARD=off: preview and paid run are exactly what origin/main di
   it.each(PRODUCT_PATHS.map((p) => [p.id, p] as const))('%s', async (_id, path) => {
     const record: Record<string, unknown> = {};
     for (const kind of KINDS) record[kind] = await runProductPath(f, path, kind, ENV_OFF);
+    await expect(`${JSON.stringify(record, null, 2)}\n`).toMatchFileSnapshot(`./__snapshots__/off-paths/${path.id}.json`);
+  });
+});
+
+describe('PROMPT_GUARD unset (the default): preview and paid run are the same bytes as origin/main', () => {
+  it.each(PRODUCT_PATHS.map((p) => [p.id, p] as const))('%s', async (_id, path) => {
+    const record: Record<string, unknown> = {};
+    for (const kind of KINDS) record[kind] = await runProductPath(f, path, kind, { GEMINI_API_KEY: 'test-key' });
     await expect(`${JSON.stringify(record, null, 2)}\n`).toMatchFileSnapshot(`./__snapshots__/off-paths/${path.id}.json`);
   });
 });

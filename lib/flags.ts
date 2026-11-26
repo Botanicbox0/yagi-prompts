@@ -467,15 +467,20 @@ export type PromptGuardMode = 'off' | 'observe' | 'enforce';
 /**
  * The prompt guard (lib/ai-guard, docs/PROMPT-GUARD.md): keeps the internal text that steers our model
  * calls from reaching a customer. `PROMPT_GUARD` in the server environment:
- *   - `off`: nothing changes, byte for byte (no canary, no added line, no check);
- *   - `observe` (the default when unset or empty): the request is guarded and the answer checked; a refusal
- *     only writes one log line and the answer goes out, EXCEPT an answer carrying the call's canary, which is
- *     always replaced by the site's fallback;
+ *   - `off` (the default when unset or empty): nothing changes, byte for byte (no canary, no added line, no
+ *     check). Merged code runs like this until the variable is set;
+ *   - `observe`: the request is guarded and the answer checked; a refusal only writes one log line and the
+ *     answer goes out, EXCEPT an answer carrying the call's canary, which is always replaced by the site's
+ *     fallback;
  *   - `enforce`: a refusal answers with the site's existing fallback. Any other non-empty value (a typo such
- *     as `enforced`) is read as `enforce`: a security switch fails closed.
+ *     as `enforced`) is read as `enforce`: once someone has set the switch, it fails closed.
+ * Site by site: with `observe`, the call sites named in `PROMPT_GUARD_ENFORCE` (comma-separated site ids such
+ * as `brand-studio.enhancer`) run in `enforce`. With the guard off, the list changes nothing.
  */
-export function promptGuardMode(env: Record<string, string | undefined> = process.env): PromptGuardMode {
+export function promptGuardMode(env: Record<string, string | undefined> = process.env, site?: string): PromptGuardMode {
   const value = env.PROMPT_GUARD?.trim().toLowerCase() ?? '';
-  if (value === '' || value === 'observe') return 'observe';
-  return value === 'off' ? 'off' : 'enforce';
+  if (value === '' || value === 'off') return 'off';
+  if (value !== 'observe') return 'enforce';
+  const enforced = (env.PROMPT_GUARD_ENFORCE ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+  return site !== undefined && enforced.includes(site) ? 'enforce' : 'observe';
 }

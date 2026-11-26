@@ -167,7 +167,7 @@ export interface GuardRequestInput {
 }
 
 export function guardRequest(input: GuardRequestInput): GuardedRequest {
-  const mode = promptGuardMode(input.env);
+  const mode = promptGuardMode(input.env, input.site);
   const log = input.log ?? defaultGuardLog;
   if (mode === 'off') {
     return {
