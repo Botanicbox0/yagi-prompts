@@ -17,7 +17,10 @@
  * It is NOT the badge the 야기 팀과 rail shows today: that badge is the summary's `unread`, the total of unread messages
  * with no alerts, and it is still in the same answer (see the slice 3a contract and its open question).
  *
- * Mentions and files sent between members come with slice 4 (§8.4); nothing of them is here.
+ * Mentions and files sent between members (보내기, slice 4a, §8.4): while 보내기 is open for the organization
+ * (./members-channel.ts `brandSendOpenFor`) the bell also carries the caller's inbox threads (./send.ts `sendBellPart`) as
+ * `thread` lines, and its number adds their unread ones (`RoomSendBell`). While it is closed the bell is exactly the 3a
+ * bell, byte for byte.
  *
  * Opt-in only: `GET /api/brand-rooms/summary?organizationId=…&bell=1` (the route) asks for it, and only then does the
  * summary carry `bell`. Every other caller of the summary gets exactly what it got before. Even when asked, the bell is
@@ -37,6 +40,8 @@ import { scopedHref } from '@/lib/brands/workspace/selection';
 import { brandStudioV2Open } from '@/lib/flags';
 import type { RoomSeat } from './access';
 import { GENERAL_CHANNEL } from './message-contracts';
+import { sendBellPart } from './send';
+import { sendThreadHref, type SendFileCard, type SendInboxView, type SendThreadSummary } from './send-contracts';
 import { storyboardCoverUrls } from './storyboards';
 
 type Env = Record<string, string | undefined>;
@@ -89,18 +94,71 @@ export interface RoomBell {
   more: boolean;
 }
 
-/** The rooms summary, with `bell` only when the caller asked for it and may have it. */
+/** The rooms summary, with `bell` only when the caller asked for it and may have it (slice 3a's shape). */
 export type RoomSummaryWithBell = RoomSummary & { bell?: RoomBell };
+
+/**
+ * A line of the bell about a members thread (보내기, slice 4a; docs/BRAND-PROJECT-SPINE.md §8.4). Present only while
+ * 보내기 is open for the organization. Every field of `RoomBellItem` is there with the same meaning, so a 3a client
+ * draws it as a conversation line; the extra fields are for the 4b screen.
+ */
+export interface RoomBellThreadItem extends Omit<RoomBellItem, 'kind'> {
+  /** `thread:<root id>`. */
+  id: string;
+  kind: 'thread';
+  /** The file's project while members are shown it, else null (an unfiled file, or a project that cannot take work). */
+  projectId: string | null;
+  projectTitle: string | null;
+  title: null;
+  /** The thread's newest line, spaces folded, at most `SEND_LIMITS.lineChars` characters. */
+  line: string;
+  version: null;
+  openNotes: 0;
+  unreadCount: 0;
+  /** The thread's last activity. */
+  at: string;
+  /** Counted in `RoomBell.unread`: a line by someone else is newer than the caller's mark on this thread. */
+  unread: boolean;
+  /** The file's thumbnail (a picture's own address when it has none); null for a deleted file, a sound or a film with no still. */
+  thumbUrl: string | null;
+  /** `/brand/inbox?organizationId=<org>&thread=<root id>` (./send-contracts.ts `sendThreadHref`). */
+  href: string;
+  rootId: string;
+  /** The caller is named in the thread (the "멘션" mark). */
+  mentioned: boolean;
+  /** Who wrote the newest line. */
+  actorName: string | null;
+  file: SendFileCard;
+}
+
+/** The bell while 보내기 is open: today's fields, the thread lines among `items`, the view and the mentions count. */
+export interface RoomSendBell extends Omit<RoomBell, 'items'> {
+  items: Array<RoomBellItem | RoomBellThreadItem>;
+  /** Which lines `items` holds: `all`, or `mentions` (only the threads that name the caller). */
+  view: SendInboxView;
+  /** Unread threads that name the caller (the "멘션" count inside the bell's window; never the badge). */
+  mentionsUnread: number;
+}
+
+/** The rooms summary as slice 4a answers it: `bell` is `RoomBell` while 보내기 is closed, `RoomSendBell` while open. */
+export type RoomSummaryWithSendBell = RoomSummary & { bell?: RoomBell | RoomSendBell };
 
 /** What the route hands the summary when the request opts in (`&bell=1`). */
 export interface RoomBellRequest {
   media: StudioMediaStore;
   env?: Env;
+  /** `&view=mentions`: only the thread lines that name the caller. Ignored while 보내기 is closed. */
+  view?: SendInboxView;
 }
 
 /** `?bell=1` exactly; anything else (absent, `true`, `0`) is not an opt-in. */
 export function bellRequested(params: URLSearchParams): boolean {
   return params.get('bell') === '1';
+}
+
+/** `&view=mentions` exactly; anything else is the full list. */
+export function bellViewOf(params: URLSearchParams): SendInboxView {
+  return params.get('view') === 'mentions' ? 'mentions' : 'all';
 }
 
 /**
@@ -134,6 +192,16 @@ const conversationHref = (projectId: string | null, organizationId: string): str
  * `storyboard:<id>` / `review:<id>` to the picture, when there is one.
  */
 export function roomBellOf(summary: Pick<RoomSummary, 'channels' | 'alerts'>, organizationId: string, thumbs: ReadonlyMap<string, string | null> = new Map()): RoomBell {
+  const lines = roomBellLines(summary, organizationId, thumbs);
+  return {
+    unread: lines.filter((line) => line.unread).length,
+    items: lines.slice(0, ROOM_BELL_LIMITS.items),
+    more: lines.length > ROOM_BELL_LIMITS.items,
+  };
+}
+
+/** Every line of the 3a bell from a summary, newest first (by `at`, then `id`), before the cut. */
+function roomBellLines(summary: Pick<RoomSummary, 'channels' | 'alerts'>, organizationId: string, thumbs: ReadonlyMap<string, string | null>): RoomBellItem[] {
   const lines: RoomBellItem[] = [];
   for (const alert of summary.alerts ?? []) {
     lines.push({
@@ -171,11 +239,7 @@ export function roomBellOf(summary: Pick<RoomSummary, 'channels' | 'alerts'>, or
     });
   }
   lines.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-  return {
-    unread: lines.filter((line) => line.unread).length,
-    items: lines.slice(0, ROOM_BELL_LIMITS.items),
-    more: lines.length > ROOM_BELL_LIMITS.items,
-  };
+  return lines;
 }
 
 /**
@@ -185,7 +249,7 @@ export function roomBellOf(summary: Pick<RoomSummary, 'channels' | 'alerts'>, or
  * at most the summary's 20 alerts). All of it under one savepoint: if any of it fails, the answer is the plain summary
  * (null here), never a failed summary, exactly as the summary treats its own alerts.
  */
-export async function roomBellFor(sql: SqlRunner, seat: RoomSeat, summary: Pick<RoomSummary, 'channels' | 'alerts'>, request: RoomBellRequest): Promise<RoomBell | null> {
+export async function roomBellFor(sql: SqlRunner, seat: RoomSeat, summary: Pick<RoomSummary, 'channels' | 'alerts'>, request: RoomBellRequest): Promise<RoomBell | RoomSendBell | null> {
   if (seat.role === 'guest') return null;
   await sql.query('savepoint brand_room_bell');
   try {
@@ -198,8 +262,9 @@ export async function roomBellFor(sql: SqlRunner, seat: RoomSeat, summary: Pick<
   }
 }
 
-async function bellFrom(sql: SqlRunner, seat: RoomSeat, summary: Pick<RoomSummary, 'channels' | 'alerts'>, request: RoomBellRequest): Promise<RoomBell | null> {
-  if (!(await bellOpenFor(sql, seat, request.env ?? process.env))) return null;
+async function bellFrom(sql: SqlRunner, seat: RoomSeat, summary: Pick<RoomSummary, 'channels' | 'alerts'>, request: RoomBellRequest): Promise<RoomBell | RoomSendBell | null> {
+  const env = request.env ?? process.env;
+  if (!(await bellOpenFor(sql, seat, env))) return null;
   const alerts = summary.alerts ?? [];
   const ids = (kind: RoomAlertItem['kind']) => alerts.filter((alert) => alert.kind === kind).map((alert) => alert.targetId);
   const boards = await storyboardCoverUrls(sql, request.media, seat.organizationId, ids('storyboard'));
@@ -209,5 +274,62 @@ async function bellFrom(sql: SqlRunner, seat: RoomSeat, summary: Pick<RoomSummar
     const found = (alert.kind === 'storyboard' ? boards : reviews).get(alert.targetId.toLowerCase());
     thumbs.set(alert.id, found ?? null);
   }
-  return roomBellOf(summary, seat.organizationId, thumbs);
+  const today = roomBellOf(summary, seat.organizationId, thumbs);
+  // 보내기 (slice 4a): while it is closed for the organization, the bell is exactly the line above, byte for byte.
+  const view = request.view === 'mentions' ? 'mentions' : 'all';
+  const send = await sendBellPart(sql, request.media, seat, { view, limit: ROOM_BELL_LIMITS.items, env });
+  if (!send) return today;
+  return withThreads(today, summary, seat.organizationId, thumbs, send, view);
+}
+
+/** A members thread as a bell line. */
+export function threadBellLine(thread: SendThreadSummary, organizationId: string): RoomBellThreadItem {
+  return {
+    id: `thread:${thread.rootId}`,
+    kind: 'thread',
+    projectId: thread.file.project?.id ?? null,
+    projectTitle: thread.file.project?.title ?? null,
+    title: null,
+    line: thread.latest.line,
+    version: null,
+    openNotes: 0,
+    unreadCount: 0,
+    at: thread.lastActivityAt,
+    unread: thread.unread,
+    thumbUrl: thread.file.thumbUrl ?? (thread.file.kind === 'image' ? thread.file.url : null),
+    href: sendThreadHref(organizationId, thread.rootId),
+    rootId: thread.rootId,
+    mentioned: thread.mentioned,
+    actorName: thread.latest.authorName,
+    file: thread.file,
+  };
+}
+
+/**
+ * The bell with 보내기 open (docs/BRAND-PROJECT-SPINE.md §8.4; the coordinator's decision 13). The number is today's
+ * counted lines plus the unread threads of the caller's inbox; the list is today's lines and the newest inbox threads
+ * (read ones too, as today's conversation lines), newest first, cut at `ROOM_BELL_LIMITS.items`. The "멘션" view lists
+ * only the threads that name the caller; the number stays the bell's (the rail's 알림함 row reads the same answer and
+ * must not change with the view).
+ */
+function withThreads(
+  today: RoomBell,
+  summary: Pick<RoomSummary, 'channels' | 'alerts'>,
+  organizationId: string,
+  thumbs: ReadonlyMap<string, string | null>,
+  send: { threads: SendThreadSummary[]; more: boolean; unread: number; mentionsUnread: number },
+  view: SendInboxView,
+): RoomSendBell {
+  const threadLines = send.threads.map((thread) => threadBellLine(thread, organizationId));
+  // Every line of today's bell, uncut, so the merged cut is right (today's `items` are already cut at the same limit).
+  const todayLines = view === 'all' ? roomBellLines(summary, organizationId, thumbs) : [];
+  const lines: Array<RoomBellItem | RoomBellThreadItem> = [...todayLines, ...threadLines];
+  lines.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  return {
+    unread: today.unread + send.unread,
+    items: lines.slice(0, ROOM_BELL_LIMITS.items),
+    more: lines.length > ROOM_BELL_LIMITS.items || send.more,
+    view,
+    mentionsUnread: send.mentionsUnread,
+  };
 }

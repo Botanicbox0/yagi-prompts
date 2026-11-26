@@ -42,9 +42,12 @@ import { dropUnreferencedStudioKeys } from '@/lib/brand-studio/physical-cleanup'
 import { publicNotesOnly, teamNotesReady } from '@/lib/brand-studio/review-visibility';
 import type { RoomAlertItem } from '@/components/brand-rooms/seams';
 import { canTalkIn, requireRoomProject, RoomDenied, roomSeat, type RoomSeat } from './access';
-import { roomBellFor, type RoomBellRequest, type RoomSummaryWithBell } from './bell';
+import { roomBellFor, type RoomBellRequest, type RoomSummaryWithSendBell } from './bell';
 import type { RoomEventKind, RoomRef } from './events';
 import { enqueueNotices } from './notices';
+import { roomAuthorName } from './names';
+import { runSendOperation } from './send';
+import { isSendOperation, type SendResult } from './send-contracts';
 import {
   AttachmentCompleteSchema,
   AttachmentReserveSchema,
@@ -202,14 +205,7 @@ const MESSAGE_SELECT = `
     from brand_room_messages m
     left join profiles p on p.id = m.author_id`;
 
-/** A display name: the profile's own name, else (brand side only) the part of the address before the @. */
-export function roomAuthorName(role: 'brand' | 'studio', displayName: string | null, email: string | null): string | null {
-  const name = displayName?.replace(/\s+/g, ' ').trim();
-  if (name) return name.slice(0, 60);
-  if (role === 'studio') return null;
-  const local = email?.split('@')[0]?.trim();
-  return local ? local.slice(0, 60) : null;
-}
+export { roomAuthorName };
 
 interface StoredAttachment {
   key: string;
@@ -1163,14 +1159,19 @@ export function roomNoticeBody(
 /* ------------------------------------------------------------ brand writes */
 
 export interface RoomOperationOutcome {
-  result: RoomOperationResult;
-  /** Set when the team should hear about it (a brand member's new line). */
+  result: RoomOperationResult | SendResult;
+  /** Set when the team should hear about it (a brand member's new line on a team channel; never a members line). */
   notice: RoomNotice | null;
 }
 
-/** One `POST /api/brand-rooms/messages` operation. Unknown names are `invalid`. */
+/**
+ * One `POST /api/brand-rooms/messages` operation. Unknown names are `invalid`. The `send.*` names (보내기, ./send.ts) are
+ * answered by the members channel's own module, which answers `invalid` too while 보내기 is closed for the organization;
+ * they never produce a team notice.
+ */
 export async function runRoomOperation(deps: RoomMessageDeps, viewer: Viewer, operation: unknown, input: unknown): Promise<RoomOperationOutcome> {
-  const quiet = (result: RoomOperationResult): RoomOperationOutcome => ({ result, notice: null });
+  const quiet = (result: RoomOperationResult | SendResult): RoomOperationOutcome => ({ result, notice: null });
+  if (isSendOperation(operation)) return quiet(await runSendOperation({ sql: deps.sql, media: deps.media }, viewer, operation, input));
   if (!isRoomOperation(operation)) return quiet(failure('invalid'));
   // The gate before any input detail is judged: a closed organization gets the same 404 whatever it sent.
   const organizationId = (input as { organizationId?: unknown } | null)?.organizationId;
@@ -1403,7 +1404,7 @@ export async function loadRoomSummary(
   viewer: Viewer,
   organizationId: string,
   options: { bell?: RoomBellRequest } = {},
-): Promise<RoomSummaryWithBell | RoomFailure> {
+): Promise<RoomSummaryWithSendBell | RoomFailure> {
   if (!UUID.test(organizationId)) return failure('invalid');
   return guard(() =>
     deps.sql.transaction(async (sql) => {
@@ -1427,7 +1428,8 @@ export async function loadRoomSummary(
 
 /**
  * Messages in each cut's or item's thread, by exact `ref_key` (`storyboard:<board>:<frame>`, …). For slice S
- * (a cut's thread count) and slice R; the caller has already checked the seat for this organization.
+ * (a cut's thread count) and slice R; the caller has already checked the seat for this organization. Team channels only:
+ * a members line (보내기) is never counted here, whatever key a caller passes.
  */
 export async function refThreadCounts(sql: SqlRunner, organizationId: string, refKeys: readonly string[]): Promise<Record<string, number>> {
   const keys = [...new Set(refKeys.map((k) => k.toLowerCase()))];
@@ -1435,7 +1437,8 @@ export async function refThreadCounts(sql: SqlRunner, organizationId: string, re
   const rows = (
     await sql.query<{ ref_key: string; n: number }>(
       `select ref_key, count(*)::int as n from brand_room_messages
-        where organization_id = $1 and ref_key = any($2::text[]) and deleted_at is null and kind = 'text' group by ref_key`,
+        where organization_id = $1 and ref_key = any($2::text[]) and deleted_at is null and kind = 'text'
+          and channel not like 'members%' group by ref_key`,
       [organizationId, keys],
     )
   ).rows;
@@ -1666,7 +1669,9 @@ export async function staffRoomOverview(
              from brand_room_messages m0
              join brand_organizations g on g.id = m0.organization_id
              left join brand_projects p on p.id = m0.project_id
-            where m0.project_id is null or p.client_visible
+            where (m0.project_id is null or p.client_visible)
+              -- The team's channels only: 'general' and a project's own. A members channel (보내기, 0200) is never the team's.
+              and (m0.channel = 'general' or m0.channel = m0.project_id::text)
             group by m0.organization_id, g.name, m0.channel, m0.project_id, p.title
             order by max(m0.created_at) desc
             limit 300`,
