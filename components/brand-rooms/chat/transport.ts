@@ -19,7 +19,20 @@ import {
   type RoomThreadPage,
 } from "@/lib/brand-rooms/message-contracts";
 import { isUnapprovedUploadReason, type UploadLimitReason } from "@/lib/brands/upload-limits-format";
-import type { RoomSummaryWithBell } from "@/lib/brand-rooms/bell";
+import type { RoomSummaryWithBell, RoomSummaryWithSendBell } from "@/lib/brand-rooms/bell";
+import type {
+  SendFileRef,
+  SendFileThreads,
+  SendInboxPage,
+  SendInboxView,
+  SendPeople,
+  SendPostInput,
+  SendPosted,
+  SendReadAllDone,
+  SendReadDone,
+  SendReplyInput,
+  SendThreadPage,
+} from "@/lib/brand-rooms/send-contracts";
 
 export type Fail = { ok: false; code: RoomErrorCode | "offline"; reason?: UploadLimitReason };
 export type LoadResult = RoomStreamPage | RoomThreadPage | RoomRefPage | Fail;
@@ -228,4 +241,79 @@ export function adminTransport(organizationId: string): ChatTransport {
     // No `read`: opening a conversation does not clear what waits for the team (확인함 or an answer does).
     refHref: adminRefHref,
   };
+}
+
+/* ------------------------------------------------------------------ 보내기 (slice 4a) */
+
+/**
+ * 보내기's client (docs/BRAND-PROJECT-SPINE.md §8; lib/brand-rooms/send-contracts.ts). Every method posts one `send.*`
+ * operation to `/api/brand-rooms/messages` for this organization and answers the server's shape, or `Fail` with the
+ * server's code (`invalid` also while 보내기 is closed for the organization) or `offline`.
+ */
+export interface SendTransport {
+  organizationId: string;
+  /** A new thread about one file; the server takes the project and the channel from the file. */
+  post(input: Omit<SendPostInput, "organizationId">): Promise<SendPosted | Fail>;
+  /** A reply in a thread. */
+  reply(input: Omit<SendReplyInput, "organizationId">): Promise<SendPosted | Fail>;
+  /** One thread (marks it read for the caller unless `markRead: false`). */
+  thread(rootId: string, options?: { markRead?: boolean }): Promise<SendThreadPage | Fail>;
+  /** The threads about one file, newest first, and its card. */
+  file(file: SendFileRef): Promise<SendFileThreads | Fail>;
+  /** One page of "나에게 온 것" (`view: 'mentions'` for the "멘션" view); pass the previous page's `next` as `cursor`. */
+  inbox(options?: { view?: SendInboxView; cursor?: string | null }): Promise<SendInboxPage | Fail>;
+  /** Mark one thread read up to `at` (default: now). */
+  read(rootId: string, at?: string | null): Promise<SendReadDone | Fail>;
+  /** "모두 읽음". */
+  readAll(): Promise<SendReadAllDone | Fail>;
+  /** Who may be named with `@`. */
+  people(): Promise<SendPeople | Fail>;
+}
+
+export function sendTransport(organizationId: string, fetcher: typeof fetch = (...args) => fetch(...args)): SendTransport {
+  const post = async <T,>(operation: string, input: Record<string, unknown>): Promise<T | Fail> => {
+    try {
+      const response = await fetcher("/api/brand-rooms/messages", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json", accept: "application/json" },
+        body: JSON.stringify({ operation, input: { organizationId, ...input } }),
+      });
+      const body = (await response.json().catch(() => null)) as Record<string, unknown> | null;
+      return body && body.ok === true ? (body as unknown as T) : failOf(body ?? { code: response.status === 401 ? "sign_in_required" : response.status === 404 ? "not_found" : "failed" });
+    } catch {
+      return { ok: false, code: "offline" };
+    }
+  };
+  return {
+    organizationId,
+    post: (input) => post<SendPosted>("send.post", { ...input }),
+    reply: (input) => post<SendPosted>("send.reply", { ...input }),
+    thread: (rootId, options) => post<SendThreadPage>("send.thread", options?.markRead === false ? { rootId, markRead: false } : { rootId }),
+    file: (file) => post<SendFileThreads>("send.file", { file }),
+    inbox: (options) => post<SendInboxPage>("send.inbox", { ...(options?.view ? { view: options.view } : {}), ...(options?.cursor ? { cursor: options.cursor } : {}) }),
+    read: (rootId, at) => post<SendReadDone>("send.read", at ? { rootId, at } : { rootId }),
+    readAll: () => post<SendReadAllDone>("send.read_all", {}),
+    people: () => post<SendPeople>("send.people", {}),
+  };
+}
+
+/**
+ * The bell's read for the 4b screen (`loadRoomBell` with the members threads): the same `&bell=1` answer, `bell` typed as
+ * it is while 보내기 is open (`RoomSendBell`, thread lines among `items`) or closed (`RoomBell`). `view: 'mentions'` asks
+ * for the "멘션" view; the number (`bell.unread`) is the same in both views.
+ */
+export async function loadSendBell(organizationId: string, view: SendInboxView = "all", fetcher: typeof fetch = (...args) => fetch(...args)): Promise<RoomSummaryWithSendBell | Fail> {
+  try {
+    const response = await fetcher(`/api/brand-rooms/summary?organizationId=${encodeURIComponent(organizationId)}&bell=1${view === "mentions" ? "&view=mentions" : ""}`, {
+      cache: "no-store",
+      credentials: "same-origin",
+      headers: { accept: "application/json" },
+    });
+    const body = (await response.json().catch(() => null)) as Record<string, unknown> | null;
+    if (response.ok && body && body.ok === true) return body as unknown as RoomSummaryWithSendBell;
+    return failOf(body ?? { code: response.status === 401 ? "sign_in_required" : response.status === 404 ? "not_found" : "failed" });
+  } catch {
+    return { ok: false, code: "offline" };
+  }
 }

@@ -22,7 +22,10 @@ import { TEAM_PROJECTS } from '@/lib/brands/project-origin';
 type Cls = 'a' | 'b' | 'c' | 'e';
 type Use = [match: string, cls: Cls, why: string];
 
-const SPINE = new Set(['lib/brand-studio/brand-projects.ts', 'lib/brand-studio/brand-project-files.ts']);
+// lib/brand-rooms/members-channel.ts is 보내기's (slice 4a): the members channel belongs to the organization's active
+// members only (`sendSeat`, `membersAudience`), never the team side, and it names the projects members are shown with the
+// spine's own `SELECTABLE_PROJECTS`, self projects included (tests/brand-rooms/send/leaks.test.ts pins the team side).
+const SPINE = new Set(['lib/brand-studio/brand-projects.ts', 'lib/brand-studio/brand-project-files.ts', 'lib/brand-rooms/members-channel.ts']);
 const COMMENTS_ONLY = new Set([
   'lib/brand-studio/contracts.ts',
   'lib/brands/workspace/campaign-terms.ts',
