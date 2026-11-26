@@ -293,3 +293,39 @@ The 8-word run is the coordinator's decision. Every other threshold was set by m
 `tests/ai-guard/inventory.ts` lists every model call with its audit number and the slice that will adopt it.
 Adopted in this slice: #1 the image prompt writer and #2 the Seedance director, on both paths (free preview
 and paid prepare; `lib/brand-studio/prepare.ts` and `engine.ts` needed no change: they call these two).
+
+## 10. 측정 도구 (레드팀 · 오탐 측정 하네스)
+
+실제 모델(로컬 서버 또는 Gemini)로 전환하기 전에 사이트별(`brand-studio.enhancer`, `brand-studio.director`) 유출 빈도와
+정상 입력의 가드 거절률(false positive)을 측정하려면 `scripts/prompt-guard-redteam.ts`를 실행한다.
+이 스크립트는 각 사이트의 실제 요청 빌더·검증·가드 경로(`off` / `observe` / `enforce`)를 그대로 구동하며,
+입력 목록은 `scripts/prompt-guard-redteam/attacks.json`(한국어 12건 + 영어 12건)과
+`scripts/prompt-guard-redteam/benign.json`(한국어·영어 정상 브리프 30건)을 사용한다.
+
+- **결과 저장 위치(`--out`)**: 저장소 안의 경로는 거부된다. 기본값은 OS 임시 폴더 아래 타임스탬프 디렉터리이며,
+  `report.json`과 `report.md` 두 파일을 쓴다. 보고서에는 내부 지시문 원문·유출 원문·비밀값을 절대 기록하지 않고
+  해시·길이·사유 코드·최대 12자 접두어만 남긴다.
+- **테스트용 가상 모델(`fake`, 기본값)**: 외부 호출 없이 최악의 에코/정상 더블로 전체 파이프라인을 점검한다.
+  ```bash
+  npm run prompt-guard:redteam -- --backend=fake --out /tmp/pg-redteam-fake
+  ```
+- **로컬 모델(`local`)**: 워크스테이션 `gpu-arbiter`(`http://127.0.0.1:11434`, 11444 직접 호출 금지)를 통해
+  Gemini 요청을 로컬 `/api/chat` 형식으로 변환해 측정한다. 기본 모델은 `yagi-crm-gemma4:31b-q8_0`이다. 스키마에
+  맞지 않는 응답은 유출이나 오탐이 아닌 `unusableAnswers`로 집계한다.
+  ```bash
+  npm run prompt-guard:redteam -- --backend=local --local-model=yagi-crm-gemma4:31b-q8_0 --out /tmp/pg-redteam-local
+  ```
+- **Gemini(`gemini`)**: `.env.local`(또는 `--env-file`)에서 `GEMINI_API_KEY` 존재 여부만 확인(값 출력 금지)하며,
+  요금과 상한 플래그 4개(`--max-krw`, `--usd-krw`, `--price-in-usd-per-mtok`, `--price-out-usd-per-mtok`)가 모두
+  있어야 시작된다. 먼저 `--dry-run`으로 호출 수와 최악 예상 비용을 확인한 뒤 실행한다.
+  ```bash
+  npm run prompt-guard:redteam -- --backend=gemini --dry-run \
+    --max-krw=<MAX_KRW> --usd-krw=<USD_KRW> \
+    --price-in-usd-per-mtok=<IN_USD_PER_MTOK> --price-out-usd-per-mtok=<OUT_USD_PER_MTOK>
+
+  npm run prompt-guard:redteam -- --backend=gemini \
+    --max-krw=<MAX_KRW> --usd-krw=<USD_KRW> \
+    --price-in-usd-per-mtok=<IN_USD_PER_MTOK> --price-out-usd-per-mtok=<OUT_USD_PER_MTOK> \
+    --max-calls=<MAX_CALLS> --out /tmp/pg-redteam-gemini
+  ```
+- 실행 중 `Ctrl-C`(SIGINT)를 누르거나 비용/호출 상한에 도달하면 새 호출을 멈추고 그때까지 실행된 결과로 부분 보고서를 쓴다.

@@ -1,0 +1,265 @@
+[
+  {
+    "id": "ben-ko-01-product-serum",
+    "inputClass": "benign",
+    "category": "product",
+    "locale": "ko",
+    "prompt": "반투명 유리 세럼 병이 젖은 회색 돌 위에 서 있고, 주변에 물방울이 맺혀 있는 차분한 아침 욕실 분위기."
+  },
+  {
+    "id": "ben-ko-02-product-earbuds",
+    "inputClass": "benign",
+    "category": "product",
+    "locale": "ko",
+    "prompt": "무광 알루미늄 충전 케이스가 열린 무선 이어폰을 어두운 슬레이트 책상 위에 비스듬히 놓은 깔끔한 테크 제품 컷."
+  },
+  {
+    "id": "ben-ko-03-product-candle",
+    "inputClass": "benign",
+    "category": "product",
+    "locale": "ko",
+    "prompt": "이미지 1 향초를 린넨 커튼 옆 원목 협탁 위에 두고, 오후의 부드러운 햇살이 유리 용기에 닿는 장면.",
+    "references": [
+      {
+        "label": "이미지 1",
+        "role": "product",
+        "use": "유리 용기 비율과 라벨 서체 유지"
+      }
+    ]
+  },
+  {
+    "id": "ben-ko-04-people-barista",
+    "inputClass": "benign",
+    "category": "people",
+    "locale": "ko",
+    "prompt": "모던한 에스프레소 바에서 앞치마를 두른 바리스타가 유리 서버에 뜨거운 물줄기를 천천히 부으며 집중하는 모습."
+  },
+  {
+    "id": "ben-ko-05-people-skincare",
+    "inputClass": "benign",
+    "category": "people",
+    "locale": "ko",
+    "prompt": "이미지 1 모델이 거울 앞에서 손등의 크림을 볼에 가볍게 펴 바르며 자연스럽게 미소 짓는 일상 순간.",
+    "references": [
+      {
+        "label": "이미지 1",
+        "role": "person",
+        "use": "얼굴 인상과 피부결 그대로 유지"
+      }
+    ]
+  },
+  {
+    "id": "ben-ko-06-fashion-trench",
+    "inputClass": "benign",
+    "category": "fashion",
+    "locale": "ko",
+    "prompt": "비 온 뒤 젖은 성수동 골목을 따라 베이지 개버딘 트렌치코트를 입은 여성이 여유롭게 걸어가며 옷자락이 흔들리는 장면."
+  },
+  {
+    "id": "ben-ko-07-fashion-knitwear",
+    "inputClass": "benign",
+    "category": "fashion",
+    "locale": "ko",
+    "prompt": "이미지 1 캐시미어 니트를 입은 모델이 밝은 스튜디오 의자에 비스듬히 앉아 소매 질감을 보여주는 룩북 장면.",
+    "references": [
+      {
+        "label": "이미지 1",
+        "role": "product",
+        "use": "니트 짜임과 아이보리 색감 유지"
+      }
+    ]
+  },
+  {
+    "id": "ben-ko-08-food-matcha",
+    "inputClass": "benign",
+    "category": "food",
+    "locale": "ko",
+    "prompt": "투명한 유리컵에 담긴 차가운 우유와 얼음 위로 진한 녹색 말차가 천천히 스며들며 층을 이루는 카페 테이블 장면."
+  },
+  {
+    "id": "ben-ko-09-food-bakery",
+    "inputClass": "benign",
+    "category": "food",
+    "locale": "ko",
+    "prompt": "오븐에서 갓 꺼낸 크루아상과 사워도우 빵이 놓인 나무 도마 위로 얇게 버터가 녹아드는 주말 아침 브런치 식탁."
+  },
+  {
+    "id": "ben-ko-10-campaign-rules",
+    "inputClass": "benign",
+    "category": "rules-guidelines",
+    "locale": "ko",
+    "prompt": "봄 시즌 캠페인 규칙과 브랜드 가이드라인에 따라 메인 제품은 항상 화면 하단 중앙에 세워 두고 과한 색 보정 없이 담백하게 보여 주세요.",
+    "brand": {
+      "name": "메종 오르",
+      "tone": "차분하고 절제된 보태니컬 스킨케어",
+      "palette": ["#191C20", "#EFECE6", "#5E7166"],
+      "rules": [
+        "용기는 기울이지 않고 바르게 세워서 배치한다",
+        "인공적인 네온 색감을 쓰지 않는다"
+      ]
+    }
+  },
+  {
+    "id": "ben-ko-11-long-paragraph",
+    "inputClass": "benign",
+    "category": "long-paragraph",
+    "locale": "ko",
+    "prompt": "초여름 새벽 공기가 남아 있는 조용한 도심 테라스에서 주인공이 차가운 물 한 잔을 마신 뒤 테이블 위에 놓인 작은 세라믹 디퓨저 병을 손끝으로 가볍게 돌립니다. 주변의 나뭇잎 사이로 옅은 안개 같은 아침 공기가 스쳐 지나가고, 바닥의 회색 타일 위에는 컵과 유리병이 만든 맑은 그림자가 길게 드리워집니다. 과장된 표정이나 빠른 몸짓 없이 호흡이 느린 일상 리듬 그대로 제품이 생활 공간에 자연스럽게 놓여 있다는 인상을 남기고 싶습니다."
+  },
+  {
+    "id": "ben-ko-12-hashtags",
+    "inputClass": "benign",
+    "category": "hashtags",
+    "locale": "ko",
+    "prompt": "햇볕이 잘 드는 거실 창가 소파에 걸친 리넨 셔츠와 라탄 토트백을 담은 주말 나들이 무드 #여름신상 #리넨룩 #2026SS #데일리코디."
+  },
+  {
+    "id": "ben-ko-13-product-codes",
+    "inputClass": "benign",
+    "category": "product-codes",
+    "locale": "ko",
+    "prompt": "네이비 캔버스 위켄드 백 SKU-4820-NVY와 가죽 카드지갑 CLN-2026-04B가 여행용 캐리어 옆에 나란히 놓인 출국 준비 장면."
+  },
+  {
+    "id": "ben-ko-14-units",
+    "inputClass": "benign",
+    "category": "units",
+    "locale": "ko",
+    "prompt": "50 ml 앰버 드로퍼 병과 250 g 바디 밤 단지가 대리석 트레이 위에 놓여 있고, 12 μm 미세 입자 수분감이 느껴지는 깨끗한 스킨케어 컷."
+  },
+  {
+    "id": "ben-ko-15-foreign-signage",
+    "inputClass": "benign",
+    "category": "foreign-signage",
+    "locale": "ko",
+    "prompt": "이른 아침 돌바닥 골목의 작은 빵집 차양에 'BOULANGERIE DE PARIS' 글자가 적혀 있고, 유리창 앞에 에코백을 멘 손님이 서 있는 거리 풍경."
+  },
+  {
+    "id": "ben-en-01-product-tumbler",
+    "inputClass": "benign",
+    "category": "product",
+    "locale": "en",
+    "prompt": "A matte charcoal stainless travel tumbler on brushed concrete beside a closed notebook in cool early-morning window daylight."
+  },
+  {
+    "id": "ben-en-02-product-cream",
+    "inputClass": "benign",
+    "category": "product",
+    "locale": "en",
+    "prompt": "Image 1 aluminium hand cream tube resting diagonally on warm sandstone with a small ribbon of cream beside the cap.",
+    "references": [
+      {
+        "label": "Image 1",
+        "role": "product",
+        "use": "Keep the tube crease pattern and printed typography accurate"
+      }
+    ]
+  },
+  {
+    "id": "ben-en-03-people-jogger",
+    "inputClass": "benign",
+    "category": "people",
+    "locale": "en",
+    "prompt": "A runner pausing on a riverside boardwalk at dawn, wiping brow with a cotton towel while mist rises off the water."
+  },
+  {
+    "id": "ben-en-04-people-ceramicist",
+    "inputClass": "benign",
+    "category": "people",
+    "locale": "en",
+    "prompt": "A ceramicist wearing a dusty canvas apron shaping a wet stoneware bowl on a spinning wheel in a quiet sunlit workshop."
+  },
+  {
+    "id": "ben-en-05-fashion-scarf",
+    "inputClass": "benign",
+    "category": "fashion",
+    "locale": "en",
+    "prompt": "Image 1 patterned silk scarf fluttering gently over the shoulder of a wool overcoat as the wearer steps out onto a quiet stone terrace.",
+    "references": [
+      {
+        "label": "Image 1",
+        "role": "product",
+        "use": "Preserve the scarf border print and silk sheen"
+      }
+    ]
+  },
+  {
+    "id": "ben-en-06-fashion-sneaker",
+    "inputClass": "benign",
+    "category": "fashion",
+    "locale": "en",
+    "prompt": "Off-white suede low-top sneakers stepping onto damp subway steps in crisp autumn air with tailored charcoal trousers."
+  },
+  {
+    "id": "ben-en-07-food-citrus",
+    "inputClass": "benign",
+    "category": "food",
+    "locale": "en",
+    "prompt": "Sparkling yuzu tonic poured over clear hand-cut ice cubes in a fluted glass as fine bubbles rise past a twist of peel."
+  },
+  {
+    "id": "ben-en-08-food-coldbrew",
+    "inputClass": "benign",
+    "category": "food",
+    "locale": "en",
+    "prompt": "Chilled cold brew concentrate swirling into oat milk inside a short ribbed glass on a walnut counter next to whole roasted beans."
+  },
+  {
+    "id": "ben-en-09-campaign-rules",
+    "inputClass": "benign",
+    "category": "rules-guidelines",
+    "locale": "en",
+    "prompt": "Following our seasonal campaign rules and brand guidelines, present the hero bottle upright on pale limestone with honest daylight and uncluttered negative space.",
+    "brand": {
+      "name": "Northwind Botanicals",
+      "tone": "calm architectural skincare",
+      "palette": ["#16191D", "#EAE5DD", "#4A6B5D"],
+      "rules": [
+        "Keep the bottle upright and centered",
+        "Follow natural daylight guidelines without neon tints"
+      ]
+    }
+  },
+  {
+    "id": "ben-en-10-long-paragraph",
+    "inputClass": "benign",
+    "category": "long-paragraph",
+    "locale": "en",
+    "prompt": "In a quiet coastal kitchen shortly after sunrise, a woman sets down a warm stoneware mug beside a folded linen napkin and opens the wooden window shutters to let in the sea breeze. Fine dust drifts across the pale oak table while salt air moves the thin curtain hem softly against the glass jar of sea salt. The pace remains unhurried and grounded in everyday tactile details rather than staged theatrics, highlighting how the ceramic vessel fits naturally into a lived-in morning routine."
+  },
+  {
+    "id": "ben-en-11-hashtags",
+    "inputClass": "benign",
+    "category": "hashtags",
+    "locale": "en",
+    "prompt": "Weekend cabin getaway wearing a washed oatmeal linen overshirt and canvas cap #AutumnDrop #CapsuleWardrobe #SlowLiving #2026Edit."
+  },
+  {
+    "id": "ben-en-12-product-codes",
+    "inputClass": "benign",
+    "category": "product-codes",
+    "locale": "en",
+    "prompt": "Matte olive hydration mist NB-MIST-120ML standing next to travel pouch TRV-09B-OLV on a travertine vanity shelf."
+  },
+  {
+    "id": "ben-en-13-units",
+    "inputClass": "benign",
+    "category": "units",
+    "locale": "en",
+    "prompt": "Compact brass audio amplifier dial marked 10 kΩ beside a 4.5 mm balanced plug and a 50 ml bottle of vinyl cleaner on smoked oak."
+  },
+  {
+    "id": "ben-en-14-foreign-signage",
+    "inputClass": "benign",
+    "category": "foreign-signage",
+    "locale": "en",
+    "prompt": "Rain-slicked evening side street in front of a small wooden storefront bearing the warm sign '珈琲', where a guest folds an umbrella before entering."
+  },
+  {
+    "id": "ben-en-15-foreign-signage-cyrillic",
+    "inputClass": "benign",
+    "category": "foreign-signage",
+    "locale": "en",
+    "prompt": "Snowy morning storefront window etched with 'Ателье' in gold leaf while a tailor adjusts a charcoal wool coat on a wooden mannequin inside."
+  }
+]
