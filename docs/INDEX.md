@@ -54,6 +54,7 @@
 | `qa/catalog-makers/PR.md`, `qa/recipe-v2/PR.md` | 카탈로그 분리·메이커 프로필(PR #94)과 레시피 v2(PR #95)의 구현 범위·검증·남은 위험. 해당 화면을 만질 때 먼저. |
 | `CREATOR-ONBOARDING-PLAN.md`, `CREATOR-ONBOARDING-REVIEW-NOTES.md`, `qa/creator-onboarding.md` | 지원·작업공간·정산 현황 화면(PR #79). |
 | `CREATOR-PROFILE.md` | 계정 페이지·SNS 주소 저장(인증 아님). |
+| `CREATIVE-MCP.md` | AI 크리에이티브용 MCP 연결·도구·클립 카드·한도 안내. |
 | `SECURITY-RESEARCH-2026-10-15.md` | 레시피 비공개·DTO 허용 목록 등 보안 선택. |
 
 ## 캠페인·브랜드

@@ -223,10 +223,37 @@ describe('AI creative studio (0065)', () => {
 
     it('refuses every tool while the program is closed, then works for an active creative', async () => {
       vi.stubEnv('TWINGS_FORMAT_CREATORS', 'off');
+      vi.stubEnv('TWINGS_OPEN_MAKER', 'off');
       expect(payload(await call('whoami'))).toEqual({ code: 'not_open' });
       vi.stubEnv('TWINGS_FORMAT_CREATORS', 'on');
       expect(payload(await call('whoami'))).toMatchObject({ programOpen: true, handle: null, publicProfile: false, extendedProfile: true });
       expect(payload(await call('get_recipe_guide'))).toMatchObject({ imageEngines: expect.arrayContaining(['gpt-image-2']), example: { version: 2 } });
+    });
+
+    // Founder, 2026-11-26: a creative who started with the one check uses MCP like the web workspace.
+    it('opens to an active creative through the one-check start alone, and never to an account without an active row', async () => {
+      vi.stubEnv('TWINGS_FORMAT_CREATORS', 'off');
+      vi.stubEnv('TWINGS_OPEN_MAKER', '');
+      expect(payload(await call('whoami'))).toMatchObject({ programOpen: true });
+      const recipe = {
+        version: 2, slots: { selfie: { kind: 'image', source: 'user', required: true } },
+        steps: [{ id: 'still', kind: 'image', engine: 'gpt-image-2', inputs: ['selfie'], prompt: 'Studio portrait of {{selfie}} in soft light.', params: { aspect: '4:5' } }],
+        output: { from: 'still' },
+      };
+      const saved = payload(await call('save_template', { title: 'One-check draft', recipe }));
+      expect(saved).toMatchObject({ saved: true, complete: true });
+
+      const stranger = (name: string, args: Record<string, unknown> = {}) => handleMcp({ ...deps(), userId: OTHER.id }, { jsonrpc: '2.0', id: 9, method: 'tools/call', params: { name, arguments: args } });
+      expect(payload(await stranger('whoami'))).toEqual({ code: 'forbidden' });
+      expect(payload(await stranger('save_template', { title: 'Not mine to make', recipe }))).toEqual({ code: 'forbidden' });
+      expect(payload(await stranger('get_template', { id: saved.id }))).toEqual({ code: 'forbidden' });
+
+      await administerPlatform(h.sql, ADMIN_VIEWER, { action: 'creator', id: CREATIVE.userId, active: false, contract: 'pilot-v1', reason: 'Revoked for the test' });
+      expect(payload(await call('whoami'))).toEqual({ code: 'forbidden' });
+      for (const programme of ['on', 'off']) {
+        vi.stubEnv('TWINGS_FORMAT_CREATORS', programme);
+        expect(payload(await call('list_templates')), programme).toEqual({ code: 'forbidden' });
+      }
     });
 
     it('validates, saves and reads back a draft, updates the profile and adds a work from base64', async () => {

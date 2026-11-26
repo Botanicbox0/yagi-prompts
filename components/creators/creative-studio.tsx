@@ -199,18 +199,40 @@ export function WorksManager({ initial, copy }: { initial: StudioWork[]; copy: W
 export interface StudioToken { id: string; name: string; prefix: string; createdAt: string; lastUsedAt: string | null }
 export interface ConnectCopy {
   heading: string; lede: string; nameLabel: string; namePlaceholder: string; create: string; creating: string; created: string; copy: string; copied: string;
-  revoke: string; empty: string; lastUsed: string; neverUsed: string; limit: string; setupHeading: string; endpoint: string; tools: string; errors: Errors;
+  revoke: string; empty: string; lastUsed: string; neverUsed: string; limit: string; setupHeading: string; endpoint: string; tools: string;
+  step1Title: string; step1Hint: string; step2Title: string; step2Hint: string; step2TokenNote: string; clientTabsLabel: string;
+  step3Title: string; step3Hint: string;
+  examples: { draft: string; check: string; list: string };
+  errors: Errors;
 }
 
 function CopyLine({ text, label, done }: { text: string; label: string; done: string }) {
   const [copied, setCopied] = useState(false);
   return (
-    <div className="flex items-start gap-2 rounded-xl bg-black p-3 text-white">
+    <div className="flex min-w-0 max-w-full items-start gap-2 rounded-xl bg-black p-3 text-white">
       <code className="min-w-0 flex-1 overflow-x-auto font-mono text-[0.75rem] leading-relaxed whitespace-pre">{text}</code>
-      <button type="button" onClick={async () => { try { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* visible anyway */ } }} className="shrink-0 rounded-full bg-white/15 px-3 py-1 text-xs hover:bg-white/25">{copied ? done : label}</button>
+      <button type="button" onClick={async () => { try { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* visible anyway */ } }} className="min-h-8 shrink-0 rounded-full bg-white/15 px-3 py-1 text-xs font-medium hover:bg-white/25">{copied ? done : label}</button>
     </div>
   );
 }
+
+function CopyPromptRow({ text, label, done, index }: { text: string; label: string; done: string; index: number }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <li data-mcp-example={index} className="flex min-w-0 items-start justify-between gap-3 rounded-xl border border-hairline bg-on-surface/[0.03] px-4 py-3">
+      <p className="min-w-0 flex-1 break-keep text-sm leading-relaxed">{text}</p>
+      <button
+        type="button"
+        onClick={async () => { try { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* visible anyway */ } }}
+        className="inline-flex min-h-9 shrink-0 items-center rounded-full border border-hairline bg-surface px-3.5 text-xs font-medium transition-colors hover:bg-on-surface/[0.05]"
+      >
+        {copied ? done : label}
+      </button>
+    </li>
+  );
+}
+
+type McpClientId = 'claude' | 'cursor' | 'codex';
 
 export function McpConnect({ initial, endpoint, locale, copy }: { initial: StudioToken[]; endpoint: string; locale: string; copy: ConnectCopy }) {
   const [tokens, setTokens] = useState(initial);
@@ -218,6 +240,7 @@ export function McpConnect({ initial, endpoint, locale, copy }: { initial: Studi
   const [fresh, setFresh] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [client, setClient] = useState<McpClientId>('claude');
   const shown = fresh ?? '<YOUR_TOKEN>';
   const date = (value: string) => new Date(value).toLocaleDateString(locale, { year: 'numeric', month: 'short', day: 'numeric' });
 
@@ -234,45 +257,117 @@ export function McpConnect({ initial, endpoint, locale, copy }: { initial: Studi
     if (result.ok) setTokens((list) => list.filter((token) => token.id !== id)); else setError(errorText(copy.errors, result.code));
   }
 
+  const snippets: Record<McpClientId, { label: string; path: string | null; code: string }> = {
+    claude: {
+      label: 'Claude Code',
+      path: null,
+      code: `claude mcp add --transport http twings ${endpoint} --header "Authorization: Bearer ${shown}"`,
+    },
+    cursor: {
+      label: 'Cursor',
+      path: '~/.cursor/mcp.json',
+      code: JSON.stringify({ mcpServers: { twings: { url: endpoint, headers: { Authorization: `Bearer ${shown}` } } } }, null, 2),
+    },
+    codex: {
+      label: 'Codex',
+      path: '~/.codex/config.toml',
+      code: `[mcp_servers.twings]\nurl = "${endpoint}"\nhttp_headers = { Authorization = "Bearer ${shown}" }`,
+    },
+  };
+  const activeSnippet = snippets[client];
+  const exampleRequests = [copy.examples.draft, copy.examples.check, copy.examples.list];
+
   return (
-    <div data-creative-mcp className="space-y-5">
-      <p className="text-sm leading-relaxed opacity-75">{copy.tools}</p>
-      <form className="flex flex-wrap items-end gap-3" onSubmit={(event) => { event.preventDefault(); void create(); }}>
-        <label className="block min-w-[14rem] flex-1 text-sm font-medium">
-          {copy.nameLabel}
-          <input value={name} onChange={(event) => setName(event.target.value)} maxLength={40} placeholder={copy.namePlaceholder} className={FIELD} />
-        </label>
-        <button type="submit" disabled={busy || !name.trim() || tokens.length >= 5} className={BUTTON}>{busy ? copy.creating : copy.create}</button>
-      </form>
-      <span className={HINT}>{copy.limit}</span>
-      {error && <p role="alert" className="rounded-xl border border-accent p-3 text-sm">{error}</p>}
-      {fresh && (
-        <div data-creative-token-fresh className="space-y-2 rounded-xl border border-accent p-4">
-          <p className="text-sm font-medium">{copy.created}</p>
-          <CopyLine text={fresh} label={copy.copy} done={copy.copied} />
-        </div>
-      )}
-      {tokens.length === 0 ? <p className="text-sm opacity-60">{copy.empty}</p> : (
-        <ul className="divide-y divide-hairline rounded-xl border border-hairline">
-          {tokens.map((token) => (
-            <li key={token.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm">
-              <span className="min-w-0"><span className="font-medium">{token.name}</span> <span className="font-mono text-xs opacity-60">{token.prefix}…</span></span>
-              <span className="text-xs opacity-60">{token.lastUsedAt ? copy.lastUsed.replace('{date}', date(token.lastUsedAt)) : copy.neverUsed}</span>
-              <button type="button" onClick={() => void revoke(token.id)} className="inline-flex min-h-9 items-center text-xs underline underline-offset-4">{copy.revoke}</button>
-            </li>
-          ))}
-        </ul>
-      )}
-      <div className="space-y-3">
-        <p className="text-sm font-semibold">{copy.setupHeading}</p>
-        <p className="text-xs opacity-70">{copy.endpoint}: <span className="font-mono">{endpoint}</span></p>
-        <p className="text-xs font-medium opacity-80">Claude Code</p>
-        <CopyLine text={`claude mcp add --transport http twings ${endpoint} --header "Authorization: Bearer ${shown}"`} label={copy.copy} done={copy.copied} />
-        <p className="text-xs font-medium opacity-80">Cursor · ~/.cursor/mcp.json</p>
-        <CopyLine text={JSON.stringify({ mcpServers: { twings: { url: endpoint, headers: { Authorization: `Bearer ${shown}` } } } }, null, 2)} label={copy.copy} done={copy.copied} />
-        <p className="text-xs font-medium opacity-80">Codex · ~/.codex/config.toml</p>
-        <CopyLine text={`[mcp_servers.twings]\nurl = "${endpoint}"\nhttp_headers = { Authorization = "Bearer ${shown}" }`} label={copy.copy} done={copy.copied} />
-      </div>
+    <div data-creative-mcp className="min-w-0 space-y-5">
+      <p className="break-keep text-sm leading-relaxed opacity-75">{copy.tools}</p>
+      <ol className="divide-y divide-hairline">
+        <li data-mcp-step="1" className="min-w-0 space-y-4 pb-6">
+          <div className="flex items-start gap-3">
+            <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-on-surface text-xs font-semibold tabular-nums text-surface">1</span>
+            <div className="min-w-0 space-y-1">
+              <h3 className="break-keep text-sm font-semibold">{copy.step1Title}</h3>
+              <p className="break-keep text-xs leading-relaxed opacity-65">{copy.step1Hint}</p>
+            </div>
+          </div>
+          <form className="flex min-w-0 flex-wrap items-end gap-3" onSubmit={(event) => { event.preventDefault(); void create(); }}>
+            <label className="block min-w-0 flex-1 basis-52 text-sm font-medium">
+              {copy.nameLabel}
+              <input value={name} onChange={(event) => setName(event.target.value)} maxLength={40} placeholder={copy.namePlaceholder} className={FIELD} />
+            </label>
+            <button type="submit" disabled={busy || !name.trim() || tokens.length >= 5} className={BUTTON}>{busy ? copy.creating : copy.create}</button>
+          </form>
+          <span className={HINT}>{copy.limit}</span>
+          {error && <p role="alert" className="rounded-xl border border-accent p-3 text-sm">{error}</p>}
+          {fresh && (
+            <div data-creative-token-fresh className="min-w-0 space-y-2 rounded-xl border border-accent p-4">
+              <p className="break-keep text-sm font-medium">{copy.created}</p>
+              <CopyLine text={fresh} label={copy.copy} done={copy.copied} />
+            </div>
+          )}
+          {tokens.length === 0 ? <p className="text-sm opacity-60">{copy.empty}</p> : (
+            <ul className="divide-y divide-hairline rounded-xl border border-hairline">
+              {tokens.map((token) => (
+                <li key={token.id} className="flex min-w-0 flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm">
+                  <span className="min-w-0 break-words"><span className="font-medium">{token.name}</span> <span className="font-mono text-xs opacity-60">{token.prefix}…</span></span>
+                  <span className="text-xs tabular-nums opacity-60">{token.lastUsedAt ? copy.lastUsed.replace('{date}', date(token.lastUsedAt)) : copy.neverUsed}</span>
+                  <button type="button" onClick={() => void revoke(token.id)} className="inline-flex min-h-9 items-center text-xs underline underline-offset-4">{copy.revoke}</button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </li>
+
+        <li data-mcp-step="2" className="min-w-0 space-y-4 py-6">
+          <div className="flex items-start gap-3">
+            <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-on-surface text-xs font-semibold tabular-nums text-surface">2</span>
+            <div className="min-w-0 space-y-1">
+              <h3 className="break-keep text-sm font-semibold">{copy.step2Title}</h3>
+              <p className="break-keep text-xs leading-relaxed opacity-65">{copy.step2Hint}</p>
+            </div>
+          </div>
+          <p className="break-all text-xs opacity-70">{copy.endpoint}: <span className="font-mono">{endpoint}</span></p>
+          <div role="tablist" aria-label={copy.clientTabsLabel} className="inline-flex max-w-full flex-wrap gap-1.5 rounded-2xl bg-on-surface/[0.05] p-1">
+            {(['claude', 'cursor', 'codex'] as const).map((id) => {
+              const selected = client === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  role="tab"
+                  aria-selected={selected}
+                  data-mcp-client={id}
+                  onClick={() => setClient(id)}
+                  className={`inline-flex min-h-9 items-center rounded-full px-3.5 text-xs font-medium transition-colors ${selected ? 'bg-surface text-on-surface' : 'opacity-65 hover:opacity-100'}`}
+                >
+                  {snippets[id].label}
+                </button>
+              );
+            })}
+          </div>
+          <div role="tabpanel" data-mcp-snippet={client} className="min-w-0 space-y-2">
+            {activeSnippet.path ? (
+              <p className="font-mono text-xs opacity-65">{activeSnippet.path}</p>
+            ) : null}
+            <CopyLine text={activeSnippet.code} label={copy.copy} done={copy.copied} />
+          </div>
+          <p className="break-keep text-xs leading-relaxed opacity-65">{copy.step2TokenNote}</p>
+        </li>
+
+        <li data-mcp-step="3" className="min-w-0 space-y-4 pt-6">
+          <div className="flex items-start gap-3">
+            <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-on-surface text-xs font-semibold tabular-nums text-surface">3</span>
+            <div className="min-w-0 space-y-1">
+              <h3 className="break-keep text-sm font-semibold">{copy.step3Title}</h3>
+              <p className="break-keep text-xs leading-relaxed opacity-65">{copy.step3Hint}</p>
+            </div>
+          </div>
+          <ul className="space-y-2.5">
+            {exampleRequests.map((text, index) => (
+              <CopyPromptRow key={index} index={index + 1} text={text} label={copy.copy} done={copy.copied} />
+            ))}
+          </ul>
+        </li>
+      </ol>
     </div>
   );
 }
