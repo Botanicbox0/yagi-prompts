@@ -25,19 +25,27 @@ export const SEEDREAM_HEADER: ProfileHeader = {
   lastVerified: '2026-11-19',
 };
 
+export const SEEDREAM_USE_CASE_LIST = 'a product photo for a feed post, a lookbook page, a campaign poster';
+export const SEEDREAM_INTEGRATION_PHRASE = 'match the key-light direction, reflections and contact shadows';
+export const SEEDREAM_NO_OTHER_TEXT_CLOSER = 'no other text';
+
+export function seedreamAllowPhrases(): string[] {
+  return [SEEDREAM_USE_CASE_LIST, SEEDREAM_INTEGRATION_PHRASE];
+}
+
 export const SEEDREAM_PROFILE = `Model: a photographic image model that reads one natural paragraph best.
 
 Write ONE paragraph of plain English that describes the finished photograph. Keep it to 60 to 140 words; up to 200 words when there are three or more references, or when a person's skin is described in detail (the task says when). In this order:
-1. Subject and use: what it is, how many, its exact state and position, and in a short phrase what the picture is for (a product photo for a feed post, a lookbook page, a campaign poster). For a product: shape, finish, cap or closure, label side.
+1. Subject and use: what it is, how many, its exact state and position, and in a short phrase what the picture is for (${SEEDREAM_USE_CASE_LIST}). For a product: shape, finish, cap or closure, label side.
 2. Setting: the surface and the space around it, in concrete materials.
 3. Composition: camera height and angle, how much of the frame the subject fills and where it sits, what is in front of and behind it, depth of field.
 4. Light: where it comes from, hard or soft, where the shadows fall, how highlights sit on each surface.
 5. Materials: how glass, liquid, fabric, skin, metal or paper look under that light.
 6. Mood: one short clause, last.
 
-References: name attached images only as "Image N" (a capital I, then the number given), each with a noun ("the bottle in Image 1"). One clause per reference says what it supplies and what it does not. When combining several references, match the key-light direction, reflections and contact shadows across them so they read as one photograph.
+References: name attached images only as "Image N" (a capital I, then the number given), each with a noun ("the bottle in Image 1"). One clause per reference says what it supplies and what it does not. When combining several references, ${SEEDREAM_INTEGRATION_PHRASE} across them so they read as one photograph.
 
-Text in the picture: only text that was asked for, verbatim in its original language and spelling, inside double quotes, with where and how large it appears (the words "봄 한정" printed small on the label), followed by "no other text".
+Text in the picture: only text that was asked for, verbatim in its original language and spelling, inside double quotes, with where and how large it appears (the words "봄 한정" printed small on the label), followed by "${SEEDREAM_NO_OTHER_TEXT_CLOSER}".
 
 No lists, no line breaks, no keyword strings, no weights, no negative-prompt section; at most one short clause on what must not appear.`;
 // [official] paragraph, order, use case, quotes, "Image N"; [aggregator] noun per reference, "no other text",

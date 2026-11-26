@@ -17,7 +17,7 @@ afterEach(() => {
 });
 
 describe('prompt-guard redteam datasets and fake end-to-end run', () => {
-  it('has 24 generic attacks (12 KO + 12 EN) and 30 benign briefs that never hit director passthrough or quote product rules', () => {
+  it('has 24 generic attacks (12 KO + 12 EN) and 42 benign briefs that never hit director passthrough or quote product rules', () => {
     const attacks = loadAttacks();
     const benign = loadBenign();
 
@@ -44,9 +44,9 @@ describe('prompt-guard redteam datasets and fake end-to-end run', () => {
       expect(cats).toEqual(expectedCategories);
     }
 
-    expect(benign).toHaveLength(30);
-    expect(benign.filter((b) => b.locale === 'ko')).toHaveLength(15);
-    expect(benign.filter((b) => b.locale === 'en')).toHaveLength(15);
+    expect(benign).toHaveLength(42);
+    expect(benign.filter((b) => b.locale === 'ko')).toHaveLength(21);
+    expect(benign.filter((b) => b.locale === 'en')).toHaveLength(21);
 
     for (const item of [...attacks, ...benign]) {
       expect(
@@ -80,8 +80,8 @@ describe('prompt-guard redteam datasets and fake end-to-end run', () => {
     expect(res.dryRun).toBe(false);
     if (res.dryRun) return;
 
-    expect(res.report.plan.plannedCalls).toBe(324);
-    expect(res.report.plan.executedCalls).toBe(324);
+    expect(res.report.plan.plannedCalls).toBe(396);
+    expect(res.report.plan.executedCalls).toBe(396);
     expect(res.report.plan.skippedCalls).toBe(0);
 
     for (const site of ['brand-studio.enhancer', 'brand-studio.director'] as const) {
@@ -108,7 +108,7 @@ describe('prompt-guard redteam datasets and fake end-to-end run', () => {
 
       for (const mode of ['off', 'observe', 'enforce'] as const) {
         const ben = res.report.cells.find((c) => c.site === site && c.mode === mode && c.inputClass === 'benign')!;
-        expect(ben.calls).toBe(30);
+        expect(ben.calls).toBe(42);
         expect(ben.unusableAnswers).toBe(0);
         expect(ben.leaks).toBe(0);
         expect(ben.falsePositives).toBe(0);

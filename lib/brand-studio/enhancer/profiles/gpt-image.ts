@@ -14,18 +14,40 @@ export const GPT_IMAGE_HEADER: ProfileHeader = {
   lastVerified: '2026-11-19',
 };
 
+export const GPT_IMAGE_FORMAT_LIST = 'a product shot, a poster, a feed post';
+export const GPT_IMAGE_PHOTO_PHRASE = 'a photorealistic photograph';
+export const GPT_IMAGE_FRAMING_LIST = 'head and shoulders, waist up, full body with feet in frame';
+export const GPT_IMAGE_PRODUCT_KEEP_FORMULA = 'keep the exact label, proportions and colours of image N';
+export const GPT_IMAGE_LOGO_FORMULA =
+  'reproduce the mark from image N exactly as drawn, without redrawing, mirroring or restyling it, at its current size';
+export const GPT_IMAGE_INTEGRATION_PHRASE = 'light direction, colour temperature, reflections and contact shadows';
+export const GPT_IMAGE_MARKUP_AREA_PHRASE = 'the area inside the red outline';
+export const GPT_IMAGE_MARKUP_CLOSER = 'Remove the red outline from the finished picture.';
+
+export function gptImageAllowPhrases(markup = false): string[] {
+  const out = [
+    GPT_IMAGE_FORMAT_LIST,
+    GPT_IMAGE_FRAMING_LIST,
+    GPT_IMAGE_PRODUCT_KEEP_FORMULA,
+    GPT_IMAGE_LOGO_FORMULA,
+    GPT_IMAGE_INTEGRATION_PHRASE,
+  ];
+  if (markup) out.push(GPT_IMAGE_MARKUP_AREA_PHRASE, GPT_IMAGE_MARKUP_CLOSER);
+  return out;
+}
+
 export const GPT_IMAGE_PROFILE = `Model: an image model that follows written instructions closely and reads a plain-language brief best.
 
 Write a short brief in plain English (three to eight sentences; up to ten when people or many references are involved), each sentence one instruction, in this order:
-1. What the picture is: the subject, how many, its exact state and position, and the format it is for (a product shot, a poster, a feed post). For a photograph, call it a photorealistic photograph.
+1. What the picture is: the subject, how many, its exact state and position, and the format it is for (${GPT_IMAGE_FORMAT_LIST}). For a photograph, call it ${GPT_IMAGE_PHOTO_PHRASE}.
 2. Setting: the surface and the space around it, in concrete materials.
 3. Composition: camera height and angle, how much of the frame the subject fills and where it sits, what is in front of and behind it.
-4. People, when there are any: how each one is framed (head and shoulders, waist up, full body with feet in frame), where they look, what their hands do and what they touch.
+4. People, when there are any: how each one is framed (${GPT_IMAGE_FRAMING_LIST}), where they look, what their hands do and what they touch.
 5. Light and colour: where the light comes from, hard or soft, where the shadows fall, the dominant colours named in words.
 6. Materials: how glass, liquid, fabric, skin, metal or paper look under that light.
 7. Constraints last, each as its own sentence: what must not change or must not appear.
 
-When images are attached, open with what each one is for, naming them only as "image 1", "image 2" with the numbers given, each with its purpose ("Use the frosted bottle from image 1 only; leave out its background and lighting"). A product image always gets "keep the exact label, proportions and colours of image N". A logo: "reproduce the mark from image N exactly as drawn, without redrawing, mirroring or restyling it, at its current size". Unify light direction, colour temperature, reflections and contact shadows across all attached images. When a picture is being edited, state the change first, then "Keep" and everything that must stay the same.
+When images are attached, open with what each one is for, naming them only as "image 1", "image 2" with the numbers given, each with its purpose ("Use the frosted bottle from image 1 only; leave out its background and lighting"). A product image always gets "${GPT_IMAGE_PRODUCT_KEEP_FORMULA}". A logo: "${GPT_IMAGE_LOGO_FORMULA}". Unify ${GPT_IMAGE_INTEGRATION_PHRASE} across all attached images. When a picture is being edited, state the change first, then "Keep" and everything that must stay the same.
 
 Text in the picture: only text that was asked for, verbatim in its original language and spelling, inside double quotes, with where it sits, how large it is and its typeface style ("봄 한정" set small in a clean sans-serif on the lower label); spell an unusual word or brand name letter by letter once. Never add other words, numbers or watermarks.
 
@@ -54,4 +76,4 @@ export const GPT_IMAGE_26_BLOCK: ModelBlock = {
 
 /** Only when a markup overlay is sent with the edit (no studio path does today). */
 export const GPT_IMAGE_MARKUP_RULE =
-  'A red outline is drawn on image 1 to mark the area to change. Refer to it as "the area inside the red outline", change only what is inside it, and end with "Remove the red outline from the finished picture."';
+  `A red outline is drawn on image 1 to mark the area to change. Refer to it as "${GPT_IMAGE_MARKUP_AREA_PHRASE}", change only what is inside it, and end with "${GPT_IMAGE_MARKUP_CLOSER}"`;

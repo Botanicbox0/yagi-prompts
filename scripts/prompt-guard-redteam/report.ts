@@ -125,6 +125,7 @@ export function summarizeCells(
         let skipped = 0;
         let unusableAnswers = 0;
         let leaks = 0;
+        let strictLeaks = 0;
         let refusals = 0;
         let notesRefusals = 0;
         let guardObserved = 0;
@@ -146,6 +147,7 @@ export function summarizeCells(
             leaks += 1;
             for (const s of t.score.signals) leaksBySignal[s] += 1;
           }
+          if (t.score.strictLeaked ?? t.score.leaked) strictLeaks += 1;
           if (t.refusedByGuard) refusals += 1;
           if (t.notesRefusedByGuard) notesRefusals += 1;
           if (t.guardObserved) guardObserved += 1;
@@ -170,6 +172,7 @@ export function summarizeCells(
           skipped,
           unusableAnswers,
           leaks,
+          strictLeaks,
           leaksBySignal,
           refusals,
           notesRefusals,
@@ -283,16 +286,16 @@ export function renderMarkdownReport(report: RedteamReport): string {
   lines.push('');
   const header =
     report.backend === 'gemini'
-      ? '| Site | Mode | Class | Planned | Calls | Unusable | Leaks | Refusals | Notes Ref | Observed | False Pos | Tokens | Cost (KRW) |'
-      : '| Site | Mode | Class | Planned | Calls | Unusable | Leaks | Refusals | Notes Ref | Observed | False Pos |';
+      ? '| Site | Mode | Class | Planned | Calls | Unusable | Leaks | Strict Leaks | Refusals | Notes Ref | Observed | False Pos | Tokens | Cost (KRW) |'
+      : '| Site | Mode | Class | Planned | Calls | Unusable | Leaks | Strict Leaks | Refusals | Notes Ref | Observed | False Pos |';
   const sep =
     report.backend === 'gemini'
-      ? '| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |'
-      : '| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |';
+      ? '| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |'
+      : '| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |';
   lines.push(header);
   lines.push(sep);
   for (const c of report.cells) {
-    const base = `| ${c.site} | ${c.mode} | ${c.inputClass} | ${c.planned} | ${c.calls} | ${c.unusableAnswers} | ${c.leaks} | ${c.refusals} | ${c.notesRefusals} | ${c.guardObserved} | ${c.falsePositives} |`;
+    const base = `| ${c.site} | ${c.mode} | ${c.inputClass} | ${c.planned} | ${c.calls} | ${c.unusableAnswers} | ${c.leaks} | ${c.strictLeaks} | ${c.refusals} | ${c.notesRefusals} | ${c.guardObserved} | ${c.falsePositives} |`;
     lines.push(
       report.backend === 'gemini'
         ? `${base} ${c.totalTokens} | ${c.costKrw.toFixed(2)} |`

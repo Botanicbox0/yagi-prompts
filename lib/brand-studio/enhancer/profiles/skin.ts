@@ -148,25 +148,57 @@ export function skinVariantOf(model: string | undefined, env: Record<string, str
 
 /* ------------------------------------------------------------------ rule text */
 
+export const SKIN_BASE_NANO_BANANA_PHRASE =
+  "fine natural texture with small changes of tone, soft highlights on the forehead, nose and cheekbones, and each person's own features, asymmetry and visible marks exactly as they are";
+
+export const SKIN_BASE_DEFAULT_PHRASE =
+  "fine natural texture with small changes of tone and highlights that sit softly on the forehead, nose and cheekbones. Keep each person's own features, asymmetry and visible marks";
+
+export const SKIN_REALISM_ZONES_PHRASE =
+  'slightly more visible fine pores across the forehead, nose and inner cheeks; softer texture on the outer cheeks and jaw; a little natural colour under the eyes and on the nose and cheeks; fine vellus hair along the hairline and jaw; natural lip lines and slightly uneven lip colour; healthy but locally varied skin rather than an even complexion';
+
+export const SKIN_REALISM_LIGHT_PHRASE =
+  'a broad soft source from one side, a little off the camera axis, with a gentle fill and controlled highlights';
+
+export const SKIN_REALISM_PERSPECTIVE_PHRASE =
+  'an eye-level portrait perspective (about 85 mm for a face, about 50 mm for a full figure) with natural optical sharpness';
+
+export const SKIN_REALISM_WIDE_TEXTURE_PHRASE =
+  'hands, arms and neck the same unretouched texture (fine hair, knuckle and wrist creases, faint veins)';
+
+export const SKIN_REALISM_SEEDREAM_EXAMPLE = 'unretouched';
+export const SKIN_REALISM_NB_PHOTO_LABEL = 'a real photograph';
+export const SKIN_REALISM_GPT_PHOTO_LABEL = 'a photorealistic photograph';
+export const SKIN_REALISM_GPT_CLOSER = 'No glamorization, no heavy retouching, no over-sharpened skin.';
+
+export const SKIN_TONE_DEPTH_LIST = 'fair, light, medium, tan or deep';
+export const SKIN_TONE_UNDERTONE_LIST = 'warm, neutral, cool or olive';
+
+export const SKIN_RESTORE_KEEP_PHRASE = 'the same person, the same face shape, expression, gaze, make-up and light';
+export const SKIN_RESTORE_ACTION_NANO_BANANA_PHRASE = `restore fine, natural skin detail in place with ${SKIN_RESTORE_KEEP_PHRASE} as they are`;
+export const SKIN_RESTORE_ACTION_DEFAULT_PHRASE = `restore fine, natural skin detail in place, with ${SKIN_RESTORE_KEEP_PHRASE} unchanged`;
+export const SKIN_RESTORE_ZONES_PHRASE =
+  'slightly more visible fine pores on the forehead, nose and inner cheeks, softer outer cheeks, natural lip lines and a little natural colour variation';
+
 const NEVER_WORDS = 'Never write beauty or perfection words for skin (flawless, perfect, porcelain, glass skin, poreless, airbrushed, dewy glow) or realism tags (8k, hyper-detailed, "every pore visible").';
 
 function baseRule(profile: StudioPromptProfile): string {
   if (profile === 'nano-banana') {
-    return `People: describe their skin the way a real photograph shows it at this camera distance: fine natural texture with small changes of tone, soft highlights on the forehead, nose and cheekbones, and each person's own features, asymmetry and visible marks exactly as they are. ${NEVER_WORDS} Phrase the skin positively; the picture needs no list of what to avoid.`;
+    return `People: describe their skin the way a real photograph shows it at this camera distance: ${SKIN_BASE_NANO_BANANA_PHRASE}. ${NEVER_WORDS} Phrase the skin positively; the picture needs no list of what to avoid.`;
   }
   const gaze = profile === 'gpt-image' ? ' Say how each person is framed and where they look.' : '';
-  return `People: describe their skin the way a real photograph shows it at this camera distance: fine natural texture with small changes of tone and highlights that sit softly on the forehead, nose and cheekbones. Keep each person's own features, asymmetry and visible marks, and add no freckles, moles or blemishes they do not have. ${NEVER_WORDS} When nothing is asked about expression or gaze, keep them relaxed and unposed.${gaze}`;
+  return `People: describe their skin the way a real photograph shows it at this camera distance: ${SKIN_BASE_DEFAULT_PHRASE}, and add no freckles, moles or blemishes they do not have. ${NEVER_WORDS} When nothing is asked about expression or gaze, keep them relaxed and unposed.${gaze}`;
 }
 
 function realismRule(profile: StudioPromptProfile): string {
-  const core = `Skin realism (the brand wants skin that reads as real at full size). Write the skin zone by zone before any constraint: slightly more visible fine pores across the forehead, nose and inner cheeks; softer texture on the outer cheeks and jaw; a little natural colour under the eyes and on the nose and cheeks; fine vellus hair along the hairline and jaw; natural lip lines and slightly uneven lip colour; healthy but locally varied skin rather than an even complexion. Keep the setting, palette and mood the request asks for (a bright, airy campaign stays bright and airy; a person reference never sets the backdrop); within that scene, let the light on the face show this relief: a broad soft source from one side, a little off the camera axis, with a gentle fill and controlled highlights, never flat frontal light or a glossy sheen. Use an eye-level portrait perspective (about 85 mm for a face, about 50 mm for a full figure) with natural optical sharpness. Match the detail to the distance: in a full-figure or wide frame give the hands, arms and neck the same unretouched texture (fine hair, knuckle and wrist creases, faint veins) instead of pores the camera could not resolve. Texture comes from the skin and the light: never ask for film grain, noise or extra sharpening.`;
+  const core = `Skin realism (the brand wants skin that reads as real at full size). Write the skin zone by zone before any constraint: ${SKIN_REALISM_ZONES_PHRASE}. Keep the setting, palette and mood the request asks for (a bright, airy campaign stays bright and airy; a person reference never sets the backdrop); within that scene, let the light on the face show this relief: ${SKIN_REALISM_LIGHT_PHRASE}, never flat frontal light or a glossy sheen. Use ${SKIN_REALISM_PERSPECTIVE_PHRASE}. Match the detail to the distance: in a full-figure or wide frame give the ${SKIN_REALISM_WIDE_TEXTURE_PHRASE} instead of pores the camera could not resolve. Texture comes from the skin and the light: never ask for film grain, noise or extra sharpening.`;
   switch (profile) {
     case 'seedream':
-      return `${core} Fold the zones and the light into the one paragraph as plain description (this is when the 200-word ceiling applies); at most one short clause such as "unretouched".`;
+      return `${core} Fold the zones and the light into the one paragraph as plain description (this is when the 200-word ceiling applies); at most one short clause such as "${SKIN_REALISM_SEEDREAM_EXAMPLE}".`;
     case 'nano-banana':
-      return `${core} Write all of it as what is visible, call the result "a real photograph", and give no list of things to avoid.`;
+      return `${core} Write all of it as what is visible, call the result "${SKIN_REALISM_NB_PHOTO_LABEL}", and give no list of things to avoid.`;
     case 'gpt-image':
-      return `${core} Call the result "a photorealistic photograph" and end with the sentence "No glamorization, no heavy retouching, no over-sharpened skin."`;
+      return `${core} Call the result "${SKIN_REALISM_GPT_PHOTO_LABEL}" and end with the sentence "${SKIN_REALISM_GPT_CLOSER}"`;
     default:
       return core;
   }
@@ -180,18 +212,17 @@ function toneRule(profile: StudioPromptProfile, variant: SkinVariant, tokens: re
     case 'none':
       return `Skin tone: ${tokens.join(', ')} ${tokens.length === 1 ? 'supplies' : 'supply'} the person's face, hair, build and skin as they are; state that role and add no description of the skin's colour.`;
     case 'short':
-      return `Skin tone: name the skin of ${who} in one clause as you see it in the picture, its depth (fair, light, medium, tan or deep) and its undertone (warm, neutral, cool or olive), ${keep}.`;
+      return `Skin tone: name the skin of ${who} in one clause as you see it in the picture, its depth (${SKIN_TONE_DEPTH_LIST}) and its undertone (${SKIN_TONE_UNDERTONE_LIST}), ${keep}.`;
     case 'full':
-      return `Skin tone: read the skin of ${who} in the picture and write it as properties to keep, in one or two sentences: depth (fair, light, medium, tan or deep), undertone (warm, neutral, cool or olive), surface (matte or satin, how visible the texture is), any freckles, moles or marks and where they sit, and how the light in that picture sits on it (where the highlights fall, how warm the shadows are). State them ${keep}.`;
+      return `Skin tone: read the skin of ${who} in the picture and write it as properties to keep, in one or two sentences: depth (${SKIN_TONE_DEPTH_LIST}), undertone (${SKIN_TONE_UNDERTONE_LIST}), surface (matte or satin, how visible the texture is), any freckles, moles or marks and where they sit, and how the light in that picture sits on it (where the highlights fall, how warm the shadows are). State them ${keep}.`;
   }
 }
 
 function restoreRule(profile: StudioPromptProfile): string {
-  const keep = 'the same person, the same face shape, expression, gaze, make-up and light';
   if (profile === 'nano-banana') {
-    return `The boxed part is a face or skin: restore fine, natural skin detail in place with ${keep} as they are. Add only fine texture where the skin looks smoothed or waxy: slightly more visible fine pores on the forehead, nose and inner cheeks, softer outer cheeks, natural lip lines and a little natural colour variation, with every mark the person has kept where it is.`;
+    return `The boxed part is a face or skin: ${SKIN_RESTORE_ACTION_NANO_BANANA_PHRASE}. Add only fine texture where the skin looks smoothed or waxy: ${SKIN_RESTORE_ZONES_PHRASE}, with every mark the person has kept where it is.`;
   }
-  return `The boxed part is a face or skin: restore fine, natural skin detail in place, with ${keep} unchanged. Add only fine texture where the skin looks smoothed or waxy: slightly more visible fine pores on the forehead, nose and inner cheeks, softer outer cheeks, natural lip lines and a little natural colour variation. Keep every mark the person has and add none.`;
+  return `The boxed part is a face or skin: ${SKIN_RESTORE_ACTION_DEFAULT_PHRASE}. Add only fine texture where the skin looks smoothed or waxy: ${SKIN_RESTORE_ZONES_PHRASE}. Keep every mark the person has and add none.`;
 }
 
 export interface SkinRulesInput {
@@ -212,4 +243,33 @@ export function skinRules(input: SkinRulesInput): string {
   if (plan.toneMatch) lines.push(toneRule(profile, input.variant, input.personTokens));
   if (plan.maybePerson) lines.push(`If an attached picture shows a person who appears in the result, apply this to them: ${baseRule(profile)}`);
   return lines.filter(Boolean).join('\n');
+}
+
+/** Output phrases the active skin rules tell the model to write into the prompt (never behaviour/prohibition rules). */
+export function skinAllowPhrases(input: SkinRulesInput): string[] {
+  if (input.profile === 'seedance') return [];
+  const { profile, plan } = input;
+  const out: string[] = [];
+  if (plan.restore) {
+    out.push(
+      profile === 'nano-banana' ? SKIN_RESTORE_ACTION_NANO_BANANA_PHRASE : SKIN_RESTORE_ACTION_DEFAULT_PHRASE,
+      SKIN_RESTORE_ZONES_PHRASE,
+    );
+  }
+  if (plan.mode === 'base' || plan.mode === 'realism' || plan.maybePerson) {
+    out.push(profile === 'nano-banana' ? SKIN_BASE_NANO_BANANA_PHRASE : SKIN_BASE_DEFAULT_PHRASE);
+  }
+  if (plan.mode === 'realism' && !plan.restore) {
+    out.push(
+      SKIN_REALISM_ZONES_PHRASE,
+      SKIN_REALISM_LIGHT_PHRASE,
+      SKIN_REALISM_PERSPECTIVE_PHRASE,
+      SKIN_REALISM_WIDE_TEXTURE_PHRASE,
+    );
+    if (profile === 'gpt-image') out.push(SKIN_REALISM_GPT_CLOSER);
+  }
+  if (plan.toneMatch && input.personTokens.length > 0 && input.variant !== 'none') {
+    out.push(SKIN_TONE_DEPTH_LIST, SKIN_TONE_UNDERTONE_LIST);
+  }
+  return out;
 }

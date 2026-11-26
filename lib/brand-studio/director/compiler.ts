@@ -25,6 +25,7 @@
  *  - Never blocks generation: any Gemini timeout/HTTP error deterministically falls back to `composeDirectorFallbackPrompt`.
  */
 import { dictatedSpans, guardRequest, type GuardedRequest } from '@/lib/ai-guard';
+import { foldText, wordUnits } from '@/lib/ai-guard/text';
 import type { StudioAudioMode } from '@/lib/brand-studio/contracts';
 import { composeFallbackPrompt, effectiveSeconds, enhancePrompt } from '@/lib/brand-studio/enhancer';
 import { blueprintShots, isBlueprint } from '@/lib/brand-studio/enhancer/blueprint';
@@ -47,9 +48,13 @@ import { loadDirectorPlaybooks, playbookRuleLines } from './playbooks';
 import {
   buildSeedanceDirectorSystemInstructionV2,
   composeDirectorFallbackPromptV2,
+  DIRECTOR_EXPLICIT_MUSIC_AUDIO_LINE,
+  DIRECTOR_NO_BGM_CLAUSE,
+  DIRECTOR_NO_BGM_REBUILT_TAIL,
   directorAllowV2,
   hasPersonInDirectorScene,
   isGarmentReference,
+  requestsExplicitMusicPerformance,
   scrubSeedanceAntiPatternsV2,
   SEEDANCE_25_PROMPT_CHARS,
 } from './rules-v2';
@@ -64,11 +69,21 @@ import type {
   PromptIntentMode,
 } from './types';
 
+export { requestsExplicitMusicPerformance };
+
 const COMPILE_TIMEOUT_MS = 25_000;
 const THUMB_MIMES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
-export const DIRECTOR_NO_BGM_AUDIO_LINE =
-  'Audio: diegetic Foley, room ambience and requested dialogue only — no background music, no score, no musical instruments.';
+export const DIRECTOR_NO_BGM_AUDIO_LINE = `Audio: ${DIRECTOR_NO_BGM_CLAUSE}.`;
+
+export const DIRECTOR_SCRUB_SKIN_PHRASE = 'natural skin texture with zero plastic beauty-filter glare';
+export const DIRECTOR_V1_PALETTE_ROLES_LIST = 'shadow floor, primary surface/wardrobe, key/accent';
+export const DIRECTOR_V1_ANTI_COMPOSITE_LIGHTING_PHRASE =
+  'match ambient shadow floor and color spill across subject and environment';
+export const DIRECTOR_V1_SKIN_WITH_REF_PHRASE =
+  'natural skin texture faithful to @Image 1, zero plastic/waxy beauty-filter glare';
+export const DIRECTOR_V1_SKIN_NO_REF_PHRASE = 'natural skin texture when people appear';
+export const DIRECTOR_V1_SKIN_NO_GLARE_PHRASE = 'zero plastic/waxy beauty-filter glare';
 
 const DIRECTOR_MODEL_NOTES = {
   ko: '참조 이미지와 컷 구성을 바탕으로 카메라·조명·사운드 연출을 정교하게 다듬었어요.',
@@ -90,9 +105,6 @@ const SHOT_TIMELINE_MARKER_RE =
   /(?:^|\n)\s*(?:\[[^\]]*\]\s*)?\d{1,3}(?:\.\d+)?\s*s?\s*[–—-]\s*\d{1,3}(?:\.\d+)?\s*s\b/im;
 const TECHNICAL_DIRECTION_RE =
   /\b(?:camera|lens|focal|\d{2,3}\s*mm|lighting|key\s+light|rim\s+light|fill\s+light|shadow\s+floor|color\s+spill|palette|close-up|medium\s+shot|wide\s+shot|push\s+in|pull\s+back|dolly|orbit|pan|tilt|handheld|locked[- ]off|hard\s+cut|match\s+cut|continuous|ots|over[- ]the[- ]shoulder|eyeline|diegetic|foley|ambience)\b|#[0-9a-f]{6}\b|카메라|조명|클로즈업|미디엄\s*샷|와이드\s*샷|핸드헬드|달리|트래킹|패닝|틸트|하드\s*컷|매치\s*컷|시선|역광|측광/i;
-
-const EXPLICIT_MUSIC_PERFORMANCE_RE =
-  /\b(?:sing(?:s|ing)?|singer|vocal(?:s|ist)?|song|bgm|background\s+music|soundtrack|musical\s+score|live\s+band|concert|choir|rap(?:ping)?|guitar\s+solo|playing\s+(?:the\s+)?(?:piano|guitar|violin|drums|cello|saxophone)|music\s+video|dance\s+to\s+the\s+beat)\b|노래|보컬|가창|연주|배경\s*음악|뮤직\s*비디오|음악에\s*맞춰/i;
 
 const BANNED_PLASTIC_SKIN_RE =
   /\b(?:poreless\s+porcelain(?:\s+glass[- ]skin)?|glass[- ]skin|dewy\s+highlighter(?:\s+glow)?|silky[- ]smooth\s+poreless\s+skin|plastic\s+beauty[- ]filter|beauty[- ]diffused\s+xenon\s+flash)\b/gi;
@@ -138,15 +150,6 @@ export function classifyPromptIntent(
   }
 
   return 'expand';
-}
-
-/** True only when the user's own prompt explicitly asks for singing, musical instruments, or music/BGM. */
-export function requestsExplicitMusicPerformance(prompt: string): boolean {
-  const strippedNegations = prompt.replace(
-    /\b(?:no|without|zero|never)\s+(?:background\s+)?(?:music|bgm|score|singing|instruments?)\b/gi,
-    ' ',
-  );
-  return EXPLICIT_MUSIC_PERFORMANCE_RE.test(strippedNegations);
 }
 
 export function normalizeDirectorAudioMode(mode: DirectorAudioMode | undefined): StudioAudioMode {
@@ -264,7 +267,7 @@ export function scrubSeedanceAntiPatterns(text: string, exempt = ''): string {
   out = out.replace(BANNED_PLASTIC_SKIN_RE, (match) =>
     new RegExp(match.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i').test(exempt)
       ? match
-      : 'natural skin texture with zero plastic beauty-filter glare',
+      : DIRECTOR_SCRUB_SKIN_PHRASE,
   );
   out = out.replace(BANNED_SAME_AS_ORIGINAL_RE, (match) =>
     new RegExp(match.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i').test(exempt)
@@ -289,7 +292,7 @@ export function enforceDirectorAudioPolicy(
   if (explicitMusic) {
     return audioLineRe.test(prompt)
       ? prompt
-      : `${prompt.trim()}\nAudio: live diegetic room sound, Foley and the requested musical performance.`;
+      : `${prompt.trim()}\n${DIRECTOR_EXPLICIT_MUSIC_AUDIO_LINE}`;
   }
 
   // Strict No-BGM Default for `on`, `sfx`, `ambient`, and `native` unless singing/music was explicitly requested.
@@ -309,11 +312,10 @@ export function enforceDirectorAudioPolicy(
     .trim()
     .replace(/[.]+$/, '');
 
-  const noBgmClause = 'no background music, no score, no musical instruments.';
   const rebuilt = body
     ? /no\s+background\s+music/i.test(body)
       ? `Audio: ${body}.`
-      : `Audio: ${body} — diegetic Foley, room ambience and requested dialogue only; ${noBgmClause}`
+      : `Audio: ${body} — ${DIRECTOR_NO_BGM_REBUILT_TAIL}`
     : DIRECTOR_NO_BGM_AUDIO_LINE;
 
   return prompt.replace(first, rebuilt);
@@ -348,7 +350,7 @@ export function buildSeedanceDirectorSystemInstruction(options: {
       ? 'Audio rule: silent run. Write NO "Audio:" line and do not describe sound.'
       : options.explicitMusic
         ? 'Audio rule: write ONE "Audio:" line with room ambience, Foley, and the explicitly requested musical/vocal performance.'
-        : 'Audio rule (Strict No-BGM Default): write ONE "Audio:" line specifying diegetic Foley, room ambience and requested dialogue only — no background music, no score, no musical instruments (music is layered cleanly in Sequence Rail post-production).';
+        : `Audio rule (Strict No-BGM Default): write ONE "Audio:" line specifying ${DIRECTOR_NO_BGM_CLAUSE} (music is layered cleanly in Sequence Rail post-production).`;
 
   const blueprintRule = options.blueprint
     ? 'Blueprint adaptation rule: the reference video is NOT sent to the generator. Write 100% self-contained visible action, camera travel/pan-tilt/zoom, subject counts, and lighting prose. NEVER write "same as original video", "@Video1", or "keep original camera".'
@@ -363,9 +365,9 @@ Mandatory Seedance 2.5 Grammar & Quality Rules:
 1. OMIT all redundant boilerplate headers: never write "Create a Seedance video", aspect ratio (9:16, 16:9), resolution (480p, 1080p, 4K), FPS, or model names.
 2. Exact block order separated by line breaks:
    - "Reference authority:" (when references are attached) locking identity, exact facial bone structure, wardrobe, and product geometry/labels to ${options.hasImageRefs ? '@Image 1 (and any additional @Image N tokens)' : 'the attached references only'}.
-   - "Visual style:" concrete #Hex color palette roles (shadow floor, primary surface/wardrobe, key/accent), motivated light source & grounded shadow floor, lens feel, and material texture.
-   - Anti-composite lighting: match ambient shadow floor and color spill across subject and environment — never pasted-on or flat front-lit.
-   - Anti-plastic skin: enforce natural skin texture${options.hasImageRefs ? ' faithful to @Image 1' : ' when people appear (no image is attached: write no @Image token)'}, zero plastic/waxy beauty-filter glare. NEVER write "glass-skin", "poreless porcelain", or "dewy highlighter" (causes upscaler boiling).
+   - "Visual style:" concrete #Hex color palette roles (${DIRECTOR_V1_PALETTE_ROLES_LIST}), motivated light source & grounded shadow floor, lens feel, and material texture.
+   - Anti-composite lighting: ${DIRECTOR_V1_ANTI_COMPOSITE_LIGHTING_PHRASE} — never pasted-on or flat front-lit.
+   - Anti-plastic skin: enforce ${options.hasImageRefs ? DIRECTOR_V1_SKIN_WITH_REF_PHRASE : `${DIRECTOR_V1_SKIN_NO_REF_PHRASE} (no image is attached: write no @Image token), ${DIRECTOR_V1_SKIN_NO_GLARE_PHRASE}`}. NEVER write "glass-skin", "poreless porcelain", or "dewy highlighter" (causes upscaler boiling).
    - Seconds-based timeline from 0.0s to ${options.seconds.toFixed(1)}s ("0.0s–Xs: …") with contiguous ranges, off-axis eyelines & camera angle alternation across cuts (18° / 45° / 90° / OTS — never repetitive flat passport front-stares), concrete camera start-to-end movement, and an explicit cut handoff at the end of every shot except the final shot ("hard cut", "match cut on …", or "continuous").
    - ${audioInstruction}
 3. ${blueprintRule}
@@ -611,31 +613,65 @@ function directorThumbParts(binding: Binding, guard: GuardedRequest): GeminiPart
   return parts;
 }
 
+/** Output phrases the v1 director rules tell the model to write into the prompt (scoped to ref/audio state). */
+export function directorV1OutputPhrases(options: {
+  hasImageRefs: boolean;
+  audioMode: DirectorAudioMode;
+  explicitMusic: boolean;
+}): string[] {
+  const out: string[] = [
+    DIRECTOR_SCRUB_SKIN_PHRASE,
+    DIRECTOR_V1_PALETTE_ROLES_LIST,
+    DIRECTOR_V1_ANTI_COMPOSITE_LIGHTING_PHRASE,
+    ...(options.hasImageRefs
+      ? [DIRECTOR_V1_SKIN_WITH_REF_PHRASE]
+      : [DIRECTOR_V1_SKIN_NO_REF_PHRASE, DIRECTOR_V1_SKIN_NO_GLARE_PHRASE]),
+  ];
+  if (options.audioMode !== 'off' && options.audioMode !== 'silent') {
+    if (options.explicitMusic) {
+      out.push(DIRECTOR_EXPLICIT_MUSIC_AUDIO_LINE);
+    } else {
+      out.push(DIRECTOR_NO_BGM_AUDIO_LINE, DIRECTOR_NO_BGM_CLAUSE, DIRECTOR_NO_BGM_REBUILT_TAIL);
+    }
+  }
+  return out;
+}
+
 /**
  * Our fixed lines that are meant to appear in a directed prompt (the prompt guard's allow-list for this
  * director): the audio lines `enforceDirectorAudioPolicy` writes, the skin phrase the scrub writes, every
- * phrase the rules quote for the model to write, and this input's deterministic fallback, which the customer
+ * phrase the rules tell the model to write, and this input's deterministic fallback, which the customer
  * reads whenever the director fails anyway.
  */
-function directorAllow(
+export function directorAllow(
   input: DirectorCompileInput,
   system: string,
-  analysis: MediaAnalysisDigest | null,
-  playbooks: readonly DirectorPlaybookRule[],
+  analysis: MediaAnalysisDigest | null = null,
+  playbooks: readonly DirectorPlaybookRule[] = [],
+  env: Record<string, string | undefined> = process.env,
 ): string[] {
   let fallbackText = '';
   try {
-    fallbackText = composeDirectorFallbackPrompt(input, { analysis, playbooks }).prompt;
+    fallbackText = composeDirectorFallbackPrompt(input, { analysis, playbooks, env }).prompt;
   } catch {
     fallbackText = '';
   }
+  const playbookLines = playbookRuleLines(playbooks);
+  const binding = bindReferences(toEnhanceInput(input, playbookLines));
+  const hasImageRefs = binding.bound.some((b) => b.token && b.ref.kind === 'image');
+  const audioMode: DirectorAudioMode = input.video?.audio ?? 'on';
+  const userText = `${input.prompt}\n${input.video?.change ?? ''}`;
+  const explicitMusic =
+    audioMode !== 'sfx' && audioMode !== 'ambient' && requestsExplicitMusicPerformance(userText);
+
   return [
-    DIRECTOR_NO_BGM_AUDIO_LINE,
-    'Audio: live diegetic room sound, Foley and the requested musical performance.',
-    'diegetic Foley, room ambience and requested dialogue only; no background music, no score, no musical instruments.',
-    'natural skin texture with zero plastic beauty-filter glare',
-    ...dictatedSpans(system),
-    fallbackText,
+    ...new Set(
+      [
+        ...directorV1OutputPhrases({ hasImageRefs, audioMode, explicitMusic }),
+        ...dictatedSpans(system),
+        fallbackText,
+      ].filter((s) => s.length > 0 && wordUnits(foldText(s)).length >= 4),
+    ),
   ];
 }
 
@@ -866,7 +902,7 @@ export class DefaultPromptCompiler implements PromptCompiler {
                 DIRECTOR_NO_BGM_AUDIO_LINE,
                 deps.env,
               )
-            : directorAllow(input, guard.system, analysis, playbooks),
+            : directorAllow(input, guard.system, analysis, playbooks, deps.env),
           shapes: { prompt: { noMarkup: true }, notes: { maxChars: NOTES_MAX, oneSentence: true } },
         },
       );
