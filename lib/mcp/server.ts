@@ -19,7 +19,7 @@ import { makerStats } from '@/lib/makers/stats';
 import { MAKER_AV_FILE_MAX_BYTES, MAKER_FILE_MAX_BYTES, MAKER_FORMAT_MAX_BYTES, MAKER_REFERENCE_FILES } from '@/lib/recipes/assets';
 import { loadMakerDraft, makerAction, MAKER_TEST_RENDERS, RecipeRejected, uploadMakerFile } from '@/lib/recipes/maker';
 import { ROYALTY_DEFAULT_KRW, ROYALTY_MAX_KRW, ROYALTY_MIN_KRW } from '@/lib/recipes/pricing';
-import { INTRO_MAX, MAKER_ENGINE_IDS, MIN_STEP_PROMPT_CHARS, NOTE_MAX, OUTRO_MAX, makerEnginesFor, parseRecipe } from '@/lib/recipes/schema';
+import { INTRO_MAX, MAKER_ENGINE_IDS, MIN_STEP_PROMPT_CHARS, NOTE_MAX, OUTRO_MAX, makerEnginesFor, parseRecipe, recipeShapeHints } from '@/lib/recipes/schema';
 import { GUIDE_META_MAX, GUIDE_NOTE_MAX, GUIDE_PROMPT_MAX, GUIDE_PROMPT_MIN, GUIDE_TITLE_MAX, MAX_GUIDE_CLIPS } from '@/components/recipes/guide-editor';
 import { isVideoEngine } from '@/lib/images/engines';
 import { DEFAULT_PROMPT_CHARS, SEEDANCE_25_PROMPT_CHARS, formatPromptChars, promptCharLimit } from '@/lib/engines/prompt-limits';
@@ -196,6 +196,7 @@ export function postGuide() {
     maxJsonBytes: POST_MAX_JSON_BYTES,
     selfPublish: true,
     rightsConfirmationRequired: true,
+    naming: 'In blog posts, the author may freely name the models and tools they used in headings, text, lists, media captions, and in a prompt card’s title, spec line (meta), prompt, and note. The rule against model names in template clip titles and spec lines (get_recipe_guide) is separate and unchanged.',
     limits: {
       titleMin: POST_TITLE_MIN,
       titleMax: POST_TITLE_MAX,
@@ -254,7 +255,7 @@ export function recipeGuide() {
     publishing: 'publish_template makes the draft a live template with no studio review once: the recipe passes, an example FILE is uploaded (role "example"), and one test_render has succeeded. test_render makes the image steps only; a template with no image step to test needs an example VIDEO file instead. Price = cost floor + royalty_krw, set automatically.',
     disclosure: 'show_prompts / show_files decide what signed-in members see on the template page. Anonymous visitors only see an outline (steps, engines, inputs, and clip card titles only) and are asked to sign in. Off by default.',
     presentation: '"make-first": example → make → how it was made. "story-first": your story and steps first.',
-    notes: 'notes.intro (shown to everyone above the outline), steps[].note and guide[].note (shown as a highlighted tip box ABOVE each prompt, members only — visible even when the prompt is folded) and notes.outro (e.g. "post yours and tag me") are display-only; no engine reads them.',
+    notes: 'notes.intro (shown to everyone above the outline), steps[].note and guide[].note (shown as a highlighted tip box ABOVE each prompt, members only — visible even when the prompt is folded) and notes.outro (e.g. "post yours and tag me") are display-only; no engine reads them. The example and exampleWithClips objects contain an ast_<32 hex from upload_file> placeholder which must be replaced with an id returned by upload_file before validating.',
     guide: {
       summary: `Optional display-only clip cards (1–${MAX_GUIDE_CLIPS} cards) for multi-clip or beat-by-beat templates. No engine reads guide[]; it renders on the template page in the full-width "Clip by clip" section (#clips).`,
       visibility: 'Signed-in members see every clip card (number, title, meta, tip box above the prompt, foldable prompt and copy button). Signed-out visitors see numbered titles only — never meta, prompts or tips.',
@@ -341,6 +342,11 @@ async function refresh(deps: McpDeps) {
   if (settings?.handle) revalidateMakerProfile([settings.handle]);
 }
 
+function shapeHintsFor(checked: ReturnType<typeof parseRecipe>, rawRecipe: unknown): string[] {
+  if (checked.ok || !checked.issues.some((issue) => issue.code === 'shape' && !issue.step)) return [];
+  return recipeShapeHints(rawRecipe);
+}
+
 async function callTool(deps: McpDeps, name: string, args: Record<string, unknown>): Promise<unknown> {
   // The same open rule the gate just applied (lib/makers/access.ts); the domain re-checks the active row.
   const access = { creators: await creativeProgramOpen(deps.sql) };
@@ -370,7 +376,11 @@ async function callTool(deps: McpDeps, name: string, args: Record<string, unknow
     case 'validate_recipe': {
       const checked = parseRecipe(args.recipe);
       const warnings = guideTokenWarnings(args.recipe);
-      const extra = warnings.length ? { warnings } : {};
+      const hints = shapeHintsFor(checked, args.recipe);
+      const extra = {
+        ...(hints.length ? { hints } : {}),
+        ...(warnings.length ? { warnings } : {}),
+      };
       return checked.ok ? { ok: true, medium: checked.medium, ...extra } : { ok: false, issues: checked.issues, ...extra };
     }
     case 'list_templates': {
@@ -412,11 +422,13 @@ async function callTool(deps: McpDeps, name: string, args: Record<string, unknow
       }, access);
       const checked = parseRecipe(args.recipe);
       const warnings = guideTokenWarnings(args.recipe);
+      const hints = shapeHintsFor(checked, args.recipe);
       return {
         id,
         saved: true,
         complete: checked.ok,
         issues: checked.ok ? [] : checked.issues,
+        ...(hints.length ? { hints } : {}),
         ...(warnings.length ? { warnings } : {}),
         editor: `${deps.origin}/creators/workspace/formats/${id}`,
       };

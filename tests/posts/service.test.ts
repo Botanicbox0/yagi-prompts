@@ -438,4 +438,48 @@ describe('maker blog service & public readers', () => {
       await pre.close();
     }
   });
+
+  it('preserves model and tool names across all post blocks when saving and reading back for the owner', async () => {
+    const ownWork = (await storeMakerWork(h.sql, store, { userId: CREATIVE.userId!, bytes: await jpegBytes() })).work;
+    const expectedBlocks = [
+      { type: 'heading' as const, text: 'Seedance 2.5 and Seedream 5.5 breakdown' },
+      {
+        type: 'text' as const,
+        text: 'Built with Seedance 2.5, Seedream 5.5, Nano Banana 2.1, Kling, Midjourney, and ComfyUI.',
+      },
+      {
+        type: 'list' as const,
+        items: ['Seedream 5.5 + Nano Banana 2.1', 'Midjourney + ComfyUI', 'Seedance 2.5 + Kling'],
+      },
+      {
+        type: 'media' as const,
+        workId: ownWork.id,
+        caption: 'Still from Seedream 5.5 / ComfyUI, animated in Seedance 2.5 and Kling',
+      },
+      {
+        type: 'prompt' as const,
+        title: 'Seedance 2.5 & Kling beat from Midjourney / Nano Banana 2.1 still',
+        kind: 'video' as const,
+        meta: 'Seedance 2.5 · Seedream 5.5 · 9:16 · 5s',
+        prompt:
+          'Slow dolly across the portrait prepared in Seedream 5.5, Nano Banana 2.1, Midjourney, and ComfyUI, rendered in Seedance 2.5 and Kling.',
+        note: 'Compared Seedance 2.5 vs Kling after a ComfyUI pass.',
+      },
+    ];
+
+    const saved = await saveMakerPost(h.sql, CREATIVE.userId!, {
+      title: 'Model comparison: Seedance 2.5 to ComfyUI',
+      summary: 'Notes on Seedance 2.5, Seedream 5.5, Nano Banana 2.1, Kling, Midjourney, and ComfyUI.',
+      coverWorkId: ownWork.id,
+      blocks: expectedBlocks,
+    });
+
+    const loaded = await loadMakerPost(h.sql, CREATIVE.userId!, saved.post.id);
+    expect(loaded).not.toBeNull();
+    expect(loaded?.title).toBe('Model comparison: Seedance 2.5 to ComfyUI');
+    expect(loaded?.summary).toBe(
+      'Notes on Seedance 2.5, Seedream 5.5, Nano Banana 2.1, Kling, Midjourney, and ComfyUI.',
+    );
+    expect(loaded?.blocks).toEqual(expectedBlocks);
+  });
 });
