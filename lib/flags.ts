@@ -418,6 +418,19 @@ export function brandSendOpen(env: Record<string, string | undefined> = process.
 }
 
 /**
+ * docs/BRAND-PROJECT-SPINE.md §8.5 (slice 4c) — 초대하고 보내기: in 보내기's send field an owner or editor names the e-mail
+ * address of someone who is not a workspace member; the line is posted at once, the existing workspace invitation goes
+ * out (role viewer), and when it is accepted the line reaches the new member as a mention. Default OFF: open only when
+ * the server environment says exactly `BRAND_SEND_INVITE=on`, and then only where 보내기 itself is open
+ * (`brandSendOpenFor`) and migration 0202 is applied (lib/brand-rooms/send-invite.ts `brandSendInviteOpenFor`). Closed:
+ * the send and invitation operations answer exactly as before slice 4c (a send carrying `invites` is `invalid`), and an
+ * invitation an editor issued through 보내기 is honoured no more.
+ */
+export function brandSendInviteOpen(env: Record<string, string | undefined> = process.env): boolean {
+  return env.BRAND_SEND_INVITE === 'on';
+}
+
+/**
  * docs/BRAND-ROOMS-FEEDBACK.md §12 — sharing a project room by invitation: brand owners and editors invite
  * people by e-mail to one project (view only or with comments), the share dialog's two link modes
  * ("초대한 사람만" by default, "링크가 있는 누구나" only when switched on), the invitation mail, single-use

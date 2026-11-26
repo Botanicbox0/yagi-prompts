@@ -82,6 +82,8 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
       // 2026-11-18 — project room notices: mail switch and queue (docs/BRAND-ROOMS-FEEDBACK.md §2.3, 0094).
       'brand_room_notice_prefs',
       'brand_room_notices',
+      // docs/BRAND-PROJECT-SPINE.md §8.5 (0202) — 초대하고 보내기: a members line waiting for an invitation, server only.
+      'brand_room_pending_mentions',
       'brand_room_reactions',
       'brand_room_reads',
       'brand_room_share_visits',

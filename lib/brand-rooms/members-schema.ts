@@ -35,9 +35,37 @@ export async function brandSendTablesReady(sql: SqlRunner, now = Date.now()): Pr
   return probe.ready;
 }
 
-/** Forget the lookup (tests change the schema under one process). */
+/** Forget the lookups, this one and 0202's (tests change the schema under one process). */
 export function resetBrandSendProbe(): void {
   probe = null;
+  inviteProbe = null;
+}
+
+let inviteProbe: { ready: boolean; at: number } | null = null;
+
+/**
+ * True once migration 0202 is applied (초대하고 보내기, slice 4c): `brand_room_pending_mentions` exists. Remembered the
+ * same way as 0200's probe: a miss is looked up again after a minute, a hit is kept.
+ */
+export async function brandSendInviteTableReady(sql: SqlRunner, now = Date.now()): Promise<boolean> {
+  if (inviteProbe && (inviteProbe.ready || now - inviteProbe.at < RECHECK_MS)) return inviteProbe.ready;
+  const found = await sql.query<{ n: number }>(
+    `select count(*)::int as n from information_schema.tables
+      where table_schema = current_schema() and table_name = 'brand_room_pending_mentions'`,
+  );
+  inviteProbe = { ready: Number(found.rows[0]?.n ?? 0) === 1, at: now };
+  return inviteProbe.ready;
+}
+
+const known = (state: { ready: boolean; at: number } | null, now: number): boolean | null =>
+  state && (state.ready || now - state.at < RECHECK_MS) ? state.ready : null;
+
+/**
+ * What the two probes above would answer without asking the database (0200's and 0202's): the remembered answers while
+ * still trusted, else null. For callers that must not run a statement just to learn "closed".
+ */
+export function brandSendProbesKnown(now = Date.now()): { send: boolean | null; invite: boolean | null } {
+  return { send: known(probe, now), invite: known(inviteProbe, now) };
 }
 
 /**

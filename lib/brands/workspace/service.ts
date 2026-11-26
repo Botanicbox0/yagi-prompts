@@ -56,6 +56,22 @@ export interface BrandWorkspaceDeps {
   projectGuestBinding?: boolean;
   /** With rooms open and invitations on: an accepted project invitation lands in the project room. */
   roomLanding?: boolean;
+  /**
+   * 초대하고 보내기 (docs/BRAND-PROJECT-SPINE.md §8.5; slice 4c), set by the route for `invitation.accept`
+   * (lib/brand-rooms/send-invite.ts `sendInviteAcceptHooks`). Absent, or closed for the invitation's organization: the
+   * acceptance is exactly what it was before slice 4c.
+   */
+  sendInvites?: BrandSendInviteHooks;
+}
+/** The acceptance's two questions to 초대하고 보내기, inside the acceptance's transaction. */
+export interface BrandSendInviteHooks {
+  /**
+   * An organization viewer invitation issued by an editor, accepted by `userId`: honoured only when 보내기 issued it, it
+   * is open there, and `userId` is not someone an owner removed from the organization.
+   */
+  honoursEditorInvitation(sql: SqlRunner, invite: { id: string; organizationId: string; email: string; createdBy: string; requestId: string }, userId: string): Promise<boolean>;
+  /** After the membership is written: the lines waiting for this invitation reach the new member. Never throws. */
+  deliver(sql: SqlRunner, invite: { id: string; organizationId: string }, userId: string): Promise<void>;
 }
 type Row = Record<string, unknown>;
 class Denied extends Error { constructor(readonly code: BrandFailureCode, readonly reason?: UploadLimitReason) { super(code); } }
@@ -959,7 +975,14 @@ export async function acceptBrandInvitation(deps: BrandWorkspaceDeps, viewer: Vi
     // project invitation (owner or editor, §12) dies the same way when its inviter loses that seat.
     if(invite.issued_by_studio) await studio(sql,String(invite.created_by));
     else if (invite.project_id) { if (!['owner','editor'].includes(await member(sql, String(invite.created_by), String(invite.organization_id)))) throw new Denied('not_found'); }
-    else if (await member(sql, String(invite.created_by), String(invite.organization_id)) !== 'owner') throw new Denied('not_found');
+    else {
+      const inviterRole = await member(sql, String(invite.created_by), String(invite.organization_id));
+      // 초대하고 보내기 (slice 4c): an editor's VIEWER invitation counts only when 보내기 issued it, and only while that is
+      // open for the organization (deps.sendInvites); every other organization invitation still needs an owner inviter.
+      if (inviterRole !== 'owner' && !(inviterRole === 'editor' && invite.role === 'viewer' && deps.sendInvites
+        && await deps.sendInvites.honoursEditorInvitation(sql, { id: String(invite.id), organizationId: String(invite.organization_id), email: String(invite.email),
+          createdBy: String(invite.created_by), requestId: String(invite.request_id) }, userId))) throw new Denied('not_found');
+    }
     if(invite.project_id) {
       // The newest invitation defines the guest's scope, including whether they may comment.
       await sql.query("insert into brand_project_members(organization_id,project_id,user_id,can_comment) values($1,$2,$3,$4) on conflict(project_id,user_id) do update set status='active',can_comment=excluded.can_comment",[invite.organization_id,invite.project_id,userId,invite.can_comment===true]);
@@ -977,6 +1000,9 @@ export async function acceptBrandInvitation(deps: BrandWorkspaceDeps, viewer: Vi
       await sql.query(`insert into brand_memberships(organization_id,user_id,role) values($1,$2,$3)
         on conflict(organization_id,user_id) do update set role=excluded.role,status='active'`, [invite.organization_id, userId, invite.role]);
     await sql.query('update brand_invites set accepted_at=now(),accepted_by=$1 where id=$2', [userId, invite.id]);
+    // 초대하고 보내기 (slice 4c): the lines waiting for this invitation reach the new member, in this transaction; this
+    // step never fails the acceptance (it rolls itself back and logs).
+    if (deps.sendInvites) await deps.sendInvites.deliver(sql, { id: String(invite.id), organizationId: String(invite.organization_id) }, userId);
     return acceptedScope(sql, invite, roomLanding);
   });
 }

@@ -63,6 +63,7 @@ import { enqueueNotices } from "@/lib/brand-rooms/notices";
 import { brandOrgInviteEmailOpen, brandRoomInvitesOpen } from "@/lib/flags";
 import { getMailer } from "@/lib/notify/service";
 import { deliverOrgInviteEmail } from "@/lib/brands/workspace/invite-mail";
+import { sendInviteAcceptHooks } from "@/lib/brand-rooms/send-invite";
 import { BRAND_NEWS_CLOSED, dismissHomeAnnouncement } from "@/lib/brand-news/service";
 export const dynamic = "force-dynamic";
 /**
@@ -225,8 +226,10 @@ export async function POST(request: NextRequest) {
         // docs/BRAND-ROOMS-FEEDBACK.md §12: with invitations on, a project invitation binds to the account
         // that accepts it and lands in the project room. Off: the strict e-mail match and today's landing.
         const invitesOn = brandRoomInvitesOpen();
+        // 초대하고 보내기 (docs/BRAND-PROJECT-SPINE.md §8.5): lines waiting for this invitation reach the new member;
+        // closed (BRAND_SEND_INVITE off, 보내기 closed, 0202 absent), the hooks read nothing and change nothing.
         result = await acceptBrandInvitation(
-          { sql, verifiedEmail, projectGuestBinding: invitesOn, roomLanding: invitesOn },
+          { sql, verifiedEmail, projectGuestBinding: invitesOn, roomLanding: invitesOn, sendInvites: sendInviteAcceptHooks() },
           viewer,
           input,
         );

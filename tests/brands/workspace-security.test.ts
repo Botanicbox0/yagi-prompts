@@ -101,9 +101,10 @@ describe('brand invitations, attachment bytes and database boundary', () => {
     await db.exec(readMigration('0185_glue_brand_workspace_approval.sql'));
     await db.exec(readMigration('0197_glue_brand_news.sql'));
     await db.exec(readMigration('0201_glue_brand_send.sql'));
+    await db.exec(readMigration('0203_glue_brand_send_invite.sql'));
     const tables =(await sql.query<{ relname: string; relrowsecurity: boolean; relforcerowsecurity: boolean }>("select relname,relrowsecurity,relforcerowsecurity from pg_class where relkind='r' and relname like 'brand_%' and relname not in ('brand_inquiries', 'brand_inquiry_deliveries') and relname not like 'brand_usage_%'")).rows; // Inquiry delivery and brand_usage_* have their own RLS tests.
-    expect(tables.map(t=>t.relname)).toEqual(expect.arrayContaining(['brand_project_members','brand_contract_documents','brand_contract_sharing_events','brand_support_messages','brand_shortlist_candidates','brand_feature_policies','brand_feature_policy_events','brand_plan_assignments','brand_plan_events','brand_identities','brand_identity_events','brand_memory_events','brand_looks','brand_studio_assets','brand_studio_jobs','brand_studio_outputs','brand_studio_allowances','brand_studio_lanes','brand_studio_folders','brand_studio_folder_items','brand_studio_likes','brand_studio_reviews','brand_studio_review_comments','brand_room_messages','brand_room_reactions','brand_room_reads','brand_storage_quotas','brand_storage_quota_events','brand_studio_video_projects','brand_studio_workflows','brand_studio_playbooks','brand_studio_mcp_tokens','brand_room_notice_prefs','brand_room_notices','brand_plan_allowance_defaults','brand_plan_allowance_default_events','brand_discount_codes','brand_discounts','brand_discount_redemptions','brand_discount_code_attempts','brand_billing_profiles','brand_invoices','brand_invoice_events','brand_allowance_grants','brand_subscriptions','brand_subscription_events','brand_workspace_approvals','brand_announcements','brand_announcement_dismissals','brand_room_thread_reads']));
-    expect(tables.length).toBe(71); // + rooms (0082..0084) + storage quotas (0086/0161) + studio v5 projects/workflows/mcp (0087/0162) + room notices (0094/0167) + billing core (0176/0177) + brand subscriptions (0182/0183) + workspace approvals (0184/0185) + news slot (0196/0197) + 보내기 thread reads (0200/0201)
+    expect(tables.map(t=>t.relname)).toEqual(expect.arrayContaining(['brand_project_members','brand_contract_documents','brand_contract_sharing_events','brand_support_messages','brand_shortlist_candidates','brand_feature_policies','brand_feature_policy_events','brand_plan_assignments','brand_plan_events','brand_identities','brand_identity_events','brand_memory_events','brand_looks','brand_studio_assets','brand_studio_jobs','brand_studio_outputs','brand_studio_allowances','brand_studio_lanes','brand_studio_folders','brand_studio_folder_items','brand_studio_likes','brand_studio_reviews','brand_studio_review_comments','brand_room_messages','brand_room_reactions','brand_room_reads','brand_storage_quotas','brand_storage_quota_events','brand_studio_video_projects','brand_studio_workflows','brand_studio_playbooks','brand_studio_mcp_tokens','brand_room_notice_prefs','brand_room_notices','brand_plan_allowance_defaults','brand_plan_allowance_default_events','brand_discount_codes','brand_discounts','brand_discount_redemptions','brand_discount_code_attempts','brand_billing_profiles','brand_invoices','brand_invoice_events','brand_allowance_grants','brand_subscriptions','brand_subscription_events','brand_workspace_approvals','brand_announcements','brand_announcement_dismissals','brand_room_thread_reads','brand_room_pending_mentions']));
+    expect(tables.length).toBe(72); // + rooms (0082..0084) + storage quotas (0086/0161) + studio v5 projects/workflows/mcp (0087/0162) + room notices (0094/0167) + billing core (0176/0177) + brand subscriptions (0182/0183) + workspace approvals (0184/0185) + news slot (0196/0197) + 보내기 thread reads (0200/0201) + 초대하고 보내기 waiting lines (0202/0203)
     for (const table of tables) {
       expect(table.relrowsecurity && table.relforcerowsecurity).toBe(true);
       for (const role of ['anon', 'authenticated']) {
@@ -149,9 +150,17 @@ describe('brand invitations, attachment bytes and database boundary', () => {
     for (const table of ['brand_room_messages', 'brand_room_reads', 'brand_room_notices']) {
       for (const privilege of ['SELECT', 'INSERT', 'UPDATE', 'DELETE']) expect(await allowedOn(table, privilege), `${table} ${privilege}`).toBe(true);
     }
+    // 초대하고 보내기 (0202/0203): a waiting line is written, read and deleted (at acceptance) on the server role, never updated;
+    // its guard runs only as the table's trigger.
+    expect(await allowedOn('brand_room_pending_mentions', 'SELECT')).toBe(true);
+    expect(await allowedOn('brand_room_pending_mentions', 'INSERT')).toBe(true);
+    expect(await allowedOn('brand_room_pending_mentions', 'DELETE')).toBe(true);
+    expect(await allowedOn('brand_room_pending_mentions', 'UPDATE')).toBe(false);
+    expect((await sql.query<{ allowed: boolean }>("select has_function_privilege('service_role','brand_room_pending_mentions_guard()','EXECUTE') as allowed")).rows[0]?.allowed).toBe(false);
     await db.exec('set role authenticated');
     await expect(sql.query('select * from brand_projects')).rejects.toThrow(/permission denied/i);
     await expect(sql.query('select * from brand_room_thread_reads')).rejects.toThrow(/permission denied/i);
+    await expect(sql.query('select * from brand_room_pending_mentions')).rejects.toThrow(/permission denied/i);
     await expect(sql.query('select * from brand_invites')).rejects.toThrow(/permission denied/i);
     await expect(sql.query('select * from brand_room_notices')).rejects.toThrow(/permission denied/i);
     await db.exec('reset role');

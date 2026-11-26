@@ -21,6 +21,11 @@
  *
  * Every list is bounded by a named limit (`SEND_LIMITS`, `ROOM_LIMITS`), and a fixed number of statements answers each
  * operation whatever the number of threads (the slice 4a contract lists them).
+ *
+ * 초대하고 보내기 (slice 4c, ./send-invite.ts): while `BRAND_SEND_INVITE` is open for the organization, `send.post` and
+ * `send.reply` also take `invites` (people who are not members yet: the existing workspace invitation, as a viewer, and the
+ * line waits for it), every line carries its invitation chips, and `send.lookup` answers what a typed address becomes.
+ * Closed, every answer and statement is exactly slice 4a's.
  */
 import type { Viewer } from '@/lib/auth/identity';
 import type { SqlRunner } from '@/lib/db/sql-runner';
@@ -31,14 +36,30 @@ import { activeMembersAmong, brandSendOpenFor, MEMBERS_LINE, sendSeat, shownProj
 import { ROOM_LIMITS, type RoomErrorCode, type RoomFailure } from './message-contracts';
 import { roomAuthorName } from './names';
 import { enqueueNotices } from './notices';
+import type { Mailer } from '@/lib/notify/mailer';
+import {
+  attachInvites,
+  carriesInvites,
+  deliverLeftovers,
+  inviteChips,
+  inviteSwitchOpen,
+  lookupAddress,
+  mailInvites,
+  mayInvite,
+  planInvites,
+  SendInviteDenied,
+  type IssuedInvite,
+} from './send-invite';
 import {
   SEND_LIMITS,
   SendFileSchema,
   SendInboxSchema,
   SendPeopleSchema,
+  SendPostInviteSchema,
   SendPostSchema,
   SendReadAllSchema,
   SendReadSchema,
+  SendReplyInviteSchema,
   SendReplySchema,
   SendThreadSchema,
   fileRefKeyOf,
@@ -50,6 +71,8 @@ import {
   type SendFileThreads,
   type SendInboxPage,
   type SendInboxView,
+  type SendInviteChip,
+  type SendInviteOutcome,
   type SendMessage,
   type SendOperation,
   type SendPeople,
@@ -67,6 +90,8 @@ type Env = Record<string, string | undefined>;
 export interface SendDeps {
   sql: SqlRunner;
   media: StudioMediaStore;
+  /** 초대하고 보내기 (slice 4c): the existing invitation mail's mailer, used after the commit while `BRAND_ORG_INVITE_EMAIL=on`. */
+  mailer?: Mailer | null;
 }
 
 class SendDenied extends Error {
@@ -86,7 +111,8 @@ async function guard<T>(fn: () => Promise<T>): Promise<T | RoomFailure> {
   try {
     return await fn();
   } catch (error) {
-    if (error instanceof SendDenied || error instanceof RoomDenied) return failure(error.code);
+    if (error instanceof SendInviteDenied && error.refused?.length) return { ok: false, code: error.code, refused: error.refused };
+    if (error instanceof SendDenied || error instanceof RoomDenied || error instanceof SendInviteDenied) return failure(error.code);
     if ((error as { code?: string } | null)?.code === '23505') return failure('conflict');
     throw error;
   }
@@ -111,17 +137,35 @@ export async function runSendOperation(deps: SendDeps, viewer: Viewer, operation
   if (typeof raw !== 'string' || !UUID.test(raw)) return failure('invalid');
   const organizationId = raw.toLowerCase();
   if (!(await brandSendOpenFor(deps.sql, organizationId, env))) return failure('invalid');
-  return guard(() =>
+  // 초대하고 보내기 (slice 4c): its own switch and 0202; closed, every answer is exactly what it was before the slice.
+  const invitesOpen = await inviteSwitchOpen(deps.sql, env);
+  // While it is closed `send.lookup` does not exist: the unknown operation's answer, before the seat, exactly as on
+  // origin/main.
+  if (operation === 'send.lookup' && !invitesOpen) return failure('invalid');
+  const issued: IssuedInvite[] = [];
+  const result = await guard(() =>
     deps.sql.transaction(async (sql) => {
       const seat = await sendSeat(sql, viewer, organizationId);
-      const ctx: Ctx = { sql, media: deps.media, organizationId, me: seat.userId.toLowerCase(), seat };
+      const ctx: Ctx = { sql, media: deps.media, organizationId, me: seat.userId.toLowerCase(), seat, invitesOpen, issued, env };
       // One lock order for everything that writes a line or a mark, the same as the spine's move (the organization row
       // first, `for update` there, then the threads' roots): the organization row `for key share` before any root,
       // file or mark is touched. A send then reads where its file is filed only after any move in progress committed
       // (or the move waits for it and carries its root), and a reply or a read mark can never hold a root while waiting
       // for the organization row the move holds (no deadlock). Writers do not block each other: `for key share`
       // conflicts only with `for update`.
-      if (WRITES.has(operation)) await sql.query('select id from brand_organizations where id = $1 for key share', [organizationId]);
+      // A line that invites someone (slice 4c; a well-formed input with at least one address, from an owner or editor)
+      // takes the same `for key share`, which already waits for and holds off the `for update` every invitation writer
+      // takes first (the members page, the team's form, the room invitations, acceptance, revocation): an address cannot
+      // join, and the daily count cannot move, between this line's decision and its write. Then a transaction-scoped
+      // advisory lock per organization queues inviting lines behind each other, so two lines inviting one new address make
+      // one invitation. No other row lock is added: the line keeps slice 4a's lock profile exactly (no new deadlock with a
+      // writer that holds a profile and then updates the organization row).
+      if (WRITES.has(operation)) {
+        await sql.query('select id from brand_organizations where id = $1 for key share', [organizationId]);
+        if (invitesOpen && mayInvite(seat) && invitingInput(operation, input)) {
+          await sql.query("select pg_advisory_xact_lock(hashtextextended('brand-send-invite:' || $1::text, 0))", [organizationId]);
+        }
+      }
       switch (operation) {
         case 'send.post':
           return post(ctx, input);
@@ -139,9 +183,27 @@ export async function runSendOperation(deps: SendDeps, viewer: Viewer, operation
           return readAll(ctx, input);
         case 'send.people':
           return people(ctx, input);
+        case 'send.lookup':
+          return lookupAddress(sql, ctx, input);
       }
     }),
   );
+  // After the commit, as the members page's `invitation.create` does: the existing invitation mail for each new
+  // invitation while `BRAND_ORG_INVITE_EMAIL=on` (its state goes into the writer's answer); off, nothing is sent.
+  if (issued.length > 0 && result.ok && 'invited' in result && result.invited) {
+    const states = await mailInvites({ sql: deps.sql, mailer: deps.mailer ?? null }, viewer, organizationId, issued, env);
+    const byEmail = new Map(issued.map((one) => [one.email, states.get(one.inviteId) ?? null]));
+    result.invited = result.invited.map((outcome) => (outcome.result === 'invited' ? { ...outcome, mailState: byEmail.get(outcome.email) ?? null } : outcome));
+  }
+  return result;
+}
+
+/** A `send.post`/`send.reply` input that parses (with `invites`) and names at least one address. */
+function invitingInput(operation: SendOperation, input: unknown): boolean {
+  if (!carriesInvites(input)) return false;
+  if (operation === 'send.post') return (SendPostInviteSchema.safeParse(input).data?.invites.length ?? 0) > 0;
+  if (operation === 'send.reply') return (SendReplyInviteSchema.safeParse(input).data?.invites.length ?? 0) > 0;
+  return false;
 }
 
 /** The operations that write a line or a read mark (`send.thread` marks the thread it opens). */
@@ -153,7 +215,16 @@ interface Ctx {
   organizationId: string;
   me: string;
   seat: RoomSeat;
+  /** 초대하고 보내기 is open for the organization (slice 4c): lines carry their invitation chips, sends take `invites`. */
+  invitesOpen: boolean;
+  /** The invitations this request issued, for the mail after the commit. */
+  issued: IssuedInvite[];
+  env: Env;
 }
+
+/** Who reads the chips (`SendMessage.invites`): only while 초대하고 보내기 is open; an owner sees every address. */
+type ChipReader = { me: string; owner: boolean } | null;
+const chipReaderOf = (ctx: Pick<Ctx, 'invitesOpen' | 'me' | 'seat'>): ChipReader => (ctx.invitesOpen ? { me: ctx.me, owner: ctx.seat.role === 'owner' } : null);
 
 /* ------------------------------------------------------------------ files */
 
@@ -284,10 +355,12 @@ async function namesOf(sql: SqlRunner, ids: Iterable<string>): Promise<Map<strin
   return new Map(rows.map((row) => [String(row.id).toLowerCase(), roomAuthorName('brand', row.display_name, row.email)]));
 }
 
-function messageOf(row: LineRow, rootId: string, me: string, names: Map<string, string | null>): SendMessage {
+/** `chips` (slice 4c) only while 초대하고 보내기 is open; otherwise the line is exactly slice 4a's (no `invites` field). */
+function messageOf(row: LineRow, rootId: string, me: string, names: Map<string, string | null>, chips?: Map<string, SendInviteChip[]> | null): SendMessage {
   const authorId = row.author_id ? String(row.author_id).toLowerCase() : null;
-  return {
-    id: String(row.id).toLowerCase(),
+  const id = String(row.id).toLowerCase();
+  const message: SendMessage = {
+    id,
     rootId,
     parentId: row.parent_id ? String(row.parent_id).toLowerCase() : null,
     authorId,
@@ -297,6 +370,19 @@ function messageOf(row: LineRow, rootId: string, me: string, names: Map<string, 
     mentions: (row.mentions ?? []).map((id) => String(id).toLowerCase()).map((id) => ({ id, name: names.get(id) ?? null })),
     createdAt: iso(row.created_at),
   };
+  if (chips) message.invites = chips.get(id) ?? [];
+  return message;
+}
+
+/** The invitation chips of `rows` for `reader` (one statement), or null while 초대하고 보내기 is closed (no statement). */
+async function chipsOf(sql: SqlRunner, organizationId: string, rows: ReadonlyArray<{ id: string; author_id: string | null }>, reader: ChipReader): Promise<Map<string, SendInviteChip[]> | null> {
+  if (!reader) return null;
+  return inviteChips(
+    sql,
+    organizationId,
+    rows.map((row) => ({ id: String(row.id), authorId: row.author_id ? String(row.author_id) : null })),
+    reader,
+  );
 }
 
 /**
@@ -304,7 +390,7 @@ function messageOf(row: LineRow, rootId: string, me: string, names: Map<string, 
  * root of this organization is left out). Four statements whatever the number: the threads with their newest line, read
  * mark and the caller's flags; the files; the titles of the projects members are shown; the names the roots name.
  */
-async function threadSummaries(ctx: Pick<Ctx, 'sql' | 'media' | 'organizationId' | 'me'>, rootIds: readonly string[]): Promise<SendThreadSummary[]> {
+async function threadSummaries(ctx: Pick<Ctx, 'sql' | 'media' | 'organizationId' | 'me'> & { chips?: ChipReader }, rootIds: readonly string[]): Promise<SendThreadSummary[]> {
   const ids = [...new Set(rootIds.map((id) => id.toLowerCase()))].filter((id) => UUID.test(id));
   if (ids.length === 0) return [];
   const rows = (
@@ -341,12 +427,14 @@ async function threadSummaries(ctx: Pick<Ctx, 'sql' | 'media' | 'organizationId'
     ctx.sql,
     rows.flatMap((row) => (row.mentions ?? []).map(String)),
   );
+  // 초대하고 보내기 (slice 4c): the roots' invitation chips, one more statement, only while it is open (never for the bell).
+  const chips = await chipsOf(ctx.sql, ctx.organizationId, rows.map((row) => ({ id: row.root_id, author_id: row.author_id })), ctx.chips ?? null);
   const byId = new Map<string, SendThreadSummary>();
   for (const row of rows) {
     const ref = parseFileRefKey(row.ref_key);
     if (!ref) continue;
     const rootId = String(row.root_id).toLowerCase();
-    const root = messageOf({ ...row, id: row.root_id, parent_id: null }, rootId, ctx.me, names);
+    const root = messageOf({ ...row, id: row.root_id, parent_id: null }, rootId, ctx.me, names, chips);
     const latestAuthor = row.latest_author ? String(row.latest_author).toLowerCase() : null;
     byId.set(rootId, {
       rootId,
@@ -438,7 +526,8 @@ async function insertLine(
 }
 
 async function postedAnswer(ctx: Ctx, rootId: string, messageId: string): Promise<SendPosted> {
-  const [summary] = await threadSummaries(ctx, [rootId]);
+  const reader = chipReaderOf(ctx);
+  const [summary] = await threadSummaries({ ...ctx, chips: reader }, [rootId]);
   if (!summary) throw new SendDenied('not_found');
   if (messageId === rootId) return { ok: true, thread: summary, message: summary.root };
   const row = (
@@ -451,7 +540,8 @@ async function postedAnswer(ctx: Ctx, rootId: string, messageId: string): Promis
     )
   ).rows[0];
   if (!row) throw new SendDenied('not_found');
-  return { ok: true, thread: summary, message: messageOf(row, rootId, ctx.me, await namesOf(ctx.sql, (row.mentions ?? []).map(String))) };
+  const names = await namesOf(ctx.sql, (row.mentions ?? []).map(String));
+  return { ok: true, thread: summary, message: messageOf(row, rootId, ctx.me, names, await chipsOf(ctx.sql, ctx.organizationId, [row], reader)) };
 }
 
 /**
@@ -460,8 +550,10 @@ async function postedAnswer(ctx: Ctx, rootId: string, messageId: string): Promis
  * caller cannot open, a deleted one and another organization's answer exactly like a made-up id (`not_found`).
  */
 async function post(ctx: Ctx, input: unknown): Promise<SendPosted> {
-  const v = parse(SendPostSchema, input);
+  // While 초대하고 보내기 is closed the slice 4a schema answers alone: an `invites` field is an unknown field (`invalid`).
+  const v: { requestId: string; file: SendFileRef; body: string; mentions: string[]; invites: string[] } = ctx.invitesOpen ? parse(SendPostInviteSchema, input) : { ...parse(SendPostSchema, input), invites: [] };
   if (!ctx.seat.canTalk) throw new SendDenied('forbidden');
+  if (v.invites.length > 0 && !mayInvite(ctx.seat)) throw new SendDenied('forbidden');
   const ref: SendFileRef = v.file.kind === 'output' ? { kind: 'output', outputId: v.file.outputId.toLowerCase() } : { kind: 'asset', assetId: v.file.assetId.toLowerCase() };
   const refKey = fileRefKeyOf(ref);
   const prior = await priorLine(ctx, v.requestId);
@@ -474,11 +566,20 @@ async function post(ctx: Ctx, input: unknown): Promise<SendPosted> {
   // The organization row is already held `for key share` (`runSendOperation`), so where the file is filed is read only
   // after any move in progress committed, and a move that starts later waits for this root and carries it.
   const file = await sendableFile(ctx.sql, ctx.organizationId, ref);
-  const mentions = await requireMembers(ctx, v.mentions);
+  const named = await requireMembers(ctx, v.mentions);
+  // 초대하고 보내기 (slice 4c): what each address becomes, every refusal before anything is written.
+  const { plan, mentions } = await planInvites(ctx.sql, ctx, { invites: v.invites, body: v.body, mentions: named });
   const channel = membersChannelOf(file.projectId);
   const id = await insertLine(ctx, { projectId: file.projectId, channel, parentId: null, body: v.body, ref, refKey, mentions, requestId: v.requestId });
+  const invited = await attachInvites(ctx.sql, ctx, { messageId: id, requestId: v.requestId }, plan);
+  ctx.issued.push(...invited.issued);
   await enqueueNotices(ctx.sql, { type: 'member', organizationId: ctx.organizationId, projectId: file.projectId, channel, messageId: id, rootId: id, actorId: ctx.me, mentions, reply: false });
-  return postedAnswer(ctx, id, id);
+  return withInvited(await postedAnswer(ctx, id, id), invited.outcomes);
+}
+
+/** The writer's answer with what each address became (only when the request named any). */
+function withInvited(answer: SendPosted, outcomes: SendInviteOutcome[]): SendPosted {
+  return outcomes.length > 0 ? { ...answer, invited: outcomes } : answer;
 }
 
 /**
@@ -487,8 +588,9 @@ async function post(ctx: Ctx, input: unknown): Promise<SendPosted> {
  * reply used as a root, or a made-up id: `not_found`.
  */
 async function reply(ctx: Ctx, input: unknown): Promise<SendPosted> {
-  const v = parse(SendReplySchema, input);
+  const v: { requestId: string; rootId: string; body: string; mentions: string[]; invites: string[] } = ctx.invitesOpen ? parse(SendReplyInviteSchema, input) : { ...parse(SendReplySchema, input), invites: [] };
   if (!ctx.seat.canTalk) throw new SendDenied('forbidden');
+  if (v.invites.length > 0 && !mayInvite(ctx.seat)) throw new SendDenied('forbidden');
   const rootId = v.rootId.toLowerCase();
   const prior = await priorLine(ctx, v.requestId);
   if (prior) {
@@ -497,11 +599,14 @@ async function reply(ctx: Ctx, input: unknown): Promise<SendPosted> {
   }
   await requireRate(ctx);
   const root = await membersRoot(ctx.sql, ctx.organizationId, rootId, true);
-  const mentions = await requireMembers(ctx, v.mentions);
+  const named = await requireMembers(ctx, v.mentions);
+  const { plan, mentions } = await planInvites(ctx.sql, ctx, { invites: v.invites, body: v.body, mentions: named });
   const id = await insertLine(ctx, { projectId: root.project_id, channel: root.channel, parentId: root.id, body: v.body, ref: root.ref, refKey: root.ref_key, mentions, requestId: v.requestId });
+  const invited = await attachInvites(ctx.sql, ctx, { messageId: id, requestId: v.requestId }, plan);
+  ctx.issued.push(...invited.issued);
   await ctx.sql.query('update brand_room_messages set updated_at = now() where id = $1', [root.id]);
   await enqueueNotices(ctx.sql, { type: 'member', organizationId: ctx.organizationId, projectId: root.project_id, channel: root.channel, messageId: id, rootId: root.id, actorId: ctx.me, mentions, reply: true });
-  return postedAnswer(ctx, root.id, id);
+  return withInvited(await postedAnswer(ctx, root.id, id), invited.outcomes);
 }
 
 /** Move the caller's read mark on one thread forward (never back), at most to now. */
@@ -533,7 +638,8 @@ async function thread(ctx: Ctx, input: unknown): Promise<SendThreadPage> {
   const v = parse(SendThreadSchema, input);
   const root = await membersRoot(ctx.sql, ctx.organizationId, v.rootId.toLowerCase(), false);
   if (v.markRead) await markThread(ctx, root.id, null);
-  const [summary] = await threadSummaries(ctx, [root.id]);
+  const reader = chipReaderOf(ctx);
+  const [summary] = await threadSummaries({ ...ctx, chips: reader }, [root.id]);
   if (!summary) throw new SendDenied('not_found');
   const rows = (
     await ctx.sql.query<LineRow>(
@@ -546,7 +652,8 @@ async function thread(ctx: Ctx, input: unknown): Promise<SendThreadPage> {
     )
   ).rows;
   const names = await namesOf(ctx.sql, rows.flatMap((row) => (row.mentions ?? []).map(String)));
-  return { ok: true, thread: summary, replies: rows.map((row) => messageOf(row, root.id, ctx.me, names)) };
+  const chips = await chipsOf(ctx.sql, ctx.organizationId, rows, reader);
+  return { ok: true, thread: summary, replies: rows.map((row) => messageOf(row, root.id, ctx.me, names, chips)) };
 }
 
 /** `send.file`: the threads about one file, newest root first (at most `SEND_LIMITS.fileThreads`), and its card. */
@@ -566,7 +673,7 @@ async function fileThreads(ctx: Ctx, input: unknown): Promise<SendFileThreads> {
   // No file a member can open by that name and no thread about it: the made-up id's answer (a deleted, not-ready or
   // internal file of this organization says nothing about itself until someone has talked about it).
   if ((!row || !row.visible) && roots.length === 0) throw new SendDenied('not_found');
-  return { ok: true, file: cardOf(ref, row, ctx.media), threads: await threadSummaries(ctx, roots) };
+  return { ok: true, file: cardOf(ref, row, ctx.media), threads: await threadSummaries({ ...ctx, chips: chipReaderOf(ctx) }, roots) };
 }
 
 /* ------------------------------------------------------------------ inbox */
@@ -663,9 +770,12 @@ async function inbox(ctx: Ctx, input: unknown): Promise<SendInboxPage> {
   const v = parse(SendInboxSchema, input);
   const after = v.cursor ? decodeCursor(v.cursor) : null;
   if (v.cursor && !after) throw new SendDenied('invalid');
+  // 초대하고 보내기 (slice 4c): lines that waited for an invitation this member accepted and did not reach them yet arrive
+  // now, before the page is read (never failing the read).
+  if (ctx.invitesOpen) await deliverLeftovers(ctx.sql, ctx.organizationId, ctx.me, ctx.env);
   const page = await inboxKeys(ctx, { mentionsOnly: v.view === 'mentions', after, limit: SEND_LIMITS.inboxPage });
   const counts = await inboxCounts(ctx);
-  return { ok: true, view: v.view, threads: await threadSummaries(ctx, page.ids), next: page.next, ...counts };
+  return { ok: true, view: v.view, threads: await threadSummaries({ ...ctx, chips: chipReaderOf(ctx) }, page.ids), next: page.next, ...counts };
 }
 
 /** `send.read_all` ("모두 읽음"): the caller's unread inbox threads, newest first, at most `SEND_LIMITS.readAllMax`, marked read now. */
@@ -731,8 +841,11 @@ export async function sendBellPart(
 ): Promise<{ threads: SendThreadSummary[]; more: boolean; unread: number; mentionsUnread: number } | null> {
   if (seat.role === 'guest') return null;
   const organizationId = seat.organizationId.toLowerCase();
-  if (!(await brandSendOpenFor(sql, organizationId, options.env ?? process.env))) return null;
+  const env = options.env ?? process.env;
+  if (!(await brandSendOpenFor(sql, organizationId, env))) return null;
   const ctx = { sql, media, organizationId, me: seat.userId.toLowerCase() };
+  // 초대하고 보내기 (slice 4c): the member's leftovers arrive before the bell is read, as in `send.inbox`.
+  if (await inviteSwitchOpen(sql, env)) await deliverLeftovers(sql, organizationId, ctx.me, env);
   const page = await inboxKeys(ctx, { mentionsOnly: options.view === 'mentions', after: null, limit: options.limit });
   const counts = await inboxCounts(ctx);
   return { threads: await threadSummaries(ctx, page.ids), more: page.next !== null, ...counts };

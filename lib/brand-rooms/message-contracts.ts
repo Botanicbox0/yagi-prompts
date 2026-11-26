@@ -56,6 +56,18 @@ export const ROOM_ERROR_CODES = [
   'unsupported_file',
   'provider_unavailable',
   'failed',
+  /**
+   * 초대하고 보내기 (slice 4c; `send.post`/`send.reply` with `invites` only): the organization's daily invitation cap
+   * (`BRAND_INVITES_PER_DAY`, shared with the members page) or one invitation's waiting lines
+   * (`SEND_LIMITS.linesPerInvitation`) would be passed. Nothing was written or sent.
+   */
+  'invite_limit',
+  /**
+   * 초대하고 보내기 (slice 4c; `send.post`/`send.reply` with `invites` only): an address 보내기 may not invite for this
+   * sender (`RoomFailure.refused` names them). One answer for every such reason: the address already has an invitation
+   * that is not 보내기's to reuse, or (for an editor) it belongs to someone an owner removed. Nothing was written or sent.
+   */
+  'invite_refused',
 ] as const;
 export type RoomErrorCode = (typeof ROOM_ERROR_CODES)[number];
 
@@ -387,6 +399,8 @@ export interface RoomFailure {
   ok: false;
   code: RoomErrorCode;
   reason?: UploadLimitReason;
+  /** `invite_refused` only: the addresses (as the server normalised them) that may not be invited. */
+  refused?: string[];
 }
 
 export interface RoomStreamPage {
@@ -500,12 +514,14 @@ export function roomErrorStatus(code: RoomErrorCode): number {
       return 400;
     case 'conflict':
     case 'storage_quota_exceeded':
+    case 'invite_refused':
       return 409;
     case 'file_too_large':
       return 413;
     case 'unsupported_file':
       return 415;
     case 'rate_limited':
+    case 'invite_limit':
       return 429;
     case 'provider_unavailable':
       return 503;
