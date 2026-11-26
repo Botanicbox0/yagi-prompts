@@ -8,17 +8,22 @@ import type { PlannedShot } from '../lines';
 import type { Binding } from '../references';
 import type { EnhanceInput } from '../types';
 import { CORE_HEADER, coreBlock } from './core';
-import { GPT_IMAGE_26_BLOCK, GPT_IMAGE_HEADER, GPT_IMAGE_MARKUP_RULE, GPT_IMAGE_PROFILE } from './gpt-image';
+import { GPT_IMAGE_26_BLOCK, GPT_IMAGE_HEADER, GPT_IMAGE_MARKUP_RULE, GPT_IMAGE_PROFILE, gptImageAllowPhrases } from './gpt-image';
 import type { ModelBlock, ProfileHeader } from './meta';
-import { NANO_BANANA_21_BLOCK, NANO_BANANA_HEADER, NANO_BANANA_PRO_BLOCK, NANO_BANANA_PROFILE } from './nano-banana';
-import { SEEDANCE_HEADER, seedanceHeader, SEEDANCE_PROFILE, seedanceProfile } from './seedance';
-import { SEEDREAM_HEADER, SEEDREAM_PROFILE } from './seedream';
-import { planSkin, skinRules, type SkinPlan, type SkinVariant } from './skin';
+import { NANO_BANANA_21_BLOCK, NANO_BANANA_HEADER, NANO_BANANA_PRO_BLOCK, NANO_BANANA_PROFILE, nanoBananaAllowPhrases } from './nano-banana';
+import { SEEDANCE_HEADER, seedanceHeader, SEEDANCE_PROFILE, seedanceAllowPhrases, seedanceProfile } from './seedance';
+import { SEEDREAM_HEADER, SEEDREAM_PROFILE, seedreamAllowPhrases } from './seedream';
+import { planSkin, skinAllowPhrases, skinRules, type SkinPlan, type SkinVariant } from './skin';
 import { taskBlock } from './tasks';
 
 export { CORE_HEADER } from './core';
 export type { ModelBlock, ProfileHeader, ProfileSource } from './meta';
-export { planSkin, skinVariantOf, mentionsPerson, wantsRealSkin, wantsToneKept, type SkinMode, type SkinPlan, type SkinVariant } from './skin';
+export { planSkin, skinAllowPhrases, skinVariantOf, mentionsPerson, wantsRealSkin, wantsToneKept, type SkinMode, type SkinPlan, type SkinVariant } from './skin';
+export { seedreamAllowPhrases } from './seedream';
+export { nanoBananaAllowPhrases } from './nano-banana';
+export { gptImageAllowPhrases } from './gpt-image';
+export { seedanceAllowPhrases } from './seedance';
+export { taskAllowPhrases } from './tasks';
 
 export const PROFILE_BLOCKS: Record<StudioPromptProfile, string> = {
   seedream: SEEDREAM_PROFILE,
@@ -51,6 +56,23 @@ export function profileVersionOf(profile: StudioPromptProfile, model?: string | 
 
 export const CORE_VERSION = `${CORE_HEADER.id}@${CORE_HEADER.version}`;
 
+export const REGION_EDIT_LOGO_NANO_BANANA_FORMULA =
+  'reproduce the mark from <token> exactly as drawn: the same letterforms, orientation, proportions and colours, at the size the part has now';
+export const REGION_EDIT_LOGO_DEFAULT_FORMULA =
+  'use the exact mark from <token>; do not redraw, mirror, restyle or enlarge it';
+export const REGION_EDIT_PEOPLE_KEEP_PHRASE =
+  'keep facial identity, head angle, gaze and expression locked';
+export const REGION_EDIT_SKIN_PHRASE =
+  'natural skin texture without plastic or waxy retouching';
+
+export function regionEditProfileAllowPhrases(profile: StudioPromptProfile): string[] {
+  return [
+    profile === 'nano-banana' ? REGION_EDIT_LOGO_NANO_BANANA_FORMULA : REGION_EDIT_LOGO_DEFAULT_FORMULA,
+    REGION_EDIT_PEOPLE_KEEP_PHRASE,
+    REGION_EDIT_SKIN_PHRASE,
+  ];
+}
+
 function regionEditProfileBlock(profile: StudioPromptProfile, wide = false): string {
   const tokenSyntax = profile === 'seedream' ? '"Image N" (a capital I)' : '"image N"';
   const firstToken = profile === 'seedream' ? 'Image 1' : 'image 1';
@@ -60,14 +82,14 @@ function regionEditProfileBlock(profile: StudioPromptProfile, wide = false): str
       : 'Write short, surgical plain-English edit instructions (two to five sentences, no scene-generation boilerplate).';
   const logo =
     profile === 'nano-banana'
-      ? 'A logo, label or product source gets: "reproduce the mark from <token> exactly as drawn: the same letterforms, orientation, proportions and colours, at the size the part has now".'
-      : 'A logo, label or product source gets: "use the exact mark from <token>; do not redraw, mirror, restyle or enlarge it".';
+      ? `A logo, label or product source gets: "${REGION_EDIT_LOGO_NANO_BANANA_FORMULA}".`
+      : `A logo, label or product source gets: "${REGION_EDIT_LOGO_DEFAULT_FORMULA}".`;
   return `Model: a precision local-repair image editor. Do NOT write a full-scene generation brief.
 ${formatLine}
 References: name attached images only as ${tokenSyntax} with the exact numbers given (${firstToken} is ${wide ? "the customer's picture, shown wide, with one part to change in place" : 'the enlarged region crop to repair in place'}; any source references start at 2).
 ${logo}
 Text in the picture: only text that was asked for, verbatim in its original language and spelling, inside double quotes, with exact surface placement and proportion.
-People: keep facial identity, head angle, gaze and expression locked unless asked; natural skin texture without plastic or waxy retouching.`;
+People: ${REGION_EDIT_PEOPLE_KEEP_PHRASE} unless asked; ${REGION_EDIT_SKIN_PHRASE}.`;
 }
 
 export interface SystemOptions {
@@ -95,6 +117,20 @@ export function skinFor(input: EnhanceInput, binding: Binding, variant: SkinVari
   });
   const personTokens = binding.bound.filter((b) => b.ref.role === 'person' && b.token).map((b) => b.token as string);
   return { plan, text: input.profile === 'seedance' ? '' : skinRules({ profile: input.profile, plan, variant, personTokens }) };
+}
+
+/** Output phrases from the active skin rules for this run's allow corpus (empty for seedance or skinMode=off). */
+export function skinAllowFor(input: EnhanceInput, binding: Binding, variant: SkinVariant = 'short'): string[] {
+  if (input.profile === 'seedance') return [];
+  const plan = planSkin({
+    kind: input.kind,
+    prompt: input.prompt,
+    change: input.video?.change ?? null,
+    references: input.references,
+    brandRules: input.brand?.rules ?? null,
+  });
+  const personTokens = binding.bound.filter((b) => b.ref.role === 'person' && b.token).map((b) => b.token as string);
+  return skinAllowPhrases({ profile: input.profile, plan, variant, personTokens });
 }
 
 export function buildSystemInstruction(

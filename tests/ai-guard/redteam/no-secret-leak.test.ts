@@ -85,7 +85,7 @@ describe('CLI secret handling (no environment values printed or stored)', () => 
 
     expect(dryRun.status, dryRun.stderr).toBe(0);
     expect(dryRun.stdout).toContain('GEMINI_API_KEY present: true');
-    expect(dryRun.stdout).toContain('Planned calls: 324');
+    expect(dryRun.stdout).toContain('Planned calls: 396');
     expect(dryRun.stdout).not.toContain(dryEnvSecret);
     expect(dryRun.stderr).not.toContain(dryEnvSecret);
   });

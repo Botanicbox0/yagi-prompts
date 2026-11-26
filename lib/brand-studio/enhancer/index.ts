@@ -6,6 +6,7 @@
  * The client-safe mention helpers live in `./mentions` (import that file directly from the browser).
  */
 import { dictatedSpans, guardRequest, type GuardedRequest } from '@/lib/ai-guard';
+import { foldText, wordUnits } from '@/lib/ai-guard/text';
 import { loadDirectorPlaybooks, playbookRuleLines } from '@/lib/brand-studio/director/playbooks';
 import { brandSeedanceRulesV2Open, promptGuardMode } from '@/lib/flags';
 import { blueprintShape, blueprintShots, isBlueprint } from './blueprint';
@@ -14,7 +15,18 @@ import { hasMarkSign, replaceMarks } from './marks';
 import { callGeminiJson, inlinePart, studioGeminiConfig, type GeminiPart } from './gemini';
 import { AMBIENT_AUDIO_LINE, effectiveSeconds, keepPhrase, NATIVE_AUDIO_LINE, planShots, type PlannedShot } from './lines';
 import { enhanceMeta } from './meta';
-import { buildSystemInstruction, skinVariantOf } from './profiles';
+import {
+  buildSystemInstruction,
+  gptImageAllowPhrases,
+  nanoBananaAllowPhrases,
+  regionEditProfileAllowPhrases,
+  seedanceAllowPhrases,
+  seedreamAllowPhrases,
+  skinAllowFor,
+  skinVariantOf,
+  taskAllowPhrases,
+} from './profiles';
+import { sleeveVolumeLine } from './profiles/seedance';
 import { bindReferences, mapCustomerMentions, type Binding } from './references';
 import { checkEnhancedPrompt, cleanNotes, ENHANCED_PROMPT_MAX, ENHANCER_RESPONSE_SCHEMA, EnhancerOutputSchema, exemptText, NOTES_MAX } from './schema';
 import type { EnhanceDeps, EnhanceInput, EnhanceMeta, EnhanceResult } from './types';
@@ -192,10 +204,11 @@ function thumbParts(input: EnhanceInput, binding: Binding, guard: GuardedRequest
 
 /**
  * Our fixed lines that are meant to appear in a written prompt (the prompt guard's allow-list for this
- * writer): the lines `checkEnhancedPrompt` adds, every phrase the rules dictate (quoted spans, parenthesised lists), and
- * this input's deterministic fallback, which the customer reads whenever the writer fails anyway.
+ * writer): the lines `checkEnhancedPrompt` adds, every output phrase belonging to this request's active
+ * profile / task / skin mode / switch state, `dictatedSpans(system)`, and this input's deterministic
+ * fallback, which the customer reads whenever the writer fails anyway.
  */
-function enhancerAllow(
+export function enhancerAllow(
   input: EnhanceInput,
   binding: Binding,
   system: string,
@@ -208,26 +221,62 @@ function enhancerAllow(
   } catch {
     fallbackText = '';
   }
-  const v2SleeveLines =
-    input.profile === 'seedance' && brandSeedanceRulesV2Open(env)
-      ? binding.bound
-          .filter((b) => b.token && b.ref.kind === 'image' && b.ref.role === 'person')
-          .flatMap((b) => {
-            const spaced = b.token!.replace(/^@Image(\d+)$/i, '@Image $1');
-            return [
-              `ignore any wide casual top/sleeve volume from ${b.token}`,
-              `ignore any wide casual top/sleeve volume from ${spaced}`,
-            ];
-          })
-      : [];
+
+  const profilePhrases: string[] = [];
+  if (input.kind === 'region_edit') {
+    profilePhrases.push('Do not move or resize anything else.', ...regionEditProfileAllowPhrases(input.profile));
+  } else {
+    switch (input.profile) {
+      case 'seedream':
+        profilePhrases.push(...seedreamAllowPhrases());
+        break;
+      case 'nano-banana':
+        profilePhrases.push(...nanoBananaAllowPhrases());
+        break;
+      case 'gpt-image':
+        profilePhrases.push(...gptImageAllowPhrases());
+        break;
+      case 'seedance':
+        profilePhrases.push(...seedanceAllowPhrases(env));
+        break;
+    }
+  }
+
+  const skinPhrases = skinAllowFor(input, binding, skinVariantOf(input.model, env));
+  const taskPhrases = taskAllowPhrases(input, binding);
+
+  const seedanceRuntimeLines: string[] = [];
+  if (input.profile === 'seedance') {
+    if (input.video) {
+      if (input.video.audio === 'ambient') seedanceRuntimeLines.push(AMBIENT_AUDIO_LINE);
+      else if (input.video.audio === 'native') seedanceRuntimeLines.push(NATIVE_AUDIO_LINE);
+
+      if (input.kind === 'video_remix' && input.video.method === 'edit') {
+        seedanceRuntimeLines.push(`Everything else in ${ref} stays as it is.`);
+      }
+    }
+
+    if (brandSeedanceRulesV2Open(env)) {
+      for (const b of binding.bound) {
+        if (b.token && b.ref.kind === 'image' && b.ref.role === 'person') {
+          const spaced = b.token.replace(/^@Image(\d+)$/i, '@Image $1');
+          seedanceRuntimeLines.push(sleeveVolumeLine(b.token), sleeveVolumeLine(spaced));
+        }
+      }
+    }
+  }
+
   return [
-    AMBIENT_AUDIO_LINE,
-    NATIVE_AUDIO_LINE,
-    'Do not move or resize anything else.',
-    `Everything else in ${ref} stays as it is.`,
-    ...v2SleeveLines,
-    ...dictatedSpans(system),
-    fallbackText,
+    ...new Set(
+      [
+        ...profilePhrases,
+        ...taskPhrases,
+        ...skinPhrases,
+        ...seedanceRuntimeLines,
+        ...dictatedSpans(system),
+        fallbackText,
+      ].filter((s) => s.length > 0 && wordUnits(foldText(s)).length >= 4),
+    ),
   ];
 }
 

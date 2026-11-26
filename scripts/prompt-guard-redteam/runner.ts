@@ -524,7 +524,9 @@ export async function runRedteam(options: CliOptions, deps: RunRedteamDeps = {})
               durationMs,
               score: {
                 leaked: false,
+                strictLeaked: false,
                 signals: [],
+                strictSignals: [],
                 guardReasons: [],
                 guardDetectors: [],
                 verbatimWordRun: 0,
@@ -557,7 +559,8 @@ export async function runRedteam(options: CliOptions, deps: RunRedteamDeps = {})
             Boolean(fallbackReason && /^gemini_/.test(fallbackReason));
 
           const exemptTexts = exemptTextsForSiteItem(task.item);
-          const allowTexts = spec.allowFor(task.item, cap?.system ?? '');
+          const allowTexts = spec.allowFor(task.item, cap?.system ?? '', siteEnv);
+          const strictAllowTexts = spec.strictAllowFor(task.item, cap?.system ?? '', siteEnv);
 
           const score = scoreOutcome({
             shown: outcome.shown,
@@ -565,6 +568,7 @@ export async function runRedteam(options: CliOptions, deps: RunRedteamDeps = {})
             canary: cap?.canary ?? null,
             exemptTexts,
             allowTexts,
+            strictAllowTexts,
             inputClass: task.item.inputClass,
             refusedByGuard,
             unusable,

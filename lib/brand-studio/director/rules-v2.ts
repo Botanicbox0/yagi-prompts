@@ -5,7 +5,14 @@
  * Kept alongside v1 code paths so `BRAND_SEEDANCE_RULES_V2` unset/off stays byte-identical to `origin/main`.
  */
 import { dictatedSpans } from '@/lib/ai-guard';
+import { foldText, wordUnits } from '@/lib/ai-guard/text';
 import { enhanceMeta } from '@/lib/brand-studio/enhancer/meta';
+import {
+  SEEDANCE_V2_EDITORIAL_MOTION_LIST,
+  SEEDANCE_VIDEO_FILM_EXPOSURE_FORMULA,
+  SEEDANCE_VIDEO_SKIN_EXPOSURE_FORMULA,
+  sleeveVolumeLine,
+} from '@/lib/brand-studio/enhancer/profiles/seedance';
 import { mentionsPerson } from '@/lib/brand-studio/enhancer/profiles/skin';
 import type { Binding, BoundReference } from '@/lib/brand-studio/enhancer/references';
 import type { EnhanceInput, EnhanceReference, EnhanceResult } from '@/lib/brand-studio/enhancer/types';
@@ -29,22 +36,38 @@ export function directorRulesVersion(env: Record<string, string | undefined> = p
   return env.BRAND_SEEDANCE_RULES_V2 === 'on' ? DIRECTOR_HEADER_V2.version : DIRECTOR_HEADER_V1.version;
 }
 
-/**
- * Canonical Seedance 2.5 1-stop underexposed 35mm film + unretouched matte-satin skin formula
- * (Video-Creator/docs/TWINGS-SOTA-BRIDGE.md §2-2).
- */
-export const SEEDANCE_VIDEO_SKIN_EXPOSURE_FORMULA =
-  'looking like scanned, slightly underexposed 35mm film: soft contrast, cool lifted blacks (#14171C), fine organic grain, gentle halation on the brightest whites; one soft key light a stop under; skin stays natural and warm, unretouched matte-satin with visible micro-pores and fine stray flyaway hairs, never over-lit or glossy, with no blush';
+export {
+  SEEDANCE_V2_EDITORIAL_MOTION_LIST as DIRECTOR_V2_EDITORIAL_MOTION_LIST,
+  SEEDANCE_VIDEO_FILM_EXPOSURE_FORMULA,
+  SEEDANCE_VIDEO_SKIN_EXPOSURE_FORMULA,
+  sleeveVolumeLine,
+};
 
-/**
- * Product-only film and exposure half obtained by splitting `SEEDANCE_VIDEO_SKIN_EXPOSURE_FORMULA` at `; skin stays`.
- * Contains no skin, micro-pore, flyaway, or blush wording.
- */
-export const SEEDANCE_VIDEO_FILM_EXPOSURE_FORMULA =
-  SEEDANCE_VIDEO_SKIN_EXPOSURE_FORMULA.split('; skin stays')[0]!;
+export const DIRECTOR_NO_BGM_CLAUSE =
+  'diegetic Foley, room ambience and requested dialogue only — no background music, no score, no musical instruments';
+export const DIRECTOR_NO_BGM_REBUILT_TAIL =
+  'diegetic Foley, room ambience and requested dialogue only; no background music, no score, no musical instruments.';
+export const DIRECTOR_EXPLICIT_MUSIC_AUDIO_LINE =
+  'Audio: live diegetic room sound, Foley and the requested musical performance.';
 
-export function sleeveVolumeLine(token: string): string {
-  return `ignore any wide casual top/sleeve volume from ${token}`;
+export const DIRECTOR_V2_SAFE_MATTE_SKIN = 'natural unretouched matte-satin skin';
+export const DIRECTOR_V2_PALETTE_ROLES_LIST = 'shadow floor, primary surfaces, key accent';
+export const DIRECTOR_V2_LIGHTING_PRODUCT_PHRASE =
+  'motivated light matching ambient shadow floor and color spill';
+export const DIRECTOR_V2_DYNAMIC_CAMERA_LIST =
+  'Steadicam tracking, crane sweep, 45°–180° orbital arc, FPV push-in';
+export const DIRECTOR_V2_EXCLUSIONS_PHRASE = 'off-axis gaze and no on-screen text or watermarks';
+
+const EXPLICIT_MUSIC_PERFORMANCE_RE =
+  /\b(?:sing(?:s|ing)?|singer|vocal(?:s|ist)?|song|bgm|background\s+music|soundtrack|musical\s+score|live\s+band|concert|choir|rap(?:ping)?|guitar\s+solo|playing\s+(?:the\s+)?(?:piano|guitar|violin|drums|cello|saxophone)|music\s+video|dance\s+to\s+the\s+beat)\b|노래|보컬|가창|연주|배경\s*음악|뮤직\s*비디오|음악에\s*맞춰/i;
+
+/** True only when the user's own prompt explicitly asks for singing, musical instruments, or music/BGM. */
+export function requestsExplicitMusicPerformance(prompt: string): boolean {
+  const strippedNegations = prompt.replace(
+    /\b(?:no|without|zero|never)\s+(?:background\s+)?(?:music|bgm|score|singing|instruments?)\b/gi,
+    ' ',
+  );
+  return EXPLICIT_MUSIC_PERFORMANCE_RE.test(strippedNegations);
 }
 
 const NO_PERSON_RE =
@@ -97,7 +120,7 @@ const BARE_GLOSSY_RE = new RegExp(`\\b${GLOSSY_TERM}\\b`, 'gi');
 const BANNED_SAME_AS_ORIGINAL_RE =
   /\b(?:same\s+as\s+(?:the\s+)?original\s+video|keep\s+(?:the\s+)?original\s+(?:video|camera\s+as\s+is)|identical\s+to\s+(?:the\s+)?source\s+video)\b/gi;
 
-const SAFE_MATTE_SKIN = 'natural unretouched matte-satin skin';
+const SAFE_MATTE_SKIN = DIRECTOR_V2_SAFE_MATTE_SKIN;
 
 function isExemptMatch(match: string, exempt: string): boolean {
   if (!exempt) return false;
@@ -167,7 +190,7 @@ export function buildSeedanceDirectorSystemInstructionV2(options: {
       ? 'Audio rule: silent run. Write NO "Audio:" line and do not describe sound.'
       : options.explicitMusic
         ? 'Audio rule: write ONE "Audio:" line with room ambience, Foley, and the explicitly requested musical/vocal performance.'
-        : 'Audio rule (Strict No-BGM Default): write ONE "Audio:" line specifying diegetic Foley, room ambience and requested dialogue only — no background music, no score, no musical instruments (music is layered cleanly in Sequence Rail post-production).';
+        : `Audio rule (Strict No-BGM Default): write ONE "Audio:" line specifying ${DIRECTOR_NO_BGM_CLAUSE} (music is layered cleanly in Sequence Rail post-production).`;
 
   const blueprintRule = options.blueprint
     ? 'Blueprint adaptation rule: the reference video is NOT sent to the generator. Write 100% self-contained visible action, camera travel/pan-tilt/zoom, subject counts, and lighting prose. Never write "same as original video" or a video token.'
@@ -183,7 +206,7 @@ export function buildSeedanceDirectorSystemInstructionV2(options: {
     const sleeveDirective =
       personTokens.length > 0
         ? `For ${personTokens.join(', ')}, state face and hair authority only (never body proportions, background, lighting, or casual clothing), and include once: "${personTokens.map(sleeveVolumeLine).join('; ')}".`
-        : 'When an attached image shows a person, state face and hair authority only (never body proportions, background, lighting, or casual clothing), and include once: "ignore any wide casual top/sleeve volume from <person @Image token>".';
+        : `When an attached image shows a person, state face and hair authority only (never body proportions, background, lighting, or casual clothing), and include once: "${sleeveVolumeLine('<person @Image token>')}".`;
     const wardrobeClause = options.hasSeparateGarmentRef
       ? 'A person reference supplies face and hair; the separate clothing reference supplies wardrobe only (exact silhouette, tailoring, fabric, and colour; never face or skin).'
       : "A person reference supplies face and hair; wardrobe comes from the brief's words unless a separate clothing reference is bound (in which case the separate clothing reference supplies wardrobe only).";
@@ -191,8 +214,8 @@ export function buildSeedanceDirectorSystemInstructionV2(options: {
   }
 
   const visualStyleRule = hasPerson
-    ? `   - "Visual style:" write ONE block for the whole prompt (never repeat inside shots) with concrete #Hex palette roles (shadow floor, primary surfaces, key accent), motivated light matching ambient shadow floor and color spill (never pasted-on or flat front-lit), and include once verbatim: "${SEEDANCE_VIDEO_SKIN_EXPOSURE_FORMULA}". Keep over-smooth or beauty-filter buzzwords out of every block, including exclusions.`
-    : `   - "Visual style:" write ONE block for the whole prompt (never repeat inside shots) with concrete #Hex palette roles (shadow floor, primary surfaces, key accent), motivated light matching ambient shadow floor and color spill, and include once verbatim: "${SEEDANCE_VIDEO_FILM_EXPOSURE_FORMULA}". Because no person is in the scene, omit skin texture clauses.`;
+    ? `   - "Visual style:" write ONE block for the whole prompt (never repeat inside shots) with concrete #Hex palette roles (${DIRECTOR_V2_PALETTE_ROLES_LIST}), ${DIRECTOR_V2_LIGHTING_PRODUCT_PHRASE} (never pasted-on or flat front-lit), and include once verbatim: "${SEEDANCE_VIDEO_SKIN_EXPOSURE_FORMULA}". Keep over-smooth or beauty-filter buzzwords out of every block, including exclusions.`
+    : `   - "Visual style:" write ONE block for the whole prompt (never repeat inside shots) with concrete #Hex palette roles (${DIRECTOR_V2_PALETTE_ROLES_LIST}), ${DIRECTOR_V2_LIGHTING_PRODUCT_PHRASE}, and include once verbatim: "${SEEDANCE_VIDEO_FILM_EXPOSURE_FORMULA}". Because no person is in the scene, omit skin texture clauses.`;
 
   return `You are a veteran Film Director writing a production-ready Seedance 2.5 video prompt in English (ceiling ${SEEDANCE_25_PROMPT_CHARS} characters).
 ${modeGuidance}
@@ -203,11 +226,11 @@ Mandatory Seedance 2.5 Grammar & Quality Rules:
 ${referenceAuthorityRule}
    - Anti-boilerplate discipline: state reference authority, physique proportions, off-axis eyeline preference, and exclusions ONCE outside the timeline. Never repeat body-proportion text, negative defence clauses, or eyeline boilerplate inside individual shot lines — keep each shot line strictly to framing, action, camera movement, and cut handoff.
    - Camera by genre (no global camera lock): infer the genre from the brief:
-     * Action, music video, fantasy, chase, or kinetic narrative -> moving camera (Steadicam tracking, crane sweep, 45°–180° orbital arc, FPV push-in) written with start, path, and end.
-     * Fashion editorial, lookbook, beauty, or calm portrait -> cut rhythm and micro-movement inside held poses (small weight shift, slow head turn, breath, a hair strand moving), alternating camera angles (18° / 45° / 90° / OTS), avoiding forced pantomime.
+     * Action, music video, fantasy, chase, or kinetic narrative -> moving camera (${DIRECTOR_V2_DYNAMIC_CAMERA_LIST}) written with start, path, and end.
+     * Fashion editorial, lookbook, beauty, or calm portrait -> cut rhythm and micro-movement inside held poses (${SEEDANCE_V2_EDITORIAL_MOTION_LIST}), alternating camera angles (18° / 45° / 90° / OTS), avoiding forced pantomime.
    - Seconds-based timeline from 0.0s to ${options.seconds.toFixed(1)}s ("0.0s–Xs: …") with contiguous ranges and an explicit handoff at the end of every non-final shot ("hard cut", "match cut on …", or "continuous").
 ${visualStyleRule}
-   - Optional single "Exclusions:" line (once, never per shot) for off-axis gaze and no on-screen text or watermarks.
+   - Optional single "Exclusions:" line (once, never per shot) for ${DIRECTOR_V2_EXCLUSIONS_PHRASE}.
    - ${audioInstruction}
 3. ${blueprintRule}
 4. Spoken dialogue only when the user's brief provides words; keep spoken lines verbatim in quotes. Never expose internal tool, provider, or infrastructure names.
@@ -468,10 +491,49 @@ export function composeDirectorFallbackPromptV2(ctx: FallbackV2Context): Enhance
   };
 }
 
+/** Output phrases the v2 director rules tell the model to write into the prompt (scoped to scene/audio state). */
+export function directorV2OutputPhrases(options: {
+  hasPerson: boolean;
+  personTokens: readonly string[];
+  hasImageRefs?: boolean;
+  audioMode: DirectorAudioMode;
+  explicitMusic: boolean;
+  noBgmLine: string;
+}): string[] {
+  const sleevePhrases =
+    options.personTokens.length > 0
+      ? options.personTokens.map(sleeveVolumeLine)
+      : options.hasImageRefs
+        ? [sleeveVolumeLine('<person @Image token>')]
+        : [];
+  const out: string[] = [
+    DIRECTOR_V2_SAFE_MATTE_SKIN,
+    options.hasPerson ? SEEDANCE_VIDEO_SKIN_EXPOSURE_FORMULA : SEEDANCE_VIDEO_FILM_EXPOSURE_FORMULA,
+    `${DIRECTOR_V2_PALETTE_ROLES_LIST}, ${DIRECTOR_V2_LIGHTING_PRODUCT_PHRASE}`,
+    DIRECTOR_V2_DYNAMIC_CAMERA_LIST,
+    SEEDANCE_V2_EDITORIAL_MOTION_LIST,
+    ...sleevePhrases,
+  ];
+  if (options.audioMode !== 'off' && options.audioMode !== 'silent') {
+    if (options.explicitMusic) {
+      out.push(`${DIRECTOR_V2_EXCLUSIONS_PHRASE}\n${DIRECTOR_EXPLICIT_MUSIC_AUDIO_LINE}`);
+    } else {
+      out.push(
+        `${DIRECTOR_V2_EXCLUSIONS_PHRASE}\n${options.noBgmLine}`,
+        DIRECTOR_NO_BGM_CLAUSE,
+        DIRECTOR_NO_BGM_REBUILT_TAIL,
+      );
+    }
+  } else {
+    out.push(DIRECTOR_V2_EXCLUSIONS_PHRASE);
+  }
+  return out;
+}
+
 /**
  * Per-call allow-list for `brand-studio.director` when `BRAND_SEEDANCE_RULES_V2=on`:
- * permits the audio policy lines, the v2 scrub replacement, the canonical v2 skin/film formula
- * relevant to the scene, the bound person sleeve-volume line(s), `dictatedSpans(system)`, and
+ * permits the scoped audio policy lines, the v2 scrub replacement, the canonical v2 skin/film formula
+ * and output phrases relevant to the scene, the bound person sleeve-volume line(s), `dictatedSpans(system)`, and
  * this input's v2 deterministic fallback.
  */
 export function directorAllowV2(
@@ -492,18 +554,22 @@ export function directorAllowV2(
   }
 
   const hasPerson = hasPersonInDirectorScene(input, analysis);
+  const hasImageRefs = binding.bound.some((b) => b.token && b.ref.kind === 'image');
   const personTokens = binding.bound
     .filter((b) => b.token && b.ref.kind === 'image' && b.ref.role === 'person')
     .map((b) => spacedToken(b.token)!);
+  const audioMode: DirectorAudioMode = input.video?.audio ?? 'on';
+  const userText = `${input.prompt}\n${input.video?.change ?? ''}`;
+  const explicitMusic =
+    audioMode !== 'sfx' && audioMode !== 'ambient' && requestsExplicitMusicPerformance(userText);
 
   return [
-    noBgmLine,
-    'Audio: live diegetic room sound, Foley and the requested musical performance.',
-    'diegetic Foley, room ambience and requested dialogue only; no background music, no score, no musical instruments.',
-    SAFE_MATTE_SKIN,
-    hasPerson ? SEEDANCE_VIDEO_SKIN_EXPOSURE_FORMULA : SEEDANCE_VIDEO_FILM_EXPOSURE_FORMULA,
-    ...personTokens.map(sleeveVolumeLine),
-    ...dictatedSpans(system),
-    fallbackText,
+    ...new Set(
+      [
+        ...directorV2OutputPhrases({ hasPerson, personTokens, hasImageRefs, audioMode, explicitMusic, noBgmLine }),
+        ...dictatedSpans(system),
+        fallbackText,
+      ].filter((s) => s.length > 0 && wordUnits(foldText(s)).length >= 4),
+    ),
   ];
 }

@@ -49,7 +49,9 @@ export interface GeminiPricing {
 
 export interface LeakScore {
   leaked: boolean;
+  strictLeaked?: boolean;
   signals: LeakSignal[];
+  strictSignals?: LeakSignal[];
   guardReasons: GuardReason[];
   guardDetectors: string[];
   verbatimWordRun: number;
@@ -96,6 +98,7 @@ export interface CellSummary {
   skipped: number;
   unusableAnswers: number;
   leaks: number;
+  strictLeaks: number;
   leaksBySignal: Record<LeakSignal, number>;
   refusals: number;
   notesRefusals: number;

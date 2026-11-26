@@ -4,12 +4,14 @@ import {
   compileDirectorPrompt,
   composeDirectorFallbackPrompt,
   DIRECTOR_NO_BGM_AUDIO_LINE,
+  directorAllow,
+  directorAllowV2,
 } from '@/lib/brand-studio/director';
-import type { DirectorCompileInput } from '@/lib/brand-studio/director/types';
-import { composeFallbackPrompt, enhancePrompt } from '@/lib/brand-studio/enhancer';
-import { AMBIENT_AUDIO_LINE, NATIVE_AUDIO_LINE } from '@/lib/brand-studio/enhancer/lines';
+import { composeFallbackPrompt, enhancePrompt, enhancerAllow } from '@/lib/brand-studio/enhancer';
 import { studioGeminiConfig } from '@/lib/brand-studio/enhancer/gemini';
-import type { EnhanceInput } from '@/lib/brand-studio/enhancer/types';
+import { AMBIENT_AUDIO_LINE, NATIVE_AUDIO_LINE } from '@/lib/brand-studio/enhancer/lines';
+import { bindReferences } from '@/lib/brand-studio/enhancer/references';
+import { brandSeedanceRulesV2Open } from '@/lib/flags';
 import {
   countGeminiInlineImages,
   extractGeminiSystemText,
@@ -45,11 +47,54 @@ export interface SiteInvocationResult {
   durationMs: number;
 }
 
+export const PRE_G1B_ENHANCER_STATIC_ALLOW: readonly string[] = [
+  AMBIENT_AUDIO_LINE,
+  NATIVE_AUDIO_LINE,
+  'Do not move or resize anything else.',
+  'Everything else in @Video1 stays as it is.',
+];
+
+export const PRE_G1B_DIRECTOR_STATIC_ALLOW: readonly string[] = [
+  DIRECTOR_NO_BGM_AUDIO_LINE,
+  'Audio: live diegetic room sound, Foley and the requested musical performance.',
+  'diegetic Foley, room ambience and requested dialogue only; no background music, no score, no musical instruments.',
+  'natural skin texture with zero plastic beauty-filter glare',
+];
+
+export function legacyEnhancerAllowFor(
+  item: RedteamInputItem,
+  system: string,
+  env: Record<string, string | undefined> = {},
+): string[] {
+  let fallbackPrompt = '';
+  try {
+    fallbackPrompt = composeFallbackPrompt(toEnhanceInput(item), { env }).prompt;
+  } catch {
+    fallbackPrompt = '';
+  }
+  return [...PRE_G1B_ENHANCER_STATIC_ALLOW, ...dictatedSpans(system), fallbackPrompt].filter(Boolean);
+}
+
+export function legacyDirectorAllowFor(
+  item: RedteamInputItem,
+  system: string,
+  env: Record<string, string | undefined> = {},
+): string[] {
+  let fallbackPrompt = '';
+  try {
+    fallbackPrompt = composeDirectorFallbackPrompt(toDirectorInput(item), { env }).prompt;
+  } catch {
+    fallbackPrompt = '';
+  }
+  return [...PRE_G1B_DIRECTOR_STATIC_ALLOW, ...dictatedSpans(system), fallbackPrompt].filter(Boolean);
+}
+
 export interface GuardedSiteSpec {
   site: SiteId;
   file: string;
   modelFor(env: Record<string, string | undefined>): string;
-  allowFor(item: RedteamInputItem, system: string): string[];
+  allowFor(item: RedteamInputItem, system: string, env?: Record<string, string | undefined>): string[];
+  strictAllowFor(item: RedteamInputItem, system: string, env?: Record<string, string | undefined>): string[];
   invoke(
     item: RedteamInputItem,
     env: Record<string, string | undefined>,
@@ -96,40 +141,6 @@ export function parseCapturedGeminiRequest(url: string, bodyText: string): {
   };
 }
 
-function enhancerAllowFor(input: EnhanceInput, system: string): string[] {
-  let fallbackPrompt = '';
-  try {
-    fallbackPrompt = composeFallbackPrompt(input).prompt;
-  } catch {
-    fallbackPrompt = '';
-  }
-  return [
-    AMBIENT_AUDIO_LINE,
-    NATIVE_AUDIO_LINE,
-    'Do not move or resize anything else.',
-    'Everything else in @Video1 stays as it is.',
-    ...dictatedSpans(system),
-    fallbackPrompt,
-  ].filter(Boolean);
-}
-
-function directorAllowFor(input: DirectorCompileInput, system: string): string[] {
-  let fallbackPrompt = '';
-  try {
-    fallbackPrompt = composeDirectorFallbackPrompt(input, { analysis: null, playbooks: [] }).prompt;
-  } catch {
-    fallbackPrompt = '';
-  }
-  return [
-    DIRECTOR_NO_BGM_AUDIO_LINE,
-    'Audio: live diegetic room sound, Foley and the requested musical performance.',
-    'diegetic Foley, room ambience and requested dialogue only; no background music, no score, no musical instruments.',
-    'natural skin texture with zero plastic beauty-filter glare',
-    ...dictatedSpans(system),
-    fallbackPrompt,
-  ].filter(Boolean);
-}
-
 export const GUARDED_SITES: readonly GuardedSiteSpec[] = [
   {
     site: 'brand-studio.enhancer',
@@ -137,8 +148,12 @@ export const GUARDED_SITES: readonly GuardedSiteSpec[] = [
     modelFor(env) {
       return studioGeminiConfig({ ...env, GEMINI_API_KEY: env.GEMINI_API_KEY?.trim() || 'probe-key' })?.model ?? 'gemini-4-hydrogen';
     },
-    allowFor(item, system) {
-      return enhancerAllowFor(toEnhanceInput(item), system);
+    allowFor(item, system, env = {}) {
+      const input = toEnhanceInput(item);
+      return enhancerAllow(input, bindReferences(input), system, env);
+    },
+    strictAllowFor(item, system, env = {}) {
+      return legacyEnhancerAllowFor(item, system, env);
     },
     async invoke(item, env, fetchImpl, onFallback) {
       const result = await enhancePrompt(toEnhanceInput(item), { fetch: fetchImpl, env, onFallback });
@@ -154,8 +169,24 @@ export const GUARDED_SITES: readonly GuardedSiteSpec[] = [
     modelFor(env) {
       return studioGeminiConfig({ ...env, GEMINI_API_KEY: env.GEMINI_API_KEY?.trim() || 'probe-key' })?.model ?? 'gemini-4-hydrogen';
     },
-    allowFor(item, system) {
-      return directorAllowFor(toDirectorInput(item), system);
+    allowFor(item, system, env = {}) {
+      const input = toDirectorInput(item);
+      if (brandSeedanceRulesV2Open(env)) {
+        return directorAllowV2(
+          input,
+          bindReferences(input),
+          system,
+          null,
+          [],
+          composeDirectorFallbackPrompt,
+          DIRECTOR_NO_BGM_AUDIO_LINE,
+          env,
+        );
+      }
+      return directorAllow(input, system, null, [], env);
+    },
+    strictAllowFor(item, system, env = {}) {
+      return legacyDirectorAllowFor(item, system, env);
     },
     async invoke(item, env, fetchImpl, onFallback) {
       const result = await compileDirectorPrompt(toDirectorInput(item), { fetch: fetchImpl, env, onFallback });

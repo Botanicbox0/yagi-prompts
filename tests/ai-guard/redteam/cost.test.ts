@@ -202,9 +202,9 @@ describe('cost meter, hard cap, pricing flags, and --dry-run', () => {
     expect(fetchCount).toBe(0);
     expect(res.dryRun).toBe(true);
     if (!res.dryRun) return;
-    expect(res.plan.totalPlannedCalls).toBe(324);
+    expect(res.plan.totalPlannedCalls).toBe(396);
     expect(res.plan.estimatedInputTokens).toBeGreaterThan(0);
-    expect(res.plan.estimatedOutputCapTokens).toBe(324 * 4096);
+    expect(res.plan.estimatedOutputCapTokens).toBe(396 * 4096);
     expect(res.plan.estimatedWorstCaseKrw).toBeGreaterThan(0);
   });
 });

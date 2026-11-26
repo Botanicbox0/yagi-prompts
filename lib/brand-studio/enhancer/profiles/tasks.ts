@@ -1,15 +1,39 @@
 /** The per-kind task block: what this run is, and the lines it must contain. */
 import type { StudioAudioMode } from '@/lib/brand-studio/contracts';
-import { formatRange, keepPhrase, type PlannedShot } from '../lines';
+import { AMBIENT_SOUND_CLOSE_PHRASE, AMBIENT_SOUND_OPEN_PHRASE, formatRange, KEEP_PHRASES, keepPhrase, type PlannedShot } from '../lines';
 import type { Binding } from '../references';
 import type { EnhanceInput } from '../types';
+
+export { AMBIENT_SOUND_CLOSE_PHRASE, AMBIENT_SOUND_OPEN_PHRASE, KEEP_PHRASES };
+
+export const IMAGE_TASK_PRODUCT_KEEP_FORMULA = 'keep the exact label, cap, proportions and colours of <token>';
+export const IMAGE_TASK_LOGO_PHRASE = 'the mark is reproduced exactly as drawn, at a natural scale';
+export const IMAGE_TASK_INTEGRATION_PHRASE =
+  'consistent key-light direction, colour temperature, reflections or refraction and contact shadows';
+
+export const REGION_TASK_WIDE_KEEP_TAIL =
+  'framing, camera angle, every other object, people and faces, colours, light, shadows, texture, grain and pixel positions';
+
+export function regionTaskWideKeepPhrase(target: string): string {
+  return `Keep everything else in ${target} exactly as it is: ${REGION_TASK_WIDE_KEEP_TAIL}`;
+}
+
+export const REGION_TASK_CROP_KEEP_TAIL =
+  'exact framing, camera angle, object scale, outer silhouette, contours, lighting direction, colour palette, and pixel positions completely unchanged';
+
+export function regionTaskCropKeepPhrase(target: string): string {
+  return `Keep ${target}'s ${REGION_TASK_CROP_KEEP_TAIL}`;
+}
+
+export const REVISION_EDIT_KEEP_PHRASE =
+  'the camera movement, the timing and cuts, the framing, the subjects';
 
 function soundRule(mode: StudioAudioMode): string {
   switch (mode) {
     case 'native':
       return 'Sound: picture, sound and music are generated together. The Audio line names the location sound, the effects and music that fits the mood.';
     case 'ambient':
-      return 'Sound: no music; music is added later. The Audio line begins "Audio: no music, only location sound and effects" and ends "No background music, score, melody or beat." Write no music anywhere else.';
+      return `Sound: no music; music is added later. The Audio line begins "${AMBIENT_SOUND_OPEN_PHRASE}" and ends "${AMBIENT_SOUND_CLOSE_PHRASE}" Write no music anywhere else.`;
     case 'silent':
       return 'Sound: none. Write no Audio line and do not describe sounds.';
   }
@@ -33,12 +57,12 @@ function imageTask(input: EnhanceInput, binding: Binding): string {
   const first = binding.bound.find((b) => b.token)?.token ?? 'image 1';
   return `Task: a new still image from the request, using the attached images for what each one supplies.
 Look at every attached picture ("Picture of ...") alongside the customer's "request", "role", "take" and "leaveOut", and bind each token to what it really shows:
-- product: name it with one noun and the trait that tells it apart ("the frosted bottle in ${first}"), then name what to keep as categories: "keep the exact label, cap, proportions and colours of <token>". Do not re-describe its colours, shapes or label text at length; the picture carries them. Leave out its own background and lighting unless asked.
-- logo: say where the mark sits and how it meets the surface (printed flat on the curved glass), and that the mark is reproduced exactly as drawn, at a natural scale.
+- product: name it with one noun and the trait that tells it apart ("the frosted bottle in ${first}"), then name what to keep as categories: "${IMAGE_TASK_PRODUCT_KEEP_FORMULA}". Do not re-describe its colours, shapes or label text at length; the picture carries them. Leave out its own background and lighting unless asked.
+- logo: say where the mark sits and how it meets the surface (printed flat on the curved glass), and that ${IMAGE_TASK_LOGO_PHRASE}.
 - person: their face, hair, build and skin come from the picture, never its backdrop, light or colour grade unless the request asks for them: the request sets the scene. Take wardrobe or pose only when asked or listed in "take". The people rules below say how to write skin.
 - style / place: describe in concrete words what to take from it: where the key light comes from, how soft the highlights are, where shadows fall, the surface materials, the dominant colours and the setting. Leave out any subject or product shown in it.
 - when "role" is null: decide what each picture supplies by comparing what is visibly in it with the request.
-Optical integration: unite all kept elements into ONE physical photograph with consistent key-light direction, colour temperature, reflections or refraction and contact shadows rather than a pasted collage.`;
+Optical integration: unite all kept elements into ONE physical photograph with ${IMAGE_TASK_INTEGRATION_PHRASE} rather than a pasted collage.`;
 }
 
 function regionTask(input: EnhanceInput, binding: Binding): string {
@@ -57,12 +81,12 @@ function regionTask(input: EnhanceInput, binding: Binding): string {
   const wide = input.regionWindow;
   if (wide) {
     return `Task: change one boxed part of an existing picture.${sources}${sourceInspection}
-Image 1 (${target}) is the customer's picture (or a wide part of it) at its own size, not a crop. The part to change is the boxed area in the ${wide.where} of ${target}, ${wide.left}-${wide.right}% from the left edge and ${wide.top}-${wide.bottom}% from the top edge; the close-up shows it. The editor gets no box, so name that part by what it visibly is and where it sits in ${target} (for example "the white teapot on the low table at the bottom left") so it is found from your words alone. Keep everything else in ${target} exactly as it is: framing, camera angle, every other object, people and faces, colours, light, shadows, texture, grain and pixel positions.
+Image 1 (${target}) is the customer's picture (or a wide part of it) at its own size, not a crop. The part to change is the boxed area in the ${wide.where} of ${target}, ${wide.left}-${wide.right}% from the left edge and ${wide.top}-${wide.bottom}% from the top edge; the close-up shows it. The editor gets no box, so name that part by what it visibly is and where it sits in ${target} (for example "the white teapot on the low table at the bottom left") so it is found from your words alone. ${regionTaskWideKeepPhrase(target)}.
 Start with "In ${target}, change only <the named part and where it is> into <the change>; do not move or resize anything else." Then say how the changed part must look, then the keep-list.
 Never zoom, crop, reframe, extend, rotate or change the aspect. Do not describe or change anything outside the boxed part.`;
   }
   return `Task: change one boxed part of an existing picture.${sources}${sourceInspection}
-Image 1 (${target}) is an enlarged crop cut out from a larger photograph, so it may look soft. Keep ${target}'s exact framing, camera angle, object scale, outer silhouette, contours, lighting direction, colour palette, and pixel positions completely unchanged. Never redraw, enlarge, or re-shape the surrounding object (never invent curvature or new geometry). Apply ONLY the requested local change, then keep every surrounding pixel identical to ${target}.
+Image 1 (${target}) is an enlarged crop cut out from a larger photograph, so it may look soft. ${regionTaskCropKeepPhrase(target)}. Never redraw, enlarge, or re-shape the surrounding object (never invent curvature or new geometry). Apply ONLY the requested local change, then keep every surrounding pixel identical to ${target}.
 Start with ${opening} Then say how the changed part must look, then the keep-list (exact object scale, outer silhouette, contours, light direction, colour, shadows, texture, grain and pixel positions of ${target}).
 Never zoom, crop, reframe, extend, rotate or change the aspect. Do not describe or change anything outside the change.`;
 }
@@ -205,7 +229,7 @@ function revisionTask(input: EnhanceInput, binding: Binding): string {
       : '';
     return `Task: the next version of a generated clip. ${ref} is version ${previous} of the clip; it was generated from the prompt in "revision.madeWith".${hasHistory ? ` The changes in "revision.history" were made after that and are already visible in ${ref}: they stay.` : ''}
 Write an edit instruction for ${ref} that applies ONLY the request. Open with: "In ${ref}, change only <the change>; everything else stays as it is." Name the subject with the same words "revision.madeWith" uses for it, so the model finds it in the video.${pictures}
-Then say plainly that the camera movement, the timing and cuts, the framing, the subjects and everything the request does not mention stay exactly as they are in ${ref}. No new timeline, no new shots, no new camera moves, no visual-style block.${marks}
+Then say plainly that ${REVISION_EDIT_KEEP_PHRASE} and everything the request does not mention stay exactly as they are in ${ref}. No new timeline, no new shots, no new camera moves, no visual-style block.${marks}
 ${never}
 ${soundRule(audio)}`;
   }
@@ -215,6 +239,37 @@ Pictures attached for the requests are listed in "references" after the ones "re
 Output the complete prompt, not a list of changes.${marks}
 ${never}
 ${soundRule(audio)}`;
+}
+
+/** Output phrases the active task block tells the model to write into the prompt. */
+export function taskAllowPhrases(input: EnhanceInput, binding: Binding): string[] {
+  const out: string[] = [];
+  if (input.revision && (input.kind === 'video' || input.kind === 'video_remix')) {
+    if (input.revision.mode === 'edit') out.push(REVISION_EDIT_KEEP_PHRASE);
+    if (input.video?.audio === 'ambient') out.push(AMBIENT_SOUND_OPEN_PHRASE, AMBIENT_SOUND_CLOSE_PHRASE);
+    return out;
+  }
+  switch (input.kind) {
+    case 'image':
+      if (binding.bound.some((b) => b.token)) {
+        out.push(IMAGE_TASK_PRODUCT_KEEP_FORMULA, IMAGE_TASK_LOGO_PHRASE, IMAGE_TASK_INTEGRATION_PHRASE);
+      }
+      return out;
+    case 'region_edit': {
+      const target = binding.editTarget ?? 'image 1';
+      out.push(input.regionWindow ? regionTaskWideKeepPhrase(target) : regionTaskCropKeepPhrase(target));
+      return out;
+    }
+    case 'video':
+      if (input.video?.audio === 'ambient') out.push(AMBIENT_SOUND_OPEN_PHRASE, AMBIENT_SOUND_CLOSE_PHRASE);
+      return out;
+    case 'video_remix':
+      if (input.video?.method !== 'edit' && input.video?.keep?.includes('look')) {
+        out.push(KEEP_PHRASES.look);
+      }
+      if (input.video?.audio === 'ambient') out.push(AMBIENT_SOUND_OPEN_PHRASE, AMBIENT_SOUND_CLOSE_PHRASE);
+      return out;
+  }
 }
 
 export function taskBlock(

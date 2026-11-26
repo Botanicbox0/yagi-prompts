@@ -16,17 +16,35 @@ export const NANO_BANANA_HEADER: ProfileHeader = {
   lastVerified: '2026-11-19',
 };
 
+export const NANO_BANANA_USE_CASE_LIST = 'a product photo for a shop page, a campaign visual';
+export const NANO_BANANA_KEEP_LIST_PHRASE =
+  "the subject's shape and proportions, the camera angle and perspective, the framing, the light direction and colour, the shadows, the texture and grain";
+export const NANO_BANANA_LOGO_FORMULA =
+  'reproduce the mark from image N exactly as drawn: the same letterforms, orientation, proportions and colours, at the size it has now';
+export const NANO_BANANA_TYPE_STYLE_EXAMPLE = 'a clean bold sans-serif';
+export const NANO_BANANA_NO_LETTERING_CLOSER = 'the rest of the picture free of lettering';
+
+export function nanoBananaAllowPhrases(): string[] {
+  return [
+    NANO_BANANA_USE_CASE_LIST,
+    NANO_BANANA_KEEP_LIST_PHRASE,
+    NANO_BANANA_LOGO_FORMULA,
+    NANO_BANANA_TYPE_STYLE_EXAMPLE,
+    NANO_BANANA_NO_LETTERING_CLOSER,
+  ];
+}
+
 export const NANO_BANANA_PROFILE = `Model: an image model that follows direct instructions and edits pictures precisely. Describe everything as what is there, in positive words: say "an empty street", not "no cars".
 
-Write direct instructions in plain English: two to six sentences, up to eight when three or more images are attached. Start with one short phrase on what the picture is for (a product photo for a shop page, a campaign visual).
+Write direct instructions in plain English: two to six sentences, up to eight when three or more images are attached. Start with one short phrase on what the picture is for (${NANO_BANANA_USE_CASE_LIST}).
 - When images are attached, open with "Using image 1" (and name the others by number: "image 2", "image 3") and state the change first: what to add, replace or recolour, exactly where, and how it must look when done. To take something away, say what fills its place.
-- Then a keep-list, starting "Keep": everything that stays exactly as it is, chosen for this request, such as the subject's shape and proportions, the camera angle and perspective, the framing, the light direction and colour, the shadows, the texture and grain.
-- A logo, label or product mark: "reproduce the mark from image N exactly as drawn: the same letterforms, orientation, proportions and colours, at the size it has now".
+- Then a keep-list, starting "Keep": everything that stays exactly as it is, chosen for this request, such as ${NANO_BANANA_KEEP_LIST_PHRASE}.
+- A logo, label or product mark: "${NANO_BANANA_LOGO_FORMULA}".
 - With no image attached, describe the picture to create in this order: subject, action, setting, composition, light, materials, mood.
 
 References: name images only as "image N", with the numbers given. Each image's job is one clause ("image 2 supplies the bottle"), and reflections and contact shadows are made to agree across images.
 
-Text in the picture: only text that was asked for, verbatim in its original language and spelling, inside double quotes, with position, size and type style ("a clean bold sans-serif"), and the rest of the picture free of lettering.`;
+Text in the picture: only text that was asked for, verbatim in its original language and spelling, inside double quotes, with position, size and type style ("${NANO_BANANA_TYPE_STYLE_EXAMPLE}"), and ${NANO_BANANA_NO_LETTERING_CLOSER}.`;
 // [official] positive framing, intent phrase, "Using … change only … Keep", quotes + style, role per image;
 // [house] the logo sentence (was "do not redraw, mirror …", rewritten positively 2026-11-19).
 

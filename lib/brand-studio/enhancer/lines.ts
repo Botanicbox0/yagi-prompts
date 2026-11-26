@@ -5,6 +5,7 @@
  */
 import type { StudioAudioMode, StudioKeepKey } from '@/lib/brand-studio/contracts';
 import { brandSeedanceRulesV2Open } from '@/lib/flags';
+import { sleeveVolumeLine } from './profiles/seedance';
 import type { BoundReference } from './references';
 import type { EnhanceInput, EnhanceVideo } from './types';
 
@@ -54,7 +55,7 @@ export function referenceClause(profile: EnhanceInput['profile'], b: BoundRefere
       case 'person':
         if (profile === 'seedance' && brandSeedanceRulesV2Open(env)) {
           const sleeveTarget = t.replace(/^@Image(\d+)$/i, '@Image $1');
-          base = `${t} supplies only the person's face and hair, not the background, lighting or clothing; ignore any wide casual top/sleeve volume from ${sleeveTarget}`;
+          base = `${t} supplies only the person's face and hair, not the background, lighting or clothing; ${sleeveVolumeLine(sleeveTarget)}`;
           break;
         }
         base = `${profile === 'seedance' ? `${t} supplies` : `Use ${t} for`} only the person's face, hair and build, not the background, lighting or clothing`;
@@ -84,8 +85,9 @@ export function referenceClause(profile: EnhanceInput['profile'], b: BoundRefere
 
 /* ----------------------------------------------------------------- sound */
 
-export const AMBIENT_AUDIO_LINE =
-  'Audio: no music, only location sound and effects. No background music, score, melody or beat.';
+export const AMBIENT_SOUND_OPEN_PHRASE = 'Audio: no music, only location sound and effects';
+export const AMBIENT_SOUND_CLOSE_PHRASE = 'No background music, score, melody or beat.';
+export const AMBIENT_AUDIO_LINE = `${AMBIENT_SOUND_OPEN_PHRASE}. ${AMBIENT_SOUND_CLOSE_PHRASE}`;
 export const NATIVE_AUDIO_LINE = 'Audio: natural location sound and effects, with music that fits the mood.';
 
 export function audioLine(mode: StudioAudioMode): string | null {
