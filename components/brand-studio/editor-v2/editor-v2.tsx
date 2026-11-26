@@ -3,6 +3,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { fill } from '@/components/brand-studio/copy';
 import { ProjectChip, ProjectGoneNotice, useProjectSpine } from '@/components/brand-studio/project-chip';
+import { WorkspaceBell } from '@/components/brand-workspace/bell';
 import type { ExportPathOverride } from '@/lib/brand-studio/editor-v2/decode-plan';
 import { EDITOR_WORKSPACES, type EditorWorkspace } from '@/lib/brand-studio/editor-v2/model';
 import { filmHasSpeedTheOldEditorChanges } from '@/lib/brand-studio/editor-v2/stored';
@@ -166,6 +167,7 @@ export function EditorV2({ copy, currentEditorHref, initialWorkspace, exportPath
             <EditorIcon name="download" />
             {copy.top.export}
           </button>
+          <WorkspaceBell size="compact" />
         </div>
       </header>
       {spineActive ? <ProjectGoneNotice /> : null}

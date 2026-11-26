@@ -6,14 +6,18 @@ import { brandContext } from '@/components/brand-workspace/context';
 import { brandScope, selectedAccess } from '@/components/brand-workspace/scope';
 import { StaffNotice, adminOrganizationHref } from '@/components/brand-workspace/staff-notice';
 import { WorkspaceHome } from '@/components/brand-workspace/home/home-view';
+import { type SpineHomeProps } from '@/components/brand-workspace/home/project-cards';
 import { WorkspaceTeamHome, type TeamHomeProject } from '@/components/brand-workspace/home/team-home';
 import { roomsOpenFor } from '@/components/brand-rooms/room/visibility';
 import type { RoomAlertItem } from '@/components/brand-rooms/seams';
 import { loadRoomSummary } from '@/lib/brand-rooms/messages';
 import { loadRoomOverview, roomUnreadCounts } from '@/lib/brand-rooms/overview';
+import { brandProjectSpineOpen, memberSeesBrandProjects } from '@/lib/brand-studio/brand-projects';
 import { studioEnv } from '@/lib/brand-studio/env';
 import { createStudioMediaStore } from '@/lib/brand-studio/media-store';
 import { jobsOf, viewsOf } from '@/lib/brand-studio/repo';
+import { studioRuntimeDeps } from '@/lib/brand-studio/runtime';
+import { loadProjectCards } from '@/lib/brand-studio/service';
 import { allowanceViewWithRefill } from '@/lib/brand-studio/allowance-refill';
 import { allowanceView, loadAllowance } from '@/lib/brand-studio/usage';
 import { billingPlanCatalogue } from '@/lib/brands/billing-page-data';
@@ -151,15 +155,25 @@ export default async function BrandWorkspaceHome({
 
   const readOnly = choice.role === 'viewer' || access.staff;
   const media = createStudioMediaStore();
+  const spineCardsPromise = memberSeesBrandProjects({ staff: access.staff, role: choice.role })
+    ? brandProjectSpineOpen(sql, choice.id)
+        .then((open) => (open ? studioRuntimeDeps(sql).then((deps) => loadProjectCards(deps, viewer, choice.id)) : null))
+        .catch(() => null)
+    : Promise.resolve(null);
   // Every read is scoped to the brand the guard above resolved for this account.
-  const [allowance, jobs, summary, workspace] = await Promise.all([
+  const [allowance, jobs, summary, workspace, spineCards] = await Promise.all([
     loadAllowance(sql, choice.id, studioEnv()).catch(() => null),
     jobsOf(sql, choice.id, RECENT_JOBS)
       .then((rows) => viewsOf(sql, rows, media))
       .catch(() => []),
     rooms ? loadRoomSummary({ sql }, viewer, choice.id).catch(() => null) : Promise.resolve(null),
     loadBrandWorkspace({ sql, verifiedEmail }, viewer, { organizationId: choice.id }).catch(() => ({ organizations: [], projects: [] })),
+    spineCardsPromise,
   ]);
+  const spineHome: SpineHomeProps | undefined =
+    spineCards && spineCards.ok
+      ? { cards: spineCards, canCreate: !access.staff && (choice.role === 'owner' || choice.role === 'editor'), roomsOpen: rooms }
+      : undefined;
   const checklistCookie = (await cookies()).get(homeChecklistDismissCookieName(choice.id))?.value;
   const checklistDismissed = readChecklistDismissedFromCookie(choice.id, checklistCookie);
   const checklist =
@@ -171,42 +185,56 @@ export default async function BrandWorkspaceHome({
         }).catch(() => null);
   const reviews: RoomAlertItem[] = summary && summary.ok ? (summary.alerts ?? []) : [];
   const activeProjects = workspace.projects.filter((p) => p.status === 'active').length;
-  const studioLocale = locale === 'en' ? 'en' : 'ko';
+  const studioLocale: 'ko' | 'en' = locale === 'en' ? 'en' : 'ko';
   const dock = dict.brandStudio.dock;
   // R4: the refill fact beside the window (no statement unless the base cap is 0); a failed read keeps today's view.
   const allowanceForScreen = allowance
     ? await allowanceViewWithRefill(sql, choice.id, allowance).catch(() => allowanceView(allowance))
     : null;
 
-  return (
+  const baseCopy = {
+    home: dict.brandHome,
+    shell: dict.studioShell,
+    roomsNav: dict.roomsShell.nav,
+    inbox: dict.roomsChat.inbox,
+    prompt: { label: dock.label, placeholder: { image: dock.placeholder, video: dock.placeholderVideo } },
+    activeStatus: b.status.active,
+    allAssets: dict.studioLibrary.allAssets,
+    closedRequestDraft: dock.closedRequestDraft,
+    closedRequestOrgFallback: dock.closedRequestOrgFallback,
+    billingCustomer: dict.brandBilling.customer,
+  };
+  const sharedProps = {
+    organizationId: choice.id,
+    organizationName: choice.name,
+    locale: studioLocale,
+    layout,
+    allowance: allowanceForScreen,
+    reviews,
+    results: homeResults(jobs, choice.id),
+    activeProjects,
+    // A viewer and the TWINGS team view cannot create here: no prompt bar. Only a viewer gets the note.
+    readOnly,
+    viewerNote: choice.role === 'viewer',
+    notice: access.staff ? <StaffNotice b={b} manageHref={viewer.isAdmin ? adminOrganizationHref(choice.id, brandHost) : null} /> : null,
+    checklist,
+    canOpenBilling: billingChecklistLinkVisible(choice, viewer.isAdmin),
+    planCatalogue: billingPlanCatalogue(),
+  };
+
+  return spineHome ? (
     <WorkspaceHome
-      organizationId={choice.id}
-      organizationName={choice.name}
-      locale={studioLocale}
-      layout={layout}
-      allowance={allowanceForScreen}
-      reviews={reviews}
-      results={homeResults(jobs, choice.id)}
-      activeProjects={activeProjects}
-      // A viewer and the TWINGS team view cannot create here: no prompt bar. Only a viewer gets the note.
-      readOnly={readOnly}
-      viewerNote={choice.role === 'viewer'}
-      notice={access.staff ? <StaffNotice b={b} manageHref={viewer.isAdmin ? adminOrganizationHref(choice.id, brandHost) : null} /> : null}
-      checklist={checklist}
-      canOpenBilling={billingChecklistLinkVisible(choice, viewer.isAdmin)}
-      planCatalogue={billingPlanCatalogue()}
+      {...sharedProps}
+      spineHome={spineHome}
       copy={{
-        home: dict.brandHome,
-        shell: dict.studioShell,
-        roomsNav: dict.roomsShell.nav,
-        inbox: dict.roomsChat.inbox,
-        prompt: { label: dock.label, placeholder: { image: dock.placeholder, video: dock.placeholderVideo } },
-        activeStatus: b.status.active,
-        allAssets: dict.studioLibrary.allAssets,
-        closedRequestDraft: dock.closedRequestDraft,
-        closedRequestOrgFallback: dock.closedRequestOrgFallback,
-        billingCustomer: dict.brandBilling.customer,
+        ...baseCopy,
+        projectHome: dict.projectHome,
+        projectSpine: dict.projectSpine,
+        libraryHub: dict.studioLibrary.hub,
+        roomsOverview: dict.roomsShell.overview,
       }}
     />
+  ) : (
+    <WorkspaceHome {...sharedProps} copy={baseCopy} />
   );
 }

@@ -31,6 +31,7 @@ import type { BrandBillingCopy } from '@/messages/brand-billing';
 import { interpolate } from '@/lib/i18n/format';
 import type { StudioSoundCopy } from '@/messages/studio-sound';
 import { ProjectChip, ProjectGoneNotice, handleNotFoundForOpenProject, projectChipStyles, useProjectSpine } from '../project-chip';
+import { WorkspaceBell } from '@/components/brand-workspace/bell';
 import { StudioAllowanceNotice } from '../studio-allowance-notice';
 import { MusicComposer, type ComposerHandle, type ComposerInput } from './composer';
 import { SendToVideoDialog, type SendTarget } from './send-dialog';
@@ -620,6 +621,7 @@ export function SoundStudio(props: SoundStudioProps) {
           <span className={s.credits} data-sound-credits>
             {interpolate(props.creditsCopy.left, { n: formatCredits(left, locale) })}
           </span>
+          <WorkspaceBell />
         </div>
       </header>
       {spineActive ? <ProjectGoneNotice /> : null}

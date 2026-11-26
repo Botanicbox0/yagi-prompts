@@ -31,6 +31,8 @@ import type { RoomsShellCopy } from '@/messages/rooms-shell';
 import { BRAND_HOME_PATH } from '@/lib/brands/workspace/home';
 import { CreditsMeter, RailToasts, useRoomUnread, useStudioActivity } from './rail-activity';
 import { RailWorkspaceMenu, type RailWorkspace } from './rail-workspace-menu';
+import { bellInboxCount } from './bell/model';
+import { RAIL_MODE_CHANGED_EVENT, useBell } from './bell/provider';
 import {
   RAIL_MODE_COOKIE,
   parseRailModeCookie,
@@ -47,7 +49,6 @@ import {
 import {
   NAV_ORDER_STORAGE_KEY,
   RAIL_COOKIE,
-  RAIL_GROUP,
   RAIL_HREF,
   RAIL_ICON,
   RAIL_STORAGE_KEY,
@@ -63,6 +64,7 @@ import {
   railActive,
   railCreateLinks,
   railEditorRoute,
+  railGroupOf,
   railItems,
   railShownExpanded,
   railShownOrder,
@@ -134,6 +136,7 @@ function writeMode(organizationId: string, mode: RailMode): void {
     const value = rememberRailMode(parseRailModeCookie(current), organizationId, mode);
     const secure = window.location.protocol === 'https:' ? '; Secure' : '';
     document.cookie = `${RAIL_MODE_COOKIE}=${encodeURIComponent(value)}; Path=/; Max-Age=31536000; SameSite=Lax${secure}`;
+    window.dispatchEvent(new CustomEvent(RAIL_MODE_CHANGED_EVENT));
   } catch {
     // Cookies blocked: the rail still follows the page, and the next visit opens on the brand's default.
   }
@@ -206,8 +209,26 @@ export function RailNavigation(props: RailNavigationProps) {
   const modeButtons = useRef<Partial<Record<RailMode, HTMLButtonElement | null>>>({});
 
   const nav = props.rooms && props.roomsCopy ? props.roomsCopy : null;
+  const bellCtx = useBell();
+
+  /* ---------------------------------------------------------- the two modes (rail-mode.ts) */
+  const modeInput = { studio, studioShowroom: props.studioShowroom, rooms: nav !== null };
+  const modes = railModes(modeInput);
+  const [modeMemory, setModeMemory] = useState<Readonly<Record<string, RailMode>>>(props.modeMemory ?? {});
+  const remembered = rememberedRailMode(modeMemory, props.organizationId);
+  const resolved = resolveRailMode({ ...modeInput, path, remembered });
+  // Set while a switch opens the other side's first page: the rail shows that side at once, and this
+  // page's own side is not written back while the next page loads.
+  const [leavingTo, setLeavingTo] = useState<RailMode | null>(null);
+  const mode = leavingTo ?? resolved;
+  const switchable = modes.length > 1 && props.organizationId !== null;
+  const hasBell = Boolean(
+    bellCtx && props.organizationId && bellCtx.organizationId === props.organizationId && nav !== null && mode === 'make',
+  );
+
   const activity = useStudioActivity({ organizationId: props.organizationId, enabled: studio, path });
-  const unread = useRoomUnread({ organizationId: props.organizationId, enabled: nav !== null });
+  // In 직접 만들기 with the bell active, the bell provider polls once for both the bell and rail 알림함.
+  const unread = useRoomUnread({ organizationId: props.organizationId, enabled: nav !== null && !hasBell });
 
   // What this browser chose last time (the cookie may be missing on a first visit after an update).
   // `initialExpanded` comes from the server once per page, so this runs once. It brings the cookie back in
@@ -235,19 +256,8 @@ export function RailNavigation(props: RailNavigationProps) {
     sound: props.sound,
   });
   // With rooms, the saved order applies inside each group and never moves an item across groups.
-  const groups = nav ? groupItems(visibleItems, order) : null;
+  const groups = nav ? groupItems(visibleItems, order, { makeInbox: hasBell }) : null;
 
-  /* ---------------------------------------------------------- the two modes (rail-mode.ts) */
-  const modeInput = { studio, studioShowroom: props.studioShowroom, rooms: nav !== null };
-  const modes = railModes(modeInput);
-  const [modeMemory, setModeMemory] = useState<Readonly<Record<string, RailMode>>>(props.modeMemory ?? {});
-  const remembered = rememberedRailMode(modeMemory, props.organizationId);
-  const resolved = resolveRailMode({ ...modeInput, path, remembered });
-  // Set while a switch opens the other side's first page: the rail shows that side at once, and this
-  // page's own side is not written back while the next page loads.
-  const [leavingTo, setLeavingTo] = useState<RailMode | null>(null);
-  const mode = leavingTo ?? resolved;
-  const switchable = modes.length > 1 && props.organizationId !== null;
   // A page of one side (a deep link, a notice, a home card) flips the rail; remember that side for this brand.
   const organizationId = props.organizationId;
   useEffect(() => {
@@ -285,7 +295,17 @@ export function RailNavigation(props: RailNavigationProps) {
     return copy.rail[id];
   };
   const badge = (id: RailItemId) =>
-    id === 'image' ? activity.counts.image : id === 'video' ? activity.counts.video : id === 'sound' ? activity.counts.sound : id === 'messages' ? unread : 0;
+    id === 'image'
+      ? activity.counts.image
+      : id === 'video'
+        ? activity.counts.video
+        : id === 'sound'
+          ? activity.counts.sound
+          : id === 'messages'
+            ? hasBell && bellCtx
+              ? bellInboxCount(bellCtx)
+              : unread
+            : 0;
   /** What the badge says to a screen reader and in the collapsed tooltip. */
   const badgeText = (id: RailItemId, count: number, short = false) =>
     count <= 0 ? '' : id === 'messages' && nav ? interpolate(short ? nav.unreadShort : nav.unread, { count }) : interpolate(copy.rail.running, { count });
@@ -416,12 +436,18 @@ export function RailNavigation(props: RailNavigationProps) {
     setDragged(null);
     if (!source || source === target) return;
     // A drop on the other group, or across the divider, is no move at all: a row stays where it belongs.
-    const next = groups ? dropInGroup(groups, source, target) : dropInTier(items, source, target);
+    const next = groups ? dropInGroup(groups, source, target, mode, hasBell) : dropInTier(items, source, target, mode);
     if (next) saveOrder(next);
   };
-  const move = (id: RailItemId, direction: -1 | 1) => saveOrder(groups ? moveInGroup(groups, id, direction) : moveInTier(items, id, direction));
+  const move = (id: RailItemId, direction: -1 | 1) =>
+    saveOrder(groups ? moveInGroup(groups, id, direction, mode, hasBell) : moveInTier(items, id, direction, mode));
   const canDropOn = (id: RailItemId) =>
-    Boolean(dragged && dragged !== id && railTier(dragged) === railTier(id) && (!groups || RAIL_GROUP[dragged] === RAIL_GROUP[id]));
+    Boolean(
+      dragged &&
+        dragged !== id &&
+        railTier(dragged, mode) === railTier(id, mode) &&
+        (!groups || railGroupOf(dragged, mode, hasBell) === railGroupOf(id, mode, hasBell)),
+    );
 
   const utilities: Array<{ key: 'team' | 'billing' | 'settings'; href: string; shown: boolean }> = [
     { key: 'team', href: '/brand/members', shown: props.team },
@@ -448,6 +474,7 @@ export function RailNavigation(props: RailNavigationProps) {
         data-nav-item={href}
         data-nav-group="primary"
         data-rail-item={id}
+        data-rail-inbox={hasBell && id === 'messages' ? '' : undefined}
         data-rail-tip={tipCount ? `${tipBase} · ${tipCount}` : tipBase}
         aria-current={railActive(href, path) ? 'page' : undefined}
         draggable
@@ -479,7 +506,7 @@ export function RailNavigation(props: RailNavigationProps) {
   // Phone tab bar: 이미지 스튜디오 · 영상 스튜디오 · 캠페인 · 에셋 when they exist, filled up from the rest; the others go in 더보기.
   // With rooms: 이미지 스튜디오 · 영상 스튜디오 · 의뢰 · 메시지 (rail-model `groupedTabIds`).
   const tabIds = nav
-    ? groupedTabIds(items)
+    ? groupedTabIds(hasBell ? items.filter((id) => id !== 'messages') : items)
     : [
         ...(['image', 'video', 'campaigns', 'assets'] as RailItemId[]).filter((id) => items.includes(id)),
         ...items.filter((id) => !['image', 'video', 'campaigns', 'assets'].includes(id)),
@@ -488,15 +515,15 @@ export function RailNavigation(props: RailNavigationProps) {
 
   // The wide rail's two bands: the working screens, then (under a thin divider) what is opened now and then.
   // The phone bar and sheet above keep the one list. 야기 팀과 has no lower band.
-  const bands = railTiers(items);
+  const bands = railTiers(items, mode);
   // The arrows move a row among its own group's rows on its own side of the divider; 에셋 listed on 야기 팀과
   // stays where it is there.
   const ownList = (id: RailItemId): readonly RailItemId[] =>
-    (groups && mode ? groups[RAIL_GROUP[id]] : items).filter((other) => railTier(other) === railTier(id));
+    (groups && mode ? groups[railGroupOf(id, mode, hasBell)] : items).filter((other) => railTier(other, mode) === railTier(id, mode));
   const row = (id: RailItemId) => {
     const list = ownList(id);
     const index = list.indexOf(id);
-    const guest = mode !== null && railModeGuest(id, mode);
+    const guest = mode !== null && !(hasBell && id === 'messages') && railModeGuest(id, mode);
     return (
     <li key={id} className="bw-rail-row" data-drag-over={dragOver === id ? 'true' : undefined}>
       {itemLink(id)}
@@ -561,7 +588,7 @@ export function RailNavigation(props: RailNavigationProps) {
     }
     // The side's first page is its rail's first row: rows above the divider come before the ones under it,
     // whatever an older saved order put first.
-    const effect = railModeSwitchEffect({ path, next, items: railShownOrder(railModeItems(groups, next)), hrefOf: (id) => scope(RAIL_HREF[id]), pageFollowsMode });
+    const effect = railModeSwitchEffect({ path, next, items: railShownOrder(railModeItems(groups, next), next), hrefOf: (id) => scope(RAIL_HREF[id]), pageFollowsMode });
     // Same page, new content: the server tree is fetched again with the cookie just written. The rail and
     // the switch stay mounted, so focus stays where it is.
     if (effect.kind === 'refresh') router.refresh();
