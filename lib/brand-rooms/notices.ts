@@ -298,8 +298,8 @@ export async function enqueueNotices(sql: SqlRunner, source: RoomNoticeSource, o
         timing === 'none' ? 'rule' : null,
         push ? 'pending' : 'none',
       ];
-      // A team-channel notice keeps exactly the statement it always had (it also runs before migration 0198); a
-      // members-channel notice carries its channel (0198's column), so the pass never reads it as a team channel's.
+      // A team-channel notice keeps exactly the statement it always had (it also runs before migration 0200); a
+      // members-channel notice carries its channel (0200's column), so the pass never reads it as a team channel's.
       const { rows } =
         source.type === 'member'
           ? await sql.query<{ id: string }>(

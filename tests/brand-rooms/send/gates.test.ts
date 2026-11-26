@@ -11,7 +11,7 @@ import { as, closeWorld, imageResult, libraryPicture, membersLine, op, openSend,
 /**
  * docs/BRAND-PROJECT-SPINE.md §8, the coordinator's decisions 1–2 and 4: when 보내기 is open, and for whom.
  *  - Closed (BRAND_SEND, BRAND_ROOMS or BRAND_ROOM_NOTIFY off, the spine off or the organization not on its list, the
- *    tables of 0198 absent): every `send.*` answers exactly what an unknown operation answers (`invalid`), and nothing
+ *    tables of 0200 absent): every `send.*` answers exactly what an unknown operation answers (`invalid`), and nothing
  *    is read (no statement beyond the remembered schema probes) or written.
  *  - A closed organization (sandboxed, generation denied, `self_studio` denied, a project-only plan), a project guest,
  *    staff who are not members, an outsider: the rooms' `not_found`, nothing written.
@@ -126,14 +126,14 @@ describe('closed: the unknown operation’s answer, nothing read or written, the
     ['the spine off', () => void vi.stubEnv('BRAND_PROJECT_SPINE', 'off')],
     ['the organization not on the spine list', () => void vi.stubEnv('BRAND_PROJECT_SPINE_ORGS', randomUUID())],
     [
-      '0198 not applied (no thread read table)',
+      '0200 not applied (no thread read table)',
       async () => {
         await w.f.sql.query('drop table brand_room_thread_reads');
         resetBrandSendProbe();
       },
     ],
     [
-      '0198 not applied (no notice channel column)',
+      '0200 not applied (no notice channel column)',
       async () => {
         await w.f.sql.query('alter table brand_room_notices drop column channel cascade');
         resetBrandSendProbe();

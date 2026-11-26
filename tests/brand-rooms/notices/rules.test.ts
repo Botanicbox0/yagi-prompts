@@ -51,10 +51,10 @@ describe('room notice rules (§2.1)', () => {
     expect(noticeExcerpt(null)).toBe('');
   });
 
-  it('spells the same kinds in the table constraint (0094, and 0198 for member_reply)', () => {
+  it('spells the same kinds in the table constraint (0094, and 0200 for member_reply)', () => {
     const core = readMigration('0094_core_brand_room_notices.sql');
     for (const kind of ROOM_NOTICE_KINDS.filter((k) => k !== 'member_reply')) expect(core).toContain(`'${kind}'`);
-    const send = readMigration('0198_core_brand_send.sql');
+    const send = readMigration('0200_core_brand_send.sql');
     for (const kind of ROOM_NOTICE_KINDS) expect(send).toContain(`'${kind}'`);
     const glue = readMigration('0167_glue_brand_room_notices.sql');
     for (const table of ['brand_room_notice_prefs', 'brand_room_notices']) expect(glue).toContain(`'${table}'`);

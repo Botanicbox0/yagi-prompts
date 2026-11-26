@@ -1,6 +1,6 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`closed: the unknown operation’s answer, nothing read or written, the summary as origin/main > 0198 not applied (no notice channel column) 1`] = `
+exports[`closed: the unknown operation’s answer, nothing read or written, the summary as origin/main > 0200 not applied (no notice channel column) 1`] = `
 {
   "answers": {
     "guestBell": {
@@ -223,7 +223,7 @@ exports[`closed: the unknown operation’s answer, nothing read or written, the 
 }
 `;
 
-exports[`closed: the unknown operation’s answer, nothing read or written, the summary as origin/main > 0198 not applied (no thread read table) 1`] = `
+exports[`closed: the unknown operation’s answer, nothing read or written, the summary as origin/main > 0200 not applied (no thread read table) 1`] = `
 {
   "answers": {
     "guestBell": {

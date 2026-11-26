@@ -6,18 +6,18 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { MIGRATIONS_DIR, coreMigrationFiles, expectReject, freshDb, glueMigrationFiles } from '../../helpers/pglite';
 
 /**
- * docs/BRAND-PROJECT-SPINE.md §8.6, slice 4a — migrations 0198 (core) and 0199 (glue). Pinned:
- *  - 0198 applies on the full chain, twice; every check it replaces still accepts every shape the rooms write today
+ * docs/BRAND-PROJECT-SPINE.md §8.6, slice 4a — migrations 0200 (core) and 0201 (glue). Pinned:
+ *  - 0200 applies on the full chain, twice; every check it replaces still accepts every shape the rooms write today
  *    (team text lines, event lines, storyboard and review refs, replies, the general channel, every notice kind);
  *  - the members channel's shapes are accepted, and the bad ones are refused by the named check: a malformed members
  *    channel, a ref_key of an unknown kind, a file ref on a team channel, a storyboard ref on a members channel, an event
  *    or a team line or a team call or an attachment on a members channel, a member_reply notice without its channel;
  *  - a reply stays in its root's channel; a thread read mark belongs to a line of its own organization;
- *  - brand_room_thread_reads is closed from the moment it exists (RLS on and forced, no policy), and 0199 gives the
+ *  - brand_room_thread_reads is closed from the moment it exists (RLS on and forced, no policy), and 0201 gives the
  *    server role select, insert and update on it only.
  */
-const CORE = '0198_core_brand_send.sql';
-const GLUE = '0199_glue_brand_send.sql';
+const CORE = '0200_core_brand_send.sql';
+const GLUE = '0201_glue_brand_send.sql';
 
 let db: PGlite;
 let org: string;
@@ -60,7 +60,7 @@ async function refused(over: Row, constraint: RegExp): Promise<void> {
   expect(await expectReject(() => insertLine(over)), JSON.stringify(over)).toMatch(constraint);
 }
 
-describe('0198 — the members channel on brand_room_messages', () => {
+describe('0200 — the members channel on brand_room_messages', () => {
   it('applies after every earlier core file, and a second time without error', async () => {
     const files = coreMigrationFiles();
     expect(files).toContain(CORE);
@@ -78,7 +78,7 @@ describe('0198 — the members channel on brand_room_messages', () => {
     await insertLine({ project_id: project, channel: project, ref: { kind: 'review', reviewId: randomUUID() }, ref_key: `review:${randomUUID()}:${randomUUID()}` });
     await insertLine({ project_id: project, channel: project, author_id: null, author_role: 'system', kind: 'event', event: 'storyboard_shared', body: '', detail: { title: 'Board' }, ref: { kind: 'storyboard', storyboardId: randomUUID() }, ref_key: `storyboard:${randomUUID()}` });
     await insertLine({ body: '', attachments: [{ key: 'st/x', name: 'brief.pdf' }] });
-    // Re-applying 0198 over these rows succeeds: every existing row passes every new check.
+    // Re-applying 0200 over these rows succeeds: every existing row passes every new check.
     await db.exec(readFileSync(join(MIGRATIONS_DIR, CORE), 'utf8'));
     expect(Number((await db.query<{ n: number }>('select count(*)::int as n from brand_room_messages')).rows[0]!.n)).toBe(8);
   });
@@ -137,7 +137,7 @@ describe('0198 — the members channel on brand_room_messages', () => {
   });
 });
 
-describe('0198 — reads, notices and the thread read marks', () => {
+describe('0200 — reads, notices and the thread read marks', () => {
   it('brand_room_reads accepts the members forms besides today’s, and nothing else', async () => {
     for (const channel of ['general', project, 'members', `members:${project}`]) {
       await db.query('insert into brand_room_reads (organization_id, channel, user_id) values ($1, $2, $3)', [org, channel, user]);
@@ -184,11 +184,11 @@ describe('0198 — reads, notices and the thread read marks', () => {
   });
 });
 
-describe('0199 — glue', () => {
+describe('0201 — glue', () => {
   const glue = readFileSync(join(MIGRATIONS_DIR, GLUE), 'utf8');
   const statements = glue.replace(/--[^\n]*/g, '');
 
-  it('pairs with 0198, and both files start with the cloud marker', () => {
+  it('pairs with 0200, and both files start with the cloud marker', () => {
     expect(glueMigrationFiles()).toContain(GLUE);
     for (const file of [CORE, GLUE]) expect(readFileSync(join(MIGRATIONS_DIR, file), 'utf8').startsWith('-- 클라우드 적용 필요'), file).toBe(true);
   });
@@ -203,7 +203,7 @@ describe('0199 — glue', () => {
     expect(statements).not.toMatch(/delete/i);
   });
 
-  it('re-asserts the posture of the three tables 0198 changed, without touching the server role', () => {
+  it('re-asserts the posture of the three tables 0200 changed, without touching the server role', () => {
     for (const table of ['brand_room_messages', 'brand_room_reads', 'brand_room_notices']) expect(glue).toContain(`'${table}'`);
     expect(glue).toContain('revoke all on public.%I from public,anon,authenticated\'');
   });
@@ -214,7 +214,7 @@ describe('0199 — glue', () => {
  * The rollback the slice 4a report gives, statement for statement (docs/BRAND-PROJECT-SPINE.md §8.6): with BRAND_SEND off,
  * the members lines and their notices go first, then the table, then the checks of 0082 and 0094 come back exactly.
  */
-export const ROLLBACK_0198 = `
+export const ROLLBACK_0200 = `
 delete from brand_room_notices where kind = 'member_reply' or channel like 'members%'
    or message_id in (select id from brand_room_messages where channel like 'members%');
 delete from brand_room_messages where channel like 'members%';
@@ -255,11 +255,11 @@ describe('rollback (the report’s statements)', () => {
     await db.query('insert into brand_room_thread_reads (organization_id, root_message_id, user_id) values ($1, $2, $3)', [org, root, user]);
     await db.query("insert into brand_room_notices (organization_id, project_id, recipient_id, kind, message_id, timing, due_at, channel) values ($1, $2, $3, 'mention', $4, 'now', now(), $5)", [org, project, user, root, `members:${project}`]);
     await db.query("insert into brand_room_notices (organization_id, project_id, recipient_id, kind, message_id, timing, due_at) values ($1, $2, $3, 'team_message', $4, 'bundle', now())", [org, project, user, team]);
-    await db.exec(ROLLBACK_0198);
+    await db.exec(ROLLBACK_0200);
     expect((await db.query<{ channel: string }>('select channel from brand_room_messages order by channel')).rows).toEqual([{ channel: project }, { channel: project }]);
     expect((await db.query<{ kind: string }>('select kind from brand_room_notices')).rows).toEqual([{ kind: 'team_message' }]);
     expect((await db.query<{ t: string | null }>("select to_regclass('public.brand_room_thread_reads')::text as t")).rows[0]!.t).toBeNull();
-    // The old checks are back: a members line is refused again, and 0198 can be applied once more.
+    // The old checks are back: a members line is refused again, and 0200 can be applied once more.
     expect(await expectReject(() => membersRoot())).toMatch(/brand_room_messages_channel/);
     await db.exec(readFileSync(join(MIGRATIONS_DIR, CORE), 'utf8'));
     await membersRoot();

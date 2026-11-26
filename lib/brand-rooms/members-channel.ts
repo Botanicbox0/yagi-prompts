@@ -2,7 +2,7 @@
  * The members channel's gates (docs/BRAND-PROJECT-SPINE.md §8.2–§8.4; slice 4a). What the send module (./send.ts), the
  * notices (./notices.ts) and the bell (./bell.ts) must all answer the same way:
  *  - whether 보내기 is open for an organization (`brandSendOpenFor`): the switch, the rooms and notices switches, the
- *    spine for that organization, and migration 0198 (a remembered probe, ./members-schema.ts). The environment is read
+ *    spine for that organization, and migration 0200 (a remembered probe, ./members-schema.ts). The environment is read
  *    first; while it says closed the database is not asked anything;
  *  - who the members channel belongs to (`sendSeat`, `membersAudience`): the organization's ACTIVE workspace members,
  *    every role. Never a project guest, never staff as staff (a staff account that is also an active member is a
@@ -34,7 +34,7 @@ export function brandSendSwitchesOn(env: Env = process.env): boolean {
 
 /**
  * Is 보내기 open for this organization (the coordinator's decision 1): the three switches, the spine open for it (switch,
- * organization list, columns), and migration 0198. Reads nothing of the organization: the environment first, then the
+ * organization list, columns), and migration 0200. Reads nothing of the organization: the environment first, then the
  * two remembered schema probes. Who may use it is `sendSeat`'s question.
  */
 export async function brandSendOpenFor(sql: SqlRunner, organizationId: string, env: Env = process.env): Promise<boolean> {

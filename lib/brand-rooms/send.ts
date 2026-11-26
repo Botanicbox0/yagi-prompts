@@ -3,7 +3,7 @@
  * colleagues with `@` and a message, and reads and answers what they were sent. Wire shapes: ./send-contracts.ts.
  *
  * Where it lives: the organization's MEMBERS channel (`members:<project>` for a file filed in a project, `members` for an
- * unfiled one; migration 0198), in the same table as the team conversation, never in it. Each send is a ROOT line about
+ * unfiled one; migration 0200), in the same table as the team conversation, never in it. Each send is a ROOT line about
  * one file (`ref` output or asset); replies are one level deep, copy the root's ref and stay in its channel.
  *
  * Who: the organization's active workspace members, every role (./members-channel.ts `sendSeat`); a project guest, staff
@@ -12,7 +12,7 @@
  * a viewer may send and reply.
  *
  * Open: only while `brandSendOpenFor` says so (BRAND_SEND, BRAND_ROOMS, BRAND_ROOM_NOTIFY, the spine for the
- * organization, migration 0198). Closed: every operation answers exactly what an unknown operation answers (`invalid`)
+ * organization, migration 0200). Closed: every operation answers exactly what an unknown operation answers (`invalid`)
  * and nothing is read or written.
  *
  * What it never does: a team notice, a Slack call, an event line, anything on a team channel. The only outbound effect
@@ -575,7 +575,7 @@ async function fileThreads(ctx: Ctx, input: unknown): Promise<SendFileThreads> {
  * "나에게 온 것" (the coordinator's decision 10) as SQL: the live roots on this organization's members channels where the
  * caller wrote the root or a reply, or is named in the root or a reply; `last_at` the newest live line, `mentioned` the
  * caller named anywhere in it, `unread` a live line by someone else newer than the caller's mark. `$1` the organization,
- * `$2` the caller. The candidate lines are found through the 0198 partial indexes (the caller's lines, the lines naming
+ * `$2` the caller. The candidate lines are found through the 0200 partial indexes (the caller's lines, the lines naming
  * them); the work grows with the caller's own threads, never with the organization's.
  */
 const INBOX = `

@@ -1,15 +1,15 @@
 /**
  * The members channel's storage facts (docs/BRAND-PROJECT-SPINE.md §8.3, §8.6; slice 4a), in a leaf module so the spine's
  * move (lib/brand-studio/brand-projects.ts) can carry a file's threads without importing the rooms' gates:
- *  - whether migration 0198 is applied (`brandSendTablesReady`, a remembered probe);
- *  - the SQL predicate for "a members line" (`MEMBERS_LINE`, the form the 0198 partial indexes use);
+ *  - whether migration 0200 is applied (`brandSendTablesReady`, a remembered probe);
+ *  - the SQL predicate for "a members line" (`MEMBERS_LINE`, the form the 0200 partial indexes use);
  *  - moving a file's threads with the file (`moveFileThreads`).
  * Nothing here reads who may see what, and nothing here sends anything.
  */
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import { membersChannelOf } from './send-contracts';
 
-/** The members channels, as a SQL predicate on `alias.channel` (the 0198 checks allow only `members` and `members:<uuid>`). */
+/** The members channels, as a SQL predicate on `alias.channel` (the 0200 checks allow only `members` and `members:<uuid>`). */
 export const MEMBERS_LINE = (alias: string): string => {
   if (!/^[a-z][a-z0-9_]{0,30}$/.test(alias)) throw new Error('bad alias');
   return `${alias}.channel like 'members%'`;
@@ -19,7 +19,7 @@ const RECHECK_MS = 60_000;
 let probe: { ready: boolean; at: number } | null = null;
 
 /**
- * True once migration 0198 is applied: `brand_room_thread_reads` exists and `brand_room_notices.channel` exists (the
+ * True once migration 0200 is applied: `brand_room_thread_reads` exists and `brand_room_notices.channel` exists (the
  * table is the file's last statement). A miss is looked up again after a minute, so applying the migration needs no
  * redeploy; a hit is kept (the spine's column probe and the news slot's table probe do the same).
  */
@@ -46,7 +46,7 @@ export function resetBrandSendProbe(): void {
  * about a deleted result stays with its run) and the library entries `assetIds`; their roots on a members channel of
  * this organization and those roots' replies move to `projectId`'s members channel (`members` when null), and so do the
  * notices about those lines. The roots are locked first, so a reply being written to one of them either commits before
- * this update reads (and moves with it) or waits for the move and lands in the new channel. Runs whenever 0198 is
+ * this update reads (and moves with it) or waits for the move and lands in the new channel. Runs whenever 0200 is
  * applied, whatever the switch says: a thread is never left behind its file. Returns the number of lines moved.
  */
 export async function moveFileThreads(

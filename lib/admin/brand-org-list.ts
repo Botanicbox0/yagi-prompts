@@ -342,7 +342,7 @@ export async function loadBrandOrgList(
     )`);
   }
 
-  // The team's channels only ('general' and a project's own): a members line (보내기, 0198) is never the team's, not even its time.
+  // The team's channels only ('general' and a project's own): a members line (보내기, 0200) is never the team's, not even its time.
   if (hasRoomMsgs) {
     ctes.push(`room_msg_agg as (
       select organization_id, max(created_at) as last_room_msg_at

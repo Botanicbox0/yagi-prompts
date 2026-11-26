@@ -409,7 +409,7 @@ export function brandRoomNotifyOpen(env: NodeJS.ProcessEnv = process.env): boole
  * organization's members channel, and reads and answers what they were sent (the 알림함 "나에게 온 것", the bell's thread
  * lines). Default OFF: open only when the server environment says exactly `BRAND_SEND=on`. Even then 보내기 is open for
  * an organization only while `BRAND_ROOMS` and `BRAND_ROOM_NOTIFY` are on, the spine is open for it
- * (`BRAND_PROJECT_SPINE` + `BRAND_PROJECT_SPINE_ORGS` + migration 0194) and migration 0198 is applied
+ * (`BRAND_PROJECT_SPINE` + `BRAND_PROJECT_SPINE_ORGS` + migration 0194) and migration 0200 is applied
  * (lib/brand-rooms/members-channel.ts `brandSendOpenFor`). Closed: every `send.*` operation answers exactly what an
  * unknown operation answers, the bell and every existing read answer as before, and nothing is written.
  */

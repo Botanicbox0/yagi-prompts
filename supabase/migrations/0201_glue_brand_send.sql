@@ -1,4 +1,4 @@
--- 클라우드 적용 필요 — TWINGS · glue migration 0199 — pairs with 0198 (보내기: members channel, per-thread reads)
+-- 클라우드 적용 필요 — TWINGS · glue migration 0201 — pairs with 0200 (보내기: members channel, per-thread reads)
 -- No browser key reads or writes any of these tables: 보내기 runs on the app's server role (POST /api/brand-rooms/messages,
 -- `send.*`; lib/brand-rooms/send.ts), as the rest of the room conversation does (0156, 0167). Deny-all RLS, no policy,
 -- browser roles revoked.
@@ -15,7 +15,7 @@ do $$ declare t text; begin
  end loop;
 end $$;
 
--- The three tables 0198 changed (checks and one new column) keep exactly their posture (0156 and 0167): re-asserted for
+-- The three tables 0200 changed (checks and one new column) keep exactly their posture (0156 and 0167): re-asserted for
 -- browser roles only, the server role's grants untouched, so this pair is safe to apply on its own.
 do $$ declare t text; begin
  foreach t in array array['brand_room_messages','brand_room_reads','brand_room_notices'] loop

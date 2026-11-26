@@ -1670,7 +1670,7 @@ export async function staffRoomOverview(
              join brand_organizations g on g.id = m0.organization_id
              left join brand_projects p on p.id = m0.project_id
             where (m0.project_id is null or p.client_visible)
-              -- The team's channels only: 'general' and a project's own. A members channel (보내기, 0198) is never the team's.
+              -- The team's channels only: 'general' and a project's own. A members channel (보내기, 0200) is never the team's.
               and (m0.channel = 'general' or m0.channel = m0.project_id::text)
             group by m0.organization_id, g.name, m0.channel, m0.project_id, p.title
             order by max(m0.created_at) desc

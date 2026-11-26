@@ -1,4 +1,4 @@
--- 클라우드 적용 필요 — TWINGS · core migration 0198 — 보내기: the members channel, file threads, per-thread reads
+-- 클라우드 적용 필요 — TWINGS · core migration 0200 — 보내기: the members channel, file threads, per-thread reads
 -- (docs/BRAND-PROJECT-SPINE.md §8.2, §8.3, §8.4, §8.6; slice 4a).
 --
 -- A workspace member sends a studio file to colleagues with `@` and a message. That conversation must never reach the
@@ -25,7 +25,7 @@
 --
 -- Safe while the old code serves: no existing value is refused; the old code never writes a members channel, an
 -- output or asset ref, `member_reply` or the new column; the new table is closed to every browser key from the moment
--- it exists (row level security on and forced, no policy, PUBLIC revoked; glue 0199 revokes the browser roles' table
+-- it exists (row level security on and forced, no policy, PUBLIC revoked; glue 0201 revokes the browser roles' table
 -- grants and grants the server role). But once a members line EXISTS, pre-4a code must not serve against this
 -- database: its admin rooms overview and organization list would show the line, and its notice pass would mail a
 -- pending members mention with a room link. Safe to deploy the code first: the
@@ -37,7 +37,7 @@
 -- report has the statements). A project deleted by hand takes its members threads with it (0082's project key cascades),
 -- and with them their notices and read marks.
 --
--- Pairs with glue 0199. Re-runnable: every statement is guarded or idempotent.
+-- Pairs with glue 0201. Re-runnable: every statement is guarded or idempotent.
 
 -- ------------------------------------------------------------------ brand_room_messages
 
@@ -145,7 +145,7 @@ create table if not exists brand_room_thread_reads (
 );
 create index if not exists idx_brand_room_thread_reads_user on brand_room_thread_reads (user_id);
 
--- Closed from the moment it exists (0156's posture; glue 0199 re-asserts it and grants the server role).
+-- Closed from the moment it exists (0156's posture; glue 0201 re-asserts it and grants the server role).
 alter table brand_room_thread_reads enable row level security;
 alter table brand_room_thread_reads force row level security;
 revoke all on brand_room_thread_reads from public;

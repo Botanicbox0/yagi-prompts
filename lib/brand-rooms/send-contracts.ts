@@ -72,7 +72,7 @@ export function membersChannelOf(projectId: string | null | undefined): string {
   return projectId ? `${MEMBERS_CHANNEL}:${projectId.toLowerCase()}` : MEMBERS_CHANNEL;
 }
 
-/** Whether a stored channel value is a members channel (the 0198 check allows exactly these two forms). */
+/** Whether a stored channel value is a members channel (the 0200 check allows exactly these two forms). */
 export function isMembersChannel(channel: string | null | undefined): boolean {
   if (channel === MEMBERS_CHANNEL) return true;
   return typeof channel === 'string' && channel.startsWith(`${MEMBERS_CHANNEL}:`) && UUID.test(channel.slice(MEMBERS_CHANNEL.length + 1));

@@ -25,7 +25,7 @@ import { as, closeWorld, code, libraryPicture, imageResult, membersLine, op, ope
 
 /**
  * docs/BRAND-PROJECT-SPINE.md §8.2 — "멤버 칸은 저절로 숨겨지지 않는다". Members lines are written straight into the table
- * (as migration 0198 allows), on a team project's members channel, on an own project's and on the unfiled one, with a
+ * (as migration 0200 allows), on a team project's members channel, on an own project's and on the unfiled one, with a
  * reply and a mention, and then every reader that is NOT a workspace member reading the members channel is asked:
  *  - every team-side read (the admin rooms overview and its last line, one organization's channels, a project desk,
  *    the admin organization list's last-activity time, room audiences), every project guest's read, the brand's own
