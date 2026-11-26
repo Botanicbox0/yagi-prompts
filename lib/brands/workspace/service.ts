@@ -65,8 +65,11 @@ export interface BrandWorkspaceDeps {
 }
 /** The acceptance's two questions to 초대하고 보내기, inside the acceptance's transaction. */
 export interface BrandSendInviteHooks {
-  /** An organization viewer invitation issued by an editor: honoured only when 보내기 issued it and it is open there. */
-  honoursEditorInvitation(sql: SqlRunner, invite: { id: string; organizationId: string }): Promise<boolean>;
+  /**
+   * An organization viewer invitation issued by an editor, accepted by `userId`: honoured only when 보내기 issued it, it
+   * is open there, and `userId` is not someone an owner removed from the organization.
+   */
+  honoursEditorInvitation(sql: SqlRunner, invite: { id: string; organizationId: string; email: string; createdBy: string; requestId: string }, userId: string): Promise<boolean>;
   /** After the membership is written: the lines waiting for this invitation reach the new member. Never throws. */
   deliver(sql: SqlRunner, invite: { id: string; organizationId: string }, userId: string): Promise<void>;
 }
@@ -977,7 +980,8 @@ export async function acceptBrandInvitation(deps: BrandWorkspaceDeps, viewer: Vi
       // 초대하고 보내기 (slice 4c): an editor's VIEWER invitation counts only when 보내기 issued it, and only while that is
       // open for the organization (deps.sendInvites); every other organization invitation still needs an owner inviter.
       if (inviterRole !== 'owner' && !(inviterRole === 'editor' && invite.role === 'viewer' && deps.sendInvites
-        && await deps.sendInvites.honoursEditorInvitation(sql, { id: String(invite.id), organizationId: String(invite.organization_id) }))) throw new Denied('not_found');
+        && await deps.sendInvites.honoursEditorInvitation(sql, { id: String(invite.id), organizationId: String(invite.organization_id), email: String(invite.email),
+          createdBy: String(invite.created_by), requestId: String(invite.request_id) }, userId))) throw new Denied('not_found');
     }
     if(invite.project_id) {
       // The newest invitation defines the guest's scope, including whether they may comment.

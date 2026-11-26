@@ -121,8 +121,18 @@ export async function planInvites(
   // The address must never travel in a line's text: the bell, the inbox, every reader and the mention mail quote it.
   const body = line.body.toLowerCase();
   if (emails.some((email) => body.includes(email))) throw new SendInviteDenied('invalid');
-  const own = (await sql.query<{ email: string | null }>('select lower(email) as email from profiles where id = $1', [ctx.me])).rows[0]?.email ?? null;
-  if (own && emails.includes(own)) throw new SendInviteDenied('invalid');
+  // The sender's own address, and their seat read again now that the organization row is held (the seat was read before
+  // the lock: an owner may have removed them meanwhile, and nothing they invite would be honoured).
+  const me = (
+    await sql.query<{ email: string | null; role: string | null }>(
+      `select lower(p.email) as email, m.role from profiles p
+         left join brand_memberships m on m.organization_id = $2 and m.user_id = p.id and m.status = 'active'
+        where p.id = $1`,
+      [ctx.me, ctx.organizationId],
+    )
+  ).rows[0];
+  if (!me || (me.role !== 'owner' && me.role !== 'editor')) throw new SendInviteDenied('forbidden');
+  if (me.email && emails.includes(me.email)) throw new SendInviteDenied('invalid');
   const members = new Map<string, string[]>();
   for (const row of (
     await sql.query<{ user_id: string; email: string }>(
@@ -274,8 +284,8 @@ export async function inviteChips(
   if (ids.length === 0) return chips;
   const authors = new Map(lines.map((line) => [line.id.toLowerCase(), line.authorId ? line.authorId.toLowerCase() : null]));
   const rows = (
-    await sql.query<{ message_id: string; email: string; revoked: boolean; accepted: boolean; expired: boolean }>(
-      `select pm.message_id::text as message_id, i.email, i.revoked_at is not null as revoked, i.accepted_at is not null as accepted,
+    await sql.query<{ message_id: string; email: string; role: string; revoked: boolean; accepted: boolean; expired: boolean }>(
+      `select pm.message_id::text as message_id, i.email, i.role, i.revoked_at is not null as revoked, i.accepted_at is not null as accepted,
               i.expires_at <= now() as expired
          from brand_room_pending_mentions pm
          join brand_invites i on i.id = pm.invite_id and i.organization_id = pm.organization_id
@@ -286,7 +296,9 @@ export async function inviteChips(
   ).rows;
   for (const row of rows) {
     const id = String(row.message_id).toLowerCase();
-    const sees = reader.owner || authors.get(id) === reader.me;
+    // The writer typed it. An owner sees it too, except an owner-role invitation's (the TWINGS team's handover, which the
+    // members page hides from owners as well).
+    const sees = authors.get(id) === reader.me || (reader.owner && row.role !== 'owner');
     const state: SendInviteChip['state'] = row.revoked ? 'expired' : row.accepted ? 'accepted' : row.expired ? 'expired' : 'pending';
     chips.get(id)?.push({ state, email: sees ? String(row.email) : null });
   }
@@ -294,11 +306,11 @@ export async function inviteChips(
 }
 
 /**
- * `send.lookup` (decision 10): what a typed address becomes. While the switch is closed: `not_allowed`, nothing read. Else,
- * at most `SEND_LIMITS.lookupsPerMinute` per person per organization (the studio's sliding-window limiter,
- * `takeFreeIntelSlot`): an ACTIVE member of this organization (one statement) is `member`; anything else is `invitable`
- * for an owner or editor and `not_allowed` for a viewer. An address with an account elsewhere on TWINGS, a removed member,
- * a project guest, an address already invited and one never seen answer alike.
+ * `send.lookup` (decision 10): what a typed address becomes. While the switch is closed, and for a caller who may not
+ * invite (a viewer): `not_allowed`, nothing read. Else, at most `SEND_LIMITS.lookupsPerMinute` per person per
+ * organization (the studio's sliding-window limiter, `takeFreeIntelSlot`, per server instance): an ACTIVE member of this
+ * organization (one statement) is `member`; anything else is `invitable`. An address with an account elsewhere on TWINGS,
+ * a removed member, a project guest, an address already invited and one never seen answer alike.
  */
 export async function lookupAddress(
   sql: SqlRunner,
@@ -310,7 +322,10 @@ export async function lookupAddress(
   const parsed = SendLookupSchema.safeParse(input);
   if (!parsed.success) throw new SendInviteDenied('invalid');
   const email = parsed.data.email;
-  if (!open) return { ok: true, email, status: 'not_allowed', member: null };
+  // Closed, or a caller who may not invite (a viewer): `not_allowed`, nothing read. A viewer names colleagues from
+  // `send.people`; an address -> member answer is only for those who may invite (it is what turns a typed address into
+  // a mention instead of an invitation).
+  if (!open || !mayInvite(ctx.seat)) return { ok: true, email, status: 'not_allowed', member: null };
   const { takeFreeIntelSlot } = await import('@/lib/brand-studio/jobs');
   if (!takeFreeIntelSlot(`send-lookup:${ctx.organizationId}:${ctx.me}`, SEND_LIMITS.lookupsPerMinute, now)) throw new SendInviteDenied('rate_limited');
   const row = (
@@ -322,7 +337,7 @@ export async function lookupAddress(
     )
   ).rows[0];
   if (row) return { ok: true, email, status: 'member', member: { id: String(row.user_id).toLowerCase(), name: roomAuthorName('brand', row.display_name, row.email) ?? '' } };
-  return { ok: true, email, status: mayInvite(ctx.seat) ? 'invitable' : 'not_allowed', member: null };
+  return { ok: true, email, status: 'invitable', member: null };
 }
 
 /* ------------------------------------------------------------------ acceptance */
@@ -343,20 +358,47 @@ async function organizationOpen(sql: SqlRunner, organizationId: string): Promise
  * and the acceptance is exactly what it was before slice 4c.
  */
 export function sendInviteAcceptHooks(env: Env = process.env): BrandSendInviteHooks {
+  /**
+   * Open for this organization, asked before the hooks' savepoints so that a closed switch costs no statement at all
+   * (the acceptance is then statement for statement what it was). Past the environment, only the remembered
+   * `information_schema` probes run here; should one fail, the hook answers closed (and logs no text).
+   */
+  const openForAcceptance = async (sql: SqlRunner, organizationId: string): Promise<boolean> => {
+    if (!brandSendInviteOpen(env)) return false;
+    try {
+      return await brandSendInviteOpenFor(sql, organizationId, env);
+    } catch (error) {
+      console.warn('[brand-send] invite_open_check_failed', JSON.stringify({ code: sqlState(error) }));
+      return false;
+    }
+  };
   return {
     /**
      * An organization invitation issued by an EDITOR (the members page lets only owners issue one) is honoured only if
-     * 보내기 issued it: a viewer invitation (the caller checks the role and the editor's seat) with lines waiting for it,
-     * while 초대하고 보내기 is open and the organization is open. Anything else: not honoured (`not_found`, as before).
+     * 보내기 issued it, while 초대하고 보내기 and the organization are open: a line written by that editor waits for it and
+     * the invitation's request id is the one that line derived for this address (`inviteRequestId`), so an invitation
+     * someone issued elsewhere (an owner since demoted, say) is never brought back to life by a line that reused it. The
+     * caller has already checked the role (viewer) and that the editor still holds an owner or editor seat. And never
+     * for someone an owner removed from this organization: an editor may invite newcomers, not bring a removed member back
+     * (an owner still may, from the members page). Anything else: not honoured (`not_found`, as before slice 4c).
      */
-    async honoursEditorInvitation(sql, invite) {
-      if (!(await brandSendInviteOpenFor(sql, invite.organizationId, env))) return false;
+    async honoursEditorInvitation(sql, invite, userId) {
+      if (!(await openForAcceptance(sql, invite.organizationId))) return false;
       await sql.query('savepoint brand_send_invite_honour');
       try {
-        const waiting = (
-          await sql.query<{ n: number }>('select count(*)::int as n from brand_room_pending_mentions where invite_id = $1 and organization_id = $2', [invite.id, invite.organizationId])
-        ).rows[0]!;
-        const honoured = Number(waiting.n) > 0 && (await organizationOpen(sql, invite.organizationId));
+        const lines = (
+          await sql.query<{ request_id: string }>(
+            `select m.request_id::text as request_id from brand_room_pending_mentions pm
+               join brand_room_messages m on m.id = pm.message_id and m.organization_id = pm.organization_id
+              where pm.invite_id = $1 and pm.organization_id = $2 and m.author_id = $3`,
+            [invite.id, invite.organizationId, invite.createdBy],
+          )
+        ).rows;
+        const issuedHere = lines.some((line) => inviteRequestId(String(line.request_id), invite.email) === invite.requestId.toLowerCase());
+        const removed = issuedHere
+          ? (await sql.query("select 1 from brand_memberships where organization_id = $1 and user_id = $2 and status <> 'active'", [invite.organizationId, userId])).rows.length > 0
+          : true;
+        const honoured = issuedHere && !removed && (await organizationOpen(sql, invite.organizationId));
         await sql.query('release savepoint brand_send_invite_honour');
         return honoured;
       } catch (error) {
@@ -375,7 +417,7 @@ export function sendInviteAcceptHooks(env: Env = process.env): BrandSendInviteHo
      * alone, is logged without any text, and the acceptance completes.
      */
     async deliver(sql, invite, userId) {
-      if (!(await brandSendInviteOpenFor(sql, invite.organizationId, env))) return;
+      if (!(await openForAcceptance(sql, invite.organizationId))) return;
       const organizationId = invite.organizationId.toLowerCase();
       const me = userId.toLowerCase();
       await sql.query('savepoint brand_send_invite_accept');

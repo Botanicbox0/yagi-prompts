@@ -183,7 +183,7 @@ describe('what each address becomes (decision 5)', () => {
     for (const bad of ['not an address', 'a@b', '', 'x'.repeat(250) + '@example.com']) expect(await code(w, owner(), 'send.post', postInput([bad])), bad).toBe('invalid');
   });
 
-  it('two lines inviting one new address make one invitation and two waiting lines; an inviting line takes the organization row for update before it reads any invitation', async () => {
+  it('two lines inviting one new address make one invitation and two waiting lines; an inviting line takes the organization row for no key update before it reads anything', async () => {
     const texts: string[] = [];
     const first = await runRoomOperation({ sql: recording(w.f.sql, texts), media: w.deps.media }, editor(), 'send.post', { organizationId: w.f.orgId, ...postInput(['twice@example.com']) });
     const second = await ok<SendPosted>(w, owner(), 'send.post', postInput(['twice@example.com']));
@@ -193,7 +193,9 @@ describe('what each address becomes (decision 5)', () => {
     expect(await count('brand_room_pending_mentions')).toBe(2);
     // The lock is the first statement after the seat, before any line, file, member or invitation is read: two such lines
     // run one after the other (PGlite has one connection; the order is what makes the cloud's concurrent case the same).
-    const lock = texts.findIndex((t) => /from brand_organizations where id = \$1 for update$/.test(t));
+    // `for no key update`: it waits for, and holds off, every invitation writer (they take `for update`) and any other
+    // inviting line, never slice 4a's sends or a foreign key check (`for key share`), so no new deadlock with them.
+    const lock = texts.findIndex((t) => /from brand_organizations where id = \$1 for no key update$/.test(t));
     const firstInviteRead = texts.findIndex((t) => /from brand_invites/.test(t));
     const firstLineRead = texts.findIndex((t) => /brand_room_messages/.test(t));
     expect(lock).toBeGreaterThan(-1);

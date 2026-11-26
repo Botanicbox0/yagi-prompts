@@ -148,13 +148,15 @@ export async function runSendOperation(deps: SendDeps, viewer: Viewer, operation
       // (or the move waits for it and carries its root), and a reply or a read mark can never hold a root while waiting
       // for the organization row the move holds (no deadlock). Writers do not block each other: `for key share`
       // conflicts only with `for update`.
-      // A line that invites someone (slice 4c) takes the row `for update` instead, the lock every invitation writer takes
-      // first (the members page, the room invitations, acceptance, revocation): it is then the only invitation writer of
-      // the organization until it commits, so two lines inviting one new address make one invitation, and an address
-      // cannot join between this line's decision and its write.
+      // A line that invites someone (slice 4c; a well-formed input with at least one address, from an owner or editor)
+      // takes the row `for no key update` instead. That conflicts with the `for update` every invitation writer takes
+      // first (the members page, the team's form, the room invitations, acceptance, revocation) and with another inviting
+      // line, so it is the only invitation writer of the organization until it commits: two lines inviting one new address
+      // make one invitation, and an address cannot join between this line's decision and its write. It does not conflict
+      // with `for key share` (slice 4a's sends, and every foreign key that points at the organization), so it never waits
+      // on, or blocks, a colleague's ordinary write that holds a profile row (no new deadlock).
       if (WRITES.has(operation)) {
-        const inviting = invitesOpen && (operation === 'send.post' || operation === 'send.reply') && mayInvite(seat) && carriesInvites(input);
-        if (inviting) await sql.query('select id from brand_organizations where id = $1 for update', [organizationId]);
+        if (invitesOpen && mayInvite(seat) && invitingInput(operation, input)) await sql.query('select id from brand_organizations where id = $1 for no key update', [organizationId]);
         else await sql.query('select id from brand_organizations where id = $1 for key share', [organizationId]);
       }
       switch (operation) {
@@ -187,6 +189,14 @@ export async function runSendOperation(deps: SendDeps, viewer: Viewer, operation
     result.invited = result.invited.map((outcome) => (outcome.result === 'invited' ? { ...outcome, mailState: byEmail.get(outcome.email) ?? null } : outcome));
   }
   return result;
+}
+
+/** A `send.post`/`send.reply` input that parses (with `invites`) and names at least one address. */
+function invitingInput(operation: SendOperation, input: unknown): boolean {
+  if (!carriesInvites(input)) return false;
+  if (operation === 'send.post') return (SendPostInviteSchema.safeParse(input).data?.invites.length ?? 0) > 0;
+  if (operation === 'send.reply') return (SendReplyInviteSchema.safeParse(input).data?.invites.length ?? 0) > 0;
+  return false;
 }
 
 /** The operations that write a line or a read mark (`send.thread` marks the thread it opens). */

@@ -252,7 +252,10 @@ export interface SendInviteChip {
    * did not reach them (they accepted while 초대하고 보내기 was closed, or delivering failed); rare.
    */
   state: 'pending' | 'expired' | 'accepted';
-  /** The invited address: only for the line's writer and the organization's owners. Null for everyone else. */
+  /**
+   * The invited address: only for the line's writer and the organization's owners (an owner-role invitation's, the YAGI
+   * team's handover, only for the writer, as the members page hides it from owners too). Null for everyone else.
+   */
   email: string | null;
 }
 
@@ -283,8 +286,8 @@ export interface SendLookup {
   email: string;
   /**
    * `member`: an active member of this organization (name them: `member` is filled). `invitable`: the caller may invite
-   * it (owner or editor, 초대하고 보내기 open). `not_allowed`: the caller may not invite here (a viewer, or the switch is
-   * closed).
+   * it (owner or editor, 초대하고 보내기 open). `not_allowed`: the caller may not invite here (a viewer, whatever the address,
+   * a member's included; or the switch is closed); nothing is looked up.
    */
   status: 'member' | 'invitable' | 'not_allowed';
   member: { id: string; name: string } | null;

@@ -37,15 +37,17 @@ export async function invitation(
     ageSeconds?: number;
     expiresAt?: string | null;
     projectId?: string | null;
+    /** The YAGI team issued it (an owner-role invitation must be, 0097). */
+    issuedByStudio?: boolean;
   },
 ): Promise<string> {
   const hash = createHash('sha256').update(v.token).digest('hex');
   return (
     await sql.query<{ id: string }>(
-      `insert into brand_invites (organization_id, project_id, email, role, token_hash, created_at, expires_at, created_by, request_id)
-         values ($1, $2, $3, $4, $5, now() - make_interval(secs => $9::int), coalesce($6::timestamptz, now() - make_interval(secs => $9::int) + interval '7 days'), $7, $8)
+      `insert into brand_invites (organization_id, project_id, email, role, token_hash, created_at, expires_at, created_by, request_id, issued_by_studio)
+         values ($1, $2, $3, $4, $5, now() - make_interval(secs => $9::int), coalesce($6::timestamptz, now() - make_interval(secs => $9::int) + interval '7 days'), $7, $8, $10)
        returning id::text as id`,
-      [v.organizationId, v.projectId ?? null, v.email, v.role ?? 'viewer', hash, v.expiresAt ?? null, v.createdBy, randomUUID(), v.ageSeconds ?? 0],
+      [v.organizationId, v.projectId ?? null, v.email, v.role ?? 'viewer', hash, v.expiresAt ?? null, v.createdBy, randomUUID(), v.ageSeconds ?? 0, v.issuedByStudio ?? false],
     )
   ).rows[0]!.id;
 }

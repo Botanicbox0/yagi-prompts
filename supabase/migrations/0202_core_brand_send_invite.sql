@@ -17,7 +17,7 @@
 -- Safe while the old code serves: the old code never reads or writes this table, and it is closed to every browser key
 -- from the moment it exists (row level security on and forced, no policy, PUBLIC revoked; glue 0203 revokes the
 -- browser roles and grants the server role). Safe to deploy the code first: the server keeps 초대하고 보내기 closed
--- until this table exists (a remembered probe, lib/brand-rooms/send-invite-schema.ts `brandSendInviteTableReady`) and
+-- until this table exists (a remembered probe, lib/brand-rooms/members-schema.ts `brandSendInviteTableReady`) and
 -- `BRAND_SEND_INVITE=on`.
 --
 -- Rollback: turn BRAND_SEND_INVITE off first (the send operations then answer exactly as before this slice, and an

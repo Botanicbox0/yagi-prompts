@@ -194,6 +194,50 @@ describe('an editor’s invitation (decision 1) and closed acceptance (decision 
   });
 });
 
+describe('what an editor’s line cannot do (the independent review’s findings)', () => {
+  it('an editor cannot bring back someone an owner removed (not_found); an owner still can, as from the members page', async () => {
+    const removed = await person(w.f.sql, 'was.here@example.com');
+    await w.f.sql.query("insert into brand_memberships (organization_id, user_id, role, status) values ($1, $2, 'editor', 'revoked')", [w.f.orgId, removed]);
+    // To the sender the address is like any non-member's (nothing tells them it was a member).
+    expect((await ok(w, editor(), 'send.lookup', { email: 'was.here@example.com' })).status).toBe('invitable');
+    const byEditor = await sendInviting(editor(), 'was.here@example.com');
+    expect(await accept(as(removed), byEditor.token!, 'was.here@example.com')).toEqual({ ok: false, code: 'not_found' });
+    expect((await w.f.sql.query('select status from brand_memberships where organization_id = $1 and user_id = $2', [w.f.orgId, removed])).rows).toEqual([{ status: 'revoked' }]);
+    // An owner's line reuses the editor's invitation (still live, still not honoured); the owner's own invitation from the
+    // members page replaces it and is honoured, as on origin/main.
+    const byOwner = await ok<SendPosted>(w, owner(), 'send.post', { requestId: randomUUID(), file: { kind: 'output', outputId: file }, body: 'Welcome back', invites: ['was.here@example.com'] });
+    expect(byOwner.invited![0]!.result).toBe('reused');
+    const fresh = await (await import('@/lib/brands/workspace/service')).createBrandInvitation({ sql: w.f.sql }, owner(), { organizationId: w.f.orgId, email: 'was.here@example.com', role: 'viewer', requestId: randomUUID() });
+    if (!fresh.ok) throw new Error(JSON.stringify(fresh));
+    expect(await accept(as(removed), fresh.token, 'was.here@example.com')).toEqual({ ok: true, organizationId: w.f.orgId });
+  });
+
+  it('an invitation 보내기 did not issue is not brought back to life by an editor’s line that reused it', async () => {
+    // An editor-made viewer invitation that did not come from 보내기 (written by hand: the members page never lets an
+    // editor issue one; this stands for an owner's invitation whose owner has since become an editor).
+    await invitation(w.f.sql, { organizationId: w.f.orgId, email: 'elsewhere@example.com', createdBy: w.f.ids.editor, token: tokenOf('elsewhere') });
+    const reused = await ok<SendPosted>(w, editor(), 'send.post', { requestId: randomUUID(), file: { kind: 'output', outputId: file }, body: 'Reusing it', invites: ['elsewhere@example.com'] });
+    expect(reused.invited![0]!.result).toBe('reused');
+    const invitee = await person(w.f.sql, 'elsewhere@example.com');
+    expect(await accept(as(invitee), tokenOf('elsewhere'), 'elsewhere@example.com')).toEqual({ ok: false, code: 'not_found' });
+  });
+
+  it('a sender who lost their seat after it was read is refused once the organization row is held (forbidden)', async () => {
+    const { planInvites, SendInviteDenied } = await import('@/lib/brand-rooms/send-invite');
+    await w.f.sql.query("update brand_memberships set role = 'viewer' where organization_id = $1 and user_id = $2", [w.f.orgId, w.f.ids.editor]);
+    const attempt = planInvites(w.f.sql, { organizationId: w.f.orgId, me: w.f.ids.editor, seat: { role: 'editor' } }, { invites: ['late.seat@example.com'], body: 'hi', mentions: [] });
+    await expect(attempt).rejects.toBeInstanceOf(SendInviteDenied);
+    await expect(attempt).rejects.toMatchObject({ code: 'forbidden' });
+  });
+
+  it('an owner-role invitation (the team’s handover) that a line reuses: its address only for the line’s writer, never in an owner’s chip', async () => {
+    await invitation(w.f.sql, { organizationId: w.f.orgId, email: 'handover@example.com', role: 'owner', createdBy: w.f.ids.admin, token: tokenOf('handover'), issuedByStudio: true });
+    const sent = await ok<SendPosted>(w, editor(), 'send.post', { requestId: randomUUID(), file: { kind: 'output', outputId: file }, body: 'For the new owner', invites: ['handover@example.com'] });
+    expect(sent.message.invites).toEqual([{ state: 'pending', email: 'handover@example.com' }]);
+    expect((await ok<SendThreadPage>(w, owner(), 'send.thread', { rootId: sent.thread.rootId, markRead: false })).thread.root.invites).toEqual([{ state: 'pending', email: null }]);
+  });
+});
+
 describe('before accepting, the invitee reads nothing (no leak of the members channel)', () => {
   it('every 보내기 door is not_found for them; the acceptance answer names no line or file; afterwards they read as any member', async () => {
     const { sent, token } = await sendInviting(owner(), 'curious@example.com', { body: 'SECRET-LINE' });

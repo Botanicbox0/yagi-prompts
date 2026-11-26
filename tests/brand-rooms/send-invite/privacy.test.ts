@@ -114,9 +114,14 @@ describe('send.lookup (decision 10)', () => {
     expect(texts[0]!.filter((t) => /profiles/.test(t) && !/brand_memberships/.test(t) && !/where id = \$1$/.test(t))).toEqual([]);
   });
 
-  it('a viewer gets member or not_allowed; closed, not_allowed with nothing read; 보내기 closed, invalid; a bad address, invalid', async () => {
-    expect((await ok<SendLookup>(w, viewer(), 'send.lookup', { email: 'owner@example.test' })).status).toBe('member');
-    expect(await ok<SendLookup>(w, viewer(), 'send.lookup', { email: 'new@example.com' })).toEqual({ ok: true, email: 'new@example.com', status: 'not_allowed', member: null });
+  it('a viewer gets not_allowed, a member’s address included, with nothing read; closed, the same; 보내기 closed, invalid; a bad address, invalid', async () => {
+    const { runRoomOperation: run } = await import('@/lib/brand-rooms/messages');
+    for (const email of ['owner@example.test', 'new@example.com']) {
+      const viewerTexts: string[] = [];
+      const answer = await run({ sql: recording(w.f.sql, viewerTexts), media: w.deps.media }, viewer(), 'send.lookup', { organizationId: w.f.orgId, email });
+      expect(answer.result).toEqual({ ok: true, email, status: 'not_allowed', member: null });
+      expect(viewerTexts.some((t) => /lower\(p\.email\)/.test(t))).toBe(false);
+    }
     expect((await ok<SendLookup>(w, as(w.f.ids.owner), 'send.lookup', { email: 'new@example.com' })).status).toBe('invitable');
     for (const bad of ['not an address', '', 'a@b']) expect(await code(w, editor(), 'send.lookup', { email: bad })).toBe('invalid');
     expect(await code(w, editor(), 'send.lookup', { email: 'new@example.com', role: 'editor' })).toBe('invalid');
