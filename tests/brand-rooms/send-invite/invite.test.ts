@@ -143,15 +143,70 @@ describe('what each address becomes (decision 5)', () => {
     expect(twice.message.mentions.map((m) => m.id)).toEqual([w.f.ids.viewer]);
   });
 
-  it('a live invitation to this organization is reused: no second invitation, nothing sent, the line waits for it too', async () => {
-    const live = await invitation(w.f.sql, { organizationId: w.f.orgId, email: 'waiting@example.com', role: 'editor', createdBy: w.f.ids.owner, token: tokenOf('live') });
+  it('a live viewer invitation to this organization is reused: no second invitation, nothing sent, the line waits for it too (not as its creator)', async () => {
+    const live = await invitation(w.f.sql, { organizationId: w.f.orgId, email: 'waiting@example.com', role: 'viewer', createdBy: w.f.ids.owner, token: tokenOf('live') });
     const before = await world();
     const sent = await ok<SendPosted>(w, editor(), 'send.post', postInput(['waiting@example.com']));
     expect(sent.invited).toEqual([{ email: 'waiting@example.com', result: 'reused', memberId: null, token: null, mailState: null }]);
     expect((await world()).invites).toBe(before.invites);
-    // The owner chose that invitation's role; 보내기 does not change it.
-    expect((await w.f.sql.query('select role, revoked_at from brand_invites where id = $1', [live])).rows).toEqual([{ role: 'editor', revoked_at: null }]);
-    expect((await w.f.sql.query('select invite_id::text as i from brand_room_pending_mentions where message_id = $1', [sent.message.id])).rows).toEqual([{ i: live }]);
+    expect((await w.f.sql.query('select role, revoked_at from brand_invites where id = $1', [live])).rows).toEqual([{ role: 'viewer', revoked_at: null }]);
+    expect((await w.f.sql.query('select invite_id::text as i, created_invite from brand_room_pending_mentions where message_id = $1', [sent.message.id])).rows).toEqual([{ i: live, created_invite: false }]);
+  });
+
+  it('M2: an address with any other live invitation (an owner’s editor or owner invitation, the team’s) is refused with one answer, for every sender; nothing is written, attached, mailed or counted', async () => {
+    const held = [
+      await invitation(w.f.sql, { organizationId: w.f.orgId, email: 'held.editor@example.com', role: 'editor', createdBy: w.f.ids.owner, token: tokenOf('h1') }),
+      await invitation(w.f.sql, { organizationId: w.f.orgId, email: 'held.owner@example.com', role: 'owner', createdBy: w.f.ids.admin, token: tokenOf('h2'), issuedByStudio: true }),
+      await invitation(w.f.sql, { organizationId: w.f.orgId, email: 'held.team@example.com', role: 'viewer', createdBy: w.f.ids.admin, token: tokenOf('h3'), issuedByStudio: true }),
+    ];
+    const before = await world();
+    for (const sender of [editor(), owner()]) {
+      for (const email of ['held.editor@example.com', 'held.owner@example.com', 'held.team@example.com']) {
+        const { result } = await op(w, sender, 'send.post', postInput([email, 'fine@example.com']));
+        expect(result, `${sender.userId} ${email}`).toEqual({ ok: false, code: 'invite_refused', refused: [email] });
+      }
+    }
+    expect(await world()).toEqual(before);
+    // The owner's invitations are untouched (never withdrawn by the create path).
+    expect((await w.f.sql.query('select count(*)::int as n from brand_invites where id = any($1::uuid[]) and revoked_at is null', [held])).rows[0]).toEqual({ n: 3 });
+    // Two refused addresses: both named, in the order sent.
+    const { result } = await op(w, editor(), 'send.post', postInput(['held.team@example.com', 'held.editor@example.com']));
+    expect(result).toEqual({ ok: false, code: 'invite_refused', refused: ['held.team@example.com', 'held.editor@example.com'] });
+  });
+
+  it('L3: an editor may not invite someone an owner removed (the same refusal, nothing written, mailed or counted); an owner may, as from the members page', async () => {
+    const removed = await person(w.f.sql, 'removed.person@example.com');
+    await w.f.sql.query("insert into brand_memberships (organization_id, user_id, role, status) values ($1, $2, 'viewer', 'revoked')", [w.f.orgId, removed]);
+    const before = await world();
+    const { result } = await op(w, editor(), 'send.post', postInput(['removed.person@example.com']));
+    expect(result).toEqual({ ok: false, code: 'invite_refused', refused: ['removed.person@example.com'] });
+    expect(await world()).toEqual(before);
+    const byOwner = await ok<SendPosted>(w, owner(), 'send.post', postInput(['removed.person@example.com']));
+    expect(byOwner.invited![0]!.result).toBe('invited');
+  });
+
+  it('M2/L3: the lookup answers an editor not_allowed for both, with the same statements as for an unknown address', async () => {
+    const removed = await person(w.f.sql, 'gone@example.com');
+    await w.f.sql.query("insert into brand_memberships (organization_id, user_id, role, status) values ($1, $2, 'viewer', 'revoked')", [w.f.orgId, removed]);
+    await invitation(w.f.sql, { organizationId: w.f.orgId, email: 'higher@example.com', role: 'editor', createdBy: w.f.ids.owner, token: tokenOf('higher') });
+    const run = async (email: string) => {
+      const texts: string[] = [];
+      const { result } = await runRoomOperation({ sql: recording(w.f.sql, texts), media: w.deps.media }, editor(), 'send.lookup', { organizationId: w.f.orgId, email });
+      return { result, texts: texts.filter((t) => !/information_schema/.test(t)) };
+    };
+    const unknown = await run('nobody@example.com');
+    const gone = await run('gone@example.com');
+    const higher = await run('higher@example.com');
+    expect(unknown.result).toEqual({ ok: true, email: 'nobody@example.com', status: 'invitable', member: null });
+    expect(gone.result).toEqual({ ok: true, email: 'gone@example.com', status: 'not_allowed', member: null });
+    expect(higher.result).toEqual({ ok: true, email: 'higher@example.com', status: 'not_allowed', member: null });
+    expect(gone.texts).toHaveLength(unknown.texts.length);
+    expect(higher.texts).toHaveLength(unknown.texts.length);
+    expect(gone.texts).toEqual(unknown.texts);
+    expect(higher.texts).toEqual(unknown.texts);
+    // An owner may invite the removed person again; the higher-role invitation stays refused for an owner too.
+    expect((await ok(w, owner(), 'send.lookup', { email: 'gone@example.com' })).status).toBe('invitable');
+    expect((await ok(w, owner(), 'send.lookup', { email: 'higher@example.com' })).status).toBe('not_allowed');
   });
 
   it('an expired, withdrawn, accepted or project invitation is not reused: a new one is issued', async () => {

@@ -27,13 +27,13 @@ let root: string;
 let teamLine: string;
 let invite: string;
 
-async function anInvite(organizationId: string, options: { projectId?: string | null; email?: string } = {}): Promise<string> {
+async function anInvite(organizationId: string, options: { projectId?: string | null; email?: string; role?: string; studio?: boolean; createdBy?: string } = {}): Promise<string> {
   const token = randomUUID();
   return (
     await db.query<{ id: string }>(
-      `insert into brand_invites (organization_id, project_id, email, role, token_hash, expires_at, created_by, request_id)
-         values ($1, $2, $3, 'viewer', $4, now() + interval '7 days', $5, $6) returning id`,
-      [organizationId, options.projectId ?? null, options.email ?? `${token.slice(0, 8)}@example.com`, createHash('sha256').update(token).digest('hex'), user, randomUUID()],
+      `insert into brand_invites (organization_id, project_id, email, role, token_hash, expires_at, created_by, request_id, issued_by_studio)
+         values ($1, $2, $3, $7, $4, now() + interval '7 days', $5, $6, $8) returning id`,
+      [organizationId, options.projectId ?? null, options.email ?? `${token.slice(0, 8)}@example.com`, createHash('sha256').update(token).digest('hex'), options.createdBy ?? user, randomUUID(), options.role ?? 'viewer', options.studio ?? false],
     )
   ).rows[0]!.id;
 }
@@ -102,22 +102,45 @@ describe('0202 — core', () => {
     const foreignInvite = await anInvite(other);
     expect(await expectReject(() => insertRow(root, foreignInvite, other))).toMatch(/foreign key|violates|members line/);
     // Another organization's invitation, written with the line's organization: the guard.
-    expect(await expectReject(() => insertRow(root, foreignInvite, org))).toMatch(/not an organization invitation of this organization/);
+    expect(await expectReject(() => insertRow(root, foreignInvite, org))).toMatch(/not an organization viewer invitation of this organization/);
     // A project invitation makes a guest, never a member: refused.
     const projectInvite = await anInvite(org, { projectId: project });
-    expect(await expectReject(() => insertRow(root, projectInvite, org))).toMatch(/not an organization invitation of this organization/);
+    expect(await expectReject(() => insertRow(root, projectInvite, org))).toMatch(/not an organization viewer invitation of this organization/);
     // A team channel's line never waits for anyone.
     expect(await expectReject(() => insertRow(teamLine, invite, org))).toMatch(/not a members line/);
     // Made-up ids.
     expect(await expectReject(() => insertRow(randomUUID(), invite, org))).toMatch(/foreign key|violates|members line/);
-    expect(await expectReject(() => insertRow(root, randomUUID(), org))).toMatch(/foreign key|violates|organization invitation/);
+    expect(await expectReject(() => insertRow(root, randomUUID(), org))).toMatch(/foreign key|violates|organization viewer invitation/);
     // A row cannot be pointed somewhere else either.
     const second = await anInvite(org);
     const elsewhere = await anInvite(other);
-    expect(await expectReject(() => db.query('update brand_room_pending_mentions set invite_id = $1', [elsewhere]))).toMatch(/organization invitation|foreign key/);
+    expect(await expectReject(() => db.query('update brand_room_pending_mentions set invite_id = $1', [elsewhere]))).toMatch(/organization viewer invitation|foreign key/);
     expect(await rows()).toBe(1);
     await insertRow(root, second, org);
     expect(await rows()).toBe(2);
+  });
+
+  it('the follow-up (M2, L1): only a viewer invitation the team did not issue; created_invite only with the line’s writer as the inviter', async () => {
+    for (const [role, studio] of [['editor', false], ['owner', true], ['viewer', true]] as const) {
+      const held = await anInvite(org, { role, studio });
+      expect(await expectReject(() => insertRow(root, held, org)), `${role} ${studio}`).toMatch(/not an organization viewer invitation of this organization/);
+    }
+    // The line's writer issued it: a created row is accepted; the default is false.
+    const own = await anInvite(org);
+    await db.query('insert into brand_room_pending_mentions (message_id, invite_id, organization_id, created_invite) values ($1, $2, $3, true)', [root, own, org]);
+    expect((await db.query<{ created_invite: boolean }>('select created_invite from brand_room_pending_mentions where invite_id = $1', [own])).rows).toEqual([{ created_invite: true }]);
+    await insertRow(root, invite, org);
+    expect((await db.query<{ created_invite: boolean }>('select created_invite from brand_room_pending_mentions where invite_id = $1', [invite])).rows).toEqual([{ created_invite: false }]);
+    // Someone else issued it: a row cannot claim the line created it.
+    const other = randomUUID();
+    await db.query('insert into auth.users (id) values ($1)', [other]);
+    await db.query('insert into profiles (id, email) values ($1, $2)', [other, `${other.slice(0, 8)}@example.com`]);
+    const theirs = await anInvite(org, { createdBy: other });
+    expect(await expectReject(() => db.query('insert into brand_room_pending_mentions (message_id, invite_id, organization_id, created_invite) values ($1, $2, $3, true)', [root, theirs, org]))).toMatch(
+      /only the line whose writer issued the invitation created it/,
+    );
+    await insertRow(root, theirs, org);
+    expect(await expectReject(() => db.query('update brand_room_pending_mentions set created_invite = true where invite_id = $1', [theirs]))).toMatch(/only the line whose writer/);
   });
 
   it('goes with its line, its invitation and its organization', async () => {

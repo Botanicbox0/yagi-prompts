@@ -6,7 +6,7 @@ import { runStudioOperation } from '@/lib/brand-studio/service';
 import { sendInviteAcceptHooks } from '@/lib/brand-rooms/send-invite';
 import type { SendInboxPage, SendPosted, SendThreadPage } from '@/lib/brand-rooms/send-contracts';
 import { as, closeWorld, code, imageResult, libraryPicture, ok, openSend, selfProject, sendWorld, type SendWorld } from '../send/helpers';
-import { invitation, openInvites, person, tokenOf, waiting } from './helpers';
+import { invitation, openInvites, person, recording, tokenOf, waiting } from './helpers';
 
 /**
  * 초대하고 보내기 (docs/BRAND-PROJECT-SPINE.md §8.5; slice 4c), the acceptance side (decisions 7 and 8), through the
@@ -185,28 +185,147 @@ describe('an editor’s invitation (decision 1) and closed acceptance (decision 
     await invitation(w.f.sql, { organizationId: w.f.orgId, email: 'bare@example.com', createdBy: w.f.ids.editor, token: tokenOf('bare') });
     const bare = await person(w.f.sql, 'bare@example.com');
     expect(await accept(as(bare), tokenOf('bare'), 'bare@example.com')).toEqual({ ok: false, code: 'not_found' });
-    // Another role (an editor-made editor invitation written by hand, a line waiting): not honoured.
+    // Another role (an editor-made editor invitation written by hand): no line can wait for it (0202's guard), and it is
+    // not honoured.
     const higher = await invitation(w.f.sql, { organizationId: w.f.orgId, email: 'higher@example.com', role: 'editor', createdBy: w.f.ids.editor, token: tokenOf('higher') });
-    await waiting(w.f.sql, { organizationId: w.f.orgId, messageId: byEditor.sent.message.id, inviteId: higher });
+    await expect(waiting(w.f.sql, { organizationId: w.f.orgId, messageId: byEditor.sent.message.id, inviteId: higher })).rejects.toThrow(/not an organization viewer invitation/);
     const climber = await person(w.f.sql, 'higher@example.com');
     expect(await accept(as(climber), tokenOf('higher'), 'higher@example.com')).toEqual({ ok: false, code: 'not_found' });
     expect((await w.f.sql.query('select count(*)::int as n from brand_memberships where user_id = $1', [climber])).rows[0]).toEqual({ n: 0 });
   });
 });
 
+describe('the follow-up review (M1, L1, L2)', () => {
+  /** A runner whose FIRST `information_schema` statement fails in the database (a missing relation), as a timeout would. */
+  function failingFirstProbe(): { sql: typeof w.f.sql; failed: () => boolean } {
+    let fired = false;
+    const wrap = (inner: typeof w.f.sql): typeof w.f.sql => ({
+      query: (text, params) => {
+        if (!fired && /information_schema/.test(text)) {
+          fired = true;
+          return inner.query('select * from relation_that_does_not_exist_for_the_test');
+        }
+        return inner.query(text, params);
+      },
+      transaction: (fn) => inner.transaction((tx) => fn(wrap(tx))),
+    });
+    return { sql: wrap(w.f.sql), failed: () => fired };
+  }
+
+  it('M1: a database error in the open check never fails an acceptance (owner’s and editor’s invitations): the seat is granted, the answer is success', async () => {
+    const { resetBrandSendProbe } = await import('@/lib/brand-rooms/members-schema');
+    const { resetSpineProbe } = await import('@/lib/brand-studio/brand-projects');
+    const logs: unknown[][] = [];
+    vi.spyOn(console, 'warn').mockImplementation((...args: unknown[]) => void logs.push(args));
+    for (const [sender, email] of [[owner(), 'm1.owner@example.com'], [editor(), 'm1.editor@example.com']] as const) {
+      const { token } = await sendInviting(sender, email);
+      const invitee = await person(w.f.sql, email);
+      // The probes forgotten, so the acceptance's open check has to ask the database, and that statement fails.
+      resetBrandSendProbe();
+      resetSpineProbe();
+      const failing = failingFirstProbe();
+      const accepted = await acceptBrandInvitation({ sql: failing.sql, verifiedEmail: email, projectGuestBinding: false, roomLanding: false, sendInvites: sendInviteAcceptHooks() }, as(invitee), { token: token! });
+      expect(failing.failed(), email).toBe(true);
+      // The owner's invitation: accepted, the delivery step skipped. The editor's: its honour check failed closed
+      // (not_found), never a 500.
+      if (sender.userId === w.f.ids.owner) {
+        expect(accepted).toEqual({ ok: true, organizationId: w.f.orgId });
+        expect((await w.f.sql.query('select status from brand_memberships where organization_id = $1 and user_id = $2', [w.f.orgId, invitee])).rows).toEqual([{ status: 'active' }]);
+      } else {
+        expect(accepted).toEqual({ ok: false, code: 'not_found' });
+      }
+    }
+    expect(JSON.stringify(logs)).not.toMatch(/example\.com|relation_that/);
+  });
+
+  it('L1: a demoted owner’s pre-issued invitation is not honoured through a line that reused it (보내기 did not create it)', async () => {
+    const { createBrandInvitation } = await import('@/lib/brands/workspace/service');
+    const { inviteRequestId } = await import('@/lib/brand-rooms/send-invite');
+    // A second owner who will be demoted.
+    const formerOwner = await person(w.f.sql, 'former.owner@example.test');
+    await w.f.sql.query("insert into brand_memberships (organization_id, user_id, role) values ($1, $2, 'owner')", [w.f.orgId, formerOwner]);
+    const lineRequest = randomUUID();
+    // While an owner, they issue a viewer invitation from the members page with the request id 보내기 would derive.
+    const pre = await createBrandInvitation({ sql: w.f.sql }, as(formerOwner), { organizationId: w.f.orgId, email: 'planted@example.com', role: 'viewer', requestId: inviteRequestId(lineRequest, 'planted@example.com') });
+    if (!pre.ok) throw new Error(JSON.stringify(pre));
+    // Demoted to editor; then they send a line with that request id naming that address: the line reuses the invitation.
+    await w.f.sql.query("update brand_memberships set role = 'editor' where organization_id = $1 and user_id = $2", [w.f.orgId, formerOwner]);
+    const line = await ok<SendPosted>(w, as(formerOwner), 'send.post', { requestId: lineRequest, file: { kind: 'output', outputId: file }, body: 'Planted', invites: ['planted@example.com'] });
+    expect(line.invited![0]!.result).toBe('reused');
+    const invitee = await person(w.f.sql, 'planted@example.com');
+    // origin/main refuses it (its inviter is no longer an owner); so does this slice.
+    expect(await accept(as(invitee), pre.token, 'planted@example.com')).toEqual({ ok: false, code: 'not_found' });
+    expect((await w.f.sql.query('select count(*)::int as n from brand_memberships where user_id = $1', [invitee])).rows[0]).toEqual({ n: 0 });
+  });
+
+  it('L2: a waiting line the acceptance could not take reaches the member on their next inbox read, and on the bell’s, once; delivery skips locked lines', async () => {
+    const { loadRoomSummary } = await import('@/lib/brand-rooms/messages');
+    const first = await sendInviting(owner(), 'later.read@example.com');
+    const second = await ok<SendPosted>(w, editor(), 'send.post', { requestId: randomUUID(), file: { kind: 'output', outputId: file }, body: 'Second', invites: ['later.read@example.com'] });
+    const invitee = await person(w.f.sql, 'later.read@example.com');
+    // The acceptance's delivery did not happen (closed at that moment, as a skipped or failed delivery leaves it).
+    vi.stubEnv('BRAND_SEND_INVITE', 'off');
+    expect((await accept(as(invitee), first.token!, 'later.read@example.com')).ok).toBe(true);
+    openInvites();
+    expect(await waitingRows()).toBe(2);
+    expect(await noticesOf(invitee)).toEqual([]);
+    // Their next inbox read delivers both lines before it is answered.
+    const inbox = await ok<SendInboxPage>(w, as(invitee), 'send.inbox', {});
+    expect(inbox.threads.map((t) => t.rootId).sort()).toEqual([first.sent.thread.rootId, second.thread.rootId].sort());
+    expect(inbox.unread).toBe(2);
+    expect(await waitingRows()).toBe(0);
+    expect((await noticesOf(invitee)).map((n) => n.kind)).toEqual(['mention', 'mention']);
+    // Once: another read adds nothing.
+    await ok(w, as(invitee), 'send.inbox', {});
+    expect(await noticesOf(invitee)).toHaveLength(2);
+    // The bell does the same for a member who reads the bell first.
+    const third = await sendInviting(owner(), 'bell.first@example.com');
+    const bellReader = await person(w.f.sql, 'bell.first@example.com');
+    vi.stubEnv('BRAND_SEND_INVITE', 'off');
+    expect((await accept(as(bellReader), third.token!, 'bell.first@example.com')).ok).toBe(true);
+    openInvites();
+    const summary = await loadRoomSummary({ sql: w.f.sql }, as(bellReader), w.f.orgId, { bell: { media: w.deps.media } });
+    expect(JSON.stringify(summary)).toContain(`thread:${third.sent.thread.rootId}`);
+    expect(await noticesOf(bellReader)).toHaveLength(1);
+    // Delivery takes only the lines nobody holds (`skip locked`), and leaves the others waiting.
+    const texts: string[] = [];
+    const fourth = await sendInviting(owner(), 'skip.locked@example.com');
+    const locker = await person(w.f.sql, 'skip.locked@example.com');
+    await acceptBrandInvitation({ sql: recording(w.f.sql, texts), verifiedEmail: 'skip.locked@example.com', sendInvites: sendInviteAcceptHooks() }, as(locker), { token: fourth.token! });
+    expect(texts.some((t) => /for update of m skip locked$/.test(t))).toBe(true);
+  });
+
+  it('L2: a read with nothing left costs its savepoint, one read and the release, and never fails the read', async () => {
+    const texts: string[] = [];
+    const { runRoomOperation } = await import('@/lib/brand-rooms/messages');
+    const answer = await runRoomOperation({ sql: recording(w.f.sql, texts), media: w.deps.media }, owner(), 'send.inbox', { organizationId: w.f.orgId });
+    expect(answer.result.ok).toBe(true);
+    const leftovers = texts.filter((t) => /brand_send_invite_leftovers|accepted_by = \$2/.test(t));
+    expect(leftovers).toEqual([
+      'savepoint brand_send_invite_leftovers',
+      expect.stringMatching(/^select distinct pm\.invite_id/),
+      'release savepoint brand_send_invite_leftovers',
+    ]);
+    // A failing leftover read is rolled back alone: the inbox still answers.
+    await w.f.db.exec(`alter table brand_room_pending_mentions rename to brand_room_pending_mentions_away`);
+    try {
+      expect((await runRoomOperation({ sql: w.f.sql, media: w.deps.media }, owner(), 'send.inbox', { organizationId: w.f.orgId })).result.ok).toBe(true);
+    } finally {
+      await w.f.db.exec(`alter table brand_room_pending_mentions_away rename to brand_room_pending_mentions`);
+    }
+  });
+});
+
 describe('what an editor’s line cannot do (the independent review’s findings)', () => {
-  it('an editor cannot bring back someone an owner removed (not_found); an owner still can, as from the members page', async () => {
-    const removed = await person(w.f.sql, 'was.here@example.com');
-    await w.f.sql.query("insert into brand_memberships (organization_id, user_id, role, status) values ($1, $2, 'editor', 'revoked')", [w.f.orgId, removed]);
-    // To the sender the address is like any non-member's (nothing tells them it was a member).
-    expect((await ok(w, editor(), 'send.lookup', { email: 'was.here@example.com' })).status).toBe('invitable');
+  it('an editor’s invitation is not honoured for someone an owner removed after the line was sent (not_found); an owner’s still is', async () => {
     const byEditor = await sendInviting(editor(), 'was.here@example.com');
+    const removed = await person(w.f.sql, 'was.here@example.com');
+    // Between the line and the acceptance the person became a member and an owner removed them (written by hand: every
+    // page that adds a member also withdraws this invitation; this is the acceptance's own wall).
+    await w.f.sql.query("insert into brand_memberships (organization_id, user_id, role, status) values ($1, $2, 'editor', 'revoked')", [w.f.orgId, removed]);
     expect(await accept(as(removed), byEditor.token!, 'was.here@example.com')).toEqual({ ok: false, code: 'not_found' });
     expect((await w.f.sql.query('select status from brand_memberships where organization_id = $1 and user_id = $2', [w.f.orgId, removed])).rows).toEqual([{ status: 'revoked' }]);
-    // An owner's line reuses the editor's invitation (still live, still not honoured); the owner's own invitation from the
-    // members page replaces it and is honoured, as on origin/main.
-    const byOwner = await ok<SendPosted>(w, owner(), 'send.post', { requestId: randomUUID(), file: { kind: 'output', outputId: file }, body: 'Welcome back', invites: ['was.here@example.com'] });
-    expect(byOwner.invited![0]!.result).toBe('reused');
+    // The owner's own invitation (from the members page, which replaces the editor's) is honoured, as on origin/main.
     const fresh = await (await import('@/lib/brands/workspace/service')).createBrandInvitation({ sql: w.f.sql }, owner(), { organizationId: w.f.orgId, email: 'was.here@example.com', role: 'viewer', requestId: randomUUID() });
     if (!fresh.ok) throw new Error(JSON.stringify(fresh));
     expect(await accept(as(removed), fresh.token, 'was.here@example.com')).toEqual({ ok: true, organizationId: w.f.orgId });
@@ -230,11 +349,11 @@ describe('what an editor’s line cannot do (the independent review’s findings
     await expect(attempt).rejects.toMatchObject({ code: 'forbidden' });
   });
 
-  it('an owner-role invitation (the team’s handover) that a line reuses: its address only for the line’s writer, never in an owner’s chip', async () => {
+  it('an owner-role invitation (the team’s handover) is never reused: the address is refused, and no line waits for it', async () => {
     await invitation(w.f.sql, { organizationId: w.f.orgId, email: 'handover@example.com', role: 'owner', createdBy: w.f.ids.admin, token: tokenOf('handover'), issuedByStudio: true });
-    const sent = await ok<SendPosted>(w, editor(), 'send.post', { requestId: randomUUID(), file: { kind: 'output', outputId: file }, body: 'For the new owner', invites: ['handover@example.com'] });
-    expect(sent.message.invites).toEqual([{ state: 'pending', email: 'handover@example.com' }]);
-    expect((await ok<SendThreadPage>(w, owner(), 'send.thread', { rootId: sent.thread.rootId, markRead: false })).thread.root.invites).toEqual([{ state: 'pending', email: null }]);
+    const { result } = await (await import('../send/helpers')).op(w, editor(), 'send.post', { requestId: randomUUID(), file: { kind: 'output', outputId: file }, body: 'For the new owner', invites: ['handover@example.com'] });
+    expect(result).toEqual({ ok: false, code: 'invite_refused', refused: ['handover@example.com'] });
+    expect(await waitingRows()).toBe(0);
   });
 });
 

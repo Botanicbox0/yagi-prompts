@@ -94,7 +94,7 @@ describe('the typed client against the real routes', () => {
     expect(inbox.ok && inbox.threads.map((t) => [t.rootId, t.unread, t.mentioned])).toEqual([[sent.thread.rootId, true, true]]);
   });
 
-  it('429 invite_limit over the daily cap; 400 invalid while closed; offline when the network fails', async () => {
+  it('429 invite_limit over the daily cap; 409 invite_refused naming the address; 400 invalid while closed (lookup included); offline when the network fails', async () => {
     await w.f.sql.query(
       `insert into brand_invites (organization_id, email, role, token_hash, expires_at, created_by, request_id)
          select $1, 'cap' || g || '@example.com', 'viewer', md5(g::text) || md5((g + 1000)::text), now() + interval '7 days', $2, gen_random_uuid() from generate_series(1, 20) g`,
@@ -107,10 +107,29 @@ describe('the typed client against the real routes', () => {
     });
     expect(response.status).toBe(429);
     expect(await response.json()).toEqual({ ok: false, code: 'invite_limit' });
+    // 409 invite_refused, with the refused address, through the route and the typed client.
+    await w.f.sql.query(
+      `insert into brand_invites (organization_id, email, role, token_hash, expires_at, created_by, request_id, created_at)
+         values ($1, 'held@example.com', 'editor', md5('held') || md5('held2'), now() + interval '7 days' - interval '2 days', $2, gen_random_uuid(), now() - interval '2 days')`,
+      [w.f.orgId, w.f.ids.owner],
+    );
+    const refused = await fetcher('/api/brand-rooms/messages', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ operation: 'send.post', input: { organizationId: w.f.orgId, requestId: randomUUID(), file: { kind: 'output', outputId: file }, body: 'x', invites: ['held@example.com'] } }),
+    });
+    expect(refused.status).toBe(409);
+    expect(await refused.json()).toEqual({ ok: false, code: 'invite_refused', refused: ['held@example.com'] });
+    expect(await sendInviteTransport(w.f.orgId, fetcher).post({ requestId: randomUUID(), file: { kind: 'output', outputId: file }, body: 'x', invites: ['held@example.com'] })).toEqual({
+      ok: false,
+      code: 'invite_refused',
+      refused: ['held@example.com'],
+    });
     vi.stubEnv('BRAND_SEND_INVITE', 'off');
     const client = sendInviteTransport(w.f.orgId, fetcher);
     expect(await client.post({ requestId: randomUUID(), file: { kind: 'output', outputId: file }, body: 'x', invites: ['a@example.com'] })).toEqual({ ok: false, code: 'invalid' });
-    expect(await client.lookup('a@example.com')).toEqual({ ok: true, email: 'a@example.com', status: 'not_allowed', member: null });
+    // Closed, the lookup does not exist: the unknown operation's answer, as on origin/main.
+    expect(await client.lookup('a@example.com')).toEqual({ ok: false, code: 'invalid' });
     const offline = sendInviteTransport(w.f.orgId, async () => {
       throw new Error('network');
     });

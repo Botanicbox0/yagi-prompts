@@ -57,6 +57,17 @@ export async function brandSendInviteTableReady(sql: SqlRunner, now = Date.now()
   return inviteProbe.ready;
 }
 
+const known = (state: { ready: boolean; at: number } | null, now: number): boolean | null =>
+  state && (state.ready || now - state.at < RECHECK_MS) ? state.ready : null;
+
+/**
+ * What the two probes above would answer without asking the database (0200's and 0202's): the remembered answers while
+ * still trusted, else null. For callers that must not run a statement just to learn "closed".
+ */
+export function brandSendProbesKnown(now = Date.now()): { send: boolean | null; invite: boolean | null } {
+  return { send: known(probe, now), invite: known(inviteProbe, now) };
+}
+
 /**
  * A file moved (docs/BRAND-PROJECT-SPINE.md §4.3, §8.3): its threads follow it, in the caller's transaction (the spine's
  * `project.move`, after its own updates). The files are the results of `jobIds` (every result, deleted or not: a thread

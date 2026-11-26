@@ -40,6 +40,7 @@ import type { Mailer } from '@/lib/notify/mailer';
 import {
   attachInvites,
   carriesInvites,
+  deliverLeftovers,
   inviteChips,
   inviteSwitchOpen,
   lookupAddress,
@@ -110,6 +111,7 @@ async function guard<T>(fn: () => Promise<T>): Promise<T | RoomFailure> {
   try {
     return await fn();
   } catch (error) {
+    if (error instanceof SendInviteDenied && error.refused?.length) return { ok: false, code: error.code, refused: error.refused };
     if (error instanceof SendDenied || error instanceof RoomDenied || error instanceof SendInviteDenied) return failure(error.code);
     if ((error as { code?: string } | null)?.code === '23505') return failure('conflict');
     throw error;
@@ -137,11 +139,14 @@ export async function runSendOperation(deps: SendDeps, viewer: Viewer, operation
   if (!(await brandSendOpenFor(deps.sql, organizationId, env))) return failure('invalid');
   // 초대하고 보내기 (slice 4c): its own switch and 0202; closed, every answer is exactly what it was before the slice.
   const invitesOpen = await inviteSwitchOpen(deps.sql, env);
+  // While it is closed `send.lookup` does not exist: the unknown operation's answer, before the seat, exactly as on
+  // origin/main.
+  if (operation === 'send.lookup' && !invitesOpen) return failure('invalid');
   const issued: IssuedInvite[] = [];
   const result = await guard(() =>
     deps.sql.transaction(async (sql) => {
       const seat = await sendSeat(sql, viewer, organizationId);
-      const ctx: Ctx = { sql, media: deps.media, organizationId, me: seat.userId.toLowerCase(), seat, invitesOpen, issued };
+      const ctx: Ctx = { sql, media: deps.media, organizationId, me: seat.userId.toLowerCase(), seat, invitesOpen, issued, env };
       // One lock order for everything that writes a line or a mark, the same as the spine's move (the organization row
       // first, `for update` there, then the threads' roots): the organization row `for key share` before any root,
       // file or mark is touched. A send then reads where its file is filed only after any move in progress committed
@@ -179,7 +184,7 @@ export async function runSendOperation(deps: SendDeps, viewer: Viewer, operation
         case 'send.people':
           return people(ctx, input);
         case 'send.lookup':
-          return lookupAddress(sql, ctx, input, invitesOpen);
+          return lookupAddress(sql, ctx, input);
       }
     }),
   );
@@ -214,6 +219,7 @@ interface Ctx {
   invitesOpen: boolean;
   /** The invitations this request issued, for the mail after the commit. */
   issued: IssuedInvite[];
+  env: Env;
 }
 
 /** Who reads the chips (`SendMessage.invites`): only while 초대하고 보내기 is open; an owner sees every address. */
@@ -764,6 +770,9 @@ async function inbox(ctx: Ctx, input: unknown): Promise<SendInboxPage> {
   const v = parse(SendInboxSchema, input);
   const after = v.cursor ? decodeCursor(v.cursor) : null;
   if (v.cursor && !after) throw new SendDenied('invalid');
+  // 초대하고 보내기 (slice 4c): lines that waited for an invitation this member accepted and did not reach them yet arrive
+  // now, before the page is read (never failing the read).
+  if (ctx.invitesOpen) await deliverLeftovers(ctx.sql, ctx.organizationId, ctx.me, ctx.env);
   const page = await inboxKeys(ctx, { mentionsOnly: v.view === 'mentions', after, limit: SEND_LIMITS.inboxPage });
   const counts = await inboxCounts(ctx);
   return { ok: true, view: v.view, threads: await threadSummaries({ ...ctx, chips: chipReaderOf(ctx) }, page.ids), next: page.next, ...counts };
@@ -832,8 +841,11 @@ export async function sendBellPart(
 ): Promise<{ threads: SendThreadSummary[]; more: boolean; unread: number; mentionsUnread: number } | null> {
   if (seat.role === 'guest') return null;
   const organizationId = seat.organizationId.toLowerCase();
-  if (!(await brandSendOpenFor(sql, organizationId, options.env ?? process.env))) return null;
+  const env = options.env ?? process.env;
+  if (!(await brandSendOpenFor(sql, organizationId, env))) return null;
   const ctx = { sql, media, organizationId, me: seat.userId.toLowerCase() };
+  // 초대하고 보내기 (slice 4c): the member's leftovers arrive before the bell is read, as in `send.inbox`.
+  if (await inviteSwitchOpen(sql, env)) await deliverLeftovers(sql, organizationId, ctx.me, env);
   const page = await inboxKeys(ctx, { mentionsOnly: options.view === 'mentions', after: null, limit: options.limit });
   const counts = await inboxCounts(ctx);
   return { threads: await threadSummaries(ctx, page.ids), more: page.next !== null, ...counts };

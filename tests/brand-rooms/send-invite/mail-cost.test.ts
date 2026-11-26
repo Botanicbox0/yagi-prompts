@@ -90,22 +90,38 @@ describe('the invitation mail', () => {
     expect(result).toEqual({ ok: false, code: 'forbidden' });
     const own = await post(w.f.sql, mailer, as(w.f.ids.owner), ['owner@example.test', 'nope@example.com']);
     expect(own.result).toEqual({ ok: false, code: 'invalid' });
+    // invite_refused (a removed member named by an editor; an address with an owner's editor invitation): no mail, no
+    // invitation, the daily count unchanged.
+    const removed = await person(w.f.sql, 'removed.mail@example.com');
+    await w.f.sql.query("insert into brand_memberships (organization_id, user_id, role, status) values ($1, $2, 'viewer', 'revoked')", [w.f.orgId, removed]);
+    await w.f.sql.query(
+      `insert into brand_invites (organization_id, email, role, token_hash, expires_at, created_by, request_id)
+         values ($1, 'held.mail@example.com', 'editor', md5('a') || md5('b'), now() + interval '7 days', $2, gen_random_uuid())`,
+      [w.f.orgId, w.f.ids.owner],
+    );
+    const invites = async () => (await w.f.sql.query<{ n: number }>("select count(*)::int as n from brand_invites where created_at > now() - interval '1 day'")).rows[0]!.n;
+    const before = await invites();
+    for (const email of ['removed.mail@example.com', 'held.mail@example.com']) {
+      const refused = await post(w.f.sql, mailer, as(w.f.ids.editor), [email, 'another@example.com']);
+      expect(refused.result).toEqual({ ok: false, code: 'invite_refused', refused: [email] });
+    }
+    expect(await invites()).toBe(before);
     expect(mailer.sent).toEqual([]);
   });
 });
 
 describe('what it costs (statements, local recording)', () => {
-  it('a line with one new address: an open plain send plus a fixed set (the invitation lock, own address, members, live invitations, daily count, the invitation, the waiting row)', async () => {
+  it('a line with one new address: an open plain send plus a fixed set (the invitation lock, own address, what the addresses are, daily count, the invitation, the waiting row)', async () => {
     const plain: string[] = [];
     await runRoomOperation({ sql: recording(w.f.sql, plain), media: w.deps.media }, as(w.f.ids.owner), 'send.post', { organizationId: w.f.orgId, requestId: randomUUID(), file: { kind: 'output', outputId: file }, body: 'plain' });
     const inviting: string[] = [];
     await post(recording(w.f.sql, inviting), null, as(w.f.ids.owner), ['cost@example.com']);
     const strip = (texts: string[]) => texts.filter((t) => !/information_schema/.test(t));
     const added = strip(inviting).length - strip(plain).length;
-    // the organization's invitation lock (1), own address and seat (1), members by address (1), live invitations (1), the
-    // daily count (1), storeInvitation (2: withdraw a stale one, insert), the waiting row (1) = 8. (The root's chips, one
-    // statement, are read for any line while open.)
-    expect(added).toBe(8);
+    // the organization's invitation lock (1), own address and seat (1), what the addresses are (1: members, removed
+    // members, invitations), the daily count (1), storeInvitation (2: withdraw a stale one, insert), the waiting row (1)
+    // = 7. (The root's chips, one statement, are read for any line while open.)
+    expect(added).toBe(7);
     expect(strip(inviting).filter((t) => /brand_room_pending_mentions/.test(t))).toHaveLength(2);
   });
 

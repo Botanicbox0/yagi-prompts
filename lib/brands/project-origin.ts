@@ -50,3 +50,11 @@ export async function spineColumnsReady(sql: SqlRunner, now = Date.now()): Promi
 export function resetSpineProbe(): void {
   probe = null;
 }
+
+/**
+ * What `spineColumnsReady` would answer without asking the database: the remembered answer while it is still trusted,
+ * else null (the next call would look it up). For callers that must not run a statement just to learn "closed".
+ */
+export function spineColumnsKnown(now = Date.now()): boolean | null {
+  return probe && (probe.ready || now - probe.at < RECHECK_MS) ? probe.ready : null;
+}

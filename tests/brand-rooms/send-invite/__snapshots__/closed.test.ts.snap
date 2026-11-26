@@ -2485,6 +2485,15 @@ exports[`closed: every send and invitation operation as origin/main, in a world 
     },
     {
       "body": {
+        "code": "invalid",
+        "ok": false,
+      },
+      "name": "lookup",
+      "statements": [],
+      "status": 400,
+    },
+    {
+      "body": {
         "id": "<id11>",
         "ok": true,
         "token": "<token>",
@@ -3302,6 +3311,15 @@ exports[`closed: every send and invitation operation as origin/main, in a world 
     },
     {
       "body": {
+        "code": "invalid",
+        "ok": false,
+      },
+      "name": "lookup",
+      "statements": [],
+      "status": 400,
+    },
+    {
+      "body": {
         "id": "<id11>",
         "ok": true,
         "token": "<token>",
@@ -4106,6 +4124,15 @@ exports[`closed: every send and invitation operation as origin/main, in a world 
         "select 1 as one from brand_plan_assignments where organization_id = $1 and plan_id = 'project_only' and started_on <= (now() at time zone 'Asia/Seoul')::date and (ends_on is null or (now() at time zone 'Asia/Seoul')::date < ends_on) limit 1",
         "select id from brand_organizations where id = $1 for key share",
       ],
+      "status": 400,
+    },
+    {
+      "body": {
+        "code": "invalid",
+        "ok": false,
+      },
+      "name": "lookup",
+      "statements": [],
       "status": 400,
     },
     {
@@ -4923,6 +4950,15 @@ exports[`closed: every send and invitation operation as origin/main, in a world 
         "select 1 as one from brand_plan_assignments where organization_id = $1 and plan_id = 'project_only' and started_on <= (now() at time zone 'Asia/Seoul')::date and (ends_on is null or (now() at time zone 'Asia/Seoul')::date < ends_on) limit 1",
         "select id from brand_organizations where id = $1 for key share",
       ],
+      "status": 400,
+    },
+    {
+      "body": {
+        "code": "invalid",
+        "ok": false,
+      },
+      "name": "lookup",
+      "statements": [],
       "status": 400,
     },
     {

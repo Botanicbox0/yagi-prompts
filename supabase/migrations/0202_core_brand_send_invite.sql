@@ -9,10 +9,15 @@
 -- invitation row.
 --
 -- One new table and its guard; no existing table, column or check changes.
---   brand_room_pending_mentions  (message_id, invite_id): one row per line and invitation. The line and its
---                                organization are one key (the line's own organization only); the invitation must be an
---                                organization-wide invitation of the SAME organization and the line a members line
---                                (the guard trigger). It goes with the line, the invitation or the organization.
+--   brand_room_pending_mentions  (message_id, invite_id, organization_id, created_invite): one row per line and
+--                                invitation. The line and its organization are one key (the line's own organization
+--                                only). The guard trigger: the invitation must be an organization-wide VIEWER invitation of
+--                                the SAME organization that the YAGI team did not issue (a line never waits for, and so
+--                                never exposes, an owner's higher-role or the team's invitation), and the line a members
+--                                line. `created_invite` is true only on the row of the line whose send CREATED the
+--                                invitation (never on a line that reused one); the guard holds it to the invitation's own
+--                                inviter being the line's writer. Acceptance honours an editor's invitation only through
+--                                such a row. It goes with the line, the invitation or the organization.
 --
 -- Safe while the old code serves: the old code never reads or writes this table, and it is closed to every browser key
 -- from the moment it exists (row level security on and forced, no policy, PUBLIC revoked; glue 0203 revokes the
@@ -20,9 +25,11 @@
 -- until this table exists (a remembered probe, lib/brand-rooms/members-schema.ts `brandSendInviteTableReady`) and
 -- `BRAND_SEND_INVITE=on`.
 --
--- Rollback: turn BRAND_SEND_INVITE off first (the send operations then answer exactly as before this slice, and an
--- invitation an editor issued through 보내기 is honoured no more), then drop the table and its function (the slice 4c
--- report has the statements). The invitations themselves stay: they are ordinary workspace invitations.
+-- Rollback: turn BRAND_SEND_INVITE off first and keep it off (the send operations then answer exactly as before this
+-- slice, and an invitation an editor issued through 보내기 is honoured no more). A running server remembers that this
+-- table exists once it has seen it (the probe never forgets a hit), so dropping the table while the switch is on would
+-- make its reads fail until a restart. Then drop the table and its function (the slice 4c report has the statements).
+-- The invitations themselves stay: they are ordinary workspace invitations.
 --
 -- Pairs with glue 0203. Re-runnable: every statement is guarded or idempotent.
 
@@ -30,6 +37,7 @@ create table if not exists brand_room_pending_mentions (
   message_id uuid not null,
   invite_id uuid not null references brand_invites(id) on delete cascade,
   organization_id uuid not null references brand_organizations(id) on delete cascade,
+  created_invite boolean not null default false,
   created_at timestamptz not null default now(),
   primary key (message_id, invite_id),
   constraint brand_room_pending_mentions_message_fk foreign key (message_id, organization_id)
@@ -38,23 +46,33 @@ create table if not exists brand_room_pending_mentions (
 -- Acceptance reads one invitation's rows; the invitation's cascade finds them here too.
 create index if not exists idx_brand_room_pending_mentions_invite on brand_room_pending_mentions (invite_id);
 
--- What a foreign key cannot say: the invitation is this organization's and organization-wide (a project invitation makes
--- a guest, never a member, so a line could never reach it), and the line is a members line (a team channel's line never
--- waits for anyone). Checked on every insert and update.
+-- What a foreign key cannot say. Checked on every insert and update.
 create or replace function brand_room_pending_mentions_guard() returns trigger language plpgsql set search_path = public, pg_temp as $$
 begin
+  -- An organization-wide viewer invitation of this organization that the team did not issue: a project invitation makes
+  -- a guest, never a member; an owner's editor or owner invitation and the team's (a handover) are theirs, not 보내기's.
   if not exists (
     select 1 from brand_invites i
      where i.id = new.invite_id and i.organization_id = new.organization_id and i.project_id is null
+       and i.role = 'viewer' and not i.issued_by_studio
   ) then
-    raise exception 'brand_room_pending_mentions: the invitation is not an organization invitation of this organization'
+    raise exception 'brand_room_pending_mentions: the invitation is not an organization viewer invitation of this organization'
       using errcode = '23514';
   end if;
+  -- A members line: a team channel's line never waits for anyone.
   if not exists (
     select 1 from brand_room_messages m
      where m.id = new.message_id and m.organization_id = new.organization_id and m.channel like 'members%'
   ) then
     raise exception 'brand_room_pending_mentions: the line is not a members line of this organization'
+      using errcode = '23514';
+  end if;
+  -- Only the line whose send created the invitation says so, and that line's writer is the invitation's inviter.
+  if new.created_invite and not exists (
+    select 1 from brand_invites i join brand_room_messages m on m.id = new.message_id
+     where i.id = new.invite_id and i.created_by = m.author_id
+  ) then
+    raise exception 'brand_room_pending_mentions: only the line whose writer issued the invitation created it'
       using errcode = '23514';
   end if;
   return new;

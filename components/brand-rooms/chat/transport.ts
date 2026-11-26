@@ -328,20 +328,28 @@ type SendReplyInviteInput = import("@/lib/brand-rooms/send-contracts").SendReply
  * 초대하고 보내기's client (docs/BRAND-PROJECT-SPINE.md §8.5; lib/brand-rooms/send-contracts.ts): a line that also invites
  * people who are not members yet, and what a typed address becomes. Same transport and answers as `sendTransport`;
  * `post`/`reply` without `invites` are exactly `sendTransport`'s. While 초대하고 보내기 is closed, a line carrying
- * `invites` answers `invalid`, and `lookup` answers `status: 'not_allowed'` (or `invalid` while 보내기 itself is closed).
+ * `invites` and `lookup` both answer `invalid` (the unknown operation's answer). An `invite_refused` failure names the
+ * addresses that may not be invited (`refused`).
  */
+export type SendInviteFail = Fail & { refused?: string[] };
+
 export interface SendInviteTransport {
   organizationId: string;
   /** A new thread about one file that may also invite (`invites`, at most `SEND_LIMITS.invitesPerMessage`). */
-  post(input: Omit<SendPostInviteInput, "organizationId">): Promise<SendPosted | Fail>;
+  post(input: Omit<SendPostInviteInput, "organizationId">): Promise<SendPosted | SendInviteFail>;
   /** A reply that may also invite. */
-  reply(input: Omit<SendReplyInviteInput, "organizationId">): Promise<SendPosted | Fail>;
+  reply(input: Omit<SendReplyInviteInput, "organizationId">): Promise<SendPosted | SendInviteFail>;
   /** What a typed e-mail address becomes: a member to name, someone the caller may invite, or not allowed here. */
-  lookup(email: string): Promise<SendLookup | Fail>;
+  lookup(email: string): Promise<SendLookup | SendInviteFail>;
 }
 
 export function sendInviteTransport(organizationId: string, fetcher: typeof fetch = (...args) => fetch(...args)): SendInviteTransport {
-  const call = async <T,>(operation: string, input: Record<string, unknown>): Promise<T | Fail> => {
+  const failWithRefused = (body: Record<string, unknown> | null, status: number): SendInviteFail => {
+    const fail = failOf(body ?? { code: status === 401 ? "sign_in_required" : status === 404 ? "not_found" : "failed" });
+    const refused = Array.isArray(body?.refused) ? (body.refused as unknown[]).filter((e): e is string => typeof e === "string") : null;
+    return refused && refused.length > 0 ? { ...fail, refused } : fail;
+  };
+  const call = async <T,>(operation: string, input: Record<string, unknown>): Promise<T | SendInviteFail> => {
     try {
       const response = await fetcher("/api/brand-rooms/messages", {
         method: "POST",
@@ -350,7 +358,7 @@ export function sendInviteTransport(organizationId: string, fetcher: typeof fetc
         body: JSON.stringify({ operation, input: { organizationId, ...input } }),
       });
       const body = (await response.json().catch(() => null)) as Record<string, unknown> | null;
-      return body && body.ok === true ? (body as unknown as T) : failOf(body ?? { code: response.status === 401 ? "sign_in_required" : response.status === 404 ? "not_found" : "failed" });
+      return body && body.ok === true ? (body as unknown as T) : failWithRefused(body, response.status);
     } catch {
       return { ok: false, code: "offline" };
     }

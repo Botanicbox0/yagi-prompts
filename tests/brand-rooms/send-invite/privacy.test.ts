@@ -92,7 +92,7 @@ describe('who sees the invited address (decision 9)', () => {
 });
 
 describe('send.lookup (decision 10)', () => {
-  it('member (id and name) for an active member; invitable for anything else; an account elsewhere answers like an unknown address', async () => {
+  it('member (id and name) for an active member; invitable for an unknown address, an account elsewhere and a guest alike; not_allowed to an editor for a removed member', async () => {
     const elsewhere = await person(w.f.sql, 'has.account@example.com');
     const otherOrg = randomUUID();
     await w.f.sql.query('insert into brand_organizations (id, name, created_by, request_id) values ($1, $2, $3, $4)', [otherOrg, 'Other brand', elsewhere, randomUUID()]);
@@ -104,7 +104,10 @@ describe('send.lookup (decision 10)', () => {
     const account = await ok<SendLookup>(w, editor(), 'send.lookup', { email: 'has.account@example.com' });
     const gone = await ok<SendLookup>(w, editor(), 'send.lookup', { email: 'removed@example.com' });
     const guest = await ok<SendLookup>(w, editor(), 'send.lookup', { email: 'guest@example.test' });
-    for (const answer of [unknown, account, gone, guest]) expect({ ...answer, email: '' }).toEqual({ ok: true, email: '', status: 'invitable', member: null });
+    for (const answer of [unknown, account, guest]) expect({ ...answer, email: '' }).toEqual({ ok: true, email: '', status: 'invitable', member: null });
+    // Someone an owner removed: an editor may not invite them (the follow-up's L3); an owner may.
+    expect(gone).toEqual({ ok: true, email: 'removed@example.com', status: 'not_allowed', member: null });
+    expect((await ok<SendLookup>(w, owner(), 'send.lookup', { email: 'removed@example.com' })).status).toBe('invitable');
     // The same statements, too: nothing outside this organization's memberships is read.
     const texts: string[][] = [[], []];
     const { runRoomOperation } = await import('@/lib/brand-rooms/messages');
@@ -114,7 +117,7 @@ describe('send.lookup (decision 10)', () => {
     expect(texts[0]!.filter((t) => /profiles/.test(t) && !/brand_memberships/.test(t) && !/where id = \$1$/.test(t))).toEqual([]);
   });
 
-  it('a viewer gets not_allowed, a member’s address included, with nothing read; closed, the same; 보내기 closed, invalid; a bad address, invalid', async () => {
+  it('a viewer gets not_allowed, a member’s address included, with nothing read; with the switch off it does not exist (invalid, before the seat, for everyone); a bad address, invalid', async () => {
     const { runRoomOperation: run } = await import('@/lib/brand-rooms/messages');
     for (const email of ['owner@example.test', 'new@example.com']) {
       const viewerTexts: string[] = [];
@@ -128,9 +131,12 @@ describe('send.lookup (decision 10)', () => {
     vi.stubEnv('BRAND_SEND_INVITE', 'off');
     const texts: string[] = [];
     const { runRoomOperation } = await import('@/lib/brand-rooms/messages');
-    const closed = await runRoomOperation({ sql: recording(w.f.sql, texts), media: w.deps.media }, editor(), 'send.lookup', { organizationId: w.f.orgId, email: 'owner@example.test' });
-    expect(closed.result).toEqual({ ok: true, email: 'owner@example.test', status: 'not_allowed', member: null });
-    expect(texts.some((t) => /lower\(p\.email\)/.test(t))).toBe(false);
+    for (const who of [editor(), viewer(), as(w.f.ids.outsider), as(w.f.ids.guest)]) {
+      const closed = await runRoomOperation({ sql: recording(w.f.sql, texts), media: w.deps.media }, who, 'send.lookup', { organizationId: w.f.orgId, email: 'owner@example.test' });
+      expect(closed.result, String(who.userId)).toEqual({ ok: false, code: 'invalid' });
+    }
+    // Nothing but the remembered schema probes: not even the seat.
+    expect(texts.filter((t) => !/information_schema/.test(t))).toEqual([]);
     vi.stubEnv('BRAND_SEND', 'off');
     expect(await code(w, editor(), 'send.lookup', { email: 'new@example.com' })).toBe('invalid');
   });

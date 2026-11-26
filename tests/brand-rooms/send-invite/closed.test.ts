@@ -23,9 +23,10 @@ import { invitation, normalizer, person, recording, tokenOf, waiting } from './h
  *
  * The snapshot was recorded by running THIS file on origin/main's code (the slice's source files checked out from
  * origin/main, its migrations and tests in place), before the slice's code existed; the slice 4c report records that run.
- * `send.lookup` is a new operation: origin/main answers it as an unknown one (`invalid`), and so does this slice while
- * 보내기 itself is closed; while 보내기 is open and only the invitation switch is closed it answers `not_allowed`
- * (decision 10), so it is recorded here only where 보내기 is closed.
+ * `send.lookup` is a new operation: origin/main answers it as an unknown one (`invalid`, before anything), and so does
+ * this slice whenever the invitation switch is closed (the follow-up's L4), for everyone: it is recorded in every closed
+ * state. In a closed ORGANIZATION with the switch on it exists and answers what every send operation answers there
+ * (`not_found`), so it is left out of those snapshots (origin/main: `invalid`).
  */
 const mocks = vi.hoisted(() => ({
   sql: null as SqlRunner | null,
@@ -211,7 +212,7 @@ describe('closed: every send and invitation operation as origin/main, in a world
       const v = await world();
       openSend(w.f.orgId);
       await close();
-      expect(await everything(v, { lookup: false })).toMatchSnapshot();
+      expect(await everything(v, { lookup: true })).toMatchSnapshot();
     });
   }
 
