@@ -2242,6 +2242,9 @@ export const ko: Dictionary = {
       enhanced: '모델에 맞게 설계했어요. 그대로 쓰거나 수정해도 돼요.',
       undoEnhance: '원래 문장으로',
       enhanceFailed: '설계하지 못했어요. 작성한 문장 그대로 생성할 수 있어요.',
+      // 대표 확인 대기 (2026-11-27): 영상 프롬프트 그림 표시 (Gemma 2패스)
+      designedHint: '설계한 프롬프트예요. 내용을 바꾸려면 위 문장을 고쳐 다시 설계해 주세요.',
+      designedStale: '문장이 바뀌어 이전 프롬프트를 쓰지 않아요. 만들 때 새로 설계해요.',
       addRef: '참조 넣기',
       videoNotHere: '영상은 영상 스튜디오에서 쓸 수 있어요. 이미지 스튜디오에서는 사진만 참조로 넣어요.',
       submit: '만들기',
@@ -2391,6 +2394,13 @@ export const ko: Dictionary = {
       yourPrompt: '입력한 문장',
       sentPrompt: '보낸 문장',
       notEnhanced: '적은 그대로 보냈어요.',
+      // 대표 확인 대기 (2026-11-27): 영상 프롬프트 그림 표시 (Gemma 2패스)
+      pictureAlt: '보낸 프롬프트 {page}/{total}쪽',
+      pagerPrev: '이전 쪽 보기',
+      pagerNext: '다음 쪽 보기',
+      pictureFailed: '프롬프트를 불러오지 못했어요.',
+      pictureRetry: '다시 불러오기',
+      pictureBusy: '잠시 뒤에 다시 열어 주세요.',
       reuse: '이 설정 다시 쓰기',
       /** 수정한 이미지: 수정 전 원본을 같은 칸·문장·참조로 부분 수정에 연다 (Gemma 2패스, 2026-11-19). */
       reuseRegion: '같은 영역 다시 수정하기',

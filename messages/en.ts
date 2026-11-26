@@ -2231,6 +2231,9 @@ export const en = {
       enhanced: 'Built for the model. Use it as it is, or keep editing.',
       undoEnhance: 'Back to my sentence',
       enhanceFailed: 'Could not build it right now. You can create with your own sentence.',
+      // 대표 확인 대기 (2026-11-27): 영상 프롬프트 그림 표시 (Gemma 2패스)
+      designedHint: 'This is the designed prompt. To change it, edit your text above and design again.',
+      designedStale: 'Your text changed, so the earlier prompt is not used. A new one is designed when you make it.',
       addRef: 'Add a reference',
       videoNotHere: 'Videos go in Video studio. Only pictures can be references here.',
       submit: 'Create',
@@ -2380,6 +2383,13 @@ export const en = {
       yourPrompt: 'What you wrote',
       sentPrompt: 'What we sent',
       notEnhanced: 'Sent exactly as you wrote it.',
+      // 대표 확인 대기 (2026-11-27): 영상 프롬프트 그림 표시 (Gemma 2패스)
+      pictureAlt: 'Sent prompt {page}/{total}',
+      pagerPrev: 'Previous page',
+      pagerNext: 'Next page',
+      pictureFailed: 'Could not load the prompt.',
+      pictureRetry: 'Try again',
+      pictureBusy: 'Please open it again in a moment.',
       reuse: 'Use these settings again',
       reuseRegion: 'Edit the same area again',
       reuseMissing: 'Not found: {label}. Add it again if needed.',

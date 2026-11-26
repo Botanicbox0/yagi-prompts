@@ -1,0 +1,23 @@
+{
+  "draft": {
+    "medium": "video",
+    "model": "seedance-2.5",
+    "prompt": "Enhanced video sentence for seedance",
+    "aspect": "9:16",
+    "resolution": "draft",
+    "quality": "",
+    "count": 1,
+    "seconds": 5,
+    "audio": "native",
+    "enhance": true,
+    "method": "reference",
+    "keep": [
+      "camera",
+      "timing"
+    ],
+    "change": ""
+  },
+  "enhanced": true,
+  "notice": null,
+  "message": null
+}

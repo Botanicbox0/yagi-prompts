@@ -9,15 +9,15 @@
 import { GLYPH_RUNS, GLYPH_UNITS_PER_EM } from './glyph-widths';
 
 export const PROMPT_PAGE = {
-  /** Pixels of the picture (2x: shown at 600 CSS px wide). */
-  width: 1200,
-  padX: 56,
-  padY: 48,
-  fontSize: 28,
-  lineHeight: 44,
-  linesPerPage: 34,
-  /** A 15,000-character prompt of ordinary lines is 5 to 8 pages; past this the last line says it goes on. */
-  maxPages: 24,
+  /** Pixels of the picture (2x: shown at up to 360 CSS px wide). */
+  width: 720,
+  padX: 36,
+  padY: 40,
+  fontSize: 30,
+  lineHeight: 48,
+  linesPerPage: 24,
+  /** Cap so a 15,000-character Korean or mixed prompt fits without truncation; past this the last line says it goes on. */
+  maxPages: 32,
   /** Lines are filled to this share of the text width, a margin for kerning. */
   fill: 0.97,
 } as const;

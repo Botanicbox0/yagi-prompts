@@ -68,6 +68,7 @@ import {
 } from "./group-model";
 import { StudioIcon } from "./icons";
 import { PromptHighlight, mentionAtCaret, resolvePromptMentions, type PromptMentionSegment } from "./prompt-highlight";
+import { DockPromptPictures, shieldedDesignOf, type PromptPictureLoader, type ShieldedDockDesign } from "./prompt-pictures";
 import { RemixPanel } from "./remix-panel";
 import { REF_DRAG_TYPE, acceptsDrag, decodeRefDrag, type RefSource, type TrayItem } from "./refs";
 import { usePageDrag } from "./use-page-drag";
@@ -105,7 +106,8 @@ export interface DockProps {
   /** The rewrite button is waiting for its sentence. */
   enhancing?: boolean;
   /** The field holds a rewritten sentence and the customer's own words are kept for "원래 문장으로". */
-  enhanced?: boolean;
+  enhanced?: boolean | ShieldedDockDesign;
+  fetchPromptPicture?: PromptPictureLoader;
   /** Opens the model list first (tests). */
   initialModelMenu?: boolean;
   /** Opens that chip's list first: "aspect", "resolution", "quality", "count", "seconds" or "sound" (tests). */
@@ -199,6 +201,7 @@ function markAtPoint(backdrop: HTMLElement | null, x: number, y: number): number
 export function Dock(props: DockProps) {
   const { draft, tray, copy, locale, busy, message, onDraft, mode = draft.medium, enhancing = false, collapsed = false } = props;
   const d = copy.dock;
+  const shieldedDesign = shieldedDesignOf(props.enhanced);
   const id = useId();
   const backdropRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -682,6 +685,14 @@ export function Dock(props: DockProps) {
           {caretLine}
         </span>
       </div>
+      {shieldedDesign && !remix && (
+        <DockPromptPictures
+          organizationId={props.organizationId ?? ""}
+          design={shieldedDesign}
+          copy={copy}
+          fetchPicture={props.fetchPromptPicture}
+        />
+      )}
       {props.errorCode === "allowance_closed" ? (
         <StudioAllowanceNotice
           kind="closed"

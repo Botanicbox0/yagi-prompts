@@ -1,0 +1,286 @@
+{
+  "buildPlain": {
+    "ok": true,
+    "input": {
+      "kind": "video",
+      "organizationId": "000000a0-0000-4000-8000-0000000000a0",
+      "requestId": "req_parity_0001",
+      "model": "seedance-2.5",
+      "prompt": "병이 돈다",
+      "enhance": true,
+      "references": [
+        {
+          "assetId": "00003001-0000-4000-8000-000000003001",
+          "role": "product",
+          "frame": "start"
+        }
+      ],
+      "aspect": "4:3",
+      "resolution": "draft",
+      "audio": "native",
+      "seconds": 5
+    }
+  },
+  "buildReviewed": {
+    "ok": true,
+    "input": {
+      "kind": "video",
+      "organizationId": "000000a0-0000-4000-8000-0000000000a0",
+      "requestId": "req_parity_0001",
+      "model": "seedance-2.5",
+      "prompt": "병이 돈다",
+      "enhance": false,
+      "reviewedPrompt": "Reviewed video sentence",
+      "references": [
+        {
+          "assetId": "00003001-0000-4000-8000-000000003001",
+          "role": "product",
+          "frame": "start"
+        }
+      ],
+      "aspect": "4:3",
+      "resolution": "draft",
+      "audio": "native",
+      "seconds": 5
+    }
+  },
+  "rerunTyped": {
+    "kind": "video",
+    "organizationId": "000000a0-0000-4000-8000-0000000000a0",
+    "requestId": "req_parity_0001",
+    "model": "seedance-2.5",
+    "prompt": "병이 돈다",
+    "enhance": false,
+    "references": [
+      {
+        "assetId": "00003001-0000-4000-8000-000000003001",
+        "frame": "start"
+      }
+    ],
+    "aspect": "9:16",
+    "resolution": "720p",
+    "audio": "native",
+    "seconds": 5
+  },
+  "rerunDesigned": {
+    "kind": "video",
+    "organizationId": "000000a0-0000-4000-8000-0000000000a0",
+    "requestId": "req_parity_0001",
+    "model": "seedance-2.5",
+    "prompt": "병이 돈다",
+    "enhance": true,
+    "references": [
+      {
+        "assetId": "00003001-0000-4000-8000-000000003001",
+        "frame": "start"
+      }
+    ],
+    "aspect": "9:16",
+    "resolution": "720p",
+    "audio": "native",
+    "seconds": 5
+  },
+  "rerunReviewed": {
+    "kind": "video",
+    "organizationId": "000000a0-0000-4000-8000-0000000000a0",
+    "requestId": "req_parity_0001",
+    "model": "seedance-2.5",
+    "prompt": "병이 돈다",
+    "enhance": false,
+    "reviewedPrompt": "Reviewed video sentence",
+    "references": [
+      {
+        "assetId": "00003001-0000-4000-8000-000000003001",
+        "frame": "start"
+      }
+    ],
+    "aspect": "9:16",
+    "resolution": "720p",
+    "audio": "native",
+    "seconds": 5
+  },
+  "reuseTyped": {
+    "to": "dock",
+    "draft": {
+      "medium": "video",
+      "model": "seedance-2.5",
+      "prompt": "병이 돈다",
+      "aspect": "9:16",
+      "resolution": "720p",
+      "quality": "",
+      "count": 1,
+      "seconds": 5,
+      "audio": "native",
+      "enhance": true,
+      "method": "reference",
+      "keep": [
+        "camera",
+        "timing"
+      ],
+      "change": ""
+    },
+    "tray": [
+      {
+        "key": "a:00003001-0000-4000-8000-000000003001",
+        "assetId": "00003001-0000-4000-8000-000000003001",
+        "kind": "image",
+        "name": "bottle.png",
+        "url": "https://media.example/st/asset-1.png",
+        "thumbUrl": "https://media.example/st/asset-1-thumb.webp",
+        "seconds": null,
+        "width": 1200,
+        "height": 1200,
+        "role": "product",
+        "frame": "start"
+      }
+    ],
+    "missing": [],
+    "reviewed": null
+  },
+  "reuseTypedBuild": {
+    "ok": true,
+    "input": {
+      "kind": "video",
+      "organizationId": "000000a0-0000-4000-8000-0000000000a0",
+      "requestId": "req_parity_0001",
+      "model": "seedance-2.5",
+      "prompt": "병이 돈다",
+      "enhance": true,
+      "references": [
+        {
+          "assetId": "00003001-0000-4000-8000-000000003001",
+          "role": "product",
+          "frame": "start"
+        }
+      ],
+      "aspect": "9:16",
+      "resolution": "720p",
+      "audio": "native",
+      "seconds": 5
+    }
+  },
+  "reuseDesigned": {
+    "to": "dock",
+    "draft": {
+      "medium": "video",
+      "model": "seedance-2.5",
+      "prompt": "병이 돈다",
+      "aspect": "9:16",
+      "resolution": "720p",
+      "quality": "",
+      "count": 1,
+      "seconds": 5,
+      "audio": "native",
+      "enhance": true,
+      "method": "reference",
+      "keep": [
+        "camera",
+        "timing"
+      ],
+      "change": ""
+    },
+    "tray": [
+      {
+        "key": "a:00003001-0000-4000-8000-000000003001",
+        "assetId": "00003001-0000-4000-8000-000000003001",
+        "kind": "image",
+        "name": "bottle.png",
+        "url": "https://media.example/st/asset-1.png",
+        "thumbUrl": "https://media.example/st/asset-1-thumb.webp",
+        "seconds": null,
+        "width": 1200,
+        "height": 1200,
+        "role": "product",
+        "frame": "start"
+      }
+    ],
+    "missing": [],
+    "reviewed": null
+  },
+  "reuseDesignedBuild": {
+    "ok": true,
+    "input": {
+      "kind": "video",
+      "organizationId": "000000a0-0000-4000-8000-0000000000a0",
+      "requestId": "req_parity_0001",
+      "model": "seedance-2.5",
+      "prompt": "병이 돈다",
+      "enhance": true,
+      "references": [
+        {
+          "assetId": "00003001-0000-4000-8000-000000003001",
+          "role": "product",
+          "frame": "start"
+        }
+      ],
+      "aspect": "9:16",
+      "resolution": "720p",
+      "audio": "native",
+      "seconds": 5
+    }
+  },
+  "reuseReviewed": {
+    "to": "dock",
+    "draft": {
+      "medium": "video",
+      "model": "seedance-2.5",
+      "prompt": "Reviewed video sentence",
+      "aspect": "9:16",
+      "resolution": "720p",
+      "quality": "",
+      "count": 1,
+      "seconds": 5,
+      "audio": "native",
+      "enhance": true,
+      "method": "reference",
+      "keep": [
+        "camera",
+        "timing"
+      ],
+      "change": ""
+    },
+    "tray": [
+      {
+        "key": "a:00003001-0000-4000-8000-000000003001",
+        "assetId": "00003001-0000-4000-8000-000000003001",
+        "kind": "image",
+        "name": "bottle.png",
+        "url": "https://media.example/st/asset-1.png",
+        "thumbUrl": "https://media.example/st/asset-1-thumb.webp",
+        "seconds": null,
+        "width": 1200,
+        "height": 1200,
+        "role": "product",
+        "frame": "start"
+      }
+    ],
+    "missing": [],
+    "reviewed": {
+      "original": "병이 돈다",
+      "improved": "Reviewed video sentence"
+    }
+  },
+  "reuseReviewedBuild": {
+    "ok": true,
+    "input": {
+      "kind": "video",
+      "organizationId": "000000a0-0000-4000-8000-0000000000a0",
+      "requestId": "req_parity_0001",
+      "model": "seedance-2.5",
+      "prompt": "병이 돈다",
+      "enhance": false,
+      "reviewedPrompt": "Reviewed video sentence",
+      "references": [
+        {
+          "assetId": "00003001-0000-4000-8000-000000003001",
+          "role": "product",
+          "frame": "start"
+        }
+      ],
+      "aspect": "9:16",
+      "resolution": "720p",
+      "audio": "native",
+      "seconds": 5
+    }
+  }
+}

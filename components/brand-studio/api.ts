@@ -69,6 +69,7 @@ import { isUnapprovedUploadReason, type UploadLimitReason } from "@/lib/brands/u
 import { newRequestId } from "./copy";
 
 export const STUDIO_ENDPOINT = "/api/brand-studio";
+export const PROMPT_IMAGE_ENDPOINT = "/api/brand-studio/prompt-image";
 
 /** Operation name -> [request input, success answer]. */
 export interface StudioOps {
@@ -99,6 +100,7 @@ type Exact<A, B> = [A] extends [B] ? ([B] extends [A] ? true : never) : never;
 export const OPERATIONS_COVERED: Exact<keyof StudioOps, StudioOperation> = true;
 
 export type ApiResult<T> = T | StudioFailure;
+export type PromptPictureResult = { ok: true; blob: Blob } | StudioFailure;
 
 export function failed(code: StudioErrorCode, reason?: UploadLimitReason): StudioFailure {
   return reason ? { ok: false, code, reason } : { ok: false, code };
@@ -132,6 +134,70 @@ async function read<T>(response: Response): Promise<ApiResult<T>> {
   const reason = isUnapprovedUploadReason(record?.reason) ? record.reason : undefined;
   if (typeof code === "string" && (STUDIO_ERROR_CODES as readonly string[]).includes(code)) return failed(code as StudioErrorCode, reason);
   return failed(STATUS_CODES[response.status] ?? "failed");
+}
+
+async function readPicture(response: Response): Promise<PromptPictureResult> {
+  if (response.ok) {
+    try {
+      const contentType = response.headers?.get?.("content-type");
+      if (contentType && !contentType.toLowerCase().includes("image/")) return failed("failed");
+      return { ok: true, blob: await response.blob() };
+    } catch {
+      return failed("failed");
+    }
+  }
+  let body: unknown = null;
+  try {
+    body = await response.json();
+  } catch {
+    body = null;
+  }
+  const record = body && typeof body === "object" ? (body as Record<string, unknown>) : null;
+  const code = record?.code;
+  if (typeof code === "string" && (STUDIO_ERROR_CODES as readonly string[]).includes(code)) return failed(code as StudioErrorCode);
+  return failed(STATUS_CODES[response.status] ?? "failed");
+}
+
+export async function fetchRunPromptPicture(
+  input: { organizationId: string; jobId: string; page: number },
+  options: { fetch?: typeof fetch; signal?: AbortSignal } = {},
+): Promise<PromptPictureResult> {
+  const fetcher = options.fetch ?? ((...args: Parameters<typeof fetch>) => fetch(...args));
+  const url = `${PROMPT_IMAGE_ENDPOINT}?organizationId=${encodeURIComponent(input.organizationId)}&jobId=${encodeURIComponent(input.jobId)}&page=${encodeURIComponent(String(input.page))}`;
+  try {
+    return await readPicture(
+      await fetcher(url, {
+        method: "GET",
+        credentials: "same-origin",
+        cache: "no-store",
+        headers: { Accept: "image/png" },
+        ...(options.signal ? { signal: options.signal } : {}),
+      }),
+    );
+  } catch {
+    return failed("failed");
+  }
+}
+
+export async function fetchDesignPromptPicture(
+  input: { organizationId: string; token: string; page: number },
+  options: { fetch?: typeof fetch; signal?: AbortSignal } = {},
+): Promise<PromptPictureResult> {
+  const fetcher = options.fetch ?? ((...args: Parameters<typeof fetch>) => fetch(...args));
+  try {
+    return await readPicture(
+      await fetcher(PROMPT_IMAGE_ENDPOINT, {
+        method: "POST",
+        credentials: "same-origin",
+        cache: "no-store",
+        headers: { "Content-Type": "application/json", Accept: "image/png" },
+        body: JSON.stringify({ organizationId: input.organizationId, token: input.token, page: input.page }),
+        ...(options.signal ? { signal: options.signal } : {}),
+      }),
+    );
+  } catch {
+    return failed("failed");
+  }
 }
 
 export function uploadKind(mime: string): StudioAssetKind | null {
@@ -249,6 +315,10 @@ export function createStudioApi({ organizationId, fetch: fetcher = (...args) => 
         headers: json,
         body: JSON.stringify({ operation: "project.files", input: { organizationId, ...input } }),
       }),
+    runPromptPicture: (jobId: string, page: number, options?: { signal?: AbortSignal }) =>
+      fetchRunPromptPicture({ organizationId, jobId, page }, { fetch: fetcher, signal: options?.signal }),
+    designPromptPicture: (token: string, page: number, options?: { signal?: AbortSignal }) =>
+      fetchDesignPromptPicture({ organizationId, token, page }, { fetch: fetcher, signal: options?.signal }),
     /** Library upload. `measure` reads width/height/length in the browser; tests pass a stub. */
     async upload(
       file: UploadFile & Blob,

@@ -2,11 +2,14 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import sharp from 'sharp';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createMemoryMediaStore } from '@/lib/brand-studio/media-store';
 import { readFontMetrics } from '@/lib/brand-studio/prompt-shield/font-metrics';
 import { drawableRuns, SERVER_FONT_FILE } from '@/lib/brand-studio/prompt-shield/glyph-source';
 import { GLYPH_RUNS, GLYPH_UNITS_PER_EM } from '@/lib/brand-studio/prompt-shield/glyph-widths';
-import { drawableText, PROMPT_BOX, PROMPT_PAGE, promptPageCount, promptPageHeight, promptPages } from '@/lib/brand-studio/prompt-shield/layout';
+import { drawableText, PROMPT_BOX, PROMPT_MORE, PROMPT_PAGE, promptPageCount, promptPageHeight, promptPages } from '@/lib/brand-studio/prompt-shield/layout';
 import { renderPromptPage } from '@/lib/brand-studio/prompt-shield/render';
+import { jobView } from '@/lib/brand-studio/repo';
+import { worldRows } from './world';
 
 /**
  * The video prompt shield's pictures: the font really draws Hangul, pages are what the view counts, nothing is
@@ -69,7 +72,7 @@ describe('pages', () => {
     const counts = [1, 2_000, 8_000, 15_000].map((n) => promptPageCount(textOf(n)));
     const hangul = [2_000, 8_000, 15_000].map((n) => promptPageCount(textOf(n, HANGUL)));
     expect(counts[0]).toBe(1);
-    expect(counts[1]).toBe(1);
+    expect(counts[1]).toBe(2);
     expect(counts[2]).toBeGreaterThanOrEqual(3);
     expect(counts[3]).toBeGreaterThan(counts[2]!);
     expect(counts[3]).toBeLessThanOrEqual(PROMPT_PAGE.maxPages);
@@ -145,5 +148,85 @@ describe('renderPromptPage', () => {
     // Reported, not asserted: the report quotes these lines.
     console.log(`[prompt-shield timing] latin 15000 chars: ${pages} pages, ms per page ${timings.join(',')}`);
     console.log(`[prompt-shield timing] mixed 15000 chars: ${mixedTimings.length} pages, ms per page ${mixedTimings.join(',')}`);
+  }, 180_000);
+
+  it('matches jobView sent.pages to rendered 720px pages across 600..15,000 chars (latin, hangul, mixed) and fits 15,000 Korean without ellipsis', async () => {
+    vi.stubEnv('BRAND_STUDIO_VIDEO_PROMPT_SHIELD', 'on');
+    vi.stubEnv('BRAND_STUDIO_VIDEO_PROMPT_SHIELD_ORGS', '00000000-0000-4000-8000-00000000a001');
+    try {
+      const { jobs, outputs } = worldRows('00000000-0000-4000-8000-00000000a001', '00000000-0000-4000-8000-00000000b001');
+      const baseJob = jobs.find((j) => j.kind === 'video' && j.final_prompt !== null)!;
+      const media = createMemoryMediaStore();
+      const fullHeight = promptPageHeight(PROMPT_PAGE.linesPerPage);
+      const lengths = [600, 2_000, 6_000, 9_000, 15_000] as const;
+      const variants = [
+        ['latin', LATIN],
+        ['hangul', HANGUL],
+        ['mixed', `${HANGUL}${LATIN}\n`],
+      ] as const;
+
+      expect(PROMPT_PAGE.width).toBe(720);
+      const summary: string[] = [];
+      let onePageMs = 0;
+      let largestLastPageMs = 0;
+
+      for (const [label, unit] of variants) {
+        const pageCounts: number[] = [];
+        let shorterLastPages = 0;
+        for (const n of lengths) {
+          const text = textOf(n, unit);
+          const view = jobView({ ...baseJob, final_prompt: text }, outputs, media);
+          const sent = view.sent;
+          expect(sent).not.toBeNull();
+          const pages = promptPages(text);
+          expect(sent!.pages).toBe(pages.length);
+          pageCounts.push(pages.length);
+
+          const tStart = performance.now();
+          const first = (await renderPromptPage(text, 1))!;
+          const firstMs = Math.round(performance.now() - tStart);
+          if (label === 'hangul' && n === 600) onePageMs = firstMs;
+          const firstMeta = await sharp(first.png).metadata();
+          expect(first.width).toBe(720);
+          expect(firstMeta.width).toBe(720);
+
+          const lastStart = performance.now();
+          const last = (await renderPromptPage(text, sent!.pages))!;
+          const lastMs = Math.round(performance.now() - lastStart);
+          if (label === 'hangul' && n === 15_000) largestLastPageMs = lastMs;
+          const lastMeta = await sharp(last.png).metadata();
+          expect(last.width).toBe(720);
+          expect(lastMeta.width).toBe(720);
+          expect(await renderPromptPage(text, sent!.pages + 1)).toBeNull();
+
+          expect(last.height).toBe(promptPageHeight(pages.at(-1)!.length));
+          if (pages.at(-1)!.length < PROMPT_PAGE.linesPerPage) {
+            expect(lastMeta.height!).toBeLessThan(fullHeight);
+            if (pages.length > 1) expect(lastMeta.height!).toBeLessThan(firstMeta.height!);
+            shorterLastPages += 1;
+          } else {
+            expect(lastMeta.height!).toBe(fullHeight);
+          }
+          if (n === 15_000) {
+            expect(pages.length).toBeLessThanOrEqual(PROMPT_PAGE.maxPages);
+            expect(pages.at(-1)!.at(-1)).not.toBe(PROMPT_MORE);
+            if (label === 'hangul') {
+              for (let p = 1; p <= pages.length; p += 1) {
+                const pageImg = (await renderPromptPage(text, p))!;
+                const meta = await sharp(pageImg.png).metadata();
+                expect(pageImg.width).toBe(720);
+                expect(meta.width).toBe(720);
+              }
+            }
+          }
+        }
+        expect(shorterLastPages).toBeGreaterThanOrEqual(3);
+        summary.push(`${label}: ${lengths.map((n, i) => `${n}=${pageCounts[i]}p`).join(', ')}`);
+      }
+      console.log(`[prompt-shield fix2 size] maxPages=${PROMPT_PAGE.maxPages}; ${summary.join(' | ')}`);
+      console.log(`[prompt-shield fix2 timing] one-page=${onePageMs}ms, 15000-korean-last-page=${largestLastPageMs}ms`);
+    } finally {
+      vi.unstubAllEnvs();
+    }
   }, 180_000);
 });

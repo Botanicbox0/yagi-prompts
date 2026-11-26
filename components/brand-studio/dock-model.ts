@@ -48,6 +48,7 @@ import {
 } from "@/lib/brand-studio/reference-video";
 import { imageRunKrw, regionEditRun, remixRunUsd, usageKrw, videoRunUsd, regionEditModel as editModelFor } from "@/lib/brand-studio/usage-rate";
 import type { StudioOps } from "./api";
+import type { ShieldedDockDesign } from "./prompt-pictures";
 import { toReferences, type RefSource, type TrayItem } from "./refs";
 
 export interface DockDraft {
@@ -381,22 +382,28 @@ export function buildJob(
   draft: DockDraft,
   tray: readonly TrayItem[],
   ids: { organizationId: string; requestId: string },
-  options: { ownWords?: string | null } = {},
-): { ok: true; input: StudioJobCreate } | { ok: false; problem: DockProblem } {
+  options: { ownWords?: string | null; shielded?: ShieldedDockDesign | null } = {},
+): { ok: true; input: StudioJobCreate & StudioShieldedReuse } | { ok: false; problem: DockProblem } {
   const clean = normalizeDraft(draft);
   const problem = dockProblem(clean, tray);
   if (problem) return { ok: false, problem };
   const remix = remixActive(clean, tray);
   const shown = clean.prompt.trim();
   const own = options.ownWords?.trim() ?? "";
-  const reviewed = !remix && own.length > 0 && own !== shown;
+  const shielded = !remix && clean.medium === "video" ? (options.shielded ?? null) : null;
+  const reviewed = !remix && !shielded && own.length > 0 && own !== shown;
   const base = {
     organizationId: ids.organizationId,
     requestId: ids.requestId,
     model: clean.model,
     prompt: reviewed ? own : shown,
-    enhance: reviewed ? false : remix ? true : clean.enhance,
+    enhance: reviewed ? false : remix || shielded ? true : clean.enhance,
     ...(reviewed ? { reviewedPrompt: shown } : {}),
+    ...(shielded
+      ? shielded.kind === "token"
+        ? { reviewedToken: shielded.token }
+        : { reviewedFrom: { jobId: shielded.jobId } }
+      : {}),
     references: toReferences(tray, clean.medium),
     aspect: clean.aspect,
   };
@@ -436,15 +443,15 @@ export function buildMultiClipJobs(
   draft: DockDraft,
   tray: readonly TrayItem[],
   ids: { organizationId: string; requestIds: readonly string[] },
-  options: { ownWords?: string | null; sheet?: FilmSheet | null } = {},
-): { ok: true; inputs: StudioJobCreate[]; plan: MultiClipPlan | null } | { ok: false; problem: DockProblem } {
+  options: { ownWords?: string | null; sheet?: FilmSheet | null; shielded?: ShieldedDockDesign | null } = {},
+): { ok: true; inputs: (StudioJobCreate & StudioShieldedReuse)[]; plan: MultiClipPlan | null } | { ok: false; problem: DockProblem } {
   const plan = activeMultiClipPlan(draft, tray);
   if (!plan || plan.clipCount < 2) {
     const single = buildJob(
       draft,
       tray,
       { organizationId: ids.organizationId, requestId: ids.requestIds[0] ?? "req-0" },
-      { ownWords: options.ownWords },
+      { ownWords: options.ownWords, shielded: options.shielded },
     );
     if (!single.ok) return single;
     return { ok: true, inputs: [single.input], plan };
