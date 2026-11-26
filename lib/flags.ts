@@ -461,3 +461,21 @@ export function brandOrgInviteEmailOpen(env: Record<string, string | undefined> 
 export function brandBillingAutoIssueOpen(env: Record<string, string | undefined> = process.env): boolean {
   return env.BRAND_BILLING_AUTO_ISSUE === 'on';
 }
+
+export type PromptGuardMode = 'off' | 'observe' | 'enforce';
+
+/**
+ * The prompt guard (lib/ai-guard, docs/PROMPT-GUARD.md): keeps the internal text that steers our model
+ * calls from reaching a customer. `PROMPT_GUARD` in the server environment:
+ *   - `off`: nothing changes, byte for byte (no canary, no added line, no check);
+ *   - `observe` (the default when unset or empty): the request is guarded and the answer checked; a refusal
+ *     only writes one log line and the answer goes out, EXCEPT an answer carrying the call's canary, which is
+ *     always replaced by the site's fallback;
+ *   - `enforce`: a refusal answers with the site's existing fallback. Any other non-empty value (a typo such
+ *     as `enforced`) is read as `enforce`: a security switch fails closed.
+ */
+export function promptGuardMode(env: Record<string, string | undefined> = process.env): PromptGuardMode {
+  const value = env.PROMPT_GUARD?.trim().toLowerCase() ?? '';
+  if (value === '' || value === 'observe') return 'observe';
+  return value === 'off' ? 'off' : 'enforce';
+}

@@ -5,16 +5,18 @@
  *
  * The client-safe mention helpers live in `./mentions` (import that file directly from the browser).
  */
+import { dictatedSpans, guardRequest, type GuardedRequest } from '@/lib/ai-guard';
 import { loadDirectorPlaybooks, playbookRuleLines } from '@/lib/brand-studio/director/playbooks';
+import { promptGuardMode } from '@/lib/flags';
 import { blueprintShape, blueprintShots, isBlueprint } from './blueprint';
 import { composeFallbackPrompt } from './fallback';
 import { hasMarkSign, replaceMarks } from './marks';
 import { callGeminiJson, inlinePart, studioGeminiConfig, type GeminiPart } from './gemini';
-import { effectiveSeconds, keepPhrase, planShots, type PlannedShot } from './lines';
+import { AMBIENT_AUDIO_LINE, effectiveSeconds, keepPhrase, NATIVE_AUDIO_LINE, planShots, type PlannedShot } from './lines';
 import { enhanceMeta } from './meta';
 import { buildSystemInstruction, skinVariantOf } from './profiles';
 import { bindReferences, mapCustomerMentions, type Binding } from './references';
-import { checkEnhancedPrompt, cleanNotes, ENHANCER_RESPONSE_SCHEMA, EnhancerOutputSchema } from './schema';
+import { checkEnhancedPrompt, cleanNotes, ENHANCED_PROMPT_MAX, ENHANCER_RESPONSE_SCHEMA, EnhancerOutputSchema, exemptText, NOTES_MAX } from './schema';
 import type { EnhanceDeps, EnhanceInput, EnhanceMeta, EnhanceResult } from './types';
 
 export { enhanceMeta } from './meta';
@@ -146,7 +148,8 @@ function payload(input: EnhanceInput, binding: Binding, seconds: number | null, 
   };
 }
 
-function thumbParts(input: EnhanceInput, binding: Binding): GeminiPart[] {
+/** The customer's words in a picture caption go through `guard.data` (unchanged with the guard off). */
+function thumbParts(input: EnhanceInput, binding: Binding, guard: GuardedRequest): GeminiPart[] {
   const parts: GeminiPart[] = [];
   const cropThumb = input.kind === 'region_edit' ? input.editCropThumb : null;
   const hasCrop = Boolean(cropThumb && THUMB_MIMES.has(cropThumb.mime));
@@ -172,10 +175,10 @@ function thumbParts(input: EnhanceInput, binding: Binding): GeminiPart[] {
     if (!thumb || b.ref.kind !== 'image' || !THUMB_MIMES.has(thumb.mime)) continue;
     const name = b.token ?? b.name;
     const cues = [
-      `the customer's "${b.ref.label}"`,
+      `the customer's "${guard.data('label', b.ref.label)}"`,
       b.ref.role ? `role: ${b.ref.role}` : 'role: infer from visual content and request',
-      b.ref.use?.trim() ? `take: "${b.ref.use.trim()}"` : null,
-      b.ref.avoid?.trim() ? `leave out: "${b.ref.avoid.trim()}"` : null,
+      b.ref.use?.trim() ? `take: "${guard.data('take', b.ref.use.trim())}"` : null,
+      b.ref.avoid?.trim() ? `leave out: "${guard.data('leave out', b.ref.avoid.trim())}"` : null,
     ]
       .filter(Boolean)
       .join(', ');
@@ -185,6 +188,22 @@ function thumbParts(input: EnhanceInput, binding: Binding): GeminiPart[] {
     parts.push(inlinePart(thumb.bytes, thumb.mime));
   }
   return parts;
+}
+
+/**
+ * Our fixed lines that are meant to appear in a written prompt (the prompt guard's allow-list for this
+ * writer): the lines `checkEnhancedPrompt` adds, every phrase the rules dictate (quoted spans, parenthesised lists), and
+ * this input's deterministic fallback, which the customer reads whenever the writer fails anyway.
+ */
+function enhancerAllow(input: EnhanceInput, binding: Binding, system: string): string[] {
+  const ref = binding.bound.find((b) => b.ref.kind === 'video')?.token ?? '@Video1';
+  let fallbackText = '';
+  try {
+    fallbackText = composeFallbackPrompt(input).prompt;
+  } catch {
+    fallbackText = '';
+  }
+  return [AMBIENT_AUDIO_LINE, NATIVE_AUDIO_LINE, 'Do not move or resize anything else.', `Everything else in ${ref} stays as it is.`, ...dictatedSpans(system), fallbackText];
 }
 
 export async function enhancePrompt(input: EnhanceInput, deps: EnhanceDeps): Promise<EnhanceResult> {
@@ -231,12 +250,22 @@ export async function enhancePrompt(input: EnhanceInput, deps: EnhanceDeps): Pro
       : effectiveInput.kind === 'video_remix' && effectiveInput.video?.method !== 'edit'
         ? planShots(seconds, effectiveInput.video)
         : [];
-    const visualParts = thumbParts(effectiveInput, binding);
-    const hasVisualParts = visualParts.some((p) => 'inlineData' in p);
     const skinVariant = skinVariantOf(effectiveInput.model, deps.env);
+    // The prompt guard (lib/ai-guard, docs/PROMPT-GUARD.md): canary + one shared rule on the system part,
+    // the customer's material in named data blocks. With PROMPT_GUARD=off the request is byte for byte as before.
+    const guard = guardRequest({
+      site: 'brand-studio.enhancer',
+      env: deps.env,
+      internal: buildSystemInstruction(effectiveInput, binding, seconds, shots, {
+        skinVariant,
+        ...(promptGuardMode(deps.env) === 'off' ? {} : { shotsInUserTurn: true }),
+      }),
+    });
+    const visualParts = thumbParts(effectiveInput, binding, guard);
+    const hasVisualParts = visualParts.some((p) => 'inlineData' in p);
     const raw = await callGeminiJson(config, deps.fetch, {
-      system: buildSystemInstruction(effectiveInput, binding, seconds, shots, { skinVariant }),
-      parts: [{ text: JSON.stringify(payload(effectiveInput, binding, seconds, shots)) }, ...visualParts],
+      system: guard.system,
+      parts: guard.parts([{ text: guard.json('request', payload(effectiveInput, binding, seconds, shots)) }, ...visualParts]),
       schema: ENHANCER_RESPONSE_SCHEMA,
       thinking: hasVisualParts ? 'MEDIUM' : 'LOW',
       timeoutMs: timeoutOf(deps.env),
@@ -249,9 +278,22 @@ export async function enhancePrompt(input: EnhanceInput, deps: EnhanceDeps): Pro
     if (input.revision && hasMarkSign(checked.prompt)) return fallback('mark_sign');
     // A reshoot rewrites the earlier prompt sentence by sentence; its shape is that prompt's, not a fresh blueprint's.
     if (blueprint && !input.revision && !blueprintShape(checked.prompt, seconds, input.video?.keep)) return fallback('blueprint_shape');
+    const notes = cleanNotes(parsed.data.notes, input.locale, MODEL_NOTES[input.locale]);
+    // The outgoing check, on exactly what would be shown, stored and sent. A refused prompt answers this
+    // writer's own fallback (as any failed check above); a refused note answers the default note (as cleanNotes).
+    const verdict = guard.check(
+      { prompt: checked.prompt, notes },
+      {
+        // The customer's own words (as the checks above count them) and their brand notes and playbooks.
+        exempt: [exemptText(effectiveInput), effectiveInput.brand?.tone ?? '', ...(effectiveInput.brand?.rules ?? [])],
+        allow: enhancerAllow(effectiveInput, binding, guard.system),
+        shapes: { prompt: { maxChars: ENHANCED_PROMPT_MAX, noMarkup: true }, notes: { maxChars: NOTES_MAX, oneSentence: true } },
+      },
+    );
+    if (verdict.blocked.includes('prompt')) return fallback(`prompt_guard_${verdict.reason}`);
     return {
       prompt: checked.prompt,
-      notes: cleanNotes(parsed.data.notes, input.locale, MODEL_NOTES[input.locale]),
+      notes: verdict.blocked.includes('notes') ? MODEL_NOTES[input.locale] : notes,
       source: 'model',
       meta: enhanceMeta(effectiveInput, 'model', { llmModel: config.model, env: deps.env }),
     };

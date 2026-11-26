@@ -16,7 +16,6 @@ import type { EnhanceInput, JobRow, StudioIntel } from '@/lib/brand-studio/types
 import { loadAllowance } from '@/lib/brand-studio/usage';
 import { requestId, seedImageAsset, studioDeps, viewerOf, type StudioFixture } from '../brand-studio/server/helpers';
 import { leakingFetch, type AnswerKind } from './leaks';
-import type { ReferenceCase } from './reference-cases';
 
 export interface ProductPath {
   id: string;
@@ -106,9 +105,14 @@ export interface PathRecord {
  * Runs the preview and one paid run of `path` in organization `f.orgId` with the model answering `kind`.
  * `env` is the model writers' environment (the place `PROMPT_GUARD` is read from).
  */
-export async function runProductPath(f: StudioFixture, path: ProductPath, kind: AnswerKind, env: Record<string, string | undefined>): Promise<PathRecord> {
+export async function runProductPath(
+  f: StudioFixture,
+  path: ProductPath,
+  answer: AnswerKind | (() => { calls: Array<{ body: string }>; fetchImpl: typeof fetch }),
+  env: Record<string, string | undefined>,
+): Promise<PathRecord> {
   resetFreeIntelRateLimits();
-  const { calls, fetchImpl } = leakingFetch(kind, { benign: path.benign } as ReferenceCase);
+  const { calls, fetchImpl } = typeof answer === 'function' ? answer() : leakingFetch(answer, path);
   const logs: PathRecord['logs'] = [];
   const deps = studioDeps(f.sql, { intelDeps: { fetch: fetchImpl, env }, log: (event, detail) => logs.push({ event, detail: detail ?? null }) });
   deps.intel = liveWriters(deps.intel) as typeof deps.intel;

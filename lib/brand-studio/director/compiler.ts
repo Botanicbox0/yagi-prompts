@@ -24,6 +24,7 @@
  *    explicitly asks for singing/music performance.
  *  - Never blocks generation: any Gemini timeout/HTTP error deterministically falls back to `composeDirectorFallbackPrompt`.
  */
+import { dictatedSpans, guardRequest, type GuardedRequest } from '@/lib/ai-guard';
 import type { StudioAudioMode } from '@/lib/brand-studio/contracts';
 import { composeFallbackPrompt, effectiveSeconds, enhancePrompt } from '@/lib/brand-studio/enhancer';
 import { blueprintShots, isBlueprint } from '@/lib/brand-studio/enhancer/blueprint';
@@ -35,6 +36,7 @@ import {
   containsInternalTerm,
   ENHANCER_RESPONSE_SCHEMA,
   EnhancerOutputSchema,
+  NOTES_MAX,
   tidyPrompt,
 } from '@/lib/brand-studio/enhancer/schema';
 import type { EnhanceInput, EnhanceResult } from '@/lib/brand-studio/enhancer/types';
@@ -545,7 +547,8 @@ export function composeDirectorFallbackPrompt(
   };
 }
 
-function directorThumbParts(binding: Binding): GeminiPart[] {
+/** The customer's label in a picture caption goes through `guard.data` (unchanged with the guard off). */
+function directorThumbParts(binding: Binding, guard: GuardedRequest): GeminiPart[] {
   const parts: GeminiPart[] = [];
   let count = 0;
   for (const b of binding.bound) {
@@ -554,12 +557,40 @@ function directorThumbParts(binding: Binding): GeminiPart[] {
     if (!thumb || b.ref.kind !== 'image' || !THUMB_MIMES.has(thumb.mime) || thumb.bytes.byteLength === 0) continue;
     const label = spacedSeedanceToken(b.token) ?? b.name;
     parts.push({
-      text: `Attached ${label} ("${b.ref.label}"${b.ref.role ? `, ${b.ref.role}` : ''}):`,
+      text: `Attached ${label} ("${guard.data('label', b.ref.label)}"${b.ref.role ? `, ${b.ref.role}` : ''}):`,
     });
     parts.push(inlinePart(thumb.bytes, thumb.mime));
     count += 1;
   }
   return parts;
+}
+
+/**
+ * Our fixed lines that are meant to appear in a directed prompt (the prompt guard's allow-list for this
+ * director): the audio lines `enforceDirectorAudioPolicy` writes, the skin phrase the scrub writes, every
+ * phrase the rules quote for the model to write, and this input's deterministic fallback, which the customer
+ * reads whenever the director fails anyway.
+ */
+function directorAllow(
+  input: DirectorCompileInput,
+  system: string,
+  analysis: MediaAnalysisDigest | null,
+  playbooks: readonly DirectorPlaybookRule[],
+): string[] {
+  let fallbackText = '';
+  try {
+    fallbackText = composeDirectorFallbackPrompt(input, { analysis, playbooks }).prompt;
+  } catch {
+    fallbackText = '';
+  }
+  return [
+    DIRECTOR_NO_BGM_AUDIO_LINE,
+    'Audio: live diegetic room sound, Foley and the requested musical performance.',
+    'diegetic Foley, room ambience and requested dialogue only; no background music, no score, no musical instruments.',
+    'natural skin texture with zero plastic beauty-filter glare',
+    ...dictatedSpans(system),
+    fallbackText,
+  ];
 }
 
 export class DefaultPromptCompiler implements PromptCompiler {
@@ -709,10 +740,14 @@ export class DefaultPromptCompiler implements PromptCompiler {
       playbooks: playbookLines,
     };
 
+    // The prompt guard (lib/ai-guard, docs/PROMPT-GUARD.md): canary + one shared rule on the system part,
+    // the customer's material in named data blocks. With PROMPT_GUARD=off the request is byte for byte as before.
+    const guard = guardRequest({ site: 'brand-studio.director', env: deps.env, internal: system });
+
     try {
       const raw = await callGeminiJson(config, deps.fetch, {
-        system,
-        parts: [{ text: JSON.stringify(userPayload) }, ...directorThumbParts(binding)],
+        system: guard.system,
+        parts: guard.parts([{ text: guard.json('request', userPayload) }, ...directorThumbParts(binding, guard)]),
         schema: ENHANCER_RESPONSE_SCHEMA,
         thinking: 'LOW',
         timeoutMs: COMPILE_TIMEOUT_MS,
@@ -734,9 +769,29 @@ export class DefaultPromptCompiler implements PromptCompiler {
         return fallback('unbound_token');
       }
 
+      const notes = cleanNotes(parsed.data.notes, input.locale, DIRECTOR_MODEL_NOTES[input.locale]);
+      // The outgoing check, on exactly what would be shown, stored and sent. A refused prompt answers this
+      // director's own fallback (as any failed check above); a refused note answers the default note.
+      const verdict = guard.check(
+        { prompt: cleaned, notes },
+        {
+          // The customer's own words: request, change, reference notes, brand notes and playbooks.
+          exempt: [
+            userText,
+            ...input.references.map((r) => `${r.label}\n${r.use ?? ''}\n${r.avoid ?? ''}`),
+            enhanceInput.brand?.name ?? '',
+            enhanceInput.brand?.tone ?? '',
+            ...(enhanceInput.brand?.rules ?? []),
+          ],
+          allow: directorAllow(input, guard.system, analysis, playbooks),
+          shapes: { prompt: { noMarkup: true }, notes: { maxChars: NOTES_MAX, oneSentence: true } },
+        },
+      );
+      if (verdict.blocked.includes('prompt')) return fallback(`prompt_guard_${verdict.reason}`);
+
       return {
         prompt: cleaned,
-        notes: cleanNotes(parsed.data.notes, input.locale, DIRECTOR_MODEL_NOTES[input.locale]),
+        notes: verdict.blocked.includes('notes') ? DIRECTOR_MODEL_NOTES[input.locale] : notes,
         source: 'model',
         intent,
         provider,

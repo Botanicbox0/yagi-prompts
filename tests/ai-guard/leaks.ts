@@ -68,9 +68,24 @@ const ANALYZER_ANSWER = {
 };
 
 /** A fetch double that answers the site's own call with the `kind` answer built from what it was sent. */
-export function leakingFetch(kind: AnswerKind, c: ReferenceCase) {
+export function leakingFetch(kind: AnswerKind, c: Pick<ReferenceCase, 'benign'>) {
   return recordingFetch((_n, body) => {
     if (!isSiteCall(body)) return geminiJson(ANALYZER_ANSWER);
     return geminiJson(leakAnswer(kind, systemOf(body), c.benign));
   });
+}
+
+/** A fetch double that answers the site's own call with exactly `answer`. */
+export function fixedAnswerFetch(answer: { prompt: string; notes: string }) {
+  return recordingFetch((_n, body) => (isSiteCall(body) ? geminiJson(answer) : geminiJson(ANALYZER_ANSWER)));
+}
+
+/** The site's own call fails (HTTP 500): the answer is the fallback each site already had before the guard. */
+export function failingSiteFetch() {
+  return recordingFetch((_n, body) => (isSiteCall(body) ? new Response('down', { status: 500 }) : geminiJson(ANALYZER_ANSWER)));
+}
+
+/** The benign prompt with an empty note: the note each site shows when the model's note is unusable. */
+export function emptyNotesFetch(c: Pick<ReferenceCase, 'benign'>) {
+  return recordingFetch((_n, body) => (isSiteCall(body) ? geminiJson({ prompt: c.benign, notes: '' }) : geminiJson(ANALYZER_ANSWER)));
 }

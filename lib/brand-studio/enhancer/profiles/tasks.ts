@@ -125,7 +125,7 @@ Kept from the blueprint: ${kept}. For each kept item carry the blueprint's words
 ${soundRule(audio)}`;
 }
 
-function remixTask(input: EnhanceInput, binding: Binding, seconds: number | null, shots: readonly PlannedShot[]): string {
+function remixTask(input: EnhanceInput, binding: Binding, seconds: number | null, shots: readonly PlannedShot[], shotsInUserTurn = false): string {
   const video = input.video;
   const audio = video?.audio ?? 'native';
   if (video?.method === 'blueprint') return blueprintTask(input, binding, seconds, shots);
@@ -142,8 +142,10 @@ ${soundRule(audio)}`;
   }
   const kept = keepPhrase(video?.keep) || 'its overall structure';
   const timing = video?.keep?.includes('timing');
+  // The shot table is read from the customer's video (and the customer may have edited it): with the prompt
+  // guard on (lib/ai-guard) it stays in the user turn as "video.shots" and these rules only point at it.
   const table = shots.length
-    ? `\nThe reference's shots, fitted to the new length:\n${shotTable(shots)}\n${timing ? 'Use exactly these ranges for the timeline.' : 'Use them as a guide for the timeline.'} For each kept item, carry the range's camera, framing or action over in plain words; rewrite only what the change replaces.`
+    ? `\nThe reference's shots, fitted to the new length${shotsInUserTurn ? ', are in "video.shots".' : `:\n${shotTable(shots)}`}\n${timing ? 'Use exactly these ranges for the timeline.' : 'Use them as a guide for the timeline.'} For each kept item, carry the range's camera, framing or action over in plain words; rewrite only what the change replaces.`
     : '';
   return `Task: a new video that follows the reference video ${ref} for what is kept and replaces what the change asks for.
 ${changeLine}
@@ -220,6 +222,7 @@ export function taskBlock(
   binding: Binding,
   seconds: number | null,
   shots: readonly PlannedShot[],
+  options: { shotsInUserTurn?: boolean } = {},
 ): string {
   if (input.revision && (input.kind === 'video' || input.kind === 'video_remix')) return revisionTask(input, binding);
   switch (input.kind) {
@@ -230,6 +233,6 @@ export function taskBlock(
     case 'video':
       return videoTask(input, binding, seconds);
     case 'video_remix':
-      return remixTask(input, binding, seconds, shots);
+      return remixTask(input, binding, seconds, shots, options.shotsInUserTurn);
   }
 }

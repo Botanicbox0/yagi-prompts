@@ -4,7 +4,7 @@ import { buildSystemInstruction, CORE_HEADER, MODEL_BLOCKS, PROFILE_BLOCKS, PROF
 import { listReferenceMentions } from '@/lib/brand-studio/enhancer/mentions';
 import { bindReferences, mapCustomerMentions } from '@/lib/brand-studio/enhancer/references';
 import { STUDIO_MODELS } from '@/lib/brand-studio/models';
-import { ENV, input, mockGemini, sentBody } from './helpers';
+import { ENV, input, mockGemini, requestPayload, sentBody } from './helpers';
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -102,7 +102,7 @@ describe('Seedream references read "Image N"; "Figure N" still works', () => {
     expect(result.source).toBe('model');
     expect(result.prompt).not.toMatch(/Figure/);
     expect(result.prompt).toMatch(/from Image 1 .* colours of Image 1, lit like Image 2/);
-    const payload = JSON.parse((sentBody(fetchMock).contents[0]!.parts[0] as { text: string }).text);
+    const payload = requestPayload(fetchMock);
     expect(payload.request).toBe('Image 1의 병을 Image 2의 빛으로');
   });
 });

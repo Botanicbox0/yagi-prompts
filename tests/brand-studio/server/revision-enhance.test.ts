@@ -3,7 +3,7 @@ import { composeFallbackPrompt, enhancePrompt, type EnhanceInput } from '@/lib/b
 import { createStudioJob } from '@/lib/brand-studio/jobs';
 import { prepareJob } from '@/lib/brand-studio/prepare';
 import type { JobRow } from '@/lib/brand-studio/types';
-import { ENV, input, mockGemini, sentBody } from '../intel/helpers';
+import { ENV, input, mockGemini, requestPayload, sentBody, writerJson, writerParts } from '../intel/helpers';
 import { fakeIntel, requestId, seedImageAsset, studioDeps, studioFixture, viewerOf, type StudioFixture } from './helpers';
 import { seedRevision, seedRun } from './revision-helpers';
 
@@ -43,7 +43,7 @@ describe('the enhancer on a new version', () => {
     expect(system).toContain('@Video1 is version 2 of the clip');
     expect(system).toContain('"revision.history"');
     expect(system).toContain('stay exactly as they are in @Video1');
-    const payload = JSON.parse((body.contents[0]!.parts[0] as { text: string }).text);
+    const payload = writerJson(writerParts(body)[0]!.text as string);
     expect(payload.revision).toEqual({ mode: 'edit', version: 3, madeWith: MADE_WITH, history: ['배경을 회색으로'] });
     expect(payload.request).toBe('병을 파란색으로');
   });
@@ -56,7 +56,7 @@ describe('the enhancer on a new version', () => {
     const system = body.systemInstruction.parts[0]!.text;
     expect(system).toContain('each request in "revision.history" in order (oldest first), and then the request');
     expect(system).toContain('keep every other sentence, their order, the timing marks and the reference tokens word for word');
-    const payload = JSON.parse((body.contents[0]!.parts[0] as { text: string }).text);
+    const payload = writerJson(writerParts(body)[0]!.text as string);
     expect(payload.revision).toMatchObject({ mode: 'reshoot', version: 4, history: ['배경을 회색으로', '병을 파란색으로'] });
     expect(payload.video.change).toBeNull();
     expect(payload.request).toBe('@Image2의 라벨을 붙여');
@@ -65,7 +65,7 @@ describe('the enhancer on a new version', () => {
   it('a plain run carries no revision block', async () => {
     const fetchMock = mockGemini({ prompt: '@Image1 a bottle turns.', notes: '다듬었어요.' });
     await enhancePrompt(reshootInput({ revision: null }), { fetch: fetchMock as unknown as typeof fetch, env: ENV });
-    const payload = JSON.parse((sentBody(fetchMock).contents[0]!.parts[0] as { text: string }).text);
+    const payload = requestPayload(fetchMock);
     expect(payload.revision).toBeNull();
     expect(payload.video.change).toBe('old change note');
   });

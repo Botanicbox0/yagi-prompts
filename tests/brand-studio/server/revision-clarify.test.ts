@@ -6,7 +6,7 @@ import { cleanClarify } from '@/lib/brand-studio/revision/advise';
 import { withClarified } from '@/lib/brand-studio/revision/clarify';
 import { runStudioOperation } from '@/lib/brand-studio/service';
 import type { JobRow } from '@/lib/brand-studio/types';
-import { ENV, input, mockGemini, sentBody } from '../intel/helpers';
+import { ENV, input, mockGemini, requestPayload, sentBody } from '../intel/helpers';
 import { fakeIntel, requestId, studioDeps, studioFixture, viewerOf, type StudioFixture } from './helpers';
 import { seedRevision, seedRun } from './revision-helpers';
 
@@ -31,7 +31,7 @@ function withGemini(answer: unknown | (() => Response)) {
 const ask = (deps: ReturnType<typeof studioDeps>, payload: Record<string, unknown>) =>
   runStudioOperation(deps, viewerOf(f.ids.owner), 'revise.plan', { organizationId: f.orgId, ...payload });
 
-const sentPayload = (fetchMock: ReturnType<typeof mockGemini>) => JSON.parse((sentBody(fetchMock).contents[0]!.parts[0] as { text: string }).text);
+const sentPayload = (fetchMock: ReturnType<typeof mockGemini>) => requestPayload(fetchMock);
 const sentSystem = (fetchMock: ReturnType<typeof mockGemini>) => sentBody(fetchMock).systemInstruction.parts[0]!.text as string;
 
 describe('revise.plan asks one question when the request reads two ways', () => {

@@ -14,7 +14,7 @@ import { createStudioJob, previewStudioPrompt } from '@/lib/brand-studio/jobs';
 import { STUDIO_MODELS } from '@/lib/brand-studio/models';
 import { cropForEdit, planRegion } from '@/lib/brand-studio/region-edit';
 import { requestId, seedImageAsset, studioDeps, studioFixture, viewerOf, type StudioFixture } from '../server/helpers';
-import { ENV, input, mockGemini, sentBody } from './helpers';
+import { ENV, input, mockGemini, sentBody, writerParts } from './helpers';
 
 const NANO_ASPECTS = STUDIO_MODELS.find((m) => m.id === 'nano-banana-pro')!.aspects;
 
@@ -165,7 +165,7 @@ describe('region_edit enhancer — inline image 1 crop & anti-redraw system rule
     expect(system).toContain('Never redraw, enlarge, or re-shape the surrounding object (never invent curvature or new geometry)');
 
     // Inline parts: [0] JSON payload, [1] label for image 1 crop, [2] inlineData of cropBytes, [3] label for image 2, [4] inlineData of refLogoBytes
-    const parts = body.contents[0]!.parts;
+    const parts = writerParts(body);
     expect(parts[1]).toMatchObject({ text: expect.stringContaining('Picture of image 1') });
     expect(parts[2]).toMatchObject({ inlineData: { mimeType: 'image/png', data: Buffer.from(cropBytes).toString('base64') } });
     expect(parts[3]).toMatchObject({ text: expect.stringContaining('Picture of image 2') });

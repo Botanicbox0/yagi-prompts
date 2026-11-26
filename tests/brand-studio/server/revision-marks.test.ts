@@ -6,7 +6,7 @@ import { prepareJob } from '@/lib/brand-studio/prepare';
 import { MARK_FRAME_MAX_BYTES, markFrameBytes } from '@/lib/brand-studio/revision/mark';
 import { runStudioOperation } from '@/lib/brand-studio/service';
 import type { JobRow } from '@/lib/brand-studio/types';
-import { ENV, input, mockGemini, sentBody } from '../intel/helpers';
+import { ENV, input, mockGemini, sentBody, writerJson, writerParts } from '../intel/helpers';
 import { fakeIntel, pngBytes, requestId, studioDeps, studioFixture, viewerOf, type StudioFixture } from './helpers';
 import { seedRevision, seedRun } from './revision-helpers';
 
@@ -195,7 +195,7 @@ describe('the prompt writer reads marks as words', () => {
     const body = sentBody(fetchMock);
     expect(body.systemInstruction.parts[0]!.text).toContain('①, ② and ③ in the request are marks the customer placed on the clip');
     expect(body.systemInstruction.parts[0]!.text).toContain('in the words that find it in the video');
-    const payload = JSON.parse((body.contents[0]!.parts[0] as { text: string }).text);
+    const payload = writerJson(writerParts(body)[0]!.text as string);
     expect(payload.revision.marks).toEqual([
       { n: 1, time: 1.2, what: 'the pink perfume bottle', x: 0.3, y: 0.4, w: 0.2, h: 0.3 },
       { n: 2, time: 3, what: null, x: 0.7, y: 0.2 },
@@ -205,7 +205,7 @@ describe('the prompt writer reads marks as words', () => {
     await enhancePrompt(editInput({ prompt: '병을 초록색으로', revision: { mode: 'reshoot', version: 3, madeWith: MADE_WITH, history: [] } }), { fetch: plain as unknown as typeof fetch, env: ENV });
     const plainBody = sentBody(plain);
     expect(plainBody.systemInstruction.parts[0]!.text).not.toContain('are marks the customer placed');
-    expect(JSON.parse((plainBody.contents[0]!.parts[0] as { text: string }).text).revision).not.toHaveProperty('marks');
+    expect(writerJson(writerParts(plainBody)[0]!.text as string).revision).not.toHaveProperty('marks');
 
     const reshoot = mockGemini({ prompt: '@Image1 a green perfume bottle turns slowly on white stone.\nAudio: soft room tone.', notes: '바꿨어요.' });
     await enhancePrompt(editInput({ kind: 'video', revision: { mode: 'reshoot', version: 3, madeWith: MADE_WITH, history: [], marks: ENHANCE_MARKS } }), { fetch: reshoot as unknown as typeof fetch, env: ENV });

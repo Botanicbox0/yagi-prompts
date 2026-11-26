@@ -4,7 +4,7 @@ import { createStudioJob } from '@/lib/brand-studio/jobs';
 import { prepareJob } from '@/lib/brand-studio/prepare';
 import { MATERIAL_NOTES_MAX, cleanMaterialNotes, readMaterial } from '@/lib/brand-studio/revision/material';
 import type { JobRow } from '@/lib/brand-studio/types';
-import { ENV, input, mockGemini, sentBody } from '../intel/helpers';
+import { ENV, input, mockGemini, sentBody, writerJson, writerParts } from '../intel/helpers';
 import { fakeIntel, requestId, seedImageAsset, seedVideoAsset, studioDeps, studioFixture, viewerOf, type StudioFixture } from './helpers';
 import { seedRun } from './revision-helpers';
 
@@ -162,7 +162,7 @@ describe('the prompt writer with material notes', () => {
     const system = body.systemInstruction.parts[0]!.text;
     expect(system).toContain('"revision.materials" are notes on videos the customer attached');
     expect(system).toContain('never write a token for one');
-    expect(JSON.parse((body.contents[0]!.parts[0] as { text: string }).text).revision.materials).toEqual(materials);
+    expect(writerJson(writerParts(body)[0]!.text as string).revision.materials).toEqual(materials);
   });
 
   it('says nothing about material when there is none', async () => {
@@ -170,7 +170,7 @@ describe('the prompt writer with material notes', () => {
     await enhancePrompt(base(), { fetch: fetchMock as unknown as typeof fetch, env: ENV });
     const body = sentBody(fetchMock);
     expect(body.systemInstruction.parts[0]!.text).not.toContain('revision.materials');
-    expect(JSON.parse((body.contents[0]!.parts[0] as { text: string }).text).revision).not.toHaveProperty('materials');
+    expect(writerJson(writerParts(body)[0]!.text as string).revision).not.toHaveProperty('materials');
   });
 });
 
