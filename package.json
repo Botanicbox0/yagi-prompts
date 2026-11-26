@@ -42,6 +42,7 @@
     "gemini:smoke": "tsx scripts/gemini-smoke.ts",
     "studio:catalog": "tsx scripts/studio-catalog.ts",
     "subscription:readiness": "tsx scripts/subscription-readiness.ts",
+    "prompt-guard:redteam": "tsx --conditions=react-server scripts/prompt-guard-redteam.ts",
     "predev": "node scripts/prepare-face-assets.mjs",
     "prebuild": "node scripts/prepare-face-assets.mjs",
     "prebuild:local": "node scripts/prepare-face-assets.mjs",
