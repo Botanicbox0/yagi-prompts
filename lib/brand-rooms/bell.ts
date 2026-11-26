@@ -106,7 +106,7 @@ export interface RoomBellThreadItem extends Omit<RoomBellItem, 'kind'> {
   /** `thread:<root id>`. */
   id: string;
   kind: 'thread';
-  /** The file's project while members are shown it, else null (an unfiled file, or a project that cannot take work). */
+  /** The file's project while members are shown it, else null (an unfiled file, or a team project the staff hid). */
   projectId: string | null;
   projectTitle: string | null;
   title: null;

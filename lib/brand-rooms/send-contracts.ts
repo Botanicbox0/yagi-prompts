@@ -212,7 +212,11 @@ export interface SendFileCard {
   thumbUrl: string | null;
   width: number | null;
   height: number | null;
-  /** Where the file is shown: its project while that project can take new work, else null (미분류). */
+  /**
+   * Where the file is shown: its project while members may see it (spine rules R-A: finished projects too), else null
+   * (미분류: unfiled, or a team project the staff hid; a library entry with a brand-material role in a finished project: 브랜드 자료).
+   * `send.file` for either reference of a saved result's pair answers the result's card while the result can be opened.
+   */
   project: SendProject | null;
 }
 

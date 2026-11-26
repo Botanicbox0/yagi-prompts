@@ -2,13 +2,18 @@
  * The spine's member reads by project: the assets page's (docs/BRAND-PROJECT-SPINE.md §7, slice 2a) and the 직접 만들기
  * home's (§5, slice 3a). Reads only; nothing here writes, sends, marks read or counts usage.
  *
- *   project.overview  the 프로젝트별 tab in one answer: per selectable project (the same set and order as
- *                     `project.list`), then 미분류 and 브랜드 자료, the counts by kind and a few cover tiles;
- *   project.files     one scope's files (a project, `unfiled` or `brand_materials`), optionally one kind, newest
- *                     first, page by page with a keyset cursor on (created_at, id);
+ *   project.overview  the 프로젝트별 tab in one answer: per listed project (`filter` absent or `active`: the same set and
+ *                     order as `project.list`; `all`: every project a member may see, finished ones too), then 미분류
+ *                     and 브랜드 자료, the counts by kind and a few cover tiles;
+ *   project.files     one scope's files (a project a member may see, `unfiled` or `brand_materials`), optionally one
+ *                     kind, newest first, page by page with a keyset cursor on (created_at, id);
  *   project.cards     the home's project cards: the overview's projects with the overview's own counts, up to three
  *                     pictures, the newest file (what `project.files` lists first) and who added it, and for a team
  *                     project its room's unread count and stage line; then the overview's 미분류.
+ *
+ * Spine rules R-A: a finished project keeps its files (`VISIBLE_PROJECTS`; a role-tagged upload of a finished project
+ * stays 브랜드 자료, as before), and a saved result shows once, as its result (`LISTED_LIBRARY_ASSETS`). The views of these
+ * reads pass `'assets'` to the `with…BrandProjects` helpers; every studio answer keeps origin/main's rule (`'studio'`).
  *
  * Who: workspace members (owner, editor, viewer) through the spine's own gate (`spineSeat`: membership → sandbox
  * hardline → feature policy → not a project guest), exactly as `project.list`. While the spine is closed for the
@@ -18,15 +23,16 @@
  * What is counted and listed is exactly what a member can open, by the rules the studio state already uses,
  * imported and never copied: runs by medium (`IMAGE_RUNS`, `VIDEO_RUNS`, and the sound studio's `SOUND_RUNS`), live
  * runs (`liveRunsFilter`), results a screen shows (`VISIBLE_OUTPUT`), library entries (`LIBRARY_ASSETS`), listed films
- * (`LISTED_FILMS`). Where a file is filed is its SHOWN project (`SHOWN_PROJECT_JOIN` / `UNFILED_ROWS`,
- * ./brand-projects.ts): its project while that project can take new work, else none (§4.2 rule 6). This module
- * reads brand_projects only through those spine fragments and `selectableProjects`; it is a spine file
- * (tests/brand-studio/spine/team-guard.test.ts) and nothing on the team side reaches it.
+ * (`LISTED_FILMS`). Where a file is filed is its SHOWN project (`SHOWN_PROJECT_JOIN` / `UNFILED_ROWS`, for library
+ * entries `SHOWN_ASSET_PROJECT_JOIN` / `UNFILED_ASSETS`, ./brand-projects.ts): its project while members may see it,
+ * else none. This module reads brand_projects only through those spine fragments, `selectableProjects`, `visibleBrandProjects`,
+ * `visibleProjectOf` and `brandProjectTotals`; it is a spine file (tests/brand-studio/spine/team-guard.test.ts) and
+ * nothing on the team side reaches it.
  *
  * The overview and the cards ask a fixed number of statements whatever the number of projects (grouped counts, windowed
  * covers, one statement per kind of fact); `project.files` asks one keyset statement for the page, then the page's views
  * by id. The cards read room facts (lib/brand-rooms/overview.ts) for team projects only, and only those projects the
- * brand is shown (`SELECTABLE_PROJECTS`: a team project the staff hid has no card and nothing of it is read).
+ * brand is shown (`VISIBLE_PROJECTS`: a team project the staff hid has no card and nothing of it is read).
  */
 import type { Viewer } from '@/lib/auth/identity';
 import type { SqlRunner } from '@/lib/db/sql-runner';
@@ -34,16 +40,26 @@ import { brandRoomsOpen } from '@/lib/flags';
 import { loadRoomStages, roomUnreadCounts, type RoomProjectStatus } from '@/lib/brand-rooms/overview';
 import { StudioDenied, type StudioSeat } from './access';
 import {
+  BRAND_MATERIAL,
+  LISTED_LIBRARY_ASSETS,
+  NOT_BRAND_MATERIAL,
+  SHOWN_ASSET_PROJECT_JOIN,
   SELECTABLE_PROJECTS,
   SHOWN_PROJECT_JOIN,
+  UNFILED_ASSETS,
   UNFILED_ROWS,
+  VISIBLE_PROJECTS,
+  brandProjectTotals,
+  isBrandMaterial,
   selectableProjects,
   spineOrganization,
   spineSeat,
-  stateScopeFilter,
+  visibleProjectOf,
+  visibleBrandProjects,
   withAssetBrandProjects,
   withBrandProjects,
   withFilmBrandProjects,
+  type ListedBrandProject,
 } from './brand-projects';
 import {
   BRAND_MATERIAL_ROLES,
@@ -54,17 +70,21 @@ import {
   BrandProjectCardsSchema,
   BrandProjectFilesSchema,
   BrandProjectOverviewSchema,
+  BrandProjectViewFilterSchema,
   type BrandMaterialRole,
   type BrandProjectFileItem,
   type BrandProjectFileKind,
   type BrandProjectRead,
+  type BrandProjectViewFilter,
   type StudioBrandProject,
   type StudioBrandProjectActivity,
+  type StudioBrandProjectCard,
   type StudioBrandProjectCardCover,
   type StudioBrandProjectCards,
   type StudioBrandProjectCounts,
   type StudioBrandProjectCover,
   type StudioBrandProjectFiles,
+  type StudioBrandProjectGroup,
   type StudioBrandProjectOverview,
   type StudioBrandProjectStage,
   type StudioFailure,
@@ -72,7 +92,7 @@ import {
 import { keepLiveProjectIds, liveProjectsOf, studioProjectsReady } from './job-projects';
 import type { StudioMediaStore } from './media-store';
 import { failure, guarded } from './outcome';
-import { IMAGE_RUNS, LIBRARY_ASSETS, SOUND_RUNS, VIDEO_RUNS, VISIBLE_OUTPUT, assetView, jobsByIds, liveRunsFilter, viewsOf } from './repo';
+import { IMAGE_RUNS, SOUND_RUNS, VIDEO_RUNS, VISIBLE_OUTPUT, assetView, jobsByIds, liveRunsFilter, viewsOf } from './repo';
 import type { AssetRow, StudioDeps } from './types';
 import { LISTED_FILMS, filmSummariesByIds } from './video-projects/service';
 
@@ -106,11 +126,8 @@ const kindOf = (alias: string): string => `case ${RESULT_KINDS.map((kind) => `wh
 /** A run is a file (a page item) once it has a result a screen shows. */
 const RUN_HAS_FILE = (alias: string): string => `exists (select 1 from brand_studio_outputs o where o.job_id = ${alias}.id and ${VISIBLE_OUTPUT('o')})`;
 
-const ROLE_LIST = BRAND_MATERIAL_ROLES.map((role) => `'${role}'`).join(', ');
-/** A library entry with no shown project is 브랜드 자료 by its role, else 미분류 (one rule, here and in `isBrandMaterial`). */
-const BRAND_MATERIAL = (alias: string): string => `${alias}.role in (${ROLE_LIST})`;
-const NOT_BRAND_MATERIAL = (alias: string): string => `(${alias}.role is null or ${alias}.role not in (${ROLE_LIST}))`;
-const isBrandMaterial = (role: string | null): role is BrandMaterialRole => role !== null && (BRAND_MATERIAL_ROLES as readonly string[]).includes(role);
+// A library entry with no shown project is 브랜드 자료 by its role, else 미분류: `BRAND_MATERIAL` / `NOT_BRAND_MATERIAL` /
+// `isBrandMaterial` (./brand-projects.ts, one rule for the shown-project join and here).
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const iso = (v: Date | string): string => (v instanceof Date ? v : new Date(String(v))).toISOString();
@@ -145,58 +162,65 @@ function coverView(row: CoverRow, media: StudioMediaStore): StudioBrandProjectCo
 
 /** The groups both the assets page's overview and the home's cards are drawn from: one computation, never two. */
 interface ProjectGroups {
-  /** Exactly `project.list`'s answer. */
-  projects: StudioBrandProject[];
+  /** The listed projects: `project.list`'s answer (`active`), or every visible project (`all`), with their status. */
+  listed: ListedBrandProject[];
   /** A copy of the counts of a project (null = 미분류). */
   countsOf(projectId: string | null): StudioBrandProjectCounts;
   /** The cover tiles of a project (null = 미분류): at most `overviewCovers`, newest first. */
   coversOf(projectId: string | null): StudioBrandProjectCover[];
   /** 브랜드 자료 by role. */
   byRole: Record<BrandMaterialRole, number>;
+  /** The files shown in finished projects (visible, not selectable), every one of them (uncut by `listMax`). */
+  finished: StudioBrandProjectCounts;
   /** The live-runs filter on `j`, as read once for this transaction. */
   live: string;
 }
 
 /**
  * After the seat: the project list, three grouped counts (results, library entries, films) and one windowed cover
- * statement, whatever the number of projects (the column probes are remembered).
+ * statement, whatever the number of projects (the column probes are remembered). Each count is grouped by the shown
+ * project and whether that project can still take work, so the files of finished projects are known apart.
  */
-async function projectGroups(sql: SqlRunner, media: StudioMediaStore, seat: StudioSeat): Promise<ProjectGroups> {
+async function projectGroups(sql: SqlRunner, media: StudioMediaStore, seat: StudioSeat, filter: BrandProjectViewFilter): Promise<ProjectGroups> {
   const organizationId = seat.organizationId;
-  const projects = await selectableProjects(sql, media, seat);
+  const listed: ListedBrandProject[] =
+    filter === 'all'
+      ? await visibleBrandProjects(sql, media, seat)
+      : (await selectableProjects(sql, media, seat)).map((project) => ({ project, status: 'open' as const, selectable: true }));
   const live = await liveRunsFilter(sql, 'j');
   const covers = BRAND_PROJECT_LIMITS.overviewCovers;
+  const selectable = `coalesce(${SELECTABLE_PROJECTS('sp')}, false) as selectable`;
   // Results by shown project and kind (indexes: idx_brand_studio_jobs_org, brand_studio_outputs_slot (job_id, idx)).
   const results = (
-    await sql.query<{ bucket: string | null; kind: ResultKind; n: number }>(
-      `select sp.id::text as bucket, ${kindOf('j')} as kind, count(*)::int as n
+    await sql.query<{ bucket: string | null; selectable: boolean; kind: ResultKind; n: number }>(
+      `select sp.id::text as bucket, ${selectable}, ${kindOf('j')} as kind, count(*)::int as n
          from brand_studio_jobs j
          join brand_studio_outputs o on o.job_id = j.id
          ${SHOWN_PROJECT_JOIN('sp', 'j')}
         where j.organization_id = $1 and ${anyOf(RESULT_KINDS, 'j')} ${live} and ${VISIBLE_OUTPUT('o')}
-        group by 1, 2`,
+        group by 1, 2, 3`,
       [organizationId],
     )
   ).rows;
-  // Library entries by shown project and role (idx_brand_studio_assets_org).
+  // Library entries by shown project and role (idx_brand_studio_assets_org; a saved result shown as its result is left out).
   const uploads = (
-    await sql.query<{ bucket: string | null; role: string | null; n: number }>(
-      `select sp.id::text as bucket, a.role, count(*)::int as n
+    await sql.query<{ bucket: string | null; selectable: boolean; role: string | null; n: number }>(
+      `select sp.id::text as bucket, ${selectable}, a.role, count(*)::int as n
          from brand_studio_assets a
-         ${SHOWN_PROJECT_JOIN('sp', 'a')}
-        where a.organization_id = $1 and ${LIBRARY_ASSETS('a')}
-        group by 1, 2`,
+         ${SHOWN_ASSET_PROJECT_JOIN('sp', 'a')}
+        where a.organization_id = $1 and ${LISTED_LIBRARY_ASSETS('a')}
+        group by 1, 2, 3`,
       [organizationId],
     )
   ).rows;
   // Films by shown project (idx_brand_studio_video_projects_org).
   const films = (
-    await sql.query<{ bucket: string | null; n: number }>(
-      `select sp.id::text as bucket, count(*)::int as n
+    await sql.query<{ bucket: string | null; selectable: boolean; n: number }>(
+      `select sp.id::text as bucket, ${selectable}, count(*)::int as n
          from brand_studio_video_projects f
          ${SHOWN_PROJECT_JOIN('sp', 'f')}
         where f.organization_id = $1 and ${LISTED_FILMS('f')}
-        group by 1`,
+        group by 1, 2`,
       [organizationId],
     )
   ).rows;
@@ -218,20 +242,31 @@ async function projectGroups(sql: SqlRunner, media: StudioMediaStore, seat: Stud
   ).rows;
 
   const counts = new Map<string, StudioBrandProjectCounts>();
+  const finished = emptyCounts();
   const bucketOf = (bucket: string | null): StudioBrandProjectCounts => {
     const key = bucket ? bucket.toLowerCase() : '';
     let found = counts.get(key);
     if (!found) counts.set(key, (found = emptyCounts()));
     return found;
   };
-  for (const row of results) if (row.kind) bucketOf(row.bucket)[row.kind] += Number(row.n);
+  /** A finished project's bucket: shown, but no longer taking work. */
+  const isFinished = (row: { bucket: string | null; selectable: boolean }) => Boolean(row.bucket) && row.selectable !== true;
+  for (const row of results) {
+    if (!row.kind) continue;
+    bucketOf(row.bucket)[row.kind] += Number(row.n);
+    if (isFinished(row)) finished[row.kind] += Number(row.n);
+  }
   const byRole = Object.fromEntries(BRAND_MATERIAL_ROLES.map((role) => [role, 0])) as Record<BrandMaterialRole, number>;
   for (const row of uploads) {
     if (row.bucket) bucketOf(row.bucket).upload += Number(row.n);
     else if (isBrandMaterial(row.role)) byRole[row.role] += Number(row.n);
     else bucketOf(null).upload += Number(row.n);
+    if (isFinished(row)) finished.upload += Number(row.n);
   }
-  for (const row of films) bucketOf(row.bucket).film += Number(row.n);
+  for (const row of films) {
+    bucketOf(row.bucket).film += Number(row.n);
+    if (isFinished(row)) finished.film += Number(row.n);
+  }
   const coverLists = new Map<string, StudioBrandProjectCover[]>();
   for (const row of coverRows) {
     const key = row.bucket ? row.bucket.toLowerCase() : '';
@@ -240,17 +275,33 @@ async function projectGroups(sql: SqlRunner, media: StudioMediaStore, seat: Stud
     coverLists.set(key, list);
   }
   return {
-    projects,
+    listed,
     countsOf: (projectId) => ({ ...(projectId === null ? bucketOf(null) : (counts.get(projectId.toLowerCase()) ?? emptyCounts())) }),
     coversOf: (projectId) => coverLists.get(projectId === null ? '' : projectId.toLowerCase()) ?? [],
     byRole,
+    finished,
     live,
   };
 }
 
 /**
+ * The view a request names (spine rules R-A), judged after the seat: none (today's answer shape, `project.list`'s set),
+ * `active` or `all`. Malformed: `invalid`.
+ */
+function viewFilterOf(raw: unknown): { named: boolean; filter: BrandProjectViewFilter } {
+  const parsed = BrandProjectViewFilterSchema.safeParse(raw);
+  if (!parsed.success) throw new StudioDenied('invalid');
+  return parsed.data.filter ? { named: true, filter: parsed.data.filter } : { named: false, filter: 'active' };
+}
+
+/** What a group or a card carries for its project in the R-A shape (only when the request named a filter). */
+const markOf = (named: boolean, item: ListedBrandProject): Pick<StudioBrandProjectGroup, 'status' | 'selectable'> =>
+  named ? { status: item.status, selectable: item.selectable } : {};
+
+/**
  * `project.overview`. After the seat: the groups (`projectGroups`: five statements), then 브랜드 자료's newest entries
- * and their shown project: seven statements whatever the number of projects (the column probes are remembered).
+ * and their shown project: seven statements whatever the number of projects (the column probes are remembered); with a
+ * `filter` named, one more (the two views' sizes).
  */
 export async function loadBrandProjectOverview(deps: StudioDeps, viewer: Viewer, raw: unknown): Promise<StudioBrandProjectOverview | StudioFailure> {
   const parsed = BrandProjectOverviewSchema.safeParse(raw);
@@ -259,28 +310,34 @@ export async function loadBrandProjectOverview(deps: StudioDeps, viewer: Viewer,
   return guarded(() =>
     deps.sql.transaction(async (sql) => {
       const seat = await spineSeat(sql, viewer, organizationId, false);
-      const groups = await projectGroups(sql, deps.media, seat);
+      const view = viewFilterOf(raw);
+      const groups = await projectGroups(sql, deps.media, seat, view.filter);
       // 브랜드 자료's newest entries: the same statement as its first page, cut to the cover count.
       const materialRows = (
         await sql.query<AssetRow>(
           `select a.* from brand_studio_assets a
-            where a.organization_id = $1 and ${LIBRARY_ASSETS('a')} and ${UNFILED_ROWS('a')} and ${BRAND_MATERIAL('a')}
+            where a.organization_id = $1 and ${LISTED_LIBRARY_ASSETS('a')} and ${UNFILED_ASSETS('a')} and ${BRAND_MATERIAL('a')}
             order by a.created_at desc, a.id desc
             limit $2`,
           [organizationId, BRAND_PROJECT_LIMITS.overviewCovers],
         )
       ).rows;
-      const materials = await withAssetBrandProjects(sql, organizationId, materialRows.map((row) => assetView(row, deps.media)));
-      return {
+      const materials = await withAssetBrandProjects(sql, organizationId, materialRows.map((row) => assetView(row, deps.media)), process.env, 'assets');
+      const answer: StudioBrandProjectOverview = {
         ok: true as const,
-        projects: groups.projects.map((project) => ({
-          project,
-          counts: groups.countsOf(project.id),
-          covers: groups.coversOf(project.id),
+        projects: groups.listed.map((item) => ({
+          project: item.project,
+          counts: groups.countsOf(item.project.id),
+          covers: groups.coversOf(item.project.id),
+          ...markOf(view.named, item),
         })),
         unfiled: { counts: groups.countsOf(null), covers: groups.coversOf(null) },
         brandMaterials: { count: Object.values(groups.byRole).reduce((sum, n) => sum + n, 0), byRole: groups.byRole, covers: materials },
+        // Always (spine rules R-A, B.6): the files that left 미분류 for their finished project, so a screen can say where.
+        finished: { counts: { ...groups.finished } },
       };
+      if (!view.named) return answer;
+      return { ...answer, totals: await brandProjectTotals(sql, seat) };
     }),
   );
 }
@@ -303,6 +360,8 @@ interface TeamFacts {
  * statements whatever the number of projects: the groups (`projectGroups`, five), the library pictures of every card
  * (one), the team projects' own facts (one), the newest file of every card (one) and, while project rooms are open,
  * the team projects' stage lines (two) and room unread counts (one) under one savepoint (two). Nothing is read per card.
+ * With a `filter` named (spine rules R-A), one more: the two views' sizes. With `all`, finished projects get cards too
+ * (a cancelled or completed team project keeps its room's unread count and its stage line as the room computes it).
  */
 export async function loadBrandProjectCards(deps: StudioDeps, viewer: Viewer, raw: unknown): Promise<StudioBrandProjectCards | StudioFailure> {
   const parsed = BrandProjectCardsSchema.safeParse(raw);
@@ -311,26 +370,32 @@ export async function loadBrandProjectCards(deps: StudioDeps, viewer: Viewer, ra
   return guarded(() =>
     deps.sql.transaction(async (sql) => {
       const seat = await spineSeat(sql, viewer, organizationId, false);
-      const groups = await projectGroups(sql, deps.media, seat);
+      const view = viewFilterOf(raw);
+      const groups = await projectGroups(sql, deps.media, seat, view.filter);
       const unfiled = { counts: groups.countsOf(null), covers: groups.coversOf(null) };
-      if (groups.projects.length === 0) return { ok: true as const, projects: [], unfiled };
-      const ids = groups.projects.map((project) => project.id);
-      const teamIds = groups.projects.filter((project) => project.origin === 'team').map((project) => project.id);
+      const totals = view.named ? { totals: await brandProjectTotals(sql, seat) } : {};
+      if (groups.listed.length === 0) return { ok: true as const, projects: [], unfiled, ...totals };
+      const ids = groups.listed.map((item) => item.project.id);
+      // Whether each card's project can still take work: a finished project's role-tagged uploads are 브랜드 자료, not its
+      // files (`SHOWN_ASSET_PROJECT_JOIN`), so they are neither its pictures nor its newest file.
+      const open = groups.listed.map((item) => item.selectable);
+      const teamIds = groups.listed.filter((item) => item.project.origin === 'team').map((item) => item.project.id);
       const limit = BRAND_PROJECT_CARD_LIMITS.covers;
+      const shownHere = (alias: string) => `(p.selectable or ${NOT_BRAND_MATERIAL(alias)})`;
 
       // The newest library entries with a picture filed in each card's project (the cover when it has no result): per
       // project, a few rows off idx_brand_studio_assets_brand_project (organization_id, brand_project_id, created_at desc).
       const libraryRows = (
         await sql.query<AssetRow & { bucket: string }>(
           `select x.*, p.id::text as bucket
-             from unnest($2::uuid[]) as p(id)
+             from unnest($2::uuid[], $4::boolean[]) as p(id, selectable)
              cross join lateral (
                select a.* from brand_studio_assets a
-                where a.organization_id = $1 and a.brand_project_id = p.id and ${LIBRARY_ASSETS('a')} and a.kind in ('image', 'video')
+                where a.organization_id = $1 and a.brand_project_id = p.id and ${shownHere('a')} and ${LISTED_LIBRARY_ASSETS('a')} and a.kind in ('image', 'video')
                 order by a.created_at desc, a.id desc
                 limit $3
              ) x`,
-          [organizationId, ids, limit],
+          [organizationId, ids, limit, open],
         )
       ).rows;
       // A team project's own facts: what its stage line starts from, and its cover image as the project list shows it.
@@ -340,7 +405,7 @@ export async function loadBrandProjectCards(deps: StudioDeps, viewer: Viewer, ra
               await sql.query<TeamFacts>(
                 `select p.id::text as id, p.status, p.created_at, p.updated_at, p.cover_attachment_id::text as cover_attachment_id
                    from brand_projects p
-                  where p.organization_id = $1 and p.id = any($2::uuid[]) and p.origin = 'team' and ${SELECTABLE_PROJECTS('p')}`,
+                  where p.organization_id = $1 and p.id = any($2::uuid[]) and p.origin = 'team' and ${VISIBLE_PROJECTS('p')}`,
                 [organizationId, teamIds],
               )
             ).rows.map((row) => [String(row.id).toLowerCase(), row] as const)
@@ -352,7 +417,7 @@ export async function loadBrandProjectCards(deps: StudioDeps, viewer: Viewer, ra
       const newest = (
         await sql.query<{ bucket: string; type: BrandProjectFileItem['type']; kind: BrandProjectFileKind; id: string; created_at: Date | string; display_name: string | null }>(
           `select p.id::text as bucket, x.type, x.kind, x.id::text as id, x.created_at, pr.display_name
-             from unnest($2::uuid[]) as p(id)
+             from unnest($2::uuid[], $3::boolean[]) as p(id, selectable)
              cross join lateral (
                select u.* from (
                  (select 'job'::text as type, ${kindOf('j')} as kind, j.id, j.created_at, j.created_by
@@ -362,7 +427,7 @@ export async function loadBrandProjectCards(deps: StudioDeps, viewer: Viewer, ra
                  union all
                  (select 'asset'::text, 'upload'::text, a.id, a.created_at, a.created_by
                     from brand_studio_assets a
-                   where a.organization_id = $1 and a.brand_project_id = p.id and ${LIBRARY_ASSETS('a')}
+                   where a.organization_id = $1 and a.brand_project_id = p.id and ${shownHere('a')} and ${LISTED_LIBRARY_ASSETS('a')}
                    order by a.created_at desc, a.id desc limit 1)
                  union all
                  (select 'film'::text, 'film'::text, f.id, f.created_at, f.created_by
@@ -375,7 +440,7 @@ export async function loadBrandProjectCards(deps: StudioDeps, viewer: Viewer, ra
              ) x
              left join brand_memberships m on m.organization_id = $1 and m.user_id = x.created_by and m.status = 'active'
              left join profiles pr on pr.id = m.user_id`,
-          [organizationId, ids],
+          [organizationId, ids, open],
         )
       ).rows;
       const rooms = teamIds.length && brandRoomsOpen() ? await roomFacts(sql, organizationId, seat.userId, [...team.values()]) : null;
@@ -404,15 +469,19 @@ export async function loadBrandProjectCards(deps: StudioDeps, viewer: Viewer, ra
       };
       return {
         ok: true as const,
-        projects: groups.projects.map((project) => ({
-          project,
-          counts: groups.countsOf(project.id),
-          covers: coversFor(project),
-          lastActivity: activityOf(project),
-          unread: project.origin === 'team' ? (rooms?.unread[project.id.toLowerCase()] ?? 0) : 0,
-          stage: project.origin === 'team' ? (rooms?.stages.get(project.id.toLowerCase()) ?? null) : null,
-        })),
+        projects: groups.listed.map(
+          (item): StudioBrandProjectCard => ({
+            project: item.project,
+            counts: groups.countsOf(item.project.id),
+            covers: coversFor(item.project),
+            lastActivity: activityOf(item.project),
+            unread: item.project.origin === 'team' ? (rooms?.unread[item.project.id.toLowerCase()] ?? 0) : 0,
+            stage: item.project.origin === 'team' ? (rooms?.stages.get(item.project.id.toLowerCase()) ?? null) : null,
+            ...markOf(view.named, item),
+          }),
+        ),
         unfiled,
+        ...totals,
       };
     }),
   );
@@ -472,12 +541,13 @@ function decodeCursor(raw: string): PageKey | null {
   return { k, i: i.toLowerCase() };
 }
 
-type Scope = { project: string } | { unfiled: true } | { materials: true };
+type Scope = { project: string; selectable: boolean } | { unfiled: true } | { materials: true };
 
 /**
  * `project.files`. Only the organization is read before the seat (as `project.list`); everything else in the request
- * (scope, kind, cursor) is judged after it, the scope by the scoped state read's own rule (`stateScopeFilter`), so
- * nobody who is not seated learns anything from how their input is answered.
+ * (scope, kind, cursor) is judged after it, so nobody who is not seated learns anything from how their input is answered.
+ * A project scope opens any project a member may see (`visibleProjectOf`, spine rules R-A: a finished project's files can
+ * be browsed); a hidden team project, another organization's or a made-up one is `not_found`, a malformed id `invalid`.
  */
 export async function loadBrandProjectFiles(deps: StudioDeps, viewer: Viewer, raw: unknown): Promise<StudioBrandProjectFiles | StudioFailure> {
   const named = BrandProjectOverviewSchema.safeParse(raw);
@@ -485,17 +555,19 @@ export async function loadBrandProjectFiles(deps: StudioDeps, viewer: Viewer, ra
   const organizationId = named.data.organizationId;
   return guarded(() =>
     deps.sql.transaction(async (sql) => {
-      const seat = await spineSeat(sql, viewer, organizationId, false);
+      await spineSeat(sql, viewer, organizationId, false);
       const parsed = BrandProjectFilesSchema.safeParse(raw);
       if (!parsed.success) throw new StudioDenied('invalid');
       const v = parsed.data;
       let scope: Scope;
       if (v.scope.kind === 'brand_materials') scope = { materials: true };
+      else if (v.scope.kind === 'unfiled') scope = { unfiled: true };
       else {
-        // A malformed id is `invalid`; a project that cannot take new work, of another organization or made up, `not_found`.
-        const judged = await stateScopeFilter(sql, seat, v.scope);
-        if (!judged) throw new StudioDenied('invalid');
-        scope = judged.brandProjectId ? { project: judged.brandProjectId } : { unfiled: true };
+        // A malformed id is `invalid`; a hidden team project, another organization's or a made-up one, `not_found`.
+        if (!UUID.test(v.scope.brandProjectId)) throw new StudioDenied('invalid');
+        const judged = await visibleProjectOf(sql, organizationId, v.scope.brandProjectId);
+        if (!judged) throw new StudioDenied('not_found');
+        scope = { project: v.scope.brandProjectId.toLowerCase(), selectable: judged.selectable };
       }
       const after = v.cursor === undefined ? null : decodeCursor(v.cursor);
       if (v.cursor !== undefined && !after) throw new StudioDenied('invalid');
@@ -527,11 +599,17 @@ export async function loadBrandProjectFiles(deps: StudioDeps, viewer: Viewer, ra
         );
       }
       if (kinds.includes('upload')) {
-        const which = 'project' in scope ? filedRows('a') : `${UNFILED_ROWS('a')} and ${'materials' in scope ? BRAND_MATERIAL('a') : NOT_BRAND_MATERIAL('a')}`;
+        // A project's entries: all of them while it takes work; in a finished project, those without a brand-material role
+        // (a role-tagged one is 브랜드 자료). Elsewhere the entries with no shown project, by role. Never a saved result shown
+        // as its result.
+        const which =
+          'project' in scope
+            ? `${filedRows('a')}${scope.selectable ? '' : ` and ${NOT_BRAND_MATERIAL('a')}`}`
+            : `${UNFILED_ASSETS('a')} and ${'materials' in scope ? BRAND_MATERIAL('a') : NOT_BRAND_MATERIAL('a')}`;
         branches.push(
           `(select 'asset'::text as type, a.id, a.created_at, ${keyText('a')} as k
               from brand_studio_assets a
-             where a.organization_id = $1 and ${LIBRARY_ASSETS('a')} and ${which}
+             where a.organization_id = $1 and ${LISTED_LIBRARY_ASSETS('a')} and ${which}
                ${before('a')}
              order by a.created_at desc, a.id desc
              limit $2)`,
@@ -565,14 +643,14 @@ export async function loadBrandProjectFiles(deps: StudioDeps, viewer: Viewer, ra
       let jobs = jobIds.length ? await viewsOf(sql, await jobsByIds(sql, organizationId, jobIds), deps.media) : [];
       if (jobs.length) {
         const old = (await studioProjectsReady(deps, sql)) ? await liveProjectsOf(sql, organizationId) : null;
-        jobs = await withBrandProjects(sql, organizationId, keepLiveProjectIds(jobs, old));
+        jobs = await withBrandProjects(sql, organizationId, keepLiveProjectIds(jobs, old), process.env, 'assets');
       }
       const assetIds = idsOf('asset');
       const assetRows = assetIds.length
         ? (await sql.query<AssetRow>('select * from brand_studio_assets where organization_id = $1 and id = any($2::uuid[])', [organizationId, assetIds])).rows
         : [];
-      const assets = await withAssetBrandProjects(sql, organizationId, assetRows.map((row) => assetView(row, deps.media)));
-      const films = await withFilmBrandProjects(sql, organizationId, await filmSummariesByIds(sql, deps.media, organizationId, idsOf('film')));
+      const assets = await withAssetBrandProjects(sql, organizationId, assetRows.map((row) => assetView(row, deps.media)), process.env, 'assets');
+      const films = await withFilmBrandProjects(sql, organizationId, await filmSummariesByIds(sql, deps.media, organizationId, idsOf('film')), process.env, 'assets');
 
       const inOrder = <T extends { id: string }>(type: BrandProjectFileItem['type'], views: T[]): T[] => {
         const byId = new Map(views.map((view) => [view.id.toLowerCase(), view]));

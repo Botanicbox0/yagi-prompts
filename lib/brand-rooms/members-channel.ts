@@ -8,17 +8,21 @@
  *    every role. Never a project guest, never staff as staff (a staff account that is also an active member is a
  *    member), never anyone of another organization. The organization's hardline gates (sandboxed client, generation
  *    closed) and `self_studio` come first; a closed organization has nobody;
- *  - which projects a member is shown (`shownProjectTitles`, the spine's `SELECTABLE_PROJECTS`): a file in a project that
- *    can no longer take work reads as 미분류, and nothing of that project (not its title) is in any answer.
+ *  - which projects a member is shown (`shownProjects`, the spine's `VISIBLE_PROJECTS`, spine rules
+ *    R-A): a finished project keeps its files and its title; a file in a team project the staff hid reads as 미분류, and
+ *    nothing of that project (not its title) is in any answer. The file card, the bell row and the notices name a file's
+ *    project by ONE decision (`shownProjectOfFile`): a role-tagged library entry of a finished project names none.
  * Nothing here sends a mail, a push, a team notice or a Slack message.
  */
 import type { Viewer } from '@/lib/auth/identity';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import { brandRoomNotifyOpen, brandRoomsOpen, brandSendOpen } from '@/lib/flags';
 import { assertBrandFeature, BrandFeatureDenied, isSandboxedClientOrganization } from '@/lib/brands/entitlements';
-import { brandProjectSpineOpen, SELECTABLE_PROJECTS } from '@/lib/brand-studio/brand-projects';
+import { brandProjectSpineOpen, isBrandMaterial, SELECTABLE_PROJECTS, VISIBLE_PROJECTS } from '@/lib/brand-studio/brand-projects';
+import { IMAGE_RUNS, LIBRARY_ASSETS, SOUND_RUNS, VIDEO_RUNS, VISIBLE_OUTPUT, liveRunsFilter } from '@/lib/brand-studio/repo';
 import { RoomDenied, roomSeat, type RoomSeat } from './access';
 import { brandSendTablesReady } from './members-schema';
+import { fileRefKeyOf, type SendFileRef, type SendProject } from './send-contracts';
 
 export { brandSendTablesReady, MEMBERS_LINE, moveFileThreads, resetBrandSendProbe } from './members-schema';
 
@@ -108,19 +112,96 @@ export async function activeMembersAmong(sql: SqlRunner, organizationId: string,
 /* ------------------------------------------------------------------ projects */
 
 /**
- * The titles of the projects members are shown, among `projectIds` of this organization: a project that can take new
- * work (`SELECTABLE_PROJECTS`). A hidden, completed or cancelled team project and an archived own project are absent
- * (the file then reads as 미분류), exactly as on the assets page.
+ * The projects members are shown, among `projectIds` of this organization (spine rules R-A): a project members may see
+ * (`VISIBLE_PROJECTS`: finished ones too), with its title and whether it can still take new work (a role-tagged library
+ * entry of a finished project reads as 브랜드 자료 on the assets page, so its card names no project). A team project the
+ * staff hid is absent (the file then reads as 미분류), exactly as on the assets page. One statement.
  */
-export async function shownProjectTitles(sql: SqlRunner, organizationId: string, projectIds: readonly string[]): Promise<Map<string, string>> {
+export async function shownProjects(sql: SqlRunner, organizationId: string, projectIds: readonly string[]): Promise<Map<string, { title: string; selectable: boolean }>> {
   const ids = [...new Set(projectIds.map((id) => id.toLowerCase()))].filter((id) => UUID.test(id));
   if (ids.length === 0) return new Map();
   const rows = (
-    await sql.query<{ id: string; title: string }>(
-      `select sp.id::text as id, sp.title from brand_projects sp
-        where sp.organization_id = $1 and sp.id = any($2::uuid[]) and ${SELECTABLE_PROJECTS('sp')}`,
+    await sql.query<{ id: string; title: string; selectable: boolean }>(
+      `select sp.id::text as id, sp.title, ${SELECTABLE_PROJECTS('sp')} as selectable from brand_projects sp
+        where sp.organization_id = $1 and sp.id = any($2::uuid[]) and ${VISIBLE_PROJECTS('sp')}`,
       [organizationId, ids],
     )
   ).rows;
-  return new Map(rows.map((row) => [String(row.id).toLowerCase(), String(row.title)]));
+  return new Map(rows.map((row) => [String(row.id).toLowerCase(), { title: String(row.title), selectable: row.selectable === true }]));
+}
+
+
+/* ------------------------------------------------------------------ files */
+
+/** One file a members thread can be about, as the file card and the notices read it. */
+export interface MemberFileRow {
+  type: 'output' | 'asset';
+  id: string;
+  kind: string | null;
+  name: string | null;
+  storage_key: string | null;
+  thumb_key: string | null;
+  width: number | null;
+  height: number | null;
+  visible: boolean;
+  stored_project_id: string | null;
+  /** A library entry's role (null for a result). */
+  role: string | null;
+}
+
+/**
+ * The files of this organization named by `refs`, one statement: a run's result (with its run's project) and a library
+ * entry. `visible` is the spine's own rule for what a member can open (the assets page's): a result that is ready, not
+ * deleted and stored, of a run a member has not removed, of an image, video or sound run (never a fill strip or the
+ * editor's export); a library entry that is ready and not deleted. Another organization's file is simply not found.
+ */
+export async function memberFileRows(sql: SqlRunner, organizationId: string, refs: readonly SendFileRef[]): Promise<MemberFileRow[]> {
+  const outputIds = [...new Set(refs.filter((r) => r.kind === 'output').map((r) => (r as { outputId: string }).outputId.toLowerCase()))];
+  const assetIds = [...new Set(refs.filter((r) => r.kind === 'asset').map((r) => (r as { assetId: string }).assetId.toLowerCase()))];
+  if (outputIds.length === 0 && assetIds.length === 0) return [];
+  const live = await liveRunsFilter(sql, 'j');
+  return (
+    await sql.query<MemberFileRow>(
+      `select 'output'::text as type, o.id::text as id, o.kind, null::text as name, o.storage_key, o.thumb_key, o.width, o.height,
+              (${VISIBLE_OUTPUT('o')} and ((${IMAGE_RUNS('j')}) or (${VIDEO_RUNS('j')}) or (${SOUND_RUNS('j')})) ${live}) as visible,
+              j.brand_project_id::text as stored_project_id, null::text as role
+         from brand_studio_outputs o
+         join brand_studio_jobs j on j.id = o.job_id and j.organization_id = o.organization_id
+        where o.organization_id = $1 and o.id = any($2::uuid[])
+       union all
+       select 'asset'::text, a.id::text, a.kind, a.name, a.storage_key, a.thumb_key, a.width, a.height,
+              (${LIBRARY_ASSETS('a')}) as visible,
+              a.brand_project_id::text, a.role
+         from brand_studio_assets a
+        where a.organization_id = $1 and a.id = any($3::uuid[])`,
+      [organizationId, outputIds, assetIds],
+    )
+  ).rows;
+}
+
+/**
+ * THE decision of which project members are shown a file in (spine rules R-A), for the file card, the bell row and the
+ * notices alike: its stored project while members may see it (`shownProjects`: finished projects too), except a library
+ * entry with a brand-material role in a project that can no longer take work (the assets page shows it under 브랜드 자료),
+ * and none for an unfiled file or a team project the staff hid. `projects` is `shownProjects` of the stored ids.
+ */
+export function shownProjectOfFile(row: Pick<MemberFileRow, 'type' | 'stored_project_id' | 'role'>, projects: ReadonlyMap<string, { title: string; selectable: boolean }>): SendProject | null {
+  const id = row.stored_project_id ? String(row.stored_project_id).toLowerCase() : null;
+  const project = id ? projects.get(id) : undefined;
+  if (!id || !project) return null;
+  if (row.type === 'asset' && !project.selectable && isBrandMaterial(row.role)) return null;
+  return { id, title: project.title };
+}
+
+/**
+ * The shown project of each file named by `refs` (keyed `output:<id>` / `asset:<id>`), by `shownProjectOfFile`, whether the
+ * file still exists or not (the notices name the project a thread lives in; the card blanks a deleted file itself). Two
+ * statements: the files and their projects.
+ */
+export async function shownProjectsOfFiles(sql: SqlRunner, organizationId: string, refs: readonly SendFileRef[]): Promise<Map<string, SendProject | null>> {
+  const rows = await memberFileRows(sql, organizationId, refs);
+  const projects = await shownProjects(sql, organizationId, rows.flatMap((row) => (row.stored_project_id ? [String(row.stored_project_id)] : [])));
+  const shown = new Map<string, SendProject | null>(refs.map((ref) => [fileRefKeyOf(ref), null]));
+  for (const row of rows) shown.set(`${row.type}:${String(row.id).toLowerCase()}`, shownProjectOfFile(row, projects));
+  return shown;
 }

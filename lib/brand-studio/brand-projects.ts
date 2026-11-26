@@ -9,11 +9,15 @@
  *    the code can ship before the migration and every new read and write asks the same question;
  *  - which projects can take new work (`SELECTABLE_PROJECTS`): this organization's own active projects, and
  *    its team projects that are shown to it and still requested or active. Anything else, including a team
- *    project the staff hid, answers `not_found`, exactly like a project that does not exist;
+ *    project the staff hid, answers `not_found` to a write, exactly like a project that does not exist;
+ *  - which projects a member may see, with what is filed in them (`VISIBLE_PROJECTS`, spine rules R-A): its own
+ *    projects in any status, and its team projects that are shown to it in any status. A finished project keeps its
+ *    files; a team project the staff hid is never visible to members and its files read as 미분류;
  *  - where new work is filed (`brandProjectForNew`);
  *  - the three operations `project.list`, `project.create`, `project.move`;
- *  - where a filed run, upload or film is SHOWN (`SHOWN_PROJECT_JOIN`, `UNFILED_ROWS`, the `with…BrandProjects`
- *    helpers), which the assets page's reads (./brand-project-files.ts) build on.
+ *  - where a filed run, upload or film is SHOWN (`SHOWN_PROJECT_JOIN`, `SHOWN_ASSET_PROJECT_JOIN`, `UNFILED_ROWS`,
+ *    `UNFILED_ASSETS`, the `with…BrandProjects` helpers), which the assets page's reads (./brand-project-files.ts) build on;
+ *  - which library entries are a saved result shown as its result instead (`SHADOWED_SAVED_COPY`, spine rules R-A).
  * Every project, run, upload and film id is checked against the organization inside the transaction that writes.
  * The old `brand_studio_jobs.project_id` (`BRAND_STUDIO_PROJECTS`, ./job-projects.ts) is neither read nor written.
  * Nothing here sends an event, a team notice, a mail or a Slack message.
@@ -26,19 +30,23 @@ import { moveFileThreads } from '@/lib/brand-rooms/members-schema';
 import { brandProjectSpineFor } from '@/lib/flags';
 import { lockOrganization, requireCreate, StudioDenied, studioSeat, type StudioSeat } from './access';
 import {
+  BRAND_MATERIAL_ROLES,
   BRAND_PROJECT_LIMITS,
   BRAND_PROJECT_OPERATIONS,
   BrandProjectCreateSchema,
   BrandProjectListSchema,
   BrandProjectMoveSchema,
+  type BrandMaterialRole,
   type BrandProjectOperation,
   type StudioBrandProject,
   type StudioBrandProjectCreated,
   type StudioBrandProjectList,
   type StudioBrandProjectMoved,
+  type StudioBrandProjectStatus,
   type StudioFailure,
   type StudioStateScope,
 } from './contracts';
+import { IMAGE_RUNS, LIBRARY_ASSETS, SOUND_RUNS, VIDEO_RUNS, VISIBLE_OUTPUT } from './list-rules';
 import type { StudioMediaStore } from './media-store';
 import { derivedUuid, failure, guarded } from './outcome';
 import type { StudioDeps } from './types';
@@ -81,6 +89,79 @@ export async function isSelectableProject(sql: SqlRunner, organizationId: string
       .length > 0
   );
 }
+
+/* ---------------------------------------------------------------- visible */
+
+/**
+ * "A member may see this project, and what is filed in it stays filed there" (spine rules R-A, the founder's decision 1),
+ * for the `brand_projects` row named `alias` (needs migration 0194, spine code only): the brand's own project in any
+ * status (active, or completed = 보관), and a team project while it is shown to the brand (`client_visible`) in any status
+ * (requested, active, completed, cancelled). A team project the staff hid is never visible, whatever its status: its
+ * files read as 미분류, exactly as before (docs/BRAND-PROJECT-SPINE.md §3.4). Reads use this; writes keep
+ * `SELECTABLE_PROJECTS` (a finished project takes no new work). Every selectable project is visible.
+ */
+export const VISIBLE_PROJECTS = (alias: string): string => `(${alias}.origin = 'self' or (${alias}.origin = 'team' and ${alias}.client_visible))`;
+
+/**
+ * A project a member may open on the assets page (`project.files`): visible, of this organization. Null when not (hidden,
+ * another organization's, made up, malformed); otherwise whether it can still take new work, which decides where its
+ * role-tagged uploads show (`SHOWN_ASSET_PROJECT_JOIN`). One statement on the primary key.
+ */
+export async function visibleProjectOf(sql: SqlRunner, organizationId: string, projectId: string): Promise<{ selectable: boolean } | null> {
+  if (!UUID.test(projectId)) return null;
+  const row = (
+    await sql.query<{ selectable: boolean }>(
+      `select ${SELECTABLE_PROJECTS('p')} as selectable from brand_projects p where p.id = $1 and p.organization_id = $2 and ${VISIBLE_PROJECTS('p')}`,
+      [projectId, organizationId],
+    )
+  ).rows[0];
+  return row ? { selectable: row.selectable === true } : null;
+}
+
+const ROLE_LIST = BRAND_MATERIAL_ROLES.map((role) => `'${role}'`).join(', ');
+/** A library entry with a brand-material role (`BRAND_MATERIAL_ROLES`); one rule, here and in `isBrandMaterial`. */
+export const BRAND_MATERIAL = (alias: string): string => `${alias}.role in (${ROLE_LIST})`;
+export const NOT_BRAND_MATERIAL = (alias: string): string => `(${alias}.role is null or ${alias}.role not in (${ROLE_LIST}))`;
+export const isBrandMaterial = (role: string | null | undefined): role is BrandMaterialRole =>
+  typeof role === 'string' && (BRAND_MATERIAL_ROLES as readonly string[]).includes(role);
+
+/**
+ * Where a library entry (`asset`) is shown, on the project row `project`: a project that can take new work shows every
+ * entry filed in it; a finished visible project shows its entries WITHOUT a brand-material role. A role-tagged entry of a
+ * finished project stays under 브랜드 자료, exactly as before R-A (the founder kept that); a hidden project shows none.
+ */
+const ASSET_SHOWN_IN = (project: string, asset: string): string =>
+  `(${SELECTABLE_PROJECTS(project)} or (${VISIBLE_PROJECTS(project)} and ${NOT_BRAND_MATERIAL(asset)}))`;
+
+/* ----------------------------------------------------------- saved results */
+
+/**
+ * A SAVED RESULT shown as its result instead (spine rules R-A, the founder's decision 4: a saved result shows once), for
+ * the `brand_studio_assets` row named `alias`: a library copy the studio made from a result (`source = 'generation'`,
+ * linked both ways: its `source_output_id` and that result's `saved_asset_id`) while the result is one a screen shows
+ * (`VISIBLE_OUTPUT`) of a run the lists list (an image, video or sound run, never a fill strip or the editor's export,
+ * not removed). The result is then the one tile, in its run's project; once the result or its run is gone, the copy
+ * shows on its own again. A genuine upload (`source = 'upload'`, even with a result's very bytes) and a post-production
+ * file with no result behind it (`source = 'generation'`, `source_output_id` null: an upscale, a track, an effect) are
+ * never shadowed. Two primary-key lookups per entry (brand_studio_outputs_pkey, brand_studio_jobs_pkey): no scan. It is a
+ * correlated SCALAR subquery on purpose: Postgres may turn an `exists` into a hashed subplan that reads the whole results and
+ * runs tables (it did on the local database); a scalar one is always probed by key. Spine code only: the spine needs 0194,
+ * so 0090's `deleted_at` on runs exists (as `FAMILY_SQL` assumes).
+ */
+export const SHADOWED_SAVED_COPY = (alias: string): string =>
+  `(${alias}.source = 'generation' and ${alias}.source_output_id is not null and coalesce((
+     select true from brand_studio_outputs so
+       join brand_studio_jobs sr on sr.id = so.job_id and sr.organization_id = so.organization_id
+      where so.id = ${alias}.source_output_id and so.organization_id = ${alias}.organization_id and so.saved_asset_id = ${alias}.id
+        and ${VISIBLE_OUTPUT('so')} and ((${IMAGE_RUNS('sr')}) or (${VIDEO_RUNS('sr')}) or (${SOUND_RUNS('sr')})) and sr.deleted_at is null
+      limit 1), false))`;
+
+/**
+ * The library entries the assets surfaces list and count (the by-project groups, 미분류, 브랜드 자료, the cards, `project.files`):
+ * the panel's own rule (`LIBRARY_ASSETS`) less the saved results shown as their result. The studio's reference rail (the
+ * studio state's `assets`) keeps `LIBRARY_ASSETS` alone: a saved copy stays there.
+ */
+export const LISTED_LIBRARY_ASSETS = (alias: string): string => `${LIBRARY_ASSETS(alias)} and not ${SHADOWED_SAVED_COPY(alias)}`;
 
 /* ----------------------------------------------------------------- filing */
 
@@ -179,34 +260,81 @@ export async function fileAssetWithRun(sql: SqlRunner, organizationId: string, a
 /* ---------------------------------------------------------------- answers */
 
 /**
- * The SHOWN project of a filed row (`row`: a run, an upload or a film, each with `organization_id` and
- * `brand_project_id`), as a left join naming it `alias`: the row's project while it can take new work, else no
- * project row (= 미분류, §4.2 rule 6). Every answer and every count that says where something is filed uses this
- * join or its complement `UNFILED_ROWS`, never a copy of the rule. Needs migration 0194 (spine code only).
+ * The SHOWN project of a filed run or film (`row`, with `organization_id` and `brand_project_id`), as a left join naming
+ * it `alias`: the row's project while members may see it (`VISIBLE_PROJECTS`: a finished project keeps its files), else
+ * no project row (= 미분류: not filed, or filed in a team project the staff hid). Every answer and every count of the ASSETS
+ * surfaces (./brand-project-files.ts) that says where something is filed uses this join or its complement `UNFILED_ROWS`
+ * (library entries: `SHOWN_ASSET_PROJECT_JOIN` / `UNFILED_ASSETS`), never a copy of the rule; the studio's answers use
+ * `STUDIO_PROJECT_JOIN` / `UNFILED_RUNS` (origin/main's rule). Needs migration 0194 (spine code only).
  */
 export const SHOWN_PROJECT_JOIN = (alias: string, row: string): string =>
+  `left join brand_projects ${alias} on ${alias}.id = ${row}.brand_project_id and ${alias}.organization_id = ${row}.organization_id and ${VISIBLE_PROJECTS(alias)}`;
+
+/**
+ * The SHOWN project of a library entry (`row`), as a left join naming it `alias`: its project while that project can take
+ * new work; in a finished visible project only when the entry has no brand-material role (a role-tagged entry of a
+ * finished project is 브랜드 자료, as before R-A); none for a hidden project (= 미분류 or 브랜드 자료 by its role).
+ */
+export const SHOWN_ASSET_PROJECT_JOIN = (alias: string, row: string): string =>
+  `left join brand_projects ${alias} on ${alias}.id = ${row}.brand_project_id and ${alias}.organization_id = ${row}.organization_id and ${ASSET_SHOWN_IN(alias, row)}`;
+
+/**
+ * The STUDIO's project of a filed row (spine rules R-A follow-up: the studio keeps origin/main's rule): the row's project
+ * while it can take new work, else none. The studio screens put a run on the wall whose open project equals its
+ * `brandProjectId` (components/brand-studio/use-studio.ts, sound/sound-studio.tsx, video/session-runs.ts, the films of
+ * video/workspace.tsx), and a finished project does not open in a studio, so a run of a finished project (and every run
+ * made from one of its results, which keeps the family's project) must read as 미분류 there or it would leave every wall.
+ * The assets surfaces (./brand-project-files.ts) use `SHOWN_PROJECT_JOIN` instead.
+ */
+const STUDIO_PROJECT_JOIN = (alias: string, row: string): string =>
   `left join brand_projects ${alias} on ${alias}.id = ${row}.brand_project_id and ${alias}.organization_id = ${row}.organization_id and ${SELECTABLE_PROJECTS(alias)}`;
 
 type FiledTable = 'brand_studio_jobs' | 'brand_studio_assets' | 'brand_studio_video_projects';
 
 /**
- * Adds the shown `brandProjectId` to `views` of `table` (one query, never one per row); unchanged while the spine
- * is closed for the organization (the key is then absent, not null).
+ * Which rule an answer's `brandProjectId` follows: `studio` (the studio state, poll, create and library answers, the sound
+ * page, the films: origin/main's rule, a finished project reads as 미분류) or `assets` (the assets page's reads, spine rules
+ * R-A: a finished project keeps its files).
  */
-async function withShownProjects<T extends { id: string }>(sql: SqlRunner, table: FiledTable, organizationId: string, views: T[], env: Env): Promise<Array<T & { brandProjectId?: string | null }>> {
+export type BrandProjectViewRule = 'studio' | 'assets';
+
+/**
+ * Adds the shown `brandProjectId` to `views` of `table` (one query, never one per row); unchanged while the spine
+ * is closed for the organization (the key is then absent, not null). A library entry that is a saved result also gets
+ * `sourceOutputId` (the result it was saved from; spine rules R-A), so a screen can show the pair once by the server's
+ * own rule (components/brand-studio/asset-hub-model.ts `buildHubEntries`).
+ */
+async function withShownProjects<T extends { id: string }>(
+  sql: SqlRunner,
+  table: FiledTable,
+  organizationId: string,
+  views: T[],
+  env: Env,
+  rule: BrandProjectViewRule,
+): Promise<Array<T & { brandProjectId?: string | null; sourceOutputId?: string }>> {
   if (views.length === 0 || !(await brandProjectSpineOpen(sql, organizationId, env))) return views;
+  const assets = table === 'brand_studio_assets';
+  const join = rule === 'studio' ? STUDIO_PROJECT_JOIN('p', 't') : assets ? SHOWN_ASSET_PROJECT_JOIN('p', 't') : SHOWN_PROJECT_JOIN('p', 't');
   const shown = new Map(
     (
-      await sql.query<{ id: string; brand_project_id: string | null }>(
-        `select t.id::text as id, p.id::text as brand_project_id
+      await sql.query<{ id: string; brand_project_id: string | null; source_output_id?: string | null }>(
+        `select t.id::text as id, p.id::text as brand_project_id${assets ? ", case when t.source = 'generation' then t.source_output_id::text end as source_output_id" : ''}
            from ${table} t
-           ${SHOWN_PROJECT_JOIN('p', 't')}
+           ${join}
           where t.organization_id = $1 and t.id = any($2::uuid[])`,
         [organizationId, views.map((view) => view.id)],
       )
-    ).rows.map((row) => [String(row.id).toLowerCase(), row.brand_project_id ? String(row.brand_project_id) : null] as const),
+    ).rows.map((row) => [String(row.id).toLowerCase(), row] as const),
   );
-  return views.map((view) => (shown.has(view.id.toLowerCase()) ? { ...view, brandProjectId: shown.get(view.id.toLowerCase()) ?? null } : view));
+  return views.map((view) => {
+    const row = shown.get(view.id.toLowerCase());
+    if (!row) return view;
+    return {
+      ...view,
+      brandProjectId: row.brand_project_id ? String(row.brand_project_id) : null,
+      ...(row.source_output_id ? { sourceOutputId: String(row.source_output_id).toLowerCase() } : {}),
+    };
+  });
 }
 
 /**
@@ -216,26 +344,47 @@ async function withShownProjects<T extends { id: string }>(sql: SqlRunner, table
  * films' list, read and mutation answers, the member branch of the sound studio page, and the assets page's reads
  * (./brand-project-files.ts). Staff who are not members, project guests, MCP and workflows never receive it.
  *
- * What the customer sees (§4.2): the stored filing is kept (a family is never split), but a project that can no
- * longer take new work (hidden by the staff, completed, cancelled) reads as 미분류: `brandProjectId: null`. One
- * query per answer (the stored ids joined to this organization's selectable projects), never one per row.
+ * What the customer sees (§4.2): the stored filing is kept (a family is never split). By default (`rule: 'studio'`, every
+ * studio answer) a project that can no longer take new work (hidden, completed, cancelled, archived) reads as 미분류:
+ * `brandProjectId: null`, exactly as on origin/main, so the studio walls keep those runs. The assets page's reads pass
+ * `'assets'` (spine rules R-A): a project members may see keeps its files, finished or not; a hidden one reads null; a
+ * role-tagged library entry of a finished project reads null too (브랜드 자료). One query per answer, never one per row.
  */
-export async function withBrandProjects<T extends { id: string }>(sql: SqlRunner, organizationId: string, views: T[], env: Env = process.env): Promise<Array<T & { brandProjectId?: string | null }>> {
-  return withShownProjects(sql, 'brand_studio_jobs', organizationId, views, env);
+export async function withBrandProjects<T extends { id: string }>(
+  sql: SqlRunner,
+  organizationId: string,
+  views: T[],
+  env: Env = process.env,
+  rule: BrandProjectViewRule = 'studio',
+): Promise<Array<T & { brandProjectId?: string | null }>> {
+  return withShownProjects(sql, 'brand_studio_jobs', organizationId, views, env, rule);
 }
 
-/** The same for films (`brand_studio_video_projects`): members' answers only, null when not selectable. */
-export async function withFilmBrandProjects<T extends { id: string }>(sql: SqlRunner, organizationId: string, films: T[], env: Env = process.env): Promise<Array<T & { brandProjectId?: string | null }>> {
-  return withShownProjects(sql, 'brand_studio_video_projects', organizationId, films, env);
+/** The same for films (`brand_studio_video_projects`): members' answers only. */
+export async function withFilmBrandProjects<T extends { id: string }>(
+  sql: SqlRunner,
+  organizationId: string,
+  films: T[],
+  env: Env = process.env,
+  rule: BrandProjectViewRule = 'studio',
+): Promise<Array<T & { brandProjectId?: string | null }>> {
+  return withShownProjects(sql, 'brand_studio_video_projects', organizationId, films, env, rule);
 }
 
 /**
  * The same for library entries (`brand_studio_assets`, slice 2a): members' answers only (the studio state, the
- * answers of `asset.complete`, `asset.update` and `asset.from_output`, the assets page's reads), null when not
- * filed or not selectable. Whether a null entry is 브랜드 자료 or 미분류 is its `role` (`BRAND_MATERIAL_ROLES`).
+ * answers of `asset.complete`, `asset.update` and `asset.from_output`, the assets page's reads), by the same two rules
+ * (studio by default; `'assets'`: `SHOWN_ASSET_PROJECT_JOIN`). Whether a null entry is 브랜드 자료 or 미분류 is its `role`
+ * (`BRAND_MATERIAL_ROLES`). A saved result also carries `sourceOutputId` (either rule).
  */
-export async function withAssetBrandProjects<T extends { id: string }>(sql: SqlRunner, organizationId: string, assets: T[], env: Env = process.env): Promise<Array<T & { brandProjectId?: string | null }>> {
-  return withShownProjects(sql, 'brand_studio_assets', organizationId, assets, env);
+export async function withAssetBrandProjects<T extends { id: string }>(
+  sql: SqlRunner,
+  organizationId: string,
+  assets: T[],
+  env: Env = process.env,
+  rule: BrandProjectViewRule = 'studio',
+): Promise<Array<T & { brandProjectId?: string | null }>> {
+  return withShownProjects(sql, 'brand_studio_assets', organizationId, assets, env, rule);
 }
 
 /**
@@ -248,20 +397,36 @@ export function memberSeesBrandProjects(seat: { staff?: boolean; role: string })
 }
 
 /**
- * "미분류" for filed rows (`alias` = a run's, an upload's or a film's table): not filed, or filed in a project that can
- * no longer take new work: the complement of `SHOWN_PROJECT_JOIN`. Needs migration 0194 (spine code only). `$1`
+ * "미분류" for filed runs and films (`alias` = a run's or a film's table): not filed, or filed in a project members may not
+ * see (a team project the staff hid): the complement of `SHOWN_PROJECT_JOIN`. Needs migration 0194 (spine code only). `$1`
  * must be the organization.
  */
 export const UNFILED_ROWS = (alias: string): string =>
-  `(${alias}.brand_project_id is null or not exists (select 1 from brand_projects sp where sp.id = ${alias}.brand_project_id and sp.organization_id = $1 and ${SELECTABLE_PROJECTS('sp')}))`;
+  `(${alias}.brand_project_id is null or not exists (select 1 from brand_projects sp where sp.id = ${alias}.brand_project_id and sp.organization_id = $1 and ${VISIBLE_PROJECTS('sp')}))`;
 
-/** `UNFILED_ROWS` for the runs of the studio state (its first use, kept by name). */
-export const UNFILED_RUNS = UNFILED_ROWS;
+/**
+ * Library entries with no shown project (`alias` = the entries' table): the complement of `SHOWN_ASSET_PROJECT_JOIN`.
+ * With a brand-material role they are 브랜드 자료 (not filed, filed in a finished project, or in a hidden one: as before R-A);
+ * without one they are 미분류 (not filed, or in a hidden project). `$1` must be the organization.
+ */
+export const UNFILED_ASSETS = (alias: string): string =>
+  `(${alias}.brand_project_id is null or not exists (select 1 from brand_projects sp where sp.id = ${alias}.brand_project_id and sp.organization_id = $1 and ${ASSET_SHOWN_IN('sp', alias)}))`;
+
+/**
+ * The studio state's 미분류 runs (`scope: unfiled`; spine rules R-A follow-up: the studio keeps origin/main's rule): not
+ * filed, or filed in a project that can no longer take new work (hidden, completed, cancelled, archived). A finished
+ * project does not open in a studio, so its runs, and the runs made from its results, stay on this wall. Exactly
+ * origin/main's text. The assets page's 미분류 is `UNFILED_ROWS`. `$1` must be the organization.
+ */
+export const UNFILED_RUNS = (alias: string): string =>
+  `(${alias}.brand_project_id is null or not exists (select 1 from brand_projects sp where sp.id = ${alias}.brand_project_id and sp.organization_id = $1 and ${SELECTABLE_PROJECTS('sp')}))`;
 
 /**
  * The runs' filter for a scoped studio state load, or null for today's query: no scope, a project guest (the
  * scope is ignored, as everything else of the spine), or the spine closed. A project must be selectable
- * (`not_found` otherwise); `unfiled` is `UNFILED_RUNS`. Runs inside the reading transaction.
+ * (`not_found` otherwise: a studio is where new work is made, so a finished project does not open there, spine rules
+ * R-A kept this); `unfiled` is `UNFILED_RUNS` (origin/main's rule: a finished project's runs are on this wall). Runs
+ * inside the reading transaction.
  */
 export async function stateScopeFilter(sql: SqlRunner, seat: StudioSeat, scope: StudioStateScope | undefined, env: Env = process.env): Promise<{ brandProjectId: string | null } | null> {
   if (!scope || seat.role === 'guest') return null;
@@ -286,6 +451,9 @@ interface ProjectRow {
   cover_kind: string | null;
   cover_key: string | null;
   cover_thumb_key: string | null;
+  /** Only in `visibleBrandProjects`' statement. */
+  status?: string;
+  selectable?: boolean;
 }
 
 const iso = (v: Date | string): string => (v instanceof Date ? v : new Date(String(v))).toISOString();
@@ -294,8 +462,8 @@ const iso = (v: Date | string): string => (v instanceof Date ? v : new Date(Stri
  * Projects with their latest activity (the later of the row's own `updated_at` and its newest run that is not a
  * fill strip) and, in one lateral join, the newest ready image or video result filed in each.
  */
-function projectsQuery(where: string): string {
-  return `select p.id, p.title, p.origin,
+function projectsQuery(where: string, extra = ''): string {
+  return `select p.id, p.title, p.origin,${extra}
                  greatest(p.updated_at, coalesce(r.newest, p.updated_at)) as last_activity_at,
                  c.kind as cover_kind, c.storage_key as cover_key, c.thumb_key as cover_thumb_key
             from brand_projects p
@@ -393,6 +561,59 @@ export async function selectableProjects(sql: SqlRunner, media: StudioMediaStore
     ])
   ).rows;
   return rows.map((row) => projectView(row, media));
+}
+
+/** A listed project with what the 전체 view marks it by (spine rules R-A). */
+export interface ListedBrandProject {
+  project: StudioBrandProject;
+  status: StudioBrandProjectStatus;
+  selectable: boolean;
+}
+
+/**
+ * The status a screen marks a project by: `open` while it can take new work (an own project while active, a shown team
+ * project while requested or active); else a team project's `completed` or `cancelled`, and an own project's `archived`
+ * (보관: `status = 'completed'`, or any other status an own project could be put in).
+ */
+export function brandProjectStatusOf(origin: string, status: string, selectable: boolean): StudioBrandProjectStatus {
+  if (selectable) return 'open';
+  if (origin === 'self') return 'archived';
+  return status === 'cancelled' ? 'cancelled' : 'completed';
+}
+
+/**
+ * Every project a member may see (`VISIBLE_PROJECTS`: finished ones too), most recent activity first, at most `listMax`,
+ * with its status (spine rules R-A, the 전체 view of `project.cards` and `project.overview`). Seated like
+ * `selectableProjects`; its importers are pinned to the spine files.
+ */
+export async function visibleBrandProjects(sql: SqlRunner, media: StudioMediaStore, seat: StudioSeat): Promise<ListedBrandProject[]> {
+  const rows = (
+    await sql.query<ProjectRow>(
+      `${projectsQuery(`p.organization_id = $1 and ${VISIBLE_PROJECTS('p')}`, ` p.status, ${SELECTABLE_PROJECTS('p')} as selectable,`)} order by last_activity_at desc, p.id desc limit $2`,
+      [seat.organizationId, BRAND_PROJECT_LIMITS.listMax],
+    )
+  ).rows;
+  return rows.map((row) => ({
+    project: projectView(row, media),
+    status: brandProjectStatusOf(String(row.origin), String(row.status ?? ''), row.selectable === true),
+    selectable: row.selectable === true,
+  }));
+}
+
+/**
+ * How many projects the two views hold, uncut (the 진행 중 / 전체 switch draws these): `active` = can take new work,
+ * `all` = visible. One statement (idx_brand_projects_origin).
+ */
+export async function brandProjectTotals(sql: SqlRunner, seat: StudioSeat): Promise<{ active: number; all: number }> {
+  const row = (
+    await sql.query<{ active: number; visible: number }>(
+      `select (count(*) filter (where ${SELECTABLE_PROJECTS('p')}))::int as active, count(*)::int as visible
+         from brand_projects p
+        where p.organization_id = $1 and ${VISIBLE_PROJECTS('p')}`,
+      [seat.organizationId],
+    )
+  ).rows[0];
+  return { active: Number(row?.active ?? 0), all: Number(row?.visible ?? 0) };
 }
 
 /** `project.list`: the projects new work can be filed in, most recent activity first, at most 100. */
@@ -502,10 +723,24 @@ async function countLive(sql: SqlRunner, table: 'brand_studio_jobs' | 'brand_stu
 }
 
 /**
+ * The saved results of `family`'s results that are shown as those results (`SHADOWED_SAVED_COPY`): they move with the run
+ * (spine rules R-A), so the one tile never leaves a hidden copy behind in another project. Through each result's
+ * `saved_asset_id` (brand_studio_outputs_slot, then brand_studio_assets_pkey), and only a copy saved from THAT result
+ * (`source_output_id`): a result linked by equal bytes to another result's copy does not carry that copy.
+ */
+const CARRIED_COPIES_SQL = `
+  select a.id::text as id from brand_studio_outputs o
+    join brand_studio_assets a on a.id = o.saved_asset_id and a.organization_id = o.organization_id and a.source_output_id = o.id
+   where o.organization_id = $2 and o.job_id = any($1::uuid[]) and ${LIBRARY_ASSETS('a')} and ${SHADOWED_SAVED_COPY('a')}
+   order by a.id`;
+
+/**
  * `project.move` (§4.3): file runs (with their families), uploads and films in a selectable project, or take them
  * out (`projectId: null`). One transaction under the organization lock; if any id is not this organization's,
  * is deleted, or is a fill strip, the whole call is `not_found` and nothing moves. Moving out of a hidden or
  * archived project is allowed: only the target is judged. `preview` writes nothing and answers the same.
+ * A run's saved results that are shown as its results move with it (spine rules R-A), with their threads; the answer
+ * names them in `savedCopyIds` (only when there are any). An upload moves alone, as before.
  */
 export async function moveToBrandProject(deps: StudioDeps, viewer: Viewer, raw: unknown): Promise<StudioBrandProjectMoved | StudioFailure> {
   const parsed = BrandProjectMoveSchema.safeParse(raw);
@@ -523,15 +758,20 @@ export async function moveToBrandProject(deps: StudioDeps, viewer: Viewer, raw: 
       if ((await countLive(sql, 'brand_studio_assets', assetIds, v.organizationId)) !== assetIds.length) throw new StudioDenied('not_found');
       if ((await countLive(sql, 'brand_studio_video_projects', filmIds, v.organizationId)) !== filmIds.length) throw new StudioDenied('not_found');
       const family = jobIds.length ? (await sql.query<{ id: string }>(FAMILY_SQL, [jobIds, v.organizationId])).rows.map((row) => String(row.id)) : [];
+      const requested = new Set(assetIds);
+      const copies = family.length
+        ? (await sql.query<{ id: string }>(CARRIED_COPIES_SQL, [family, v.organizationId])).rows.map((row) => String(row.id).toLowerCase()).filter((id) => !requested.has(id))
+        : [];
+      const moving = [...assetIds, ...copies];
       if (!v.preview) {
         if (family.length) await sql.query('update brand_studio_jobs set brand_project_id = $3 where organization_id = $2 and id = any($1::uuid[])', [family, v.organizationId, v.projectId]);
-        if (assetIds.length) await sql.query('update brand_studio_assets set brand_project_id = $3 where organization_id = $2 and id = any($1::uuid[])', [assetIds, v.organizationId, v.projectId]);
+        if (moving.length) await sql.query('update brand_studio_assets set brand_project_id = $3 where organization_id = $2 and id = any($1::uuid[])', [moving, v.organizationId, v.projectId]);
         if (filmIds.length) await sql.query('update brand_studio_video_projects set brand_project_id = $3 where organization_id = $2 and id = any($1::uuid[])', [filmIds, v.organizationId, v.projectId]);
         // The members threads about the moved files follow them (보내기, §8.3), in this same transaction: a failed move
         // leaves the files and their threads where they were. Nothing is sent.
-        await moveFileThreads(sql, v.organizationId, { jobIds: family, assetIds, projectId: v.projectId });
+        await moveFileThreads(sql, v.organizationId, { jobIds: family, assetIds: moving, projectId: v.projectId });
       }
-      return { ok: true as const, projectId: v.projectId, jobIds: family, assetIds, filmIds };
+      return { ok: true as const, projectId: v.projectId, jobIds: family, assetIds, filmIds, ...(copies.length ? { savedCopyIds: copies } : {}) };
     }),
   );
 }

@@ -28,9 +28,11 @@ import {
   type StudioAssetSaved,
   type StudioDone,
   type StudioFailure,
+  type StudioOutputDeleted,
 } from './contracts';
 import { lockOrganization, requireCreate, studioSeat, StudioDenied } from './access';
-import { brandProjectFiling, brandProjectForNew, fileAssetWithRun, fileStudioAsset } from './brand-projects';
+import { SHADOWED_SAVED_COPY, brandProjectFiling, brandProjectForNew, brandProjectSpineOpen, fileAssetWithRun, fileStudioAsset } from './brand-projects';
+import { LIBRARY_ASSETS } from './list-rules';
 import { bytesLimit, checkUpload, imageInfo, kindOfMime, sha256Hex, thumbnailWebp, videoFrameRate, videoInfo } from './files';
 import { recordAssetFps } from './asset-fps';
 import { scheduleRoleCheck } from './asset-role';
@@ -306,13 +308,26 @@ export async function assetFromOutput(deps: StudioDeps, viewer: Viewer, raw: unk
   return 'ok' in outcome ? outcome : { ok: true, asset: assetView(outcome, deps.media) };
 }
 
-export async function deleteStudioOutput(deps: StudioDeps, viewer: Viewer, raw: unknown): Promise<StudioDone | StudioFailure> {
+/**
+ * `output.delete`. With `withSavedCopy: true` while the brand project spine is open for the organization (spine rules R-A;
+ * closed, the field is not looked at; open, it is judged after the seat): the library copy saved from this result that is
+ * shown as this result (`SHADOWED_SAVED_COPY`) is deleted in the same transaction, so deleting the assets page's single
+ * tile does not leave the copy to appear in its place. The copy is refused as `asset.delete` refuses it (an open run uses
+ * it: `conflict` for the whole call, nothing deleted); an upload, a post-production file or a copy that is not shown as
+ * this result is never touched. Lock order as `asset.delete` (the copy, then the result), so the two cannot deadlock.
+ */
+export async function deleteStudioOutput(deps: StudioDeps, viewer: Viewer, raw: unknown): Promise<StudioOutputDeleted | StudioFailure> {
   const parsed = OutputRefSchema.safeParse(raw);
   if (!parsed.success) return failure('invalid');
   const v = parsed.data;
+  // The environment first, then the remembered column probe (as `brandProjectFiling`): closed, the field is not read.
+  const spine = await brandProjectSpineOpen(deps.sql, v.organizationId);
   const outcome = await guarded(() =>
     deps.sql.transaction(async (sql) => {
       requireCreate(await studioSeat(sql, viewer.userId, v.organizationId));
+      const asked = spine && raw && typeof raw === 'object' ? (raw as { withSavedCopy?: unknown }).withSavedCopy : undefined;
+      if (asked !== undefined && typeof asked !== 'boolean') throw new StudioDenied('invalid');
+      const copy = asked === true ? await shadowedCopyOf(sql, v.organizationId, v.outputId) : null;
       const row = (
         await sql.query<{ id: string; job_id: string; idx: number; storage_key: string | null; thumb_key: string | null }>(
           'select id, job_id, idx, storage_key, thumb_key from brand_studio_outputs where id = $1 and organization_id = $2 and deleted_at is null for update',
@@ -321,14 +336,42 @@ export async function deleteStudioOutput(deps: StudioDeps, viewer: Viewer, raw: 
       ).rows[0];
       if (!row) throw new StudioDenied('not_found');
       if ((await sql.query(openRefsTo('outputId'), [v.organizationId, v.outputId])).rows[0]) throw new StudioDenied('conflict');
+      // The copy, as `asset.delete` judges it (after the result's own refusals, before anything is written).
+      if (copy && (await sql.query(openRefsTo('assetId'), [v.organizationId, copy.id])).rows[0]) throw new StudioDenied('conflict');
       const job = (await sql.query<Pick<JobRow, 'work'>>('select work from brand_studio_jobs where id = $1', [row.job_id])).rows[0];
       const patch = job?.work?.region?.patches?.[String(row.idx)];
       await sql.query('update brand_studio_outputs set deleted_at = now() where id = $1', [row.id]);
+      if (copy) {
+        // Exactly `asset.delete`'s two writes.
+        await sql.query('update brand_studio_assets set deleted_at = now() where id = $1', [copy.id]);
+        await sql.query('update brand_studio_outputs set saved_asset_id = null where saved_asset_id = $1', [copy.id]);
+      }
       await reconcileOrganizationStorage(sql, v.organizationId);
-      return { ...row, patch_key: patch?.patchKey ?? null, mask_key: patch?.maskKey ?? null };
+      return { ...row, patch_key: patch?.patchKey ?? null, mask_key: patch?.maskKey ?? null, copy };
     }),
   );
   if ('ok' in outcome) return outcome;
-  await dropKeys(deps, [outcome.storage_key, outcome.thumb_key, outcome.patch_key, outcome.mask_key], { outputId: outcome.id });
-  return { ok: true };
+  const copyKeys = outcome.copy ? [outcome.copy.storage_key, outcome.copy.thumb_key] : [];
+  await dropKeys(deps, [...new Set([outcome.storage_key, outcome.thumb_key, outcome.patch_key, outcome.mask_key, ...copyKeys])], { outputId: outcome.id });
+  return outcome.copy ? { ok: true, savedCopyId: String(outcome.copy.id) } : { ok: true };
+}
+
+/**
+ * The library copy saved from `outputId` that is shown as that result (`SHADOWED_SAVED_COPY`), locked, or null. Read through
+ * the result's `saved_asset_id` (primary keys only), and only a copy saved from THIS result (`source_output_id`): a result
+ * linked by equal bytes to another result's copy never deletes it. The copy is locked before the result, as `asset.delete`
+ * locks them.
+ */
+async function shadowedCopyOf(sql: StudioDeps['sql'], organizationId: string, outputId: string): Promise<Pick<AssetRow, 'id' | 'storage_key' | 'thumb_key'> | null> {
+  return (
+    (
+      await sql.query<Pick<AssetRow, 'id' | 'storage_key' | 'thumb_key'>>(
+        `select a.id, a.storage_key, a.thumb_key from brand_studio_assets a
+          where a.organization_id = $2 and a.id = (select o.saved_asset_id from brand_studio_outputs o where o.id = $1 and o.organization_id = $2)
+            and a.source_output_id = $1 and ${LIBRARY_ASSETS('a')} and ${SHADOWED_SAVED_COPY('a')}
+          for update of a`,
+        [outputId, organizationId],
+      )
+    ).rows[0] ?? null
+  );
 }

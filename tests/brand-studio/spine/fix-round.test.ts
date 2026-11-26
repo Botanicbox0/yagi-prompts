@@ -158,7 +158,10 @@ describe('F1 the team side never opens a brand’s own project, and brandProject
 
 /* --------------------------------------------------------------------- F2 */
 
-describe('F2 a project that can no longer take new work reads as 미분류; the filing is kept', () => {
+// Spine rules R-A follow-up: in the STUDIO (state, poll, create answers, films) this is origin/main's rule, unchanged: a run
+// of a project that can no longer take work stays on the 미분류 wall. The assets page keeps a finished project's files in
+// it (the next block).
+describe('F2 a project that can no longer take new work reads as 미분류 in the studio; the filing is kept', () => {
   const cases: Array<[string, () => Promise<string>, (id: string) => Promise<void>, (id: string) => Promise<void>]> = [
     ['a team project the staff hide', () => teamProject(), (id) => f.sql.query('update brand_projects set client_visible = false where id = $1', [id]).then(() => {}), (id) => f.sql.query('update brand_projects set client_visible = true where id = $1', [id]).then(() => {})],
     ['a team project completed', () => teamProject(), (id) => f.sql.query("update brand_projects set status = 'completed' where id = $1", [id]).then(() => {}), (id) => f.sql.query("update brand_projects set status = 'active' where id = $1", [id]).then(() => {})],
@@ -200,6 +203,53 @@ describe('F2 a project that can no longer take new work reads as 미분류; the 
       expect((await state({ scope: { kind: 'unfiled' } })).jobs.map((job) => job.id)).toEqual([loose.id]);
       const relisted = await loadVideoProjects(films(), owner(), f.orgId);
       expect(relisted.ok && relisted.projects.find((p) => p.id === filmId)!.brandProjectId).toBe(project);
+    });
+  }
+});
+
+/**
+ * Spine rules R-A (the founder's decision 1) on the ASSETS PAGE: a finished project keeps its files there, while the studio
+ * reads them as 미분류 as before (the block above). A run made from one of its results keeps the family's project (kept as
+ * today), is on the studio's 미분류 wall, and is in the project on the assets page. New work cannot be filed in it.
+ */
+describe('F2 after R-A: the assets page keeps a finished project’s files; the studio reads them as before', () => {
+  const cases: Array<[string, () => Promise<string>, (id: string) => Promise<void>]> = [
+    ['a team project completed', () => teamProject(), (id) => f.sql.query("update brand_projects set status = 'completed' where id = $1", [id]).then(() => {})],
+    ['a team project cancelled', () => teamProject(), (id) => f.sql.query("update brand_projects set status = 'cancelled' where id = $1", [id]).then(() => {})],
+    ['an own project completed (보관)', () => selfProject('Archive me'), (id) => f.sql.query("update brand_projects set status = 'completed' where id = $1", [id]).then(() => {})],
+  ];
+  for (const [label, make, close] of cases) {
+    it(label, async () => {
+      open();
+      const project = await make();
+      const run = await create({ ...image, brandProjectId: project });
+      await advanceStudioJobsWith(deps, { jobIds: [run.id] });
+      const output = (await state()).jobs.find((job) => job.id === run.id)!.outputs[0]!.id;
+      const film = await runVideoProjectOperation(films(), owner(), 'create', { organizationId: f.orgId, requestId: `vp_${randomUUID()}`, title: 'Cut', brandProjectId: project });
+      const filmId = film.ok ? film.project!.id : '';
+      const loose = await create(image);
+      await advanceStudioJobsWith(deps, { jobIds: [loose.id] });
+      await close(project);
+
+      // New work cannot be filed in it: a new run naming it is refused, and so is moving into it; moving out is allowed.
+      expect(await op(owner(), 'job.create', { organizationId: f.orgId, requestId: requestId(), ...image, brandProjectId: project })).toEqual({ ok: false, code: 'not_found' });
+      expect(await op(owner(), 'project.move', { organizationId: f.orgId, projectId: project, jobIds: [loose.id] })).toEqual({ ok: false, code: 'not_found' });
+      expect((await op(owner(), 'project.move', { organizationId: f.orgId, projectId: null, jobIds: [run.id], preview: true })).ok).toBe(true);
+
+      // A new version of its result keeps the family together; the studio puts it on the 미분류 wall.
+      const edit = await create({ kind: 'region_edit', model: 'nano-banana-pro', prompt: '라벨만', source: { outputId: output }, box: { x: 0.25, y: 0.25, w: 0.5, h: 0.5 } });
+      await advanceStudioJobsWith(deps, { jobIds: [edit.id] });
+      expect(await filed('brand_studio_jobs', edit.id)).toBe(project);
+      expect(edit.brandProjectId).toBeNull();
+      expect((await state({ scope: { kind: 'unfiled' } })).jobs.map((job) => job.id).sort()).toEqual([run.id, edit.id, loose.id].sort());
+
+      // The assets page: the run, its new version and the film are in the project, with its id.
+      const page = await op(owner(), 'project.files', { organizationId: f.orgId, scope: { kind: 'project', brandProjectId: project } });
+      if (!page.ok || !('items' in page)) throw new Error(JSON.stringify(page));
+      expect(page.items.map((item) => `${item.type}:${item.id}`).sort()).toEqual([`job:${run.id}`, `job:${edit.id}`, `film:${filmId}`].sort());
+      for (const view of [...page.jobs, ...page.films]) expect(view.brandProjectId).toBe(project);
+      const unfiled = await op(owner(), 'project.files', { organizationId: f.orgId, scope: { kind: 'unfiled' } });
+      expect(unfiled.ok && 'items' in unfiled && unfiled.items.map((item) => item.id)).toEqual([loose.id]);
     });
   }
 });
