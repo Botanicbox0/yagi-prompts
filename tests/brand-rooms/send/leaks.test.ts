@@ -6,6 +6,7 @@ import { roomAudience } from '@/lib/brand-rooms/access';
 import {
   loadRoomMessages,
   loadRoomSummary,
+  refThreadCounts,
   runRoomOperation,
   staffAcknowledge,
   staffDeleteMessage,
@@ -268,6 +269,15 @@ describe('§8.2 — guessed channels and line ids on the existing doors', () => 
     await w.f.sql.query("update brand_memberships set status = 'revoked' where organization_id = $1 and user_id = $2", [w.f.orgId, w.f.ids.editor]);
     for (const operation of ['send.thread', 'send.read']) expect(await code(w, as(w.f.ids.editor), operation, { rootId: roots[0]! })).toBe('not_found');
     expect(await code(w, as(w.f.ids.editor), 'send.inbox', {})).toBe('not_found');
+  });
+});
+
+describe('a thread count by key never counts a members line', () => {
+  it('refThreadCounts (no caller today) is scoped to the team channels', async () => {
+    vi.stubEnv('BRAND_ROOMS', 'on');
+    const { roots } = await membersLines();
+    const keys = (await w.f.sql.query<{ ref_key: string }>('select distinct ref_key from brand_room_messages where id = any($1::uuid[])', [roots])).rows.map((r) => r.ref_key);
+    expect(await refThreadCounts(w.f.sql, w.f.orgId, keys)).toEqual({});
   });
 });
 

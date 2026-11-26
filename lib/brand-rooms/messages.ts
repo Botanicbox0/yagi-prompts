@@ -1428,7 +1428,8 @@ export async function loadRoomSummary(
 
 /**
  * Messages in each cut's or item's thread, by exact `ref_key` (`storyboard:<board>:<frame>`, …). For slice S
- * (a cut's thread count) and slice R; the caller has already checked the seat for this organization.
+ * (a cut's thread count) and slice R; the caller has already checked the seat for this organization. Team channels only:
+ * a members line (보내기) is never counted here, whatever key a caller passes.
  */
 export async function refThreadCounts(sql: SqlRunner, organizationId: string, refKeys: readonly string[]): Promise<Record<string, number>> {
   const keys = [...new Set(refKeys.map((k) => k.toLowerCase()))];
@@ -1436,7 +1437,8 @@ export async function refThreadCounts(sql: SqlRunner, organizationId: string, re
   const rows = (
     await sql.query<{ ref_key: string; n: number }>(
       `select ref_key, count(*)::int as n from brand_room_messages
-        where organization_id = $1 and ref_key = any($2::text[]) and deleted_at is null and kind = 'text' group by ref_key`,
+        where organization_id = $1 and ref_key = any($2::text[]) and deleted_at is null and kind = 'text'
+          and channel not like 'members%' group by ref_key`,
       [organizationId, keys],
     )
   ).rows;

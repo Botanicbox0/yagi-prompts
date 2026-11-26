@@ -461,6 +461,11 @@ async function post(ctx: Ctx, input: unknown): Promise<SendPosted> {
     return postedAnswer(ctx, String(prior.id).toLowerCase(), String(prior.id).toLowerCase());
   }
   await requireRate(ctx);
+  // The spine's move holds the organization row `for update` while it refiles files and their threads. Taking the row
+  // `for key share` before reading where the file is filed orders this send against any move: a move that started first
+  // commits before the file is read (the root lands in the new channel); a move that starts later waits for this root
+  // and carries it. Sends do not block each other (`for key share` conflicts only with `for update`).
+  await ctx.sql.query('select id from brand_organizations where id = $1 for key share', [ctx.organizationId]);
   const file = await sendableFile(ctx.sql, ctx.organizationId, ref);
   const mentions = await requireMembers(ctx, v.mentions);
   const channel = membersChannelOf(file.projectId);
@@ -551,8 +556,9 @@ async function fileThreads(ctx: Ctx, input: unknown): Promise<SendFileThreads> {
       [ctx.organizationId, refKey, SEND_LIMITS.fileThreads],
     )
   ).rows.map((r) => String(r.id).toLowerCase());
-  // Nothing of this organization by that name, and no thread about it: the made-up id's answer.
-  if (!row && roots.length === 0) throw new SendDenied('not_found');
+  // No file a member can open by that name and no thread about it: the made-up id's answer (a deleted, not-ready or
+  // internal file of this organization says nothing about itself until someone has talked about it).
+  if ((!row || !row.visible) && roots.length === 0) throw new SendDenied('not_found');
   return { ok: true, file: cardOf(ref, row, ctx.media), threads: await threadSummaries(ctx, roots) };
 }
 

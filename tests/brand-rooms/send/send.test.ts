@@ -281,6 +281,32 @@ describe('reads: a thread, a file’s threads, the members list', () => {
     expect((await inbox(owner())).threads.find((t) => t.rootId === first.thread.rootId)!.file.available).toBe(false);
     expect(await code(w, owner(), 'send.reply', { requestId: randomUUID(), rootId: first.thread.rootId, body: 'Still talking' })).toBe('ok');
     expect(await code(w, owner(), 'send.file', { file: output(randomUUID()) })).toBe('not_found');
+    // A deleted (or internal) file of this organization nobody talked about says nothing about itself: the made-up id's answer.
+    const quiet = (await imageResult(w)).outputId;
+    await w.f.sql.query('update brand_studio_outputs set deleted_at = now() where id = $1', [quiet]);
+    expect(await code(w, owner(), 'send.file', { file: output(quiet) })).toBe('not_found');
+    const fill = await imageResult(w);
+    await w.f.sql.query(`update brand_studio_jobs set params = params || '{"purpose":"fill"}'::jsonb where id = $1`, [fill.jobId]);
+    expect(await code(w, owner(), 'send.file', { file: output(fill.outputId) })).toBe('not_found');
+  });
+
+  it('a send takes the organization row before it reads where the file is filed (ordered against a move)', async () => {
+    const { outputId } = await imageResult(w, w.f.projectId);
+    const texts: string[] = [];
+    const wrap = (inner: SqlRunner): SqlRunner => ({
+      query: (text, params) => {
+        texts.push(text.replace(/\s+/g, ' '));
+        return inner.query(text, params);
+      },
+      transaction: (fn) => inner.transaction((tx) => fn(wrap(tx))),
+    });
+    const { runRoomOperation } = await import('@/lib/brand-rooms/messages');
+    const { result } = await runRoomOperation({ sql: wrap(w.f.sql), media: w.deps.media }, owner(), 'send.post', { organizationId: w.f.orgId, requestId: randomUUID(), file: output(outputId), body: 'x' });
+    expect(result.ok).toBe(true);
+    const lock = texts.findIndex((t) => /from brand_organizations where id = \$1 for key share/.test(t));
+    const read = texts.findIndex((t) => /from brand_studio_outputs o/.test(t));
+    expect(lock).toBeGreaterThan(-1);
+    expect(read).toBeGreaterThan(lock);
   });
 
   it('a project members are not shown is not named on a card (a team project the staff hid)', async () => {
