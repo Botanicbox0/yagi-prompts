@@ -6587,7 +6587,7 @@ export const en = {
     adminLabel: 'For',
     adminAny: 'Anyone',
   },
-  // Batch 3 (`TWINGS_MAKER_BLOG`, provisional copy — awaiting founder review).
+  // Batch 3 (`TWINGS_MAKER_BLOG`). Copy and the name "Blog" confirmed by the founder on 2026-11-26.
   makerBlog: {
     tabTemplates: 'Templates',
     tabBlog: 'Blog',
@@ -6612,7 +6612,7 @@ export const en = {
     instagramPlaceholderLabel: 'Instagram post',
     instagramShowEmbed: 'View on Instagram',
     instagramOpenExternal: 'Open on Instagram',
-    instagramFallback: 'Preview could not load inline. Open the original post below.',
+    instagramFallback: 'If the preview does not appear, open the original post below.',
     workspaceHeading: 'Blog',
     workspaceLede: 'Write production notes, embed your works, and link your templates.',
     workspaceNewCta: 'Write a new post',
@@ -6664,6 +6664,8 @@ export const en = {
     fieldPromptTitle: 'Prompt title',
     fieldPromptKind: 'Kind',
     fieldPromptMeta: 'One-line specs (optional)',
+    // In a blog post the author may name the models and tools they used (founder, 2026-11-26). An example line.
+    fieldPromptMetaPlaceholder: 'e.g. Video · 9:16 · Seedance 2.5',
     fieldPromptBody: 'Prompt',
     fieldPromptTip: 'Tip (optional, shown above prompt)',
     fieldTemplateSelect: 'Published template',

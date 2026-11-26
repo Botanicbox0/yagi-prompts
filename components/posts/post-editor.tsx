@@ -949,6 +949,7 @@ export function PostEditor({
                           type="text"
                           disabled={locked}
                           value={selectedBlock.meta ?? ''}
+                          placeholder={blogCopy.fieldPromptMetaPlaceholder}
                           maxLength={POST_PROMPT_META_MAX}
                           onChange={(event) =>
                             updateBlock(selectedIndex, {
