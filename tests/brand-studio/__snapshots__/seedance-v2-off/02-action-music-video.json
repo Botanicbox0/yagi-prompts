@@ -1,0 +1,28 @@
+{
+  "id": "02-action-music-video",
+  "label": "Action / music-video brief",
+  "intent": "slot_fill",
+  "directorRequests": [
+    {
+      "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-4-hydrogen:generateContent",
+      "systemText": "You are a veteran Film Director writing a production-ready Seedance 2.5 video prompt in English.\nMode: SLOT-FILL. Preserve the user's exact story beats, subject actions, and spoken lines while filling missing Reference authority, Visual style (#Hex palette + lighting + skin/material texture), off-axis shot angles, explicit cut handoffs, and the Audio line.\n\nMandatory Seedance 2.5 Grammar & Quality Rules:\n1. OMIT all redundant boilerplate headers: never write \"Create a Seedance video\", aspect ratio (9:16, 16:9), resolution (480p, 1080p, 4K), FPS, or model names.\n2. Exact block order separated by line breaks:\n   - \"Reference authority:\" (when references are attached) locking identity, exact facial bone structure, wardrobe, and product geometry/labels to the attached references only.\n   - \"Visual style:\" concrete #Hex color palette roles (shadow floor, primary surface/wardrobe, key/accent), motivated light source & grounded shadow floor, lens feel, and material texture.\n   - Anti-composite lighting: match ambient shadow floor and color spill across subject and environment — never pasted-on or flat front-lit.\n   - Anti-plastic skin: enforce natural skin texture when people appear (no image is attached: write no @Image token), zero plastic/waxy beauty-filter glare. NEVER write \"glass-skin\", \"poreless porcelain\", or \"dewy highlighter\" (causes upscaler boiling).\n   - Seconds-based timeline from 0.0s to 8.0s (\"0.0s–Xs: …\") with contiguous ranges, off-axis eyelines & camera angle alternation across cuts (18° / 45° / 90° / OTS — never repetitive flat passport front-stares), concrete camera start-to-end movement, and an explicit cut handoff at the end of every shot except the final shot (\"hard cut\", \"match cut on …\", or \"continuous\").\n   - Audio rule: write ONE \"Audio:\" line with room ambience, Foley, and the explicitly requested musical/vocal performance.\n3. Reference rule: bind only the attached @Image N / @Audio N tokens; invent no unattached tokens.\n4. Spoken dialogue only when the user's brief provides words; keep spoken lines verbatim in quotes. Never expose internal tool, provider, or infrastructure names.\nReturn JSON matching { \"prompt\": string, \"notes\": string } where \"notes\" is one concise sentence in the user's language.",
+      "userTexts": [
+        "{\"intent\":\"slot_fill\",\"request\":\"High-energy music video chase down a rain-slicked neon alley as a woman sprints past glowing shopfronts and leaps over a puddle.\",\"change\":null,\"customerLanguage\":\"en\",\"seconds\":8,\"audioMode\":\"on\",\"references\":[],\"mediaDigest\":null,\"shots\":null,\"brand\":null,\"playbooks\":[]}"
+      ]
+    }
+  ],
+  "compiledResult": {
+    "prompt": "Visual style: #14171C shadow floor, #252A34 wet asphalt, #3875C5 neon reflection; motivated storefront backlight.\n0.0s–4.0s: low-angle Steadicam tracking behind the woman sprinting past rain-slicked storefronts. Hard cut.\n4.0s–8.0s: 90° orbital arc sweeping around her as she leaps clear over a puddle and lands in stride.\nAudio: rapid footsteps splashing through water and vibrant music performance.",
+    "notes": "Prepared the action chase sequence with dynamic camera movement.",
+    "source": "model",
+    "intent": "slot_fill",
+    "provider": "gemini-4-hydrogen",
+    "playbooksApplied": 0
+  },
+  "fallbackResult": {
+    "prompt": "Visual style: palette anchored by #1B1F24 shadow floor, #D8CFC2 primary surfaces, and #3875C5 key accents; motivated directional key light, match ambient shadow floor and color spill, never pasted-on or flat front-lit; organic lens roll-off and authentic material micro-texture. Natural skin texture when people appear, zero plastic/waxy beauty-filter glare.\n0.0s–3.6s: 18° off-axis medium shot with natural off-axis eyeline — High-energy music video chase down a rain-slicked neon alley as a woman sprints past glowing shopfronts and leaps over a puddle; camera glides in with gentle parallax. Hard cut.\n3.6s–6.2s: 45° three-quarter close-up — physical interaction continues with grounded weight and natural material response; subtle handheld tracking. Match cut on motion.\n6.2s–8.0s: OTS / 90° profile payoff — action completes cleanly and settles into a composed final frame; slow locked-off hold.\nAudio: live diegetic room sound, Foley and the requested musical performance.",
+    "notes": "Applied reference authority, natural lighting and skin rules, cut handoffs, and diegetic sound.",
+    "source": "fallback"
+  },
+  "profileVersion": "seedance@2026-11-15.1"
+}

@@ -7,7 +7,7 @@
  */
 import { dictatedSpans, guardRequest, type GuardedRequest } from '@/lib/ai-guard';
 import { loadDirectorPlaybooks, playbookRuleLines } from '@/lib/brand-studio/director/playbooks';
-import { promptGuardMode } from '@/lib/flags';
+import { brandSeedanceRulesV2Open, promptGuardMode } from '@/lib/flags';
 import { blueprintShape, blueprintShots, isBlueprint } from './blueprint';
 import { composeFallbackPrompt } from './fallback';
 import { hasMarkSign, replaceMarks } from './marks';
@@ -195,15 +195,40 @@ function thumbParts(input: EnhanceInput, binding: Binding, guard: GuardedRequest
  * writer): the lines `checkEnhancedPrompt` adds, every phrase the rules dictate (quoted spans, parenthesised lists), and
  * this input's deterministic fallback, which the customer reads whenever the writer fails anyway.
  */
-function enhancerAllow(input: EnhanceInput, binding: Binding, system: string): string[] {
+function enhancerAllow(
+  input: EnhanceInput,
+  binding: Binding,
+  system: string,
+  env: Record<string, string | undefined> = process.env,
+): string[] {
   const ref = binding.bound.find((b) => b.ref.kind === 'video')?.token ?? '@Video1';
   let fallbackText = '';
   try {
-    fallbackText = composeFallbackPrompt(input).prompt;
+    fallbackText = composeFallbackPrompt(input, { env }).prompt;
   } catch {
     fallbackText = '';
   }
-  return [AMBIENT_AUDIO_LINE, NATIVE_AUDIO_LINE, 'Do not move or resize anything else.', `Everything else in ${ref} stays as it is.`, ...dictatedSpans(system), fallbackText];
+  const v2SleeveLines =
+    input.profile === 'seedance' && brandSeedanceRulesV2Open(env)
+      ? binding.bound
+          .filter((b) => b.token && b.ref.kind === 'image' && b.ref.role === 'person')
+          .flatMap((b) => {
+            const spaced = b.token!.replace(/^@Image(\d+)$/i, '@Image $1');
+            return [
+              `ignore any wide casual top/sleeve volume from ${b.token}`,
+              `ignore any wide casual top/sleeve volume from ${spaced}`,
+            ];
+          })
+      : [];
+  return [
+    AMBIENT_AUDIO_LINE,
+    NATIVE_AUDIO_LINE,
+    'Do not move or resize anything else.',
+    `Everything else in ${ref} stays as it is.`,
+    ...v2SleeveLines,
+    ...dictatedSpans(system),
+    fallbackText,
+  ];
 }
 
 export async function enhancePrompt(input: EnhanceInput, deps: EnhanceDeps): Promise<EnhanceResult> {
@@ -220,7 +245,7 @@ export async function enhancePrompt(input: EnhanceInput, deps: EnhanceDeps): Pro
       meta = undefined;
     }
     try {
-      return { ...composeFallbackPrompt(input), ...(meta ? { meta } : {}) };
+      return { ...composeFallbackPrompt(input, { env: deps.env }), ...(meta ? { meta } : {}) };
     } catch {
       return { prompt: input.revision ? replaceMarks(input.prompt.trim(), []) : input.prompt.trim(), notes: '', source: 'fallback', ...(meta ? { meta } : {}) };
     }
@@ -258,6 +283,7 @@ export async function enhancePrompt(input: EnhanceInput, deps: EnhanceDeps): Pro
       env: deps.env,
       internal: buildSystemInstruction(effectiveInput, binding, seconds, shots, {
         skinVariant,
+        env: deps.env,
         ...(promptGuardMode(deps.env) === 'off' ? {} : { shotsInUserTurn: true }),
       }),
     });
@@ -286,7 +312,7 @@ export async function enhancePrompt(input: EnhanceInput, deps: EnhanceDeps): Pro
       {
         // The customer's own words (as the checks above count them) and their brand notes and playbooks.
         exempt: [exemptText(effectiveInput), effectiveInput.brand?.tone ?? '', ...(effectiveInput.brand?.rules ?? [])],
-        allow: enhancerAllow(effectiveInput, binding, guard.system),
+        allow: enhancerAllow(effectiveInput, binding, guard.system, deps.env),
         shapes: { prompt: { maxChars: ENHANCED_PROMPT_MAX, noMarkup: true }, notes: { maxChars: NOTES_MAX, oneSentence: true } },
       },
     );

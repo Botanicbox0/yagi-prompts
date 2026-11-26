@@ -510,3 +510,15 @@ export function promptGuardMode(env: Record<string, string | undefined> = proces
   const enforced = (env.PROMPT_GUARD_ENFORCE ?? '').split(',').map((s) => s.trim()).filter(Boolean);
   return site !== undefined && enforced.includes(site) ? 'enforce' : 'observe';
 }
+
+/**
+ * docs/SEEDANCE-BRIDGE-2026-11-26.md (SB-2) — Seedance 2.5 brand-studio video prompt rules v2 (1-stop
+ * underexposed 35mm film/skin formula split from stills, single sleeve-volume reference line without
+ * body build, no per-shot defensive boilerplate, genre-adaptive camera, Mode A/B reference consistency,
+ * and bumped profile/director version). Default OFF: open only when the server environment says exactly
+ * `BRAND_SEEDANCE_RULES_V2=on`. Off leaves every request, fallback, profile and version byte-identical
+ * to `origin/main`.
+ */
+export function brandSeedanceRulesV2Open(env: Record<string, string | undefined> = process.env): boolean {
+  return env.BRAND_SEEDANCE_RULES_V2 === 'on';
+}

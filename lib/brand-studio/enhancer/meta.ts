@@ -17,7 +17,7 @@ export function enhanceMeta(
   const { plan } = skinFor(input, binding, variant);
   return {
     profile: input.profile,
-    profileVersion: profileVersionOf(input.profile, input.model),
+    profileVersion: profileVersionOf(input.profile, input.model, options.env),
     coreVersion: CORE_VERSION,
     llmModel: source === 'model' ? (options.llmModel ?? null) : null,
     source,
