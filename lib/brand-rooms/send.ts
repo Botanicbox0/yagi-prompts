@@ -30,9 +30,8 @@
 import type { Viewer } from '@/lib/auth/identity';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import { isStudioMediaKey, type StudioMediaStore } from '@/lib/brand-studio/media-store';
-import { IMAGE_RUNS, LIBRARY_ASSETS, SOUND_RUNS, VIDEO_RUNS, VISIBLE_OUTPUT, liveRunsFilter } from '@/lib/brand-studio/repo';
 import { RoomDenied, type RoomSeat } from './access';
-import { activeMembersAmong, brandSendOpenFor, MEMBERS_LINE, sendSeat, shownProjectTitles } from './members-channel';
+import { activeMembersAmong, brandSendOpenFor, memberFileRows, MEMBERS_LINE, sendSeat, shownProjectOfFile, shownProjects, type MemberFileRow } from './members-channel';
 import { ROOM_LIMITS, type RoomErrorCode, type RoomFailure } from './message-contracts';
 import { roomAuthorName } from './names';
 import { enqueueNotices } from './notices';
@@ -228,57 +227,50 @@ const chipReaderOf = (ctx: Pick<Ctx, 'invitesOpen' | 'me' | 'seat'>): ChipReader
 
 /* ------------------------------------------------------------------ files */
 
-interface FileRow {
-  type: 'output' | 'asset';
-  id: string;
-  kind: string | null;
-  name: string | null;
-  storage_key: string | null;
-  thumb_key: string | null;
-  width: number | null;
-  height: number | null;
-  visible: boolean;
-  stored_project_id: string | null;
-  /** Filled after the statement: the stored project's title while members are shown it (`shownProjectTitles`). */
+interface FileRow extends MemberFileRow {
+  /** Filled after the statement: the project members are shown the file in (`shownProjectOfFile`), its title. */
   shown_project_title?: string | null;
 }
 
 /**
- * The files of this organization named by `refs`, one statement: a run's result (with its run's project) and a library
- * entry. `visible` is the spine's own rule for what a member can open (the assets page's): a result that is ready, not
- * deleted and stored, of a run a member has not removed, of an image, video or sound run (never a fill strip or the
- * editor's export); a library entry that is ready and not deleted. The shown project is the stored one while it can
- * still take work (the spine's `SELECTABLE_PROJECTS`, one more statement). Another organization's file is simply not found.
+ * The files of this organization named by `refs` (`memberFileRows`, one statement), each with the title of the project
+ * members are shown it in (`shownProjectOfFile`, the same decision the notices use; one more statement, for the files a
+ * member can open).
  */
 async function fileRows(sql: SqlRunner, organizationId: string, refs: readonly SendFileRef[]): Promise<Map<string, FileRow>> {
-  const outputIds = [...new Set(refs.filter((r) => r.kind === 'output').map((r) => (r as { outputId: string }).outputId.toLowerCase()))];
-  const assetIds = [...new Set(refs.filter((r) => r.kind === 'asset').map((r) => (r as { assetId: string }).assetId.toLowerCase()))];
-  if (outputIds.length === 0 && assetIds.length === 0) return new Map();
-  const live = await liveRunsFilter(sql, 'j');
-  const rows = (
-    await sql.query<FileRow>(
-      `select 'output'::text as type, o.id::text as id, o.kind, null::text as name, o.storage_key, o.thumb_key, o.width, o.height,
-              (${VISIBLE_OUTPUT('o')} and ((${IMAGE_RUNS('j')}) or (${VIDEO_RUNS('j')}) or (${SOUND_RUNS('j')})) ${live}) as visible,
-              j.brand_project_id::text as stored_project_id
-         from brand_studio_outputs o
-         join brand_studio_jobs j on j.id = o.job_id and j.organization_id = o.organization_id
-        where o.organization_id = $1 and o.id = any($2::uuid[])
-       union all
-       select 'asset'::text, a.id::text, a.kind, a.name, a.storage_key, a.thumb_key, a.width, a.height,
-              (${LIBRARY_ASSETS('a')}) as visible,
-              a.brand_project_id::text
-         from brand_studio_assets a
-        where a.organization_id = $1 and a.id = any($3::uuid[])`,
-      [organizationId, outputIds, assetIds],
-    )
-  ).rows;
-  const titles = await shownProjectTitles(sql, organizationId, rows.flatMap((row) => (row.visible && row.stored_project_id ? [String(row.stored_project_id)] : [])));
-  return new Map(
-    rows.map((row) => [
-      `${row.type}:${String(row.id).toLowerCase()}`,
-      { ...row, shown_project_title: row.stored_project_id ? (titles.get(String(row.stored_project_id).toLowerCase()) ?? null) : null },
-    ]),
-  );
+  const rows = await memberFileRows(sql, organizationId, refs);
+  const projects = await shownProjects(sql, organizationId, rows.flatMap((row) => (row.visible && row.stored_project_id ? [String(row.stored_project_id)] : [])));
+  return new Map(rows.map((row) => [`${row.type}:${String(row.id).toLowerCase()}`, { ...row, shown_project_title: shownProjectOfFile(row, projects)?.title ?? null }]));
+}
+
+/**
+ * The other reference of a saved result's pair (spine rules R-A): a run's result and the library copy saved from it
+ * (`source = 'generation'`, linked both ways: the copy's `source_output_id` and the result's `saved_asset_id`). Null for
+ * anything else: an upload with a result's bytes, a post-production file, an unsaved result, another organization's.
+ * Whether either side still exists does not matter: both references name the same file. One statement on primary keys.
+ */
+async function pairedRef(sql: SqlRunner, organizationId: string, ref: SendFileRef): Promise<SendFileRef | null> {
+  const row =
+    ref.kind === 'output'
+      ? (
+          await sql.query<{ id: string }>(
+            `select a.id::text as id from brand_studio_outputs o
+               join brand_studio_assets a on a.id = o.saved_asset_id and a.organization_id = o.organization_id
+              where o.id = $2 and o.organization_id = $1 and a.source = 'generation' and a.source_output_id = o.id`,
+            [organizationId, ref.outputId],
+          )
+        ).rows[0]
+      : (
+          await sql.query<{ id: string }>(
+            `select o.id::text as id from brand_studio_assets a
+               join brand_studio_outputs o on o.id = a.source_output_id and o.organization_id = a.organization_id
+              where a.id = $2 and a.organization_id = $1 and a.source = 'generation' and o.saved_asset_id = a.id`,
+            [organizationId, ref.assetId],
+          )
+        ).rows[0];
+  if (!row) return null;
+  const id = String(row.id).toLowerCase();
+  return ref.kind === 'output' ? { kind: 'asset', assetId: id } : { kind: 'output', outputId: id };
 }
 
 const mediaUrl = (media: StudioMediaStore, key: string | null): string | null => (key && isStudioMediaKey(key) ? media.url(key) : null);
@@ -656,24 +648,39 @@ async function thread(ctx: Ctx, input: unknown): Promise<SendThreadPage> {
   return { ok: true, thread: summary, replies: rows.map((row) => messageOf(row, root.id, ctx.me, names, chips)) };
 }
 
-/** `send.file`: the threads about one file, newest root first (at most `SEND_LIMITS.fileThreads`), and its card. */
+/**
+ * `send.file`: the threads about one file, newest root first (at most `SEND_LIMITS.fileThreads`), and its card.
+ * Spine rules R-A: a saved result and the result it was saved from are one file with two references (`output:<id>`,
+ * `asset:<id>`). Asked by either, the answer lists the threads of both (one list, newest root first, each once), and the
+ * card is the result's while the result can be opened (else the copy's, else the one asked for). Who may ask, and when
+ * the answer is `not_found`, is exactly as before: judged on the reference asked for alone.
+ */
 async function fileThreads(ctx: Ctx, input: unknown): Promise<SendFileThreads> {
   const v = parse(SendFileSchema, input);
   const ref: SendFileRef = v.file.kind === 'output' ? { kind: 'output', outputId: v.file.outputId.toLowerCase() } : { kind: 'asset', assetId: v.file.assetId.toLowerCase() };
   const refKey = fileRefKeyOf(ref);
   const row = (await fileRows(ctx.sql, ctx.organizationId, [ref])).get(refKey);
-  const roots = (
-    await ctx.sql.query<{ id: string }>(
-      `select r.id::text as id from brand_room_messages r
-        where r.organization_id = $1 and r.ref_key = $2 and r.parent_id is null and r.deleted_at is null and ${MEMBERS_LINE('r')}
-        order by r.created_at desc, r.id desc limit $3`,
-      [ctx.organizationId, refKey, SEND_LIMITS.fileThreads],
-    )
-  ).rows.map((r) => String(r.id).toLowerCase());
+  const rootsOf = async (keys: string[]) =>
+    (
+      await ctx.sql.query<{ id: string }>(
+        `select r.id::text as id from brand_room_messages r
+          where r.organization_id = $1 and r.ref_key = ${keys.length === 1 ? '$2' : 'any($2::text[])'} and r.parent_id is null and r.deleted_at is null and ${MEMBERS_LINE('r')}
+          order by r.created_at desc, r.id desc limit $3`,
+        [ctx.organizationId, keys.length === 1 ? keys[0] : keys, SEND_LIMITS.fileThreads],
+      )
+    ).rows.map((r) => String(r.id).toLowerCase());
+  const roots = await rootsOf([refKey]);
   // No file a member can open by that name and no thread about it: the made-up id's answer (a deleted, not-ready or
   // internal file of this organization says nothing about itself until someone has talked about it).
   if ((!row || !row.visible) && roots.length === 0) throw new SendDenied('not_found');
-  return { ok: true, file: cardOf(ref, row, ctx.media), threads: await threadSummaries({ ...ctx, chips: chipReaderOf(ctx) }, roots) };
+  const partner = await pairedRef(ctx.sql, ctx.organizationId, ref);
+  if (!partner) return { ok: true, file: cardOf(ref, row, ctx.media), threads: await threadSummaries({ ...ctx, chips: chipReaderOf(ctx) }, roots) };
+  const partnerKey = fileRefKeyOf(partner);
+  const both = await rootsOf([refKey, partnerKey]);
+  const partnerRow = (await fileRows(ctx.sql, ctx.organizationId, [partner])).get(partnerKey);
+  const [result, resultRow, copy, copyRow] = ref.kind === 'output' ? [ref, row, partner, partnerRow] : [partner, partnerRow, ref, row];
+  const card = resultRow?.visible ? cardOf(result, resultRow, ctx.media) : copyRow?.visible ? cardOf(copy, copyRow, ctx.media) : cardOf(ref, row, ctx.media);
+  return { ok: true, file: card, threads: await threadSummaries({ ...ctx, chips: chipReaderOf(ctx) }, both) };
 }
 
 /* ------------------------------------------------------------------ inbox */

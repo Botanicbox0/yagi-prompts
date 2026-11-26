@@ -144,6 +144,20 @@ describe('a self project is invisible to the team side', () => {
     expect(active).not.toBe(archived);
   });
 
+  it('spine rules R-A: a finished self project that keeps its files changes nothing on the team side either', async () => {
+    const filed = await life();
+    const before = await teamSide();
+    const selfId = await addSelfProject(filed);
+    await f.sql.query("update brand_projects set status = 'completed', updated_at = now() where id = $1", [selfId]);
+    expect(await teamSide()).toEqual(before);
+    vi.stubEnv('BRAND_PROJECT_SPINE', 'on');
+    vi.stubEnv('BRAND_PROJECT_SPINE_ORGS', '*');
+    expect(await teamSide()).toEqual(before);
+    // The member's side sees the files in it (finished projects keep their files); the team side above saw none of it.
+    const files = await runStudioOperation(deps, owner(), 'project.files', { organizationId: f.orgId, scope: { kind: 'project', brandProjectId: selfId } });
+    expect(files.ok && 'items' in files && files.items.map((item) => item.id).sort()).toEqual([filed.assetId, filed.filmId].sort());
+  });
+
   for (const spine of ['switched off (columns present)', 'switched on'] as const) {
   it(`a self project made by a team account does not approve the upload gate (${spine})`, async () => {
     // origin/main's statement runs unchanged (tests/brands/workspace-approval-parity.test.ts pins it); a row it finds

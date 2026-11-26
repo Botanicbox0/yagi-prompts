@@ -95,10 +95,23 @@ export function humanTitle(raw: string | null | undefined): string | null {
   return /\s/.test(base) ? base : base.replace(/_+/g, " ").trim();
 }
 
+/**
+ * A saved result shows once (spine rules R-A, the server's saved-result rule in lib/brand-studio/brand-projects.ts):
+ * a library copy saved from a result (`source: 'generation'` with `sourceOutputId`, which only members' answers carry
+ * while the spine is open) is left out while that result, linked back to it (`savedAssetId`), is among the runs merged
+ * here; the result is the one tile. Without `sourceOutputId` (spine closed, guests, MCP) nothing is left out.
+ */
+function shownAsItsResult(asset: StudioAssetView, results: ReadonlyMap<string, StudioOutputView>): boolean {
+  if (asset.source !== "generation" || !asset.sourceOutputId) return false;
+  return results.get(asset.sourceOutputId.toLowerCase())?.savedAssetId?.toLowerCase() === asset.id.toLowerCase();
+}
+
 /** Builds unified entries from uploaded assets and ready generated studio outputs, newest first. */
 export function buildHubEntries(assets: readonly StudioAssetView[], jobs: readonly StudioJobView[], fallbackGeneratedLabel: string): HubEntry[] {
   const entries: HubEntry[] = [];
+  const results = new Map(jobs.flatMap((job) => job.outputs.map((output) => [output.id.toLowerCase(), output] as const)));
   for (const asset of assets) {
+    if (shownAsItsResult(asset, results)) continue;
     entries.push({
       key: `a:${asset.id}`,
       source: { assetId: asset.id },

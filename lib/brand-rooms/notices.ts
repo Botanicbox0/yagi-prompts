@@ -43,8 +43,8 @@ import { brandSiteUrl, siteUrl } from '@/lib/seo/site-url';
 import { roomAudience } from './access';
 import { TEAM_PROJECTS } from '@/lib/brands/project-origin';
 import type { RoomEventKind } from './events';
-import { brandSendOpenFor, MEMBERS_LINE, membersAudience, shownProjectTitles } from './members-channel';
-import { isMembersChannel, membersChannelOf, sendThreadHref } from './send-contracts';
+import { brandSendOpenFor, MEMBERS_LINE, membersAudience, shownProjectsOfFiles } from './members-channel';
+import { fileRefKeyOf, isMembersChannel, membersChannelOf, parseFileRefKey, sendThreadHref, type SendProject } from './send-contracts';
 
 /* ------------------------------------------------------------------ rules (§2.1) */
 
@@ -657,8 +657,11 @@ interface Facts {
   messages: Map<string, MessageFacts>;
   recipients: Map<string, RecipientFacts>;
   projects: Map<string, string>;
-  /** Members threads (보내기): `<organization>:<project>` -> the title members are shown, only while the project can take work. */
-  memberProjects: Map<string, string>;
+  /**
+   * Members threads (보내기): `<organization>:<root>` -> the project members are shown the thread's file in, by the file
+   * card's own decision (./members-channel.ts `shownProjectOfFile`), or null (no project to name: the mail is skipped).
+   */
+  memberFiles: Map<string, SendProject | null>;
 }
 
 const toDate = (v: Date | string): Date => (v instanceof Date ? v : new Date(String(v)));
@@ -754,33 +757,47 @@ async function loadFacts(sql: SqlRunner, rows: readonly NoticeRow[]): Promise<Fa
       projects.set(String(p.id).toLowerCase(), String(p.title));
     }
   }
-  // Members threads: the project members are shown, by the spine's rule (./members-channel.ts), one statement per
-  // organization that has one; a hidden, finished or archived project has no title here (its mail is then skipped).
-  const memberProjects = new Map<string, string>();
+  // Members threads: the project members are shown the thread's FILE in, by the very decision the file card and the bell
+  // row use (./members-channel.ts `shownProjectsOfFiles`; spine rules R-A follow-up), three statements per organization
+  // that has one (the roots' files, the files, their projects). None (unfiled, a team project the staff hid, a role-tagged
+  // library entry of a finished project): no `{project}` to name, so the mail and the push are skipped (in-app only).
+  const memberFiles = new Map<string, SendProject | null>();
   const byOrganization = new Map<string, Set<string>>();
   for (const row of rows) {
     const message = row.message_id ? messages.get(row.message_id.toLowerCase()) : undefined;
     if (!message || !isMembersChannel(message.channel) || !row.project_id) continue;
     const organizationId = row.organization_id.toLowerCase();
-    byOrganization.set(organizationId, (byOrganization.get(organizationId) ?? new Set()).add(row.project_id.toLowerCase()));
+    byOrganization.set(organizationId, (byOrganization.get(organizationId) ?? new Set()).add((message.parentId ?? message.id).toLowerCase()));
   }
-  for (const [organizationId, ids] of byOrganization) {
-    for (const [id, title] of await shownProjectTitles(sql, organizationId, [...ids])) memberProjects.set(`${organizationId}:${id}`, title);
+  for (const [organizationId, rootIds] of byOrganization) {
+    const roots = (
+      await sql.query<{ id: string; ref_key: string | null }>('select r.id::text as id, r.ref_key from brand_room_messages r where r.organization_id = $1 and r.id = any($2::uuid[])', [
+        organizationId,
+        [...rootIds],
+      ])
+    ).rows;
+    const refs = roots.flatMap((root) => {
+      const ref = root.ref_key ? parseFileRefKey(root.ref_key) : null;
+      return ref ? [{ rootId: String(root.id).toLowerCase(), ref }] : [];
+    });
+    const shown = await shownProjectsOfFiles(sql, organizationId, refs.map((one) => one.ref));
+    for (const one of refs) memberFiles.set(`${organizationId}:${one.rootId}`, shown.get(fileRefKeyOf(one.ref)) ?? null);
   }
-  return { messages, recipients, projects, memberProjects };
+  return { messages, recipients, projects, memberFiles };
 }
 
 /**
  * What a mail or a push about a members thread may say, or why it may not go out: a kind that is in-app only, or a
- * thread whose file is unfiled or in a project members are not shown (no true `{project}` for the mention words).
+ * thread whose file members are shown in no project (unfiled, a team project the staff hid, a role-tagged library entry
+ * of a finished project: exactly when its file card names none), so there is no true `{project}` for the mention words.
  */
 function memberDelivery(row: NoticeRow, facts: Facts): { ok: true; projectId: string; projectTitle: string; href: string; tag: string } | { ok: false } {
   const thread = memberThreadOf(row, facts);
   if (!thread || IN_APP_ONLY.has(row.kind) || row.kind !== 'mention' || !row.project_id) return { ok: false };
   if (thread.message.channel !== membersChannelOf(row.project_id)) return { ok: false };
-  const projectTitle = facts.memberProjects.get(`${row.organization_id.toLowerCase()}:${row.project_id.toLowerCase()}`);
-  if (!projectTitle) return { ok: false };
-  return { ok: true, projectId: row.project_id.toLowerCase(), projectTitle, href: sendThreadHref(row.organization_id, thread.rootId), tag: thread.rootId };
+  const project = facts.memberFiles.get(`${row.organization_id.toLowerCase()}:${thread.rootId}`);
+  if (!project) return { ok: false };
+  return { ok: true, projectId: project.id, projectTitle: project.title, href: sendThreadHref(row.organization_id, thread.rootId), tag: thread.rootId };
 }
 
 /** The project's title; the general channel is named by the mail itself (`roomsChat.inbox.general`). */

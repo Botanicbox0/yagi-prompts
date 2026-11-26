@@ -257,15 +257,16 @@ describe('project.overview', () => {
     const group = (id: string) => answer.projects.find((g) => g.project.id === id)!;
     expect(group(w.P1).counts).toEqual({ image: 2, video: 1, sound: 1, upload: 2, film: 1 });
     expect(group(f.projectId).counts).toEqual({ image: 1, video: 0, sound: 0, upload: 0, film: 0 });
-    // The hidden and the archived project read as 미분류; the product upload filed in the hidden one is 브랜드 자료.
-    expect(answer.unfiled.counts).toEqual({ image: 2, video: 2, sound: 1, upload: 2, film: 2 });
+    // The hidden project reads as 미분류; the product upload filed in the hidden one is 브랜드 자료. Spine rules R-A: the
+    // archived own project keeps its run (it is not listed here; `filter: 'all'` lists it), so 미분류 has one video less.
+    expect(answer.unfiled.counts).toEqual({ image: 2, video: 1, sound: 1, upload: 2, film: 2 });
     expect(answer.brandMaterials.count).toBe(4);
     expect(answer.brandMaterials.byRole).toEqual({ product: 2, person: 1, logo: 1, style: 0, place: 0 });
     // Covers: image and video results only, newest first, at most the named limit.
     expect(group(w.P1).covers.map((c) => c.outputId).sort()).toEqual([w.r1.outputs[0], w.r1.outputs[1], w.r2.outputs[0]].sort());
     expect(group(w.P1).covers.every((c) => c.kind === 'image' || c.kind === 'video')).toBe(true);
-    // 미분류 holds four image and video results here (2 + 2), fewer than the limit.
-    expect(answer.unfiled.covers.length).toBe(Math.min(4, BRAND_PROJECT_LIMITS.overviewCovers));
+    // 미분류 holds three image and video results here (2 + 1: the archived project keeps its video), fewer than the limit.
+    expect(answer.unfiled.covers.length).toBe(Math.min(3, BRAND_PROJECT_LIMITS.overviewCovers));
     expect(answer.brandMaterials.covers.map((a) => a.id).sort()).toEqual([w.u3, w.u6, w.u7, w.u8].sort());
     for (const asset of answer.brandMaterials.covers) expect(asset.brandProjectId).toBeNull();
     // Nothing of the other organization, by id, title or address.
@@ -354,12 +355,15 @@ describe('project.files', () => {
     for (const id of [`job:${w.theirRun.jobId}`, `asset:${w.theirLogo}`, `film:${w.theirFilm}`]) expect(everywhere.has(id)).toBe(false);
   });
 
-  it('agrees with the scoped studio state run for run, with the same view objects', async () => {
+  it('agrees with the scoped studio state run for run, with the same view objects (but for a finished project’s runs, spine rules R-A)', async () => {
     const w = await world();
     for (const scope of [{ kind: 'project', brandProjectId: w.P1 }, { kind: 'unfiled' }] as const) {
       const state = (await loadStudioState(deps, owner(), f.orgId, { scope })) as StudioState;
       const listed = [...(await allPages(scope, 'image')), ...(await allPages(scope, 'video'))].flatMap((p) => p.jobs);
-      const withResults = state.jobs.filter((job) => job.outputs.length > 0);
+      // The studio's 미분류 wall keeps origin/main's rule (follow-up 1): the archived project's run is on it; the assets
+      // page shows that run in its project instead. Nothing else differs.
+      const withResults = state.jobs.filter((job) => job.outputs.length > 0 && !(scope.kind === 'unfiled' && job.id === w.r5.jobId));
+      if (scope.kind === 'unfiled') expect(state.jobs.map((j) => j.id)).toContain(w.r5.jobId);
       expect(listed.map((j) => j.id).sort()).toEqual(withResults.map((j) => j.id).sort());
       for (const job of listed) expect(job).toEqual(withResults.find((j) => j.id === job.id));
       // The library entries are the state's own views too.
@@ -439,19 +443,27 @@ describe('project.files', () => {
     expect((await page(scope)).items.slice(0, 3).every((item) => item.type === 'asset' && !expected.includes(`asset:${item.id}`))).toBe(true);
   });
 
-  it('a project that is not selectable is not_found, exactly as the scoped state read answers; malformed input is invalid', async () => {
+  it('a project members may not see is not_found, exactly as the scoped state read answers; a finished one opens here only; malformed input is invalid', async () => {
     open();
     const other = await secondOrg();
     const hidden = await teamProject({ visible: false });
+    const hiddenDone = await teamProject({ visible: false, status: 'completed' });
     const completed = await teamProject({ status: 'completed' });
     const cancelled = await teamProject({ status: 'cancelled' });
     const archived = await selfProject('Archived');
     await f.sql.query("update brand_projects set status = 'completed' where id = $1", [archived]);
     const theirs = await selfProject('Theirs', other);
-    for (const bad of [hidden, completed, cancelled, archived, theirs, randomUUID()]) {
+    for (const bad of [hidden, hiddenDone, theirs, randomUUID()]) {
       const scope = { kind: 'project', brandProjectId: bad } as const;
       expect(await files({ scope }), bad).toEqual({ ok: false, code: 'not_found' });
       expect(await files({ scope }), bad).toEqual(await loadStudioState(deps, owner(), f.orgId, { scope }));
+    }
+    // Spine rules R-A: a finished project's files can be browsed on the assets page; the studio still does not open it
+    // (it takes no new work).
+    for (const done of [completed, cancelled, archived]) {
+      const scope = { kind: 'project', brandProjectId: done } as const;
+      expect((await files({ scope })).ok, done).toBe(true);
+      expect(await loadStudioState(deps, owner(), f.orgId, { scope }), done).toEqual({ ok: false, code: 'not_found' });
     }
     // This organization's project, named under the other organization (whose owner the viewer also is).
     const mine = await selfProject('Mine');
@@ -477,7 +489,7 @@ describe('project.files', () => {
     for (const kind of ['image', 'video', 'sound', 'film'] as const) expect((await page({ kind: 'brand_materials' }, { kind })).items).toEqual([]);
   });
 
-  it('a project that stops taking work between the two reads: not_found on the page, its files under 미분류 (a role-tagged upload under 브랜드 자료) next time', async () => {
+  it('a project that stops taking work between the two reads: its files stay in it (a role-tagged upload goes under 브랜드 자료, as before), and it is listed with filter all', async () => {
     open();
     const P = await selfProject('Soon archived');
     const r = await run('image');
@@ -491,15 +503,21 @@ describe('project.files', () => {
     expect(before.projects.find((g) => g.project.id === P)!.counts).toEqual({ image: 1, video: 0, sound: 0, upload: 2, film: 1 });
 
     await f.sql.query("update brand_projects set status = 'completed' where id = $1", [P]);
-    expect(await files({ scope: { kind: 'project', brandProjectId: P } })).toEqual({ ok: false, code: 'not_found' });
+    // Spine rules R-A: the page opens it; the run, the role-less upload and the film are still in it.
+    expect(ids(await allPages({ kind: 'project', brandProjectId: P })).sort()).toEqual([`job:${r.jobId}`, `asset:${loose}`, `film:${F}`].sort());
     const after = await overview();
+    // Without a filter it is not listed (it takes no new work), and its files are NOT 미분류.
     expect(after.projects.some((g) => g.project.id === P)).toBe(false);
-    expect(after.unfiled.counts).toEqual({ image: before.unfiled.counts.image + 1, video: 0, sound: 0, upload: before.unfiled.counts.upload + 1, film: before.unfiled.counts.film + 1 });
+    expect(after.unfiled.counts).toEqual(before.unfiled.counts);
     expect(after.brandMaterials.byRole.logo).toBe(before.brandMaterials.byRole.logo + 1);
     const unfiled = ids(await allPages({ kind: 'unfiled' }));
-    for (const id of [`job:${r.jobId}`, `asset:${loose}`, `film:${F}`]) expect(unfiled).toContain(id);
+    for (const id of [`job:${r.jobId}`, `asset:${loose}`, `film:${F}`]) expect(unfiled).not.toContain(id);
     expect(ids(await allPages({ kind: 'brand_materials' }))).toContain(`asset:${logo}`);
-    for (const item of (await allPages({ kind: 'unfiled' })).flatMap((p) => [...p.jobs, ...p.assets, ...p.films])) expect(item.brandProjectId).toBeNull();
+    for (const item of (await allPages({ kind: 'project', brandProjectId: P })).flatMap((p) => [...p.jobs, ...p.assets, ...p.films])) expect(item.brandProjectId).toBe(P);
+    // With filter all it is listed with the same counts, marked archived.
+    const all = (await op(owner(), 'project.overview', { organizationId: f.orgId, filter: 'all' })) as StudioBrandProjectOverview;
+    expect(all.projects.find((g) => g.project.id === P)).toMatchObject({ counts: { image: 1, video: 0, sound: 0, upload: 1, film: 1 }, status: 'archived', selectable: false });
+    expect(all.finished).toEqual({ counts: { image: 1, video: 0, sound: 0, upload: 1, film: 1 } });
     // The stored filing is untouched: brought back, everything is in the project again.
     await f.sql.query("update brand_projects set status = 'active' where id = $1", [P]);
     expect((await overview()).projects.find((g) => g.project.id === P)!.counts).toEqual({ image: 1, video: 0, sound: 0, upload: 2, film: 1 });
@@ -632,9 +650,26 @@ describe('who may read: the same answers as project.list', () => {
     expect(importing(/withAssetBrandProjects/)).toEqual(['lib/brand-studio/brand-project-files.ts', 'lib/brand-studio/brand-projects.ts', 'lib/brand-studio/service.ts']);
     // The spine's own-project-aware pieces stay inside the spine: no team, admin, MCP or workflow file can list or
     // join a brand's own projects through them (they carry no TEAM_PROJECTS on purpose).
-    for (const name of ['selectableProjects', 'SHOWN_PROJECT_JOIN', 'UNFILED_ROWS', 'spineSeat', 'spineOrganization']) {
+    for (const name of [
+      'selectableProjects',
+      'SHOWN_PROJECT_JOIN',
+      'UNFILED_ROWS',
+      'spineSeat',
+      'spineOrganization',
+      // Spine rules R-A: the visible-project reads and the saved-result rule's listing stay in the spine too.
+      'visibleBrandProjects',
+      'visibleProjectOf',
+      'brandProjectTotals',
+      'SHOWN_ASSET_PROJECT_JOIN',
+      'UNFILED_ASSETS',
+      'LISTED_LIBRARY_ASSETS',
+    ]) {
       expect(importing(new RegExp(`\\b${name}\\b`)), name).toEqual(['lib/brand-studio/brand-project-files.ts', 'lib/brand-studio/brand-projects.ts']);
     }
+    // The visible-project predicate: the spine and 보내기's member gate (as `SELECTABLE_PROJECTS`); the saved-result rule:
+    // the spine and the result's delete.
+    expect(importing(/\bVISIBLE_PROJECTS\b/)).toEqual(['lib/brand-rooms/members-channel.ts', 'lib/brand-studio/brand-project-files.ts', 'lib/brand-studio/brand-projects.ts']);
+    expect(importing(/\bSHADOWED_SAVED_COPY\b/)).toEqual(['lib/brand-studio/assets.ts', 'lib/brand-studio/brand-projects.ts']);
   });
 });
 
@@ -816,7 +851,7 @@ describe('closed: every answer touched here is byte for byte origin/main’s', (
 describe('moving from the assets page (project.move)', () => {
   const move = (input: Record<string, unknown>, viewer = owner()) => op(viewer, 'project.move', { organizationId: f.orgId, ...input });
 
-  it('an upload moves alone, a film moves alone, a run moves with its family (not with the library copy saved from it)', async () => {
+  it('an upload moves alone, a film moves alone, a run moves with its family and (spine rules R-A) with the library copy saved from it', async () => {
     open();
     const P = await selfProject('Target');
     const root = await run('image');
@@ -837,14 +872,19 @@ describe('moving from the assets page (project.move)', () => {
 
     const family = (await move({ projectId: P, jobIds: [edit.jobId], preview: true })) as StudioBrandProjectMoved;
     expect([...family.jobIds].sort()).toEqual([root.jobId, edit.jobId].sort());
+    // The saved copy is shown as the root's result, so it goes with the family (named apart from the uploads).
+    expect(family.savedCopyIds).toEqual([copy]);
+    expect(family.assetIds).toEqual([]);
     expect(await filedNow('brand_studio_jobs', root.jobId)).toBeNull();
     await move({ projectId: P, jobIds: [edit.jobId] });
     for (const id of [root.jobId, edit.jobId]) expect(await filedNow('brand_studio_jobs', id)).toBe(P);
-    // Taking the run out leaves the library copy where it is (today's rule; see the slice report).
-    await move({ projectId: null, jobIds: [root.jobId] });
-    expect(await filedNow('brand_studio_assets', copy)).toBe(P);
+    // Spine rules R-A: taking the run out takes the library copy with it (it used to stay where it was).
+    const out = (await move({ projectId: null, jobIds: [root.jobId] })) as StudioBrandProjectMoved;
+    expect(out.savedCopyIds).toEqual([copy]);
+    expect(await filedNow('brand_studio_assets', copy)).toBeNull();
+    // The pair shows once: the root's result (now 미분류), not the copy; P keeps the film.
     const group = (await overview()).projects.find((g) => g.project.id === P)!;
-    expect(group.counts).toEqual({ image: 0, video: 0, sound: 0, upload: 1, film: 1 });
+    expect(group.counts).toEqual({ image: 0, video: 0, sound: 0, upload: 0, film: 1 });
     expect(await move({ projectId: P, assetIds: [copy] }, viewerOf(f.ids.viewer))).toEqual({ ok: false, code: 'forbidden' });
   });
 

@@ -20,6 +20,9 @@ import {
   type BrandProjectFilesInput,
   type BrandProjectFilingInput,
   type BrandProjectMoveInput,
+  type BrandProjectViewFilter,
+  type OutputDeleteInput,
+  type StudioOutputDeleted,
   type CampaignHandoffSchema,
   type OutputWaveformSchema,
   type LyricsDraftSchema,
@@ -30,7 +33,6 @@ import {
   type ImageJobGroupSchema,
   type JobAssignProjectSchema,
   type JobRefSchema,
-  type OutputRefSchema,
   type PromptPreviewSchema,
   type ReviseMarkReadSchema,
   type ReviseTalkSchema,
@@ -83,7 +85,8 @@ export interface StudioOps {
   "asset.update": [z.input<typeof AssetUpdateSchema>, StudioAssetSaved];
   "asset.delete": [z.input<typeof AssetRefSchema>, StudioDone];
   "asset.from_output": [z.input<typeof AssetFromOutputSchema>, StudioAssetSaved];
-  "output.delete": [z.input<typeof OutputRefSchema>, StudioDone];
+  /** `withSavedCopy` (spine rules R-A): also delete the saved copy shown as this result (the assets page's single tile). */
+  "output.delete": [OutputDeleteInput, StudioOutputDeleted];
   "job.delete": [z.input<typeof JobRefSchema>, StudioDone];
   "job.assign_project": [z.input<typeof JobAssignProjectSchema>, StudioJobProjectAssigned];
   "handoff.campaign": [z.input<typeof CampaignHandoffSchema>, StudioHandoffDone];
@@ -213,20 +216,32 @@ export function createStudioApi({ organizationId, fetch: fetcher = (...args) => 
         headers: json,
         body: JSON.stringify({ operation: "project.move", input: { organizationId, ...input } }),
       }),
-    /** The assets page's 프로젝트별 tab: every project's counts and covers, then 미분류 and 브랜드 자료 (spine open). */
-    loadBrandProjectOverview: () =>
+    /**
+     * The assets page's 프로젝트별 tab: every project's counts and covers, then 미분류 and 브랜드 자료 (spine open). Spine rules
+     * R-A: `filter` (`active` | `all`) lists finished projects too with `all`, and either value adds each group's `status`
+     * and `selectable`, `finished` and `totals`; without it the answer has today's shape.
+     */
+    loadBrandProjectOverview: (options?: { filter?: BrandProjectViewFilter }) =>
       send<StudioBrandProjectOverview>(STUDIO_ENDPOINT, {
         method: "POST",
         headers: json,
-        body: JSON.stringify({ operation: "project.overview", input: { organizationId } }),
+        body: JSON.stringify({ operation: "project.overview", input: { organizationId, ...(options?.filter ? { filter: options.filter } : {}) } }),
       }),
-    /** The 직접 만들기 home's project cards and its 미분류 line (spine open; read once per visit, never polled). */
-    loadBrandProjectCards: () =>
+    /**
+     * The 직접 만들기 home's project cards and its 미분류 line (spine open; read once per visit, never polled). Spine rules
+     * R-A: `filter` as `loadBrandProjectOverview` (each card's `status` and `selectable`, and `totals`).
+     */
+    loadBrandProjectCards: (options?: { filter?: BrandProjectViewFilter }) =>
       send<StudioBrandProjectCards>(STUDIO_ENDPOINT, {
         method: "POST",
         headers: json,
-        body: JSON.stringify({ operation: "project.cards", input: { organizationId } }),
+        body: JSON.stringify({ operation: "project.cards", input: { organizationId, ...(options?.filter ? { filter: options.filter } : {}) } }),
       }),
+    /**
+     * Delete a result from the assets page's single tile (spine rules R-A): the result and, in the same transaction, the
+     * library copy saved from it while that copy is shown as the result. `savedCopyId` names the copy when one went.
+     */
+    deleteResultWithSavedCopy: (outputId: string) => call("output.delete", { organizationId, outputId, withSavedCopy: true }),
     /** One scope's files, one page; pass the answer's `next` as `cursor` for the following page (spine open). */
     listBrandProjectFiles: (input: Omit<BrandProjectFilesInput, "organizationId">) =>
       send<StudioBrandProjectFiles>(STUDIO_ENDPOINT, {

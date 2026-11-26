@@ -576,6 +576,14 @@ export const FilmAnalyzeSchema = z.object({ organizationId: Id, assetId: Id, dep
 export const AssetRefSchema = z.object({ organizationId: Id, assetId: Id });
 export const OutputRefSchema = z.object({ organizationId: Id, outputId: Id });
 /**
+ * `output.delete`'s input. `withSavedCopy` (spine rules R-A; read only while the brand project spine is open for the
+ * organization, judged after the seat; closed, it is not looked at): also delete, in the same transaction, the library
+ * copy saved from this result while that copy is shown as this result (the assets page's single tile). Absent or false:
+ * exactly today's delete (the result only). A copy that an open run uses is refused with the whole call (`conflict`),
+ * as `asset.delete` refuses it; an upload is never touched.
+ */
+export type OutputDeleteInput = z.input<typeof OutputRefSchema> & { withSavedCopy?: boolean };
+/**
  * `lyrics.draft`: lyrics for the sound studio (docs/BRAND-SOUND-STUDIO.md §7.5, §12.3). Free, rate-limited.
  * `topic` writes new lyrics from the description ("가사 초안 만들기"); `polish` returns the customer's lyrics made
  * easier to sing ("부르기 좋게 손보기"), shown next to the original and used only if the customer accepts it.
@@ -764,9 +772,24 @@ export type BrandProjectFileKind = (typeof BRAND_PROJECT_FILE_KINDS)[number];
 /** `project.files`' scope: one selectable project, 미분류, or 브랜드 자료. */
 export type BrandProjectFilesScope = { kind: 'project'; brandProjectId: string } | { kind: 'unfiled' } | { kind: 'brand_materials' };
 
-/** `project.overview`: the organization only. */
+/** `project.overview`: the organization (the one field read before the seat; `filter` is judged after it). */
 export const BrandProjectOverviewSchema = z.object({ organizationId: Id });
-export type BrandProjectOverviewInput = z.input<typeof BrandProjectOverviewSchema>;
+
+/**
+ * Which projects `project.cards` and `project.overview` list (spine rules R-A): `active` = the projects that can take new
+ * work (today's set: `project.list`'s); `all` = every project a member may see, finished ones too (completed or cancelled
+ * team projects shown to the brand, archived own projects). A team project the staff hid is in neither.
+ */
+export const BRAND_PROJECT_VIEW_FILTERS = ['active', 'all'] as const;
+export type BrandProjectViewFilter = (typeof BRAND_PROJECT_VIEW_FILTERS)[number];
+/** The optional part of both inputs, judged after the seat (malformed: `invalid` for a member). */
+export const BrandProjectViewFilterSchema = z.object({ filter: z.enum(BRAND_PROJECT_VIEW_FILTERS).optional() });
+
+/**
+ * `project.overview`'s input. Without `filter`: the `active` list in today's group shape, plus `finished`. With a `filter`
+ * named: each group's `status` and `selectable`, and `totals` (see the answer).
+ */
+export type BrandProjectOverviewInput = z.input<typeof BrandProjectOverviewSchema> & { filter?: BrandProjectViewFilter };
 
 /**
  * `project.files`: one scope, optionally one kind, newest first; `cursor` is the previous page's `next`. Everything
@@ -785,9 +808,24 @@ export const BrandProjectFilesSchema = z.object({
 });
 export type BrandProjectFilesInput = z.input<typeof BrandProjectFilesSchema>;
 
-/** `project.cards`: the organization only. */
+/** `project.cards`: the organization (the one field read before the seat; `filter` is judged after it). */
 export const BrandProjectCardsSchema = z.object({ organizationId: Id });
-export type BrandProjectCardsInput = z.input<typeof BrandProjectCardsSchema>;
+/** `project.cards`' input. Without `filter`: today's answer shape. With it: the R-A fields (see the answer). */
+export type BrandProjectCardsInput = z.input<typeof BrandProjectCardsSchema> & { filter?: BrandProjectViewFilter };
+
+/**
+ * What the 전체 view marks a project by (spine rules R-A): `open` = it can take new work (an own project while active, a
+ * team project while requested or active); `completed` / `cancelled` = a finished team project; `archived` = an own
+ * project put away (보관). Only `open` projects can be chosen for new work or moved into.
+ */
+export const BRAND_PROJECT_STATUSES = ['open', 'completed', 'cancelled', 'archived'] as const;
+export type StudioBrandProjectStatus = (typeof BRAND_PROJECT_STATUSES)[number];
+
+/** The two views' sizes, uncut by `listMax`: `active` = open projects, `all` = every project a member may see. */
+export interface StudioBrandProjectTotals {
+  active: number;
+  all: number;
+}
 
 /** The home's project cards (`project.cards`, slice 3a). Kept apart from `BRAND_PROJECT_LIMITS` on purpose. */
 export const BRAND_PROJECT_CARD_LIMITS = {
@@ -880,12 +918,19 @@ export interface StudioAssetView {
   durationMs?: number;
   source: StudioAssetSource;
   /**
-   * The brand project this file is filed in (null = none: 미분류 or 브랜드 자료 by its `role`, see
-   * `BRAND_MATERIAL_ROLES`), by the same rule as runs: null also when its project can no longer take new work.
+   * The brand project this file is shown in (null = none: 미분류 or 브랜드 자료 by its `role`, see
+   * `BRAND_MATERIAL_ROLES`). Spine rules R-A: a project members may see keeps its files, finished or not; null when not
+   * filed, filed in a team project the staff hid, or (an entry with a brand-material role) filed in a finished project.
    * Present only in answers to workspace members while the brand project spine is open for the organization;
    * absent (not null) for project guests, MCP, workflows and whenever the spine is closed.
    */
   brandProjectId?: string | null;
+  /**
+   * A saved result (spine rules R-A): the result (`StudioOutputView.id`) this library copy was saved from. While that
+   * result is shown, the assets surfaces show the result alone (the copy is the same file). Present only beside
+   * `brandProjectId` (members, spine open) and only on a saved result; absent otherwise.
+   */
+  sourceOutputId?: string;
   createdAt: string;
 }
 
@@ -1136,6 +1181,17 @@ export interface StudioBrandProjectMoved {
   jobIds: string[];
   assetIds: string[];
   filmIds: string[];
+  /**
+   * Spine rules R-A: the library copies saved from the moved runs' results that are shown as those results (so not a
+   * tile of their own) and moved with them. Present only when there is at least one; never one of `assetIds`.
+   */
+  savedCopyIds?: string[];
+}
+
+/** `output.delete`: done; `savedCopyId` when `withSavedCopy` also deleted the result's saved copy. */
+export interface StudioOutputDeleted {
+  ok: true;
+  savedCopyId?: string;
 }
 
 /** Counts of one group of the assets page: results by run medium, library entries, films (`project.files` kinds). */
@@ -1155,29 +1211,43 @@ export interface StudioBrandProjectCover {
 
 /** One project's group on the 프로젝트별 tab. */
 export interface StudioBrandProjectGroup {
-  /** Exactly the project as `project.list` answers it. */
+  /** Exactly the project as `project.list` answers it (finished ones in the same shape). */
   project: StudioBrandProject;
   counts: StudioBrandProjectCounts;
   /** At most `BRAND_PROJECT_LIMITS.overviewCovers`, newest first. */
   covers: StudioBrandProjectCover[];
+  /** Spine rules R-A, only when the request named a `filter`: what the screen marks the project by. */
+  status?: StudioBrandProjectStatus;
+  /** Spine rules R-A, only when the request named a `filter`: false = it cannot take new work (`status` is not `open`). */
+  selectable?: boolean;
 }
 
 /**
- * `project.overview`: every project `project.list` lists (same set, same order), then 미분류 and 브랜드 자료. Each count
- * equals the number of items `project.files` returns for that scope and kind over all its pages (a result is one
- * item: count `outputs` of the job views).
+ * `project.overview`: one group per listed project (without `filter` or with `active`: exactly `project.list`'s set and
+ * order; with `all`: every project a member may see, finished ones too, most recent activity first, at most `listMax`),
+ * then 미분류 and 브랜드 자료. Each count equals the number of items `project.files` returns for that scope and kind over
+ * all its pages (a result is one item: count `outputs` of the job views). A saved result is counted once, as its result.
  */
 export interface StudioBrandProjectOverview {
   ok: true;
   projects: StudioBrandProjectGroup[];
   unfiled: { counts: StudioBrandProjectCounts; covers: StudioBrandProjectCover[] };
   brandMaterials: {
-    /** Library entries with no (selectable) project and a role of `BRAND_MATERIAL_ROLES`. */
+    /** Library entries with a role of `BRAND_MATERIAL_ROLES` not shown in a project (none, a finished one, a hidden one). */
     count: number;
     byRole: Record<BrandMaterialRole, number>;
     /** The newest few (`BRAND_PROJECT_LIMITS.overviewCovers`), as the panel shows a library entry. */
     covers: StudioAssetView[];
   };
+  /**
+   * Spine rules R-A, always (with or without `filter`): the files shown in finished projects (every finished project a
+   * member may see, uncut by `listMax`). Without `filter` or with `active` those projects are not listed, so this says
+   * where the files that are no longer in 미분류 are; with `all` they are also in their groups. Optional in the type only so
+   * that answers built before R-A (fixtures, cached pages) still type-check; this server always sends it.
+   */
+  finished?: { counts: StudioBrandProjectCounts };
+  /** Spine rules R-A, only when the request named a `filter`: the sizes of the two views (the switch's numbers). */
+  totals?: StudioBrandProjectTotals;
 }
 
 /** One item of a `project.files` page: which list holds its view. */
@@ -1261,16 +1331,22 @@ export interface StudioBrandProjectCard {
   unread: number;
   /** A team project while project rooms are open: the data behind its stage line. Null otherwise. */
   stage: StudioBrandProjectStage | null;
+  /** Spine rules R-A, only when the request named a `filter`: what the screen marks the card by. */
+  status?: StudioBrandProjectStatus;
+  /** Spine rules R-A, only when the request named a `filter`: false = it cannot take new work. */
+  selectable?: boolean;
 }
 
 /**
- * `project.cards`: one card per project `project.list` lists (same set, same order), then 미분류 exactly as
- * `project.overview` gives it.
+ * `project.cards`: one card per listed project (the same set and order as `project.overview` with the same `filter`:
+ * without one or with `active`, `project.list`'s), then 미분류 exactly as `project.overview` gives it.
  */
 export interface StudioBrandProjectCards {
   ok: true;
   projects: StudioBrandProjectCard[];
   unfiled: { counts: StudioBrandProjectCounts; covers: StudioBrandProjectCover[] };
+  /** Spine rules R-A, only when the request named a `filter`: the sizes of the two views (the switch's numbers). */
+  totals?: StudioBrandProjectTotals;
 }
 
 /** `job.assign_project`: every run that moved (the run and its family) and where they are now. */

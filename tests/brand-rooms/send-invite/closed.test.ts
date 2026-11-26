@@ -27,6 +27,10 @@ import { invitation, normalizer, person, recording, tokenOf, waiting } from './h
  * this slice whenever the invitation switch is closed (the follow-up's L4), for everyone: it is recorded in every closed
  * state. In a closed ORGANIZATION with the switch on it exists and answers what every send operation answers there
  * (`not_found`), so it is left out of those snapshots (origin/main: `invalid`).
+ * Spine rules R-A (slice R-A server) changed three of 보내기's own statements while it is open, and the four "보내기 open"
+ * snapshots were updated for those lines only (the answers are unchanged): the file statement carries the entry's role,
+ * the shown-projects statement reads `VISIBLE_PROJECTS` and says whether each can take work, and `send.file` asks one
+ * more (the other reference of a saved result's pair).
  */
 const mocks = vi.hoisted(() => ({
   sql: null as SqlRunner | null,
