@@ -27,6 +27,7 @@ export type SendLocale = 'ko' | 'en';
 
 export interface BrandSendClientProp {
   organizationId: string;
+  invite?: boolean;
 }
 
 export interface ViewerSendProp extends BrandSendClientProp {
@@ -86,6 +87,22 @@ export interface SendCopy {
     editor: string;
     viewer: string;
   };
+  inviteHeading: string;
+  inviteDesc: string;
+  inviteAction: string;
+  chipPending: string;
+  chipExpired: string;
+  chipAccepted: string;
+  chipCount: string;
+  inviteRefused: string;
+  inviteNotAllowed: string;
+  inviteLimit: string;
+  inviteTooMany: string;
+  inviteSelf: string;
+  inviteLinkCopy: string;
+  inviteLinkCopied: string;
+  inviteNeedsWords: string;
+  inviteRemove: string;
 }
 
 export function pickSendCopy(dict: Dictionary): SendCopy {
@@ -142,6 +159,22 @@ export function pickSendCopy(dict: Dictionary): SendCopy {
       editor: dict.brandWorkspace.roles.editor,
       viewer: dict.brandWorkspace.roles.viewer,
     },
+    inviteHeading: s.inviteHeading,
+    inviteDesc: s.inviteDesc,
+    inviteAction: s.inviteAction,
+    chipPending: s.chipPending,
+    chipExpired: s.chipExpired,
+    chipAccepted: s.chipAccepted,
+    chipCount: s.chipCount,
+    inviteRefused: s.inviteRefused,
+    inviteNotAllowed: s.inviteNotAllowed,
+    inviteLimit: s.inviteLimit,
+    inviteTooMany: s.inviteTooMany,
+    inviteSelf: s.inviteSelf,
+    inviteLinkCopy: s.inviteLinkCopy,
+    inviteLinkCopied: s.inviteLinkCopied,
+    inviteNeedsWords: s.inviteNeedsWords,
+    inviteRemove: dict.roomsChat.composer.removeFile,
   };
 }
 

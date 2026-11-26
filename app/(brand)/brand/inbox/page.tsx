@@ -5,6 +5,7 @@ import { pickSendCopy } from '@/components/brand-send/model';
 import { brandContext } from '@/components/brand-workspace/context';
 import { brandScope } from '@/components/brand-workspace/scope';
 import { brandSendOpenFor, brandSendSwitchesOn } from '@/lib/brand-rooms/members-channel';
+import { brandSendInviteOpenFor } from '@/lib/brand-rooms/send-invite';
 import { runSendOperation } from '@/lib/brand-rooms/send';
 import type { SendInboxPage as SendInboxPageData, SendInboxView, SendThreadPage } from '@/lib/brand-rooms/send-contracts';
 import { memberSeesBrandProjects } from '@/lib/brand-studio/brand-projects';
@@ -93,7 +94,8 @@ export default async function BrandInboxPage({
   }
 
   const copy = pickSendCopy(dict);
-  const sendProp = { organizationId: choice.id };
+  const inviteOpen = await brandSendInviteOpenFor(sql, choice.id).catch(() => false);
+  const sendProp = inviteOpen ? { organizationId: choice.id, invite: true } : { organizationId: choice.id };
 
   return (
     <SendInboxPage

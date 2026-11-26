@@ -1,9 +1,16 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import { sendTransport, type SendTransport } from '@/components/brand-rooms/chat/transport';
+import {
+  sendInviteTransport,
+  sendTransport,
+  type SendInviteTransport,
+  type SendTransport,
+} from '@/components/brand-rooms/chat/transport';
 import type { SendFileRef, SendFileThreads, SendPerson } from '@/lib/brand-rooms/send-contracts';
-import { SendComposer } from './composer';
+import { SendComposer, type SendComposerSubmit } from './composer';
+import { SendInviteChips } from './invite-chips';
+import { extractCopyableInviteTokens, inviteRefusalOutcome } from './invite-model';
 import {
   inboxThreadHref,
   initialChar,
@@ -28,6 +35,8 @@ export interface SendPanelProps {
   copy: SendCopy;
   locale: SendLocale;
   transport?: SendTransport;
+  invite?: boolean;
+  inviteTransport?: SendInviteTransport;
   initialFile?: SendFileThreads | null;
   initialPeople?: readonly SendPerson[];
   autoFocus?: boolean;
@@ -38,12 +47,16 @@ export interface SendPanelProps {
   onInnerEscape?: () => void;
 }
 
+const EMPTY_INVITE_TOKENS: Readonly<Record<string, Record<string, string>>> = {};
+
 export function SendPanel({
   organizationId,
   fileRef,
   copy,
   locale,
   transport,
+  invite = false,
+  inviteTransport,
   initialFile,
   initialPeople,
   autoFocus = false,
@@ -61,8 +74,14 @@ export function SendPanel({
     () => transport ?? sendTransport(organizationId),
     [transport, organizationId],
   );
+  const activeInviteTransport = useMemo(
+    () => (invite ? (inviteTransport ?? sendInviteTransport(organizationId)) : null),
+    [invite, inviteTransport, organizationId],
+  );
 
   const [state, setState] = useState<SendFileState>(() => initialSendFileState(fileKey, initialFile));
+  const [inviteTokensByMsg, setInviteTokensByMsg] =
+    useState<Readonly<Record<string, Record<string, string>>>>(EMPTY_INVITE_TOKENS);
   const stateRef = useRef<SendFileState>(state);
   const mountedRef = useRef(true);
   const loadedTargetRef = useRef<string | null>(initialFile ? `${organizationId}:${fileKey}` : null);
@@ -116,6 +135,7 @@ export function SendPanel({
 
   useEffect(() => {
     mountedRef.current = true;
+    setInviteTokensByMsg((prev) => (Object.keys(prev).length === 0 ? prev : EMPTY_INVITE_TOKENS));
     return () => {
       mountedRef.current = false;
       if (stateRef.current.postGone) {
@@ -154,8 +174,16 @@ export function SendPanel({
     return res;
   }, [activeTransport]);
 
+  const handleLookup = useCallback(
+    async (email: string) => {
+      if (!activeInviteTransport) return { ok: false as const, code: 'invalid' as const };
+      return activeInviteTransport.lookup(email);
+    },
+    [activeInviteTransport],
+  );
+
   const handleSend = useCallback(
-    async ({ body, mentions, requestId }: { body: string; mentions: string[]; requestId: string }) => {
+    async ({ body, mentions, invites, requestId }: SendComposerSubmit) => {
       const ref: SendFileRef =
         refKind === 'output' ? { kind: 'output', outputId: refId } : { kind: 'asset', assetId: refId };
       dispatch({
@@ -166,11 +194,20 @@ export function SendPanel({
         authorName: copy.you,
       });
       try {
-        const res = await activeTransport.post({ requestId, file: ref, body, mentions });
+        const res =
+          invite && invites && invites.length > 0 && activeInviteTransport
+            ? await activeInviteTransport.post({ requestId, file: ref, body, mentions, invites })
+            : await activeTransport.post({ requestId, file: ref, body, mentions });
         if (!mountedRef.current) {
           return res.ok ? { ok: true as const } : res;
         }
         if (res.ok) {
+          if (invite && res.invited) {
+            const tokens = extractCopyableInviteTokens(res.invited);
+            if (Object.keys(tokens).length > 0) {
+              setInviteTokensByMsg((prev) => ({ ...prev, [res.message.id]: tokens }));
+            }
+          }
           dispatch({ type: 'apply_post', requestId, posted: res });
           return { ok: true as const };
         }
@@ -178,7 +215,17 @@ export function SendPanel({
         if (res.code === 'not_found') {
           dispatch({ type: 'post_gone' });
         } else {
-          const outcome = sendRefusalOutcome(res.code, 'compose_post');
+          const carriedInvites = Boolean(invite && invites && invites.length > 0);
+          const refusedList = 'refused' in res && Array.isArray(res.refused) ? (res.refused as readonly string[]) : undefined;
+          const outcome = invite
+            ? inviteRefusalOutcome(
+                res.code,
+                refusedList,
+                'compose_post',
+                copy,
+                carriedInvites,
+              )
+            : sendRefusalOutcome(res.code, 'compose_post');
           if (outcome.hideSend) {
             onClosedRef.current?.();
           }
@@ -191,7 +238,7 @@ export function SendPanel({
         return { ok: false as const, code: 'offline' as const };
       }
     },
-    [activeTransport, copy.you, dispatch, refId, refKind],
+    [activeInviteTransport, activeTransport, copy, dispatch, invite, refId, refKind],
   );
 
   const handleEscapeCapture = (event: KeyboardEvent<HTMLElement>) => {
@@ -297,6 +344,14 @@ export function SendPanel({
                         {words.replyCountText ? `${words.time} · ${words.replyCountText}` : words.time}
                       </span>
                     </a>
+                    {invite && item.thread.root.invites && item.thread.root.invites.length > 0 ? (
+                      <SendInviteChips
+                        invites={item.thread.root.invites}
+                        copy={copy}
+                        tokensByEmail={inviteTokensByMsg[item.thread.root.id]}
+                        compact
+                      />
+                    ) : null}
                   </li>
                 );
               })}
@@ -311,6 +366,8 @@ export function SendPanel({
                 hint={copy.sendHint}
                 onSend={handleSend}
                 loadPeople={loadPeople}
+                invite={invite}
+                lookupAddress={invite ? handleLookup : undefined}
                 showNoMentionHint
                 submitDisabled={state.postGone}
                 hideNotFoundError

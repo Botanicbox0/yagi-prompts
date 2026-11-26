@@ -28,6 +28,7 @@ import projectChipStyles from "@/components/brand-studio/project-chip/project-ch
 import { WorkspaceBell } from "@/components/brand-workspace/bell";
 import { pickSendCopy, type ViewerSendProp } from "@/components/brand-send/model";
 import { brandSendOpenFor, brandSendSwitchesOn } from "@/lib/brand-rooms/members-channel";
+import { brandSendInviteOpenFor } from "@/lib/brand-rooms/send-invite";
 import { memberSeesBrandProjects } from "@/lib/brand-studio/brand-projects";
 import { VideoStudioWorkspace } from "@/components/brand-studio/video/workspace";
 import s from "@/components/brand-studio/video/video.module.css";
@@ -201,13 +202,17 @@ export default async function StudioVideoPage({
     initialProjectId = validFilmId;
   }
 
-  const send: ViewerSendProp | null =
+  const sendBase: ViewerSendProp | null =
     effectiveSpine &&
     brandSendSwitchesOn() &&
     memberSeesBrandProjects({ staff: access.staff, role: choice.role }) &&
     (await brandSendOpenFor(ctx.deps.sql, choice.id).catch(() => false))
       ? { organizationId: choice.id, copy: pickSendCopy(dict) }
       : null;
+  const send: ViewerSendProp | null =
+    sendBase && (await brandSendInviteOpenFor(ctx.deps.sql, choice.id).catch(() => false))
+      ? { ...sendBase, invite: true }
+      : sendBase;
 
   const title = <h1 className="bs-title">{t.title}</h1>;
   const page = (

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
-import { sendTransport, type SendTransport } from '@/components/brand-rooms/chat/transport';
+import { sendTransport, type SendInviteTransport, type SendTransport } from '@/components/brand-rooms/chat/transport';
 import { ROOM_ACTIVITY } from '@/components/brand-rooms/seams';
 import { WorkspaceBell } from '@/components/brand-workspace/bell';
 import { ROOM_POLL_HIDDEN_MS } from '@/lib/brand-rooms/message-contracts';
@@ -38,6 +38,7 @@ export interface SendInboxPageProps {
   locale: SendLocale;
   copy: SendCopy;
   transport?: SendTransport;
+  inviteTransport?: SendInviteTransport;
   initialInbox?: SendInboxPageData | null;
   initialThread?: SendThreadPage | null;
   initialThreadGone?: boolean;
@@ -101,6 +102,7 @@ export function SendInboxPage({
   locale,
   copy,
   transport,
+  inviteTransport,
   initialInbox = null,
   initialThread = null,
   initialThreadGone = false,
@@ -491,6 +493,8 @@ export function SendInboxPage({
             locale={locale}
             copy={copy}
             transport={activeTransport}
+            invite={send.invite}
+            inviteTransport={inviteTransport}
             initialThread={matchingInitialThread}
             initialGone={matchingInitialGone}
             markSeedRead={Boolean(matchingInitialThread)}
