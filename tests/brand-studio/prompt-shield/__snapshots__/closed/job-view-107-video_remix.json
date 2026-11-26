@@ -1,0 +1,65 @@
+{
+  "id": "00000000-0000-4000-8000-000000000107",
+  "kind": "video_remix",
+  "status": "succeeded",
+  "model": "seedance-2.5",
+  "prompt": "같은 구성으로 우리 제품",
+  "finalPrompt": "Blueprint designed: Quillwort sentinel 7Q: the violet heron folds a brass map twice.\nShot 1 0-2s wide.\nShot 2 2-5s close-up.",
+  "expected": 1,
+  "aspect": "9:16",
+  "resolution": "720p",
+  "seconds": 5,
+  "audio": "native",
+  "references": [
+    {
+      "assetId": "00000000-0000-4000-8000-000000000901"
+    }
+  ],
+  "parentOutputId": null,
+  "parentAssetId": null,
+  "box": null,
+  "method": "blueprint",
+  "keep": [
+    "timing",
+    "composition"
+  ],
+  "change": "",
+  "shots": [
+    {
+      "start": 0,
+      "end": 2,
+      "framing": "wide",
+      "camera": "locked-off",
+      "action": "the bottle stands on stone"
+    },
+    {
+      "start": 2,
+      "end": 5,
+      "framing": "close-up",
+      "camera": "slow push",
+      "action": "a hand lifts the bottle",
+      "transition": "hard cut"
+    }
+  ],
+  "outputs": [
+    {
+      "id": "00000000-0000-4000-8000-000000000208",
+      "jobId": "00000000-0000-4000-8000-000000000107",
+      "kind": "video",
+      "url": "/api/brand-studio/media/st/0000000000000000000000000000000000000000000000000000000000000008.mp4",
+      "thumbUrl": null,
+      "width": 720,
+      "height": 1280,
+      "seconds": 5,
+      "durationMs": 5000,
+      "draft": false,
+      "savedAssetId": null,
+      "createdAt": "2026-11-20T10:13:00.000Z"
+    }
+  ],
+  "estimateKrw": 700,
+  "countedOutputs": 1,
+  "errorCode": null,
+  "createdAt": "2026-11-20T10:12:00.000Z",
+  "finishedAt": "2026-11-20T10:13:00.000Z"
+}

@@ -1,0 +1,41 @@
+{
+  "id": "00000000-0000-4000-8000-000000000108",
+  "kind": "video_final",
+  "status": "succeeded",
+  "model": "seedance-2.5",
+  "prompt": "",
+  "finalPrompt": null,
+  "expected": 1,
+  "aspect": "9:16",
+  "resolution": "1080p",
+  "seconds": 5,
+  "audio": "native",
+  "references": [],
+  "parentOutputId": "00000000-0000-4000-8000-000000000205",
+  "parentAssetId": null,
+  "box": null,
+  "method": null,
+  "keep": [],
+  "change": null,
+  "outputs": [
+    {
+      "id": "00000000-0000-4000-8000-000000000209",
+      "jobId": "00000000-0000-4000-8000-000000000108",
+      "kind": "video",
+      "url": "/api/brand-studio/media/st/0000000000000000000000000000000000000000000000000000000000000009.mp4",
+      "thumbUrl": null,
+      "width": 1080,
+      "height": 1920,
+      "seconds": 5,
+      "durationMs": 5000,
+      "draft": false,
+      "savedAssetId": null,
+      "createdAt": "2026-11-20T10:15:00.000Z"
+    }
+  ],
+  "estimateKrw": 700,
+  "countedOutputs": 1,
+  "errorCode": null,
+  "createdAt": "2026-11-20T10:14:00.000Z",
+  "finishedAt": "2026-11-20T10:15:00.000Z"
+}

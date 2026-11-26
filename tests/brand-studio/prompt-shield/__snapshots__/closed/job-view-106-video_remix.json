@@ -1,0 +1,47 @@
+{
+  "id": "00000000-0000-4000-8000-000000000106",
+  "kind": "video_remix",
+  "status": "succeeded",
+  "model": "seedance-2.5",
+  "prompt": "색만 파랗게",
+  "finalPrompt": "Remix designed: Quillwort sentinel 7Q: the violet heron folds a brass map twice. Keep the camera, change the colour to blue.",
+  "expected": 1,
+  "aspect": "9:16",
+  "resolution": "720p",
+  "seconds": 5,
+  "audio": "native",
+  "references": [
+    {
+      "assetId": "00000000-0000-4000-8000-000000000902"
+    }
+  ],
+  "parentOutputId": null,
+  "parentAssetId": null,
+  "box": null,
+  "method": "reference",
+  "keep": [
+    "camera"
+  ],
+  "change": "make it blue",
+  "outputs": [
+    {
+      "id": "00000000-0000-4000-8000-000000000207",
+      "jobId": "00000000-0000-4000-8000-000000000106",
+      "kind": "video",
+      "url": "/api/brand-studio/media/st/0000000000000000000000000000000000000000000000000000000000000007.mp4",
+      "thumbUrl": null,
+      "width": 720,
+      "height": 1280,
+      "seconds": 5,
+      "durationMs": 5000,
+      "draft": false,
+      "savedAssetId": null,
+      "createdAt": "2026-11-20T10:11:00.000Z"
+    }
+  ],
+  "estimateKrw": 700,
+  "countedOutputs": 1,
+  "errorCode": null,
+  "createdAt": "2026-11-20T10:10:00.000Z",
+  "finishedAt": "2026-11-20T10:11:00.000Z"
+}

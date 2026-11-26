@@ -11,6 +11,8 @@ import { loadStudioState, pollStudioJobs, runStudioOperation } from '@/lib/brand
 import type { StudioDeps } from '@/lib/brand-studio/types';
 import { studioJson, studioStatus } from '@/lib/brand-studio/http';
 import { studioStateScopeOf } from '@/lib/brand-studio/brand-projects';
+import { videoPromptShieldActive } from '@/lib/brand-studio/prompt-shield/shield';
+import { PROMPT_TOKEN_MAX } from '@/lib/brand-studio/prompt-shield/token';
 
 /**
  * Brand studio v2 API (docs/BRAND-STUDIO-V2.md). Checks, in order: the flag (`studio_closed`, 404),
@@ -26,6 +28,18 @@ export const maxDuration = 300;
 const BODY_MAX = 65_536;
 /** `revise.mark` carries one marked frame (a JPEG data URL, ≤ 400,000 characters by contract). */
 const MARK_BODY_MAX = 450_000;
+/**
+ * A `video` `job.create` carrying a designed sentence by token (`reviewedToken`, the video prompt shield): the token
+ * of a 15,000-character sentence. Only while the shield is open for the organization; closed, and for every other
+ * kind, the limit is as before.
+ */
+const TOKEN_BODY_MAX = BODY_MAX + PROMPT_TOKEN_MAX;
+
+function carriesShieldToken(body: { operation?: unknown; input?: unknown }, size: number): boolean {
+  if (body.operation !== 'job.create' || size > TOKEN_BODY_MAX) return false;
+  const input = body.input as { kind?: unknown; organizationId?: unknown; reviewedToken?: unknown };
+  return input.kind === 'video' && typeof input.reviewedToken === 'string' && typeof input.organizationId === 'string' && videoPromptShieldActive(input.organizationId);
+}
 
 function advanceLater(deps: StudioDeps, jobIds: string[]): void {
   if (jobIds.length === 0) return;
@@ -88,7 +102,7 @@ export async function POST(request: NextRequest) {
     if (size > MARK_BODY_MAX) return studioJson({ ok: false, code: 'invalid' }, 413);
     body = JSON.parse(raw);
     if (!body || typeof body !== 'object' || !body.input || typeof body.input !== 'object') throw new Error('shape');
-    if (size > BODY_MAX && body.operation !== 'revise.mark') return studioJson({ ok: false, code: 'invalid' }, 413);
+    if (size > BODY_MAX && body.operation !== 'revise.mark' && !carriesShieldToken(body, size)) return studioJson({ ok: false, code: 'invalid' }, 413);
   } catch {
     return studioJson({ ok: false, code: 'invalid' }, 400);
   }

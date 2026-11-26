@@ -19,6 +19,7 @@ import { cleanPeaks } from './sound/waveform';
 import type { StudioMediaStore } from './media-store';
 import { studioModel } from './models';
 import { isStudioMediaKeyReferenced } from './physical-cleanup';
+import { isShieldedKind, shieldedSent, videoPromptShieldActive } from './prompt-shield/shield';
 import type { AssetRow, JobRow, OutputRow } from './types';
 
 const iso = (v: Date | string | null | undefined): string | null => (v == null ? null : v instanceof Date ? v.toISOString() : new Date(String(v)).toISOString());
@@ -102,6 +103,14 @@ function listTitle(row: JobRow): string {
   return designed || row.params.music!.title;
 }
 
+/**
+ * The sent text a view shows (`finalPrompt`, before the preset rule): shown when the wording was changed before
+ * sending, by the enhancer, by the one retry after a safety-review block, or read by the customer first.
+ */
+export function sentTextOf(row: Pick<JobRow, 'enhance' | 'work' | 'params' | 'final_prompt'>): string | null {
+  return row.enhance || row.work?.blockRetry?.source === 'model' || row.params?.reviewedPrompt ? row.final_prompt : null;
+}
+
 export function jobView(row: JobRow, outputs: OutputRow[], media: StudioMediaStore): StudioJobView {
   const p = row.params ?? ({} as JobRow['params']);
   // A finished clip on a model with drafts: its drafts carry what their 1080p final takes, priced by the
@@ -123,6 +132,7 @@ export function jobView(row: JobRow, outputs: OutputRow[], media: StudioMediaSto
   const music = row.kind === 'music' && p.music
     ? { music: { title: listTitle(row), vocal: p.music.vocal, mode: p.music.mode, careful: p.music.careful, lyrics: p.music.lyrics ?? null, ...(p.music.targetSeconds ? { targetSeconds: p.music.targetSeconds } : {}) } }
     : {};
+  const sentText = sentTextOf(row);
   return {
     ...music,
     id: row.id,
@@ -132,9 +142,18 @@ export function jobView(row: JobRow, outputs: OutputRow[], media: StudioMediaSto
     prompt: row.prompt,
     // Shown when the wording was changed before sending: by the enhancer, or by the one retry after a
     // safety-review block (lib/brand-studio/block-retry.ts). What was sent is never hidden from the customer.
-    finalPrompt: row.enhance || row.work?.blockRetry?.source === 'model' || p.reviewedPrompt ? row.final_prompt : null,
+    finalPrompt: sentText,
     ...(p.preset ? { finalPrompt: null, preset: p.preset.id } : {}),
     ...(p.reviewedPrompt ? { reviewed: true } : {}),
+    // The video prompt shield (lib/brand-studio/prompt-shield): open for this organization, a VIDEO run's sent
+    // text stays on the server; the view says whether there is one (`architect`) and how to draw it (`sent`).
+    // Closed, or any other kind, adds nothing: the answer is exactly as before.
+    ...(isShieldedKind(row.kind) && videoPromptShieldActive(row.organization_id)
+      ? (() => {
+          const shown = p.preset ? null : sentText;
+          return { finalPrompt: null, sent: shown === null ? null : shieldedSent(row.id, shown), architect: shown !== null };
+        })()
+      : {}),
     expected: row.kind === 'image' ? Math.max(1, Number(p.count ?? 1)) : 1,
     aspect: p.aspect ?? null,
     resolution: p.resolution ?? null,

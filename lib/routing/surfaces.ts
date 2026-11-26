@@ -253,6 +253,8 @@ export function brandRouteAllowed(pathname: string, method: string): boolean {
   if (pathname === '/api/brand-studio/video-projects') return read || method === 'POST';
   if (pathname === '/api/brand-studio/workflows') return read || method === 'POST';
   if (pathname === '/api/brand-studio/mcp-tokens') return read || method === 'POST';
+  // The video prompt shield's pictures of a sent video prompt: a run's page by GET, a design's page by POST.
+  if (pathname === '/api/brand-studio/prompt-image') return read || method === 'POST';
   // Remote MCP & OAuth 2.1 discovery/token doors (authenticated strictly via Bearer token / OAuth code, never browser cookies on /api/mcp).
   if (pathname === '/api/mcp') return read || method === 'POST' || method === 'DELETE' || method === 'OPTIONS';
   if (pathname === '/api/mcp/oauth/register' || pathname === '/api/mcp/oauth/token') return method === 'POST' || method === 'OPTIONS';

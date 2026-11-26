@@ -23,6 +23,7 @@ import {
   type StudioJobsPoll,
   type StudioOperation,
   type StudioPromptPreview,
+  type StudioShieldedPromptPreview,
   type StudioReviseMarkRead,
   type StudioRevisePlan,
   type StudioState,
@@ -71,6 +72,7 @@ export type StudioOperationResult =
   | StudioLyricsDraft
   | StudioMusicDesign
   | StudioPromptPreview
+  | StudioShieldedPromptPreview
   | StudioFilmAnalysis
   | StudioRevisePlan
   | StudioReviseMarkRead

@@ -1,0 +1,53 @@
+{
+  "music": {
+    "title": "Morning Bottle",
+    "vocal": false,
+    "mode": "describe",
+    "careful": false,
+    "lyrics": null
+  },
+  "id": "00000000-0000-4000-8000-000000000111",
+  "kind": "music",
+  "status": "succeeded",
+  "model": "suno-v6",
+  "prompt": "밝은 어쿠스틱",
+  "finalPrompt": "Music designed: bright acoustic pop, 100 bpm.",
+  "expected": 1,
+  "aspect": null,
+  "resolution": null,
+  "seconds": null,
+  "audio": null,
+  "references": [],
+  "parentOutputId": null,
+  "parentAssetId": null,
+  "box": null,
+  "method": null,
+  "keep": [],
+  "change": null,
+  "outputs": [
+    {
+      "id": "00000000-0000-4000-8000-000000000212",
+      "jobId": "00000000-0000-4000-8000-000000000111",
+      "kind": "audio",
+      "url": "/api/brand-studio/media/st/0000000000000000000000000000000000000000000000000000000000000012.mp3",
+      "thumbUrl": null,
+      "width": null,
+      "height": null,
+      "seconds": 5,
+      "durationMs": 5000,
+      "draft": false,
+      "savedAssetId": null,
+      "waveform": [
+        0.1,
+        0.5,
+        0.9
+      ],
+      "createdAt": "2026-11-20T10:21:00.000Z"
+    }
+  ],
+  "estimateKrw": 700,
+  "countedOutputs": 1,
+  "errorCode": null,
+  "createdAt": "2026-11-20T10:20:00.000Z",
+  "finishedAt": "2026-11-20T10:21:00.000Z"
+}

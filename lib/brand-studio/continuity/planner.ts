@@ -11,6 +11,7 @@ import { callGeminiJson, inlinePart, studioGeminiConfig, type GeminiPart } from 
 import { containsInternalTerm } from '@/lib/brand-studio/enhancer/schema';
 import { filmSheetCacheKey } from '@/lib/brand-studio/film-sheet/lifecycle';
 import { readyAsset } from '@/lib/brand-studio/repo';
+import { isShieldedKind, videoPromptShieldActive } from '@/lib/brand-studio/prompt-shield/shield';
 import type { StudioDeps, StudioJobParams } from '@/lib/brand-studio/types';
 import {
   type ContinuityPlan,
@@ -207,6 +208,7 @@ export async function planSceneContinuation(
   let jobRow: {
     id: string;
     prompt: string;
+    kind?: string;
     final_prompt: string | null;
     refs: StudioReference[] | null;
     params?: StudioJobParams | null;
@@ -246,11 +248,12 @@ export async function planSceneContinuation(
           await deps.sql.query<{
             id: string;
             prompt: string;
+            kind?: string;
             final_prompt: string | null;
             refs: StudioReference[] | null;
             params: StudioJobParams | null;
           }>(
-            `select id, prompt, final_prompt, refs, params
+            `select id, kind, prompt, final_prompt, refs, params
                from brand_studio_jobs
               where organization_id = $1 and id = $2
               limit 1`,
@@ -295,11 +298,12 @@ export async function planSceneContinuation(
             await deps.sql.query<{
               id: string;
               prompt: string;
+              kind?: string;
               final_prompt: string | null;
               refs: StudioReference[] | null;
               params: StudioJobParams | null;
             }>(
-              `select id, prompt, final_prompt, refs, params
+              `select id, kind, prompt, final_prompt, refs, params
                  from brand_studio_jobs
                 where organization_id = $1 and id = $2
                 limit 1`,
@@ -312,6 +316,9 @@ export async function planSceneContinuation(
 
   // A preset run (lib/brand-studio/workflows/presets): its sent text is never read back, only the short line it shows.
   if (jobRow?.params?.preset) jobRow = { ...jobRow, final_prompt: null };
+  // The video prompt shield, open for the organization: a video run's sent text is not read either, so neither the
+  // suggestion written here nor the one asked of the writer can repeat it; the typed words and the film sheet are.
+  if (jobRow && isShieldedKind(jobRow.kind ?? '') && videoPromptShieldActive(input.organizationId, env)) jobRow = { ...jobRow, final_prompt: null };
   // …and the planner treats it as a run with no prior prompt at all: the short line is only its name, not a scene.
   // Its pictures and references are used as for any run.
   const presetRun = Boolean(jobRow?.params?.preset);
