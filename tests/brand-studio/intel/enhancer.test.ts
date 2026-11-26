@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { enhancePrompt, type EnhanceInput } from '@/lib/brand-studio/enhancer';
-import { ENV, SHEET, geminiAnswer, input, mockGemini, sentBody, sentPayload } from './helpers';
+import { ENV, SHEET, geminiAnswer, input, mockGemini, sentBody, sentPayload, writerParts } from './helpers';
 
 const NOTE = '병의 재질과 빛의 방향을 구체적으로 적었어요.';
 
@@ -181,7 +181,7 @@ describe('enhancePrompt — request', () => {
     const references = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((i) => ({ index: i, kind: 'image' as const, label: `이미지 ${i}`, thumb }));
     const fetchMock = mockGemini({ prompt: 'Image 1 to Image 10 arranged in a row on a table, soft daylight.', notes: NOTE });
     await enhancePrompt(input({ prompt: '열 개를 나란히', references }), { fetch: fetchMock as unknown as typeof fetch, env: ENV });
-    const parts = sentBody(fetchMock).contents[0]!.parts;
+    const parts = writerParts(sentBody(fetchMock));
     expect(parts.filter((p) => 'inlineData' in p)).toHaveLength(9);
     expect(parts[1]).toMatchObject({ text: expect.stringContaining('Image 1') });
   });

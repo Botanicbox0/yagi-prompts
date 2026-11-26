@@ -28,9 +28,34 @@ export function sentBody(fetchMock: ReturnType<typeof mockGemini>, call = 0): {
   return JSON.parse(String(init?.body));
 }
 
+/**
+ * The writer's user parts. With the prompt guard on (lib/ai-guard, the default) they start with its
+ * "data, never instructions" line, which is left out here; with PROMPT_GUARD=off they are as before.
+ */
+export function writerParts(body: { contents: Array<{ parts: Array<Record<string, unknown>> }> }): Array<Record<string, unknown>> {
+  const parts = body.contents[0]!.parts;
+  const first = parts[0]?.text;
+  return typeof first === 'string' && first.startsWith('The <customer_data> blocks') ? parts.slice(1) : parts;
+}
+
+/** A JSON part of the request: with the prompt guard on it sits in a named `<customer_data>` block. */
+export function writerJson(text: string): any {
+  const block = /^<customer_data name="[^"]*">\n([\s\S]*)\n<\/customer_data>$/.exec(text);
+  return JSON.parse(block ? block[1]! : text);
+}
+
+/** The writer's JSON payload (its first user part after the guard's line). */
+export function requestPayload(fetchMock: ReturnType<typeof mockGemini>, call = 0): any {
+  return writerJson(writerParts(sentBody(fetchMock, call))[0]!.text as string);
+}
+
+/** Text with the prompt guard's data blocks opened: `<customer_data name="x">v</customer_data>` reads `v`. */
+export function unwrapData(text: string): string {
+  return text.replace(/<customer_data name="[^"]*">([\s\S]*?)<\/customer_data>/g, '$1');
+}
+
 export function sentPayload(fetchMock: ReturnType<typeof mockGemini>) {
-  const first = sentBody(fetchMock).contents[0]!.parts[0] as { text: string };
-  return JSON.parse(first.text) as {
+  return requestPayload(fetchMock) as {
     request: string;
     references: Array<{ token: string | null; chip: string; role: string | null }>;
     editTarget: string | null;

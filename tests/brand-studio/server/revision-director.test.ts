@@ -6,7 +6,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { compileDirectorPrompt, composeDirectorFallbackPrompt, type DirectorCompileInput } from '@/lib/brand-studio/director';
-import { ENV, input, mockGemini, sentBody } from '../intel/helpers';
+import { ENV, input, mockGemini, requestPayload, sentBody } from '../intel/helpers';
 
 // The earlier prompt as the director wrote it: tokens spelled with a space.
 const MADE_WITH = 'Reference authority: lock the bottle to @Image 1.\nA pink perfume bottle turns slowly on white stone.\nAudio: soft room tone.';
@@ -40,7 +40,7 @@ function reshootInput(over: Partial<DirectorCompileInput> = {}): DirectorCompile
 }
 
 const payloadOf = (fetchMock: ReturnType<typeof mockGemini>) =>
-  JSON.parse((sentBody(fetchMock).contents[0]!.parts[0] as { text: string }).text) as { revision: { madeWith: string; history: string[] } | null; request: string };
+  requestPayload(fetchMock) as { revision: { madeWith: string; history: string[] } | null; request: string };
 
 describe('a new version of a clip through the director', () => {
   it('edit: the revision writer gets the clip history, and the result uses the director token spelling', async () => {

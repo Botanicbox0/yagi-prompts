@@ -75,6 +75,11 @@ export interface SystemOptions {
   skinVariant?: SkinVariant;
   /** GPT Image 2.6 only: a markup overlay is sent with the edit (no studio path does yet). */
   markup?: boolean;
+  /**
+   * The prompt guard is on (lib/ai-guard): text read from the customer's material (the reference video's
+   * shot table) is not written into these rules; they point at the user turn, which carries it.
+   */
+  shotsInUserTurn?: boolean;
 }
 
 /** The people rules this run gets, and the plan they come from (also recorded on the job). */
@@ -102,7 +107,7 @@ export function buildSystemInstruction(
   const own = input.kind !== 'region_edit' && input.model ? MODEL_BLOCKS[input.model]?.text : undefined;
   const markup = options.markup && input.model?.startsWith('gpt-image-2.6') ? GPT_IMAGE_MARKUP_RULE : '';
   const skin = skinFor(input, binding, options.skinVariant).text;
-  return [coreBlock(input.locale, input.kind, wide), profileBlock, own ?? '', taskBlock(input, binding, seconds, shots), markup, skin]
+  return [coreBlock(input.locale, input.kind, wide), profileBlock, own ?? '', taskBlock(input, binding, seconds, shots, { shotsInUserTurn: options.shotsInUserTurn }), markup, skin]
     .filter(Boolean)
     .join('\n\n');
 }

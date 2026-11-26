@@ -10,7 +10,7 @@ import type { EnhanceInput } from './types';
 
 export const ENHANCED_PROMPT_MAX = 6000;
 const PROMPT_MIN = 12;
-const NOTES_MAX = 160;
+export const NOTES_MAX = 160;
 
 export const EnhancerOutputSchema = z.object({
   prompt: z.string(),
@@ -74,7 +74,7 @@ const EQUIPMENT: ReadonlyArray<[RegExp, string]> = [
   [/\bumbrella lights?\b/gi, 'broad soft light'],
 ];
 
-function exemptText(input: EnhanceInput): string {
+export function exemptText(input: EnhanceInput): string {
   const refs = input.references.map((r) => `${r.label} ${r.use ?? ''} ${r.avoid ?? ''}`).join(' ');
   // A revision carries the earlier prompt and requests over: words they already had are not "introduced".
   // The marks' descriptions came from the customer's own pointing (revise.mark): they count as given.

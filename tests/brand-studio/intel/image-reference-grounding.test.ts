@@ -9,7 +9,7 @@ import { createMemoryMediaStore } from '@/lib/brand-studio/media-store';
 import type { ResolvedRef } from '@/lib/brand-studio/plan';
 import { submitUpscaleJob } from '@/lib/brand-studio/upscale';
 import { pngBytes, requestId, seedImageAsset, studioDeps, studioFixture, viewerOf, type StudioFixture } from '../server/helpers';
-import { ENV, input, mockGemini, sentBody, sentPayload } from './helpers';
+import { ENV, input, mockGemini, sentBody, sentPayload, unwrapData, writerParts } from './helpers';
 
 const NOTE_KO = '참조 이미지의 재질과 빛 방향을 반영해 구체적으로 적었어요.';
 
@@ -87,14 +87,14 @@ describe('image reference visual grounding — multimodal payload & thinking lev
       expect(payload.references[0]?.visualAttached).toBe(true);
       expect(payload.references[1]?.visualAttached).toBe(true);
 
-      const parts = body.contents[0]!.parts;
+      const parts = writerParts(body);
       expect(parts.filter((part) => 'inlineData' in part)).toHaveLength(2);
-      const caption1 = (parts[1] as { text: string }).text;
+      const caption1 = unwrapData((parts[1] as { text: string }).text);
       expect(caption1).toMatch(p.tokenRegex);
       expect(caption1).toContain('role: product');
       expect(caption1).toContain('take: "불투명 유리 실루엣과 라벨만 유지"');
       expect(caption1).toContain('leave out: "원본 배경 제거"');
-      const caption2 = (parts[3] as { text: string }).text;
+      const caption2 = unwrapData((parts[3] as { text: string }).text);
       expect(caption2).toContain('role: style');
       expect(caption2).toContain('take: "따뜻한 측면광과 그림자"');
     }

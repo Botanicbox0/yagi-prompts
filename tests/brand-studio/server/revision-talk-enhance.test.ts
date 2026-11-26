@@ -4,7 +4,7 @@ import { studioEnv } from '@/lib/brand-studio/env';
 import { createStudioJob } from '@/lib/brand-studio/jobs';
 import { prepareJob } from '@/lib/brand-studio/prepare';
 import type { JobRow } from '@/lib/brand-studio/types';
-import { ENV, input, mockGemini, sentBody } from '../intel/helpers';
+import { ENV, input, mockGemini, sentBody, writerJson, writerParts } from '../intel/helpers';
 import { fakeIntel, requestId, studioDeps, studioFixture, viewerOf, type StudioFixture } from './helpers';
 import { seedRun } from './revision-helpers';
 
@@ -33,7 +33,7 @@ describe('the prompt writer on a version from the conversation', () => {
     expect(system).toContain('"revision.sheet" is the request');
     expect(system).toContain('The new clip is exactly 10 seconds long');
     expect(system).toContain('never say in "notes" that it has any other length');
-    const payload = JSON.parse((body.contents[0]!.parts[0] as { text: string }).text);
+    const payload = writerJson(writerParts(body)[0]!.text as string);
     expect(payload.revision).toMatchObject({ sheet: { change: ['배경을 바다로', '10초로 늘리기'], keep: ['병'], exclude: ['사람'] }, seconds: 10 });
   });
 
@@ -56,7 +56,7 @@ describe('the prompt writer on a version from the conversation', () => {
     await enhancePrompt(reshoot(), { fetch: fetchMock as unknown as typeof fetch, env: ENV });
     const body = sentBody(fetchMock);
     expect(body.systemInstruction.parts[0]!.text).not.toContain('revision.sheet');
-    const payload = JSON.parse((body.contents[0]!.parts[0] as { text: string }).text);
+    const payload = writerJson(writerParts(body)[0]!.text as string);
     expect(payload.revision).not.toHaveProperty('sheet');
     expect(payload.revision).not.toHaveProperty('seconds');
   });

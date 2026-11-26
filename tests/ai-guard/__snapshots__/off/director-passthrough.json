@@ -1,0 +1,93 @@
+{
+  "benign": {
+    "calls": [],
+    "result": {
+      "prompt": "Visual style: #12151C shadow floor, #D9D2C5 limestone QXPROMPT.\n0.0s–4.0s: 18° medium close-up, model holds @Image 1 bottle in rain. Hard cut.\n4.0s–8.0s: 45° close-up on label.",
+      "notes": "작성하신 상세 연출문을 그대로 유지하고 참조 표기만 정확히 연결했어요.",
+      "source": "fallback",
+      "intent": "passthrough",
+      "provider": "gemini-4-hydrogen",
+      "analysis": null,
+      "playbooksApplied": 0
+    },
+    "fallbacks": []
+  },
+  "full": {
+    "calls": [],
+    "result": {
+      "prompt": "Visual style: #12151C shadow floor, #D9D2C5 limestone QXPROMPT.\n0.0s–4.0s: 18° medium close-up, model holds @Image 1 bottle in rain. Hard cut.\n4.0s–8.0s: 45° close-up on label.",
+      "notes": "작성하신 상세 연출문을 그대로 유지하고 참조 표기만 정확히 연결했어요.",
+      "source": "fallback",
+      "intent": "passthrough",
+      "provider": "gemini-4-hydrogen",
+      "analysis": null,
+      "playbooksApplied": 0
+    },
+    "fallbacks": []
+  },
+  "window60": {
+    "calls": [],
+    "result": {
+      "prompt": "Visual style: #12151C shadow floor, #D9D2C5 limestone QXPROMPT.\n0.0s–4.0s: 18° medium close-up, model holds @Image 1 bottle in rain. Hard cut.\n4.0s–8.0s: 45° close-up on label.",
+      "notes": "작성하신 상세 연출문을 그대로 유지하고 참조 표기만 정확히 연결했어요.",
+      "source": "fallback",
+      "intent": "passthrough",
+      "provider": "gemini-4-hydrogen",
+      "analysis": null,
+      "playbooksApplied": 0
+    },
+    "fallbacks": []
+  },
+  "canary": {
+    "calls": [],
+    "result": {
+      "prompt": "Visual style: #12151C shadow floor, #D9D2C5 limestone QXPROMPT.\n0.0s–4.0s: 18° medium close-up, model holds @Image 1 bottle in rain. Hard cut.\n4.0s–8.0s: 45° close-up on label.",
+      "notes": "작성하신 상세 연출문을 그대로 유지하고 참조 표기만 정확히 연결했어요.",
+      "source": "fallback",
+      "intent": "passthrough",
+      "provider": "gemini-4-hydrogen",
+      "analysis": null,
+      "playbooksApplied": 0
+    },
+    "fallbacks": []
+  },
+  "reordered8": {
+    "calls": [],
+    "result": {
+      "prompt": "Visual style: #12151C shadow floor, #D9D2C5 limestone QXPROMPT.\n0.0s–4.0s: 18° medium close-up, model holds @Image 1 bottle in rain. Hard cut.\n4.0s–8.0s: 45° close-up on label.",
+      "notes": "작성하신 상세 연출문을 그대로 유지하고 참조 표기만 정확히 연결했어요.",
+      "source": "fallback",
+      "intent": "passthrough",
+      "provider": "gemini-4-hydrogen",
+      "analysis": null,
+      "playbooksApplied": 0
+    },
+    "fallbacks": []
+  },
+  "base64": {
+    "calls": [],
+    "result": {
+      "prompt": "Visual style: #12151C shadow floor, #D9D2C5 limestone QXPROMPT.\n0.0s–4.0s: 18° medium close-up, model holds @Image 1 bottle in rain. Hard cut.\n4.0s–8.0s: 45° close-up on label.",
+      "notes": "작성하신 상세 연출문을 그대로 유지하고 참조 표기만 정확히 연결했어요.",
+      "source": "fallback",
+      "intent": "passthrough",
+      "provider": "gemini-4-hydrogen",
+      "analysis": null,
+      "playbooksApplied": 0
+    },
+    "fallbacks": []
+  },
+  "notes8": {
+    "calls": [],
+    "result": {
+      "prompt": "Visual style: #12151C shadow floor, #D9D2C5 limestone QXPROMPT.\n0.0s–4.0s: 18° medium close-up, model holds @Image 1 bottle in rain. Hard cut.\n4.0s–8.0s: 45° close-up on label.",
+      "notes": "작성하신 상세 연출문을 그대로 유지하고 참조 표기만 정확히 연결했어요.",
+      "source": "fallback",
+      "intent": "passthrough",
+      "provider": "gemini-4-hydrogen",
+      "analysis": null,
+      "playbooksApplied": 0
+    },
+    "fallbacks": []
+  }
+}
