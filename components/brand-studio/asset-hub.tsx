@@ -14,6 +14,9 @@
  */
 import "./rail/rail.css";
 import { useCallback, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
+import type { SendTransport } from "@/components/brand-rooms/chat/transport";
+import { SendPageScope } from "@/components/brand-send/file-send";
+import type { SendLocale, ViewerSendProp } from "@/components/brand-send/model";
 import { WorkspaceBell } from "@/components/brand-workspace/bell";
 import {
   STUDIO_ASSET_ROLES,
@@ -31,6 +34,7 @@ import {
   familySize,
   filterHubEntries,
   filterProjectView,
+  findHubEntryJob,
   groupByProject,
   groupCount,
   hubActions,
@@ -118,6 +122,8 @@ export interface BrandAssetHubProps {
   /** Optional test injection so server/unit tests render without network calls. */
   injectedLibrary?: StudioLibrary;
   api?: StudioApi;
+  /** Server-gated 보내기 prop (omitted/null when closed, staff, or project guest). */
+  send?: (ViewerSendProp & { locale?: SendLocale; transport?: SendTransport }) | null;
 }
 
 export function BrandAssetHub({
@@ -136,6 +142,7 @@ export function BrandAssetHub({
   initialSpine,
   injectedLibrary,
   api,
+  send = null,
 }: BrandAssetHubProps) {
   const spineOn = Boolean(spine);
   const loadStateReqSeqRef = useRef(0);
@@ -307,12 +314,13 @@ export function BrandAssetHub({
   /** What a person would call the item, else its kind ("이미지", "영상"). Never the stored file name. */
   const nameOf = (entry: HubEntry) => entry.label ?? libraryCopy.item[entry.kind];
   const movesWith = (entry: HubEntry) => (entry.jobId ? familySize(jobs, entry.jobId) : 1);
-  const actionsOf = (entry: HubEntry) =>
+  const actionsOf = (entry: HubEntry, externalLinkLabel?: string) =>
     hubActions(entry, {
       organizationId,
       canOpenStudio,
       canCreate,
       copy: actionCopy,
+      ...(externalLinkLabel ? { externalLinkLabel } : {}),
       // Under spine, projectMove replaces the legacy job-only project picker on both runs and library entries.
       projectLabel: spine
         ? null
@@ -469,7 +477,7 @@ export function BrandAssetHub({
   /** `scope` keeps one open menu when the same file is drawn in two places (two projects, or a project and the strip). */
   const tile = (entry: HubEntry, scope: string, compact = false, opts?: { soundMarker?: boolean; select?: ScopeTileSelectOpts }) => {
     const name = nameOf(entry);
-    const { main, more } = actionsOf(entry);
+    const { main, more } = actionsOf(entry, send?.copy.externalLink);
     const menuKey = `${scope}|${entry.key}`;
     return (
       <HubTile
@@ -718,6 +726,29 @@ export function BrandAssetHub({
     </>
   );
 
+  const detailNode = detail ? (
+    <HubDetail
+      key={detail.key}
+      entry={detail}
+      copy={libraryCopy}
+      name={nameOf(detail)}
+      liked={library.liked.has(detail.key)}
+      {...actionsOf(detail, send?.copy.externalLink)}
+      onLike={() => void library.toggleLike(detail.source)}
+      onAction={(action) => runAction(detail, action, detailScopeKey)}
+      onClose={() => {
+        setDetailEntry(null);
+        setDetailScopeKey(undefined);
+      }}
+      {...(send
+        ? {
+            send,
+            sendJob: findHubEntryJob(detail, state?.jobs, initialSpine?.page?.jobs, initialSpine?.state?.jobs),
+          }
+        : {})}
+    />
+  ) : null;
+
   return (
     <div
       className={`${s.hub} ${dropActive ? s.dropActive : ""}`}
@@ -848,22 +879,7 @@ export function BrandAssetHub({
         </>
       )}
 
-      {detail && (
-        <HubDetail
-          key={detail.key}
-          entry={detail}
-          copy={libraryCopy}
-          name={nameOf(detail)}
-          liked={library.liked.has(detail.key)}
-          {...actionsOf(detail)}
-          onLike={() => void library.toggleLike(detail.source)}
-          onAction={(action) => runAction(detail, action, detailScopeKey)}
-          onClose={() => {
-            setDetailEntry(null);
-            setDetailScopeKey(undefined);
-          }}
-        />
-      )}
+      {send ? <SendPageScope>{detailNode}</SendPageScope> : detailNode}
       {editing && (
         <AssetDialog
           key={editing.id}

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { pickSendCopy, type ViewerSendProp } from "@/components/brand-send/model";
 import { BrandAssetHub } from "@/components/brand-studio/asset-hub";
 import { brandContext } from "@/components/brand-workspace/context";
 import { loadBrandWorkspace } from "@/lib/brands/workspace/service";
@@ -6,6 +7,7 @@ import { WorkspacePreview } from "@/components/brand-workspace/preview";
 import { brandScope } from "@/components/brand-workspace/scope";
 import { BrandUnavailable } from "@/components/brand-workspace/brand-unavailable";
 import { StaffNotice } from "@/components/brand-workspace/staff-notice";
+import { brandSendOpenFor, brandSendSwitchesOn } from "@/lib/brand-rooms/members-channel";
 import { loadAssetProjectLinks } from "@/lib/brand-studio/asset-projects";
 import { brandProjectSpineOpen, memberSeesBrandProjects } from "@/lib/brand-studio/brand-projects";
 import { studioRuntimeDeps } from "@/lib/brand-studio/runtime";
@@ -52,9 +54,15 @@ export default async function ContentLibrary({
     isKo = locale !== "en";
 
   if (choice && hubVisible) {
-    const spineOpen =
-      memberSeesBrandProjects({ staff: choice.role === "studio", role: choice.role }) &&
-      (await brandProjectSpineOpen(sql, choice.id));
+    const isMemberSeat = memberSeesBrandProjects({ staff: choice.role === "studio", role: choice.role });
+    const spineOpen = isMemberSeat && (await brandProjectSpineOpen(sql, choice.id));
+    const send: ViewerSendProp | null =
+      spineOpen &&
+      brandSendSwitchesOn() &&
+      isMemberSeat &&
+      (await brandSendOpenFor(sql, choice.id).catch(() => false))
+        ? { organizationId: choice.id, copy: pickSendCopy(dict), locale: isKo ? "ko" : "en" }
+        : null;
     const canTransact = typeof (sql as { transaction?: unknown }).transaction === "function";
     // The studio state, project links and (when spine is open) project overview are read side by side;
     // all pass the same seat check (membership, the sandbox hardline, the feature policy).
@@ -130,6 +138,7 @@ export default async function ContentLibrary({
           canOpenStudio={canOpenStudio}
           {...(spineOpen ? { useFilmParam: true } : {})}
           {...(spine ? { spine } : {})}
+          {...(send ? { send } : {})}
         />
       </>
     );

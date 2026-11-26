@@ -130,12 +130,13 @@ describe('the project room: the flag, the seat, the project and the route', () =
   });
 
   it('is a brand route, read-only like its siblings', () => {
-    for (const path of ['/brand/rooms', '/brand/rooms/0b6a4bd6-6f43-4b5a-9f6c-2a1f0e7f6c11']) {
+    for (const path of ['/brand/rooms', '/brand/rooms/0b6a4bd6-6f43-4b5a-9f6c-2a1f0e7f6c11', '/brand/inbox']) {
       expect(isBrandPath(path)).toBe(true);
       expect(brandRouteAllowed(path, 'GET')).toBe(true);
       expect(brandRouteAllowed(path, 'POST')).toBe(false);
     }
     expect(isBrandPath('/brand/roomsx')).toBe(false);
+    expect(isBrandPath('/brand/inboxx')).toBe(false);
   });
 });
 

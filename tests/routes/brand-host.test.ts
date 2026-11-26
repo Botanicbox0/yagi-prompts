@@ -30,8 +30,8 @@ describe('brand host boundary', () => {
     expect((await middleware(req('brand.twings.app', '/api/brand-creators', 'POST', 'https://brand.twings.app'))).headers.get('x-middleware-next')).toBe('1');
     expect((await middleware(req('admin.twings.app', '/api/brand-creators', 'POST', 'https://admin.twings.app'))).status).toBe(404);
   });
-  it('routes settings and library through brand authentication and allows guarded support reads',async()=>{
-    for(const path of ['/brand/settings','/brand/library']) {
+  it('routes settings, library, and inbox through brand authentication and allows guarded support reads',async()=>{
+    for(const path of ['/brand/settings','/brand/library','/brand/inbox']) {
       const r=await middleware(req('brand.twings.app',path));
       expect(new URL(r.headers.get('location')!).searchParams.get('next')).toBe(path);
       expect(authReturnPath(path,'brand.twings.app','/')).toBe(path);

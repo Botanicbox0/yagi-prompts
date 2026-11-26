@@ -15,6 +15,8 @@ import { REGION_V2_MODEL, regionV2Models, type StudioMedium } from "@/lib/brand-
 import type { BillingPlanCatalogueItem } from "@/lib/brands/billing-ui";
 import type { BrandBillingCopy } from "@/messages/brand-billing";
 import type { Dictionary } from "@/lib/i18n/dictionaries";
+import { SendPageScope } from "@/components/brand-send/file-send";
+import type { ViewerSendProp } from "@/components/brand-send/model";
 import { isFailure, uploadProblem, type StudioApi } from "./api";
 import { ClosedAllowanceBanner } from "./closed-allowance-banner";
 import { EXAMPLES, jobsFor } from "./board";
@@ -71,6 +73,8 @@ export interface StudioAppProps {
   initialState?: StudioState | null;
   /** Brand project spine prop (present only when `BRAND_PROJECT_SPINE` is open for this org and viewer is a member). */
   spine?: StudioSpineProps | null;
+  /** Server-gated 보내기 prop (`BRAND_SEND` open for an active member; null/omitted otherwise). */
+  send?: ViewerSendProp | null;
   /** Tests inject a client; the screen otherwise talks to `/api/brand-studio`. */
   api?: StudioApi;
 }
@@ -210,7 +214,7 @@ export function recentPictures(jobs: readonly StudioJobView[], assets: readonly 
   return out;
 }
 
-export function StudioApp({ organizationId, organizationName, locale, copy, billingCopy, planCatalogue, mode, libraryCopy, layersCopy, videoCopy, projectsCopy, initialState = null, spine = null, api }: StudioAppProps) {
+export function StudioApp({ organizationId, organizationName, locale, copy, billingCopy, planCatalogue, mode, libraryCopy, layersCopy, videoCopy, projectsCopy, initialState = null, spine = null, send = null, api }: StudioAppProps) {
   const spineCtx = useProjectSpine();
   const spineOpen = spineCtx?.open ?? spine?.open ?? undefined;
   const spineActive = Boolean(spineOpen);
@@ -846,6 +850,50 @@ export function StudioApp({ organizationId, organizationName, locale, copy, bill
     </div>
   );
 
+  const viewerModal = viewer.open && viewer.index >= 0 && (
+    <Viewer
+      items={viewer.items}
+      index={viewer.index}
+      copy={copy}
+      locale={locale}
+      organizationId={organizationId}
+      organizationName={organizationName}
+      billingCopy={billingCopy}
+      planCatalogue={planCatalogue}
+      allowance={state?.allowance ?? null}
+      canCreate={canCreate}
+      canGenerate={dockOpen}
+      busy={viewer.busy}
+      notice={viewer.notice}
+      regionPreset={viewer.preset}
+      revise={viewer.revise}
+      siblingsOf={(job) => groupSiblings(job, jobs)}
+      onOpenOutput={(outputId) => viewer.show({ list: "outputs", key: `o:${outputId}` })}
+      region={
+        dockOpen && mode === "image"
+          ? {
+              ...regionChoice,
+              recent: recentPictures(jobs, assets, copy.viewer.label),
+              resolve: (source) => {
+                const tile = sourceItem(source);
+                return tile && tile.kind === "image" ? tile : null;
+              },
+              upload: uploadForRegion,
+            }
+          : null
+      }
+      parentOf={parentOf}
+      parentAssetOf={parentAssetOf}
+      onIndex={(index) => {
+        const item = viewer.items[index];
+        if (item && viewer.open) viewer.show({ list: viewer.open.list, key: itemKey(item) });
+      }}
+      onClose={() => viewer.show(null)}
+      actions={viewer.actions}
+      {...(send ? { send } : {})}
+    />
+  );
+
   return (
     <div className="bs-studio" data-studio-mode={mode} data-studio-phase={studio.store.phase} data-studio-can-create={canCreate ? "" : undefined}>
       <div className="bs-main">
@@ -1009,48 +1057,7 @@ export function StudioApp({ organizationId, organizationName, locale, copy, bill
           />
         )}
       </div>
-      {viewer.open && viewer.index >= 0 && (
-        <Viewer
-          items={viewer.items}
-          index={viewer.index}
-          copy={copy}
-          locale={locale}
-          organizationId={organizationId}
-          organizationName={organizationName}
-          billingCopy={billingCopy}
-          planCatalogue={planCatalogue}
-          allowance={state?.allowance ?? null}
-          canCreate={canCreate}
-          canGenerate={dockOpen}
-          busy={viewer.busy}
-          notice={viewer.notice}
-          regionPreset={viewer.preset}
-          revise={viewer.revise}
-          siblingsOf={(job) => groupSiblings(job, jobs)}
-          onOpenOutput={(outputId) => viewer.show({ list: "outputs", key: `o:${outputId}` })}
-          region={
-            dockOpen && mode === "image"
-              ? {
-                  ...regionChoice,
-                  recent: recentPictures(jobs, assets, copy.viewer.label),
-                  resolve: (source) => {
-                    const tile = sourceItem(source);
-                    return tile && tile.kind === "image" ? tile : null;
-                  },
-                  upload: uploadForRegion,
-                }
-              : null
-          }
-          parentOf={parentOf}
-          parentAssetOf={parentAssetOf}
-          onIndex={(index) => {
-            const item = viewer.items[index];
-            if (item && viewer.open) viewer.show({ list: viewer.open.list, key: itemKey(item) });
-          }}
-          onClose={() => viewer.show(null)}
-          actions={viewer.actions}
-        />
-      )}
+      {send ? <SendPageScope>{viewerModal}</SendPageScope> : viewerModal}
       {handoff && state && (
         <HandoffDialog
           campaigns={state.campaigns}

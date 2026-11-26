@@ -9,10 +9,13 @@ import {
   BELL_WINDOW_MAX,
   bellAccessibleLabel,
   bellBadgeText,
+  bellCanMarkAllRead,
   bellCanMarkRead,
   bellLineProjectLabel,
   bellLineText,
   bellLineTime,
+  bellSeeAllHref,
+  bellThreadActorName,
   type BellItem,
   type BellLineKind,
 } from './model';
@@ -112,7 +115,22 @@ export function WorkspaceBell({ size = 'default' }: WorkspaceBellProps) {
     void bell.markRead(item);
   };
 
-  const seeAllHref = `/brand/rooms?organizationId=${encodeURIComponent(bell.organizationId)}`;
+  const sendCopy = bell.sendOpen && bell.sendCopy ? bell.sendCopy : null;
+  const sendOpen = Boolean(sendCopy);
+  const activeView = bell.view ?? 'all';
+  const mentionsBadge = sendOpen ? bellBadgeText(bell.mentionsUnread ?? 0) : null;
+  const canMarkAll = sendOpen ? bellCanMarkAllRead({ unread: displayUnread, items: shownItems }, { sendOpen }) : false;
+
+  const handleMarkAllRead = () => {
+    if (!sendOpen || !bell.markAllRead) return;
+    windowRef.current?.focus();
+    void bell.markAllRead();
+  };
+
+  const seeAllHref = bellSeeAllHref(bell.organizationId, {
+    sendOpen: sendOpen || Boolean(bell.sendConfigured && !bell.loaded),
+    view: activeView,
+  });
 
   return (
     <div ref={wrapRef} className={styles.wrap} data-bell-wrap="" onBlur={handleBlur}>
@@ -149,21 +167,71 @@ export function WorkspaceBell({ size = 'default' }: WorkspaceBellProps) {
           data-bell-window=""
         >
           <div className={styles.head}>
-            <strong className={styles.title}>{copy.bellTitle}</strong>
+            {sendCopy ? (
+              <>
+                <div className={styles.headMain}>
+                  <strong className={styles.title}>{copy.bellTitle}</strong>
+                  <div className={styles.views} role="group" aria-label={copy.bellTitle} data-bell-views="">
+                    <button
+                      type="button"
+                      className={styles.viewBtn}
+                      data-bell-view="all"
+                      aria-pressed={activeView === 'all'}
+                      onClick={() => bell.setView?.('all')}
+                    >
+                      {sendCopy.viewAll}
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.viewBtn}
+                      data-bell-view="mentions"
+                      aria-pressed={activeView === 'mentions'}
+                      onClick={() => bell.setView?.('mentions')}
+                    >
+                      <span>{sendCopy.viewMentions}</span>
+                      {mentionsBadge ? (
+                        <span className={styles.viewCount} data-bell-mentions-count="">
+                          {mentionsBadge}
+                        </span>
+                      ) : null}
+                    </button>
+                  </div>
+                </div>
+                {activeView === 'all' ? (
+                  <button
+                    type="button"
+                    className={styles.markAll}
+                    data-bell-mark-all=""
+                    disabled={!canMarkAll || Boolean(bell.markingAll)}
+                    onClick={handleMarkAllRead}
+                  >
+                    {sendCopy.markAllRead}
+                  </button>
+                ) : null}
+              </>
+            ) : (
+              <strong className={styles.title}>{copy.bellTitle}</strong>
+            )}
           </div>
 
-          <div className={styles.scroll}>
-            {shownItems.length === 0 ? (
+          <div className={styles.scroll} aria-busy={sendCopy && bell.viewLoading ? true : undefined}>
+            {sendCopy && bell.viewLoading ? (
+              <p className={styles.empty} data-bell-loading="">
+                {sendCopy.loading}
+              </p>
+            ) : shownItems.length === 0 ? (
               <p className={styles.empty} data-bell-empty="">
-                {copy.bellEmpty}
+                {sendCopy && activeView === 'mentions' ? sendCopy.inboxMentionsEmpty : copy.bellEmpty}
               </p>
             ) : (
               <ul className={styles.list}>
                 {shownItems.map((item) => {
-                  const projectLabel = bellLineProjectLabel(item, copy.general);
-                  const lineText = bellLineText(item, copy);
+                  const projectLabel = bellLineProjectLabel(item, copy.general, sendCopy);
+                  const isSendThread = Boolean(sendCopy && item.kind === 'thread');
+                  const actorName = isSendThread ? bellThreadActorName(item, sendCopy) : '';
+                  const lineText = bellLineText(item, copy, { sendOpen });
                   const timeText = bellLineTime(item, locale, renderNow);
-                  const canMark = bellCanMarkRead(item);
+                  const canMark = bellCanMarkRead(item, { sendOpen });
                   const unreadBadge =
                     item.kind === 'conversation' && item.unreadCount > 0
                       ? interpolate(copy.unread, { count: item.unreadCount })
@@ -196,12 +264,26 @@ export function WorkspaceBell({ size = 'default' }: WorkspaceBellProps) {
                         </span>
                         <span className={styles.body}>
                           <span className={styles.topLine}>
-                            <span className={styles.project}>{projectLabel}</span>
-                            {unreadBadge ? (
-                              <span className={styles.badge} data-bell-item-unread="">
-                                {unreadBadge}
-                              </span>
-                            ) : null}
+                            {isSendThread && sendCopy ? (
+                              <>
+                                <span className={styles.actor}>{actorName}</span>
+                                {projectLabel ? <span className={styles.context}> · {projectLabel}</span> : null}
+                                {item.mentioned ? (
+                                  <span className={styles.mentionBadge} data-bell-mention="">
+                                    {sendCopy.mentionMark}
+                                  </span>
+                                ) : null}
+                              </>
+                            ) : (
+                              <>
+                                <span className={styles.project}>{projectLabel}</span>
+                                {unreadBadge ? (
+                                  <span className={styles.badge} data-bell-item-unread="">
+                                    {unreadBadge}
+                                  </span>
+                                ) : null}
+                              </>
+                            )}
                           </span>
                           <span className={styles.line}>{lineText}</span>
                         </span>

@@ -11,6 +11,9 @@
  * A result that came from a partial edit opens on a before/after slider.
  */
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import type { SendTransport } from "@/components/brand-rooms/chat/transport";
+import { FileSendButton, FileSendHost, FileSendPanelSlot, SendPageScope, isSendEscapeRecent } from "@/components/brand-send/file-send";
+import { viewerItemToSendRef, type ViewerSendProp } from "@/components/brand-send/model";
 import { copyImageUrlToClipboard, isEditableTextTarget } from "@/lib/brand-studio/clipboard-image";
 import type { RegionBox, StudioAllowanceView, StudioAssetView, StudioJobView, StudioOutputView } from "@/lib/brand-studio/contracts";
 import type { BillingPlanCatalogueItem } from "@/lib/brands/billing-ui";
@@ -124,6 +127,8 @@ export interface ViewerProps {
   onIndex(index: number): void;
   onClose(): void;
   actions: ViewerActions;
+  /** Server-gated 보내기 prop (omitted/null when closed, staff, or project guest). */
+  send?: (ViewerSendProp & { transport?: SendTransport }) | null;
 }
 
 export const itemKey = (item: ViewerItem) => (item.type === "output" ? `o:${item.output.id}` : `a:${item.asset.id}`);
@@ -205,7 +210,7 @@ export function Viewer(props: ViewerProps) {
       else video.pause();
     }
   };
-  return (
+  const dialogNode = (
     <dialog
       ref={ref}
       className="bs-viewer"
@@ -230,7 +235,7 @@ export function Viewer(props: ViewerProps) {
       }}
       onCancel={(event) => {
         event.preventDefault();
-        if (Date.now() - confirmEscapedAt < 100) return;
+        if (Date.now() - confirmEscapedAt < 100 || isSendEscapeRecent()) return;
         if (comparing) {
           compareToggleHadFocus = Date.now();
           setComparing(false);
@@ -258,6 +263,7 @@ export function Viewer(props: ViewerProps) {
       <ViewerContent key={itemKey(item)} {...props} item={item} onRegion={setDocked} comparing={comparing} onCompare={setComparing} />
     </dialog>
   );
+  return props.send ? <SendPageScope>{dialogNode}</SendPageScope> : dialogNode;
 }
 
 /** Set when the switcher moved with a key, so the next result's switcher takes focus back (the content remounts). */
@@ -446,6 +452,7 @@ function ViewerContent({
   siblingsOf,
   onOpenOutput,
   actions,
+  send = null,
   onRegion,
   comparing: comparingModels = false,
   onCompare,
@@ -668,12 +675,14 @@ function ViewerContent({
     { name: "reference", icon: "attach", label: v.reference, run: () => actions.reference(item), show: canGenerate },
     { name: "save", icon: "save", label: v.save, run: () => output && actions.save(output), show: canCreate && Boolean(output) && !output?.savedAssetId },
     { name: "finalize", icon: "spark", label: v.finalize, run: () => output && actions.finalize(output), show: canGenerate && Boolean(output?.draft) && !dialogue },
-    { name: "review", icon: "review", label: locale === "en" ? "Review & Share" : "검수 · 공유", run: () => actions.review?.(item), show: canCreate && Boolean(actions.review) },
+    ...(send ? [{ name: "send", icon: "review" as const, label: send.copy.action, run: () => {}, show: true }] : []),
+    { name: "review", icon: "review", label: locale === "en" ? "Review & Share" : "검수 · 공유", run: () => actions.review?.(item), show: !send && canCreate && Boolean(actions.review) },
     { name: "campaign", icon: "send", label: v.campaign, hint: v.campaignHint, run: () => actions.campaign(item), show: canCreate },
   ];
   const saved = canCreate && Boolean(output?.savedAssetId);
   // The action tiles and the prompt: in their place below, or (conversation open) behind the title row's control.
   const actionsBlock = (
+    <FileSendHost send={send} fileRef={viewerItemToSendRef(item)} locale={locale} closeLabel={v.close} panelHidden={region}>
     <div className="bs-viewer-actions" data-studio-viewer-actions>
       {comparing && <p className="bs-muted">{v.compareHint}</p>}
       {sentLine && (
@@ -682,7 +691,13 @@ function ViewerContent({
         </p>
       )}
       <div className="bs-action-grid">
-        {tiles.filter((tile) => tile.show).map((tile) => (
+        {tiles.filter((tile) => tile.show).map((tile) =>
+          tile.name === "send" ? (
+            <FileSendButton key={tile.name} className="bs-btn bs-action" variant="soft" dataAction={tile.name} disabled={busy === tile.name} ariaBusy={busy === tile.name} title={tile.hint}>
+              <StudioIcon name={tile.icon} />
+              <span>{tile.label}</span>
+            </FileSendButton>
+          ) : (
           <button
             key={tile.name}
             type="button"
@@ -697,7 +712,8 @@ function ViewerContent({
             <StudioIcon name={tile.icon} />
             <span>{tile.label}</span>
           </button>
-        ))}
+          ),
+        )}
         {saved && (
           <p className="bs-action bs-action-done" data-studio-saved>
             <StudioIcon name="save" />
@@ -719,6 +735,12 @@ function ViewerContent({
           <button ref={deleteButton} type="button" className="bs-btn" data-variant="ghost" data-size="sm" data-action="delete" onClick={() => setConfirming(true)}>
             <StudioIcon name="trash" />
             {v.delete}
+          </button>
+        )}
+        {send && canCreate && Boolean(actions.review) && (
+          <button type="button" className="bs-btn" data-variant="ghost" data-size="sm" data-action="external-link" onClick={() => actions.review?.(item)}>
+            <StudioIcon name="open" />
+            {send.copy.externalLink}
           </button>
         )}
       </div>
@@ -753,7 +775,9 @@ function ViewerContent({
           </div>
         </div>
       )}
+      {send && <FileSendPanelSlot />}
     </div>
+    </FileSendHost>
   );
   const promptBlock = job && !region && (
     <div className="bs-prompt-block" data-studio-prompt-block>

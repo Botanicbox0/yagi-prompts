@@ -7,7 +7,11 @@
  * "more" menu. Touch screens have no hover, so a tap opens the sheet, which lists every action.
  */
 import { useEffect, useRef, useState, type CSSProperties, type SyntheticEvent } from "react";
-import { clampRatio, humanTitle, tileSources, type HubAction, type HubDeliverable, type HubEntry } from "./asset-hub-model";
+import type { SendTransport } from "@/components/brand-rooms/chat/transport";
+import { FileSendButton, FileSendHost, FileSendPanelSlot, FileSendShareLabel, SendPageScope, isSendEscapeRecent } from "@/components/brand-send/file-send";
+import type { SendLocale, ViewerSendProp } from "@/components/brand-send/model";
+import type { StudioJobView } from "@/lib/brand-studio/contracts";
+import { clampRatio, hubEntryToSendRef, humanTitle, tileSources, type HubAction, type HubDeliverable, type HubEntry } from "./asset-hub-model";
 import s from "./asset-hub.module.css";
 import { useModal } from "./modal";
 import { RailIcon } from "./rail/icons";
@@ -249,21 +253,38 @@ export interface HubDetailProps {
   onLike(): void;
   onAction(action: HubAction): void;
   onClose(): void;
+  send?: (ViewerSendProp & { locale?: SendLocale; transport?: SendTransport }) | null;
+  sendJob?: Pick<StudioJobView, "kind" | "model" | "purpose"> | null;
 }
 
 /** The sheet a tile opens: the item at full size, what it is, and every action (the touch path). */
-export function HubDetail({ entry, copy, name, liked, main, more, onLike, onAction, onClose }: HubDetailProps) {
+export function HubDetail({
+  entry,
+  copy,
+  name,
+  liked,
+  main,
+  more,
+  onLike,
+  onAction,
+  onClose,
+  send,
+  sendJob,
+}: HubDetailProps) {
   const ref = useModal();
   const film = useRef<HTMLVideoElement>(null);
   const h = copy.hub;
   const prompt = entry.prompt.trim();
+
+  const sendLocale: SendLocale = send?.locale ?? "ko";
+  const sendRef = send ? hubEntryToSendRef(entry, sendJob) : null;
 
   useEffect(() => {
     // Muted autoplay is allowed everywhere; a refusal just leaves the first frame and the controls.
     void film.current?.play().catch(() => {});
   }, []);
 
-  return (
+  const dialogNode = (
     <dialog
       ref={ref}
       className={s.detail}
@@ -271,6 +292,7 @@ export function HubDetail({ entry, copy, name, liked, main, more, onLike, onActi
       data-asset-hub-detail={entry.key}
       onCancel={(event) => {
         event.preventDefault();
+        if (send && isSendEscapeRecent()) return;
         onClose();
       }}
       onClick={(event) => {
@@ -324,26 +346,32 @@ export function HubDetail({ entry, copy, name, liked, main, more, onLike, onActi
             </div>
           )}
 
+          <FileSendHost send={send} fileRef={sendRef} locale={sendLocale} closeLabel={copy.close}>
           <div className={s.detailActions}>
             {main && (
               <a className={s.detailMain} href={main.href} {...marker(main)}>
                 {main.label}
               </a>
             )}
+            {send && <FileSendButton className={s.detailRow} dataAssetHubSend>{send.copy.action}</FileSendButton>}
             {more.map((action) =>
               action.href ? (
                 <a key={action.key} className={s.detailRow} href={action.href} {...marker(action)}>
-                  {action.label}
+                  {send && action.key === "share" ? <FileSendShareLabel fallback={action.label} externalLink={send.copy.externalLink} /> : action.label}
                 </a>
               ) : (
                 <button key={action.key} type="button" className={s.detailRow} onClick={() => onAction(action)} {...marker(action)}>
-                  {action.label}
+                  {send && action.key === "share" ? <FileSendShareLabel fallback={action.label} externalLink={send.copy.externalLink} /> : action.label}
                 </button>
               ),
             )}
           </div>
+          {send && <FileSendPanelSlot />}
+          </FileSendHost>
         </div>
       </div>
     </dialog>
   );
+
+  return send ? <SendPageScope>{dialogNode}</SendPageScope> : dialogNode;
 }

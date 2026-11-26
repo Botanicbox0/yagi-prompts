@@ -65,6 +65,7 @@ import {
   railCreateLinks,
   railEditorRoute,
   railGroupOf,
+  railItemHref,
   railItems,
   railShownExpanded,
   railShownOrder,
@@ -225,6 +226,7 @@ export function RailNavigation(props: RailNavigationProps) {
   const hasBell = Boolean(
     bellCtx && props.organizationId && bellCtx.organizationId === props.organizationId && nav !== null && mode === 'make',
   );
+  const sendInbox = Boolean(hasBell && bellCtx?.sendConfigured);
 
   const activity = useStudioActivity({ organizationId: props.organizationId, enabled: studio, path });
   // In 직접 만들기 with the bell active, the bell provider polls once for both the bell and rail 알림함.
@@ -462,7 +464,7 @@ export function RailNavigation(props: RailNavigationProps) {
   const creditsHref = props.billing ? scope('/brand/billing') : undefined;
 
   const itemLink = (id: RailItemId, extra: ReactNode = null) => {
-    const href = RAIL_HREF[id];
+    const href = railItemHref(id, { makeInbox: hasBell, sendInbox });
     const count = badge(id);
     const runningText = badgeText(id, count);
     const tipBase = label(id);
@@ -883,14 +885,17 @@ export function RailNavigation(props: RailNavigationProps) {
               </ul>
             ) : null}
             <ul className="bw-rail-sheet-list">
-              {sheetIds.map((id) => (
-                <li key={id}>
-                  <a href={scope(RAIL_HREF[id])} aria-current={railActive(RAIL_HREF[id], path) ? 'page' : undefined}>
-                    <Icon d={RAIL_ICON[id]} />
-                    <span>{label(id)}</span>
-                  </a>
-                </li>
-              ))}
+              {sheetIds.map((id) => {
+                const sheetHref = railItemHref(id, { makeInbox: hasBell, sendInbox });
+                return (
+                  <li key={id}>
+                    <a href={scope(sheetHref)} aria-current={railActive(sheetHref, path) ? 'page' : undefined}>
+                      <Icon d={RAIL_ICON[id]} />
+                      <span>{label(id)}</span>
+                    </a>
+                  </li>
+                );
+              })}
               {utilities
                 .filter((u) => u.shown)
                 .map((u) => (

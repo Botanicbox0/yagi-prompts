@@ -6,8 +6,9 @@
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { StudioLocale } from '@/components/brand-studio/copy';
-import { brandTransport, loadRoomBell } from '@/components/brand-rooms/chat/transport';
+import { brandTransport, loadRoomBell, loadSendBell, sendTransport } from '@/components/brand-rooms/chat/transport';
 import { ROOM_ACTIVITY } from '@/components/brand-rooms/seams';
+import type { SendInboxView } from '@/lib/brand-rooms/send-contracts';
 import { studioShowroomVisible, studioV2Visible } from '@/lib/brand-studio/visibility';
 import { sectionVisibility, selectedChoice, type BrandWorkspaceScope } from '@/lib/brands/workspace/selection';
 import { useWorkspaceSelection } from '../identity';
@@ -21,17 +22,28 @@ import {
 import {
   BELL_POLL_MS,
   bellActive,
+  bellAnswerForView,
+  bellHasSendView,
+  bellMarkAllConversationTargets,
   bellMarkReadTarget,
   bellPollReduce,
+  bellThreadMarkReadTarget,
   initialBellPollState,
   type BellCopy,
   type BellItem,
   type BellPollMachine,
   type BellPollReason,
+  type BellSendCopy,
   type BellState,
 } from './model';
 
 export const RAIL_MODE_CHANGED_EVENT = 'twings:rail-mode-changed';
+
+export interface BellSendConfig {
+  organizations?: readonly string[];
+  organizationId?: string;
+  copy?: BellSendCopy;
+}
 
 export interface BellContextValue {
   organizationId: string;
@@ -42,7 +54,16 @@ export interface BellContextValue {
   copy: BellCopy | null;
   locale: StudioLocale;
   refresh(): Promise<void>;
-  markRead(item: Pick<BellItem, 'kind' | 'projectId' | 'at' | 'unread'>): Promise<void>;
+  markRead(item: Pick<BellItem, 'id' | 'kind' | 'projectId' | 'at' | 'unread' | 'rootId'>): Promise<void>;
+  sendConfigured?: boolean;
+  sendOpen?: boolean;
+  sendCopy?: BellSendCopy | null;
+  view?: SendInboxView;
+  viewLoading?: boolean;
+  mentionsUnread?: number;
+  markingAll?: boolean;
+  setView?(next: SendInboxView): void;
+  markAllRead?(): Promise<void>;
 }
 
 export interface BellProviderProps {
@@ -52,7 +73,16 @@ export interface BellProviderProps {
   rooms?: boolean;
   bellCopy?: BellCopy;
   locale?: StudioLocale;
+  send?: BellSendConfig;
+  sendCopy?: BellSendCopy;
   children: ReactNode;
+}
+
+function sendEnabledForOrg(send: BellSendConfig | undefined, orgId: string | null | undefined): boolean {
+  if (!send || !orgId) return false;
+  const target = orgId.toLowerCase();
+  if (send.organizationId && send.organizationId.toLowerCase() === target) return true;
+  return Boolean(send.organizations?.some((id) => id.toLowerCase() === target));
 }
 
 interface BellViewSnapshot {
@@ -100,6 +130,8 @@ function ActiveBellProvider({
   rooms = false,
   bellCopy,
   locale = 'ko',
+  send,
+  sendCopy,
   children,
 }: BellProviderProps) {
   const { pathname, selection } = useWorkspaceSelection(scope);
@@ -159,8 +191,20 @@ function ActiveBellProvider({
     );
   }, []);
 
+  const sendRef = useRef(send);
+  sendRef.current = send;
+  const hasSendProp = sendEnabledForOrg(send, selectedOrgId);
+
+  const desiredViewRef = useRef<SendInboxView>('all');
+  const pendingViewRef = useRef<SendInboxView | null>(null);
+  const inflightViewRef = useRef<SendInboxView>('all');
+  const [viewFilter, setViewFilter] = useState<SendInboxView>('all');
+  const markingAllRef = useRef(false);
+  const [markingAll, setMarkingAll] = useState(false);
+
   const inflightRef = useRef<Promise<void> | null>(null);
   const unmountedRef = useRef(false);
+  const triggerReadRef = useRef<((reason: BellPollReason) => Promise<void>) | null>(null);
   useEffect(() => {
     unmountedRef.current = false;
     return () => {
@@ -170,10 +214,21 @@ function ActiveBellProvider({
 
   const dispatchRead = useCallback(
     async (orgId: string, seq: number): Promise<void> => {
-      const res = await loadRoomBell(orgId);
+      const sendActive = sendEnabledForOrg(sendRef.current, orgId);
+      const reqView = sendActive ? desiredViewRef.current : 'all';
+      if (sendActive) inflightViewRef.current = reqView;
+      const res = sendActive ? await loadSendBell(orgId, reqView) : await loadRoomBell(orgId);
       if (unmountedRef.current) return;
-      const answer = res.ok ? { ok: true as const, bell: res.bell } : { ok: false as const, code: res.code };
+      const rawBell = res.ok ? (res.bell as BellState | undefined) : undefined;
+      const adjustedBell =
+        rawBell && sendActive ? bellAnswerForView(rawBell, desiredViewRef.current) : rawBell;
+      const answer = res.ok ? { ok: true as const, bell: adjustedBell } : { ok: false as const, code: res.code };
       const settled = bellPollReduce(machineRef.current, { type: 'answer', organizationId: orgId, seq, result: answer });
+      if (settled.state.stopped) {
+        pendingViewRef.current = null;
+        desiredViewRef.current = 'all';
+        if (!unmountedRef.current) setViewFilter('all');
+      }
       syncMachine(settled.state);
     },
     [syncMachine],
@@ -183,6 +238,23 @@ function ActiveBellProvider({
     (orgId: string, seq: number): Promise<void> => {
       const pending = dispatchRead(orgId, seq).finally(() => {
         if (inflightRef.current === pending) inflightRef.current = null;
+        if (machineRef.current.stopped) {
+          pendingViewRef.current = null;
+          return;
+        }
+        const queued = pendingViewRef.current;
+        if (
+          queued &&
+          !unmountedRef.current &&
+          machineRef.current.active &&
+          !machineRef.current.stopped &&
+          !machineRef.current.inflight &&
+          machineRef.current.organizationId?.toLowerCase() === orgId.toLowerCase()
+        ) {
+          pendingViewRef.current = null;
+          desiredViewRef.current = queued;
+          void triggerReadRef.current?.('manual');
+        }
       });
       inflightRef.current = pending;
       return pending;
@@ -211,10 +283,14 @@ function ActiveBellProvider({
     },
     [startRequest],
   );
+  triggerReadRef.current = triggerRead;
 
   // Sync activation/deactivation strictly with (selectedOrgId, modeActive).
   useEffect(() => {
     if (!modeActive || !selectedOrgId) {
+      desiredViewRef.current = 'all';
+      pendingViewRef.current = null;
+      setViewFilter('all');
       const deactivated = bellPollReduce(machineRef.current, { type: 'deactivate' });
       syncMachine(deactivated.state);
       return;
@@ -226,6 +302,9 @@ function ActiveBellProvider({
     if (sameOrg && machineRef.current.stopped) return;
 
     if (!sameOrg || !machineRef.current.active) {
+      desiredViewRef.current = 'all';
+      pendingViewRef.current = null;
+      setViewFilter('all');
       const activated = bellPollReduce(machineRef.current, {
         type: 'activate',
         organizationId: selectedOrgId,
@@ -295,11 +374,19 @@ function ActiveBellProvider({
   const refresh = useCallback(() => triggerRead('manual'), [triggerRead]);
 
   const markRead = useCallback(
-    async (item: Pick<BellItem, 'kind' | 'projectId' | 'at' | 'unread'>) => {
+    async (item: Pick<BellItem, 'id' | 'kind' | 'projectId' | 'at' | 'unread' | 'rootId'>) => {
       const targetOrg = machineRef.current.organizationId;
-      const target = bellMarkReadTarget(item);
-      if (!targetOrg || !target || !machineRef.current.active || machineRef.current.stopped) return;
-      await brandTransport(targetOrg).read?.(target.channel, target.at);
+      if (!targetOrg || !machineRef.current.active || machineRef.current.stopped) return;
+      if (item.kind === 'thread') {
+        if (!sendEnabledForOrg(sendRef.current, targetOrg)) return;
+        const threadTarget = bellThreadMarkReadTarget(item);
+        if (!threadTarget) return;
+        await sendTransport(targetOrg).read(threadTarget.rootId, threadTarget.at);
+      } else {
+        const target = bellMarkReadTarget(item);
+        if (!target) return;
+        await brandTransport(targetOrg).read?.(target.channel, target.at);
+      }
       if (unmountedRef.current) return;
       if (inflightRef.current) await inflightRef.current;
       if (unmountedRef.current || machineRef.current.organizationId?.toLowerCase() !== targetOrg.toLowerCase()) return;
@@ -307,6 +394,57 @@ function ActiveBellProvider({
     },
     [triggerRead],
   );
+
+  const switchView = useCallback(
+    (next: SendInboxView) => {
+      const targetOrg = machineRef.current.organizationId;
+      if (!targetOrg || !machineRef.current.active || machineRef.current.stopped) return;
+      if (!sendEnabledForOrg(sendRef.current, targetOrg)) return;
+      if (desiredViewRef.current === next && pendingViewRef.current === null) return;
+      desiredViewRef.current = next;
+      setViewFilter(next);
+      if (machineRef.current.inflight) {
+        pendingViewRef.current = inflightViewRef.current === next ? null : next;
+        return;
+      }
+      pendingViewRef.current = null;
+      void triggerRead('manual');
+    },
+    [triggerRead],
+  );
+
+  const markAllRead = useCallback(async () => {
+    const targetOrg = machineRef.current.organizationId;
+    if (
+      !targetOrg ||
+      !machineRef.current.active ||
+      machineRef.current.stopped ||
+      markingAllRef.current ||
+      desiredViewRef.current !== 'all' ||
+      !sendEnabledForOrg(sendRef.current, targetOrg)
+    ) {
+      return;
+    }
+    markingAllRef.current = true;
+    setMarkingAll(true);
+    try {
+      const current = machineRef.current.bell;
+      const convTargets = current ? bellMarkAllConversationTargets(current.items) : [];
+      const roomApi = brandTransport(targetOrg);
+      const sendApi = sendTransport(targetOrg);
+      await Promise.all([
+        sendApi.readAll(),
+        ...convTargets.map((t) => roomApi.read?.(t.channel, t.at)),
+      ]);
+      if (unmountedRef.current) return;
+      if (inflightRef.current) await inflightRef.current;
+      if (unmountedRef.current || machineRef.current.organizationId?.toLowerCase() !== targetOrg.toLowerCase()) return;
+      await triggerRead('manual');
+    } finally {
+      markingAllRef.current = false;
+      if (!unmountedRef.current) setMarkingAll(false);
+    }
+  }, [triggerRead]);
 
   const activeNow = Boolean(
     modeActive &&
@@ -318,6 +456,17 @@ function ActiveBellProvider({
   const currentBell = view.bell;
   const activeOrg = view.organizationId;
   const resolvedCopy = bellCopy ?? null;
+  const resolvedSendCopy = send?.copy ?? sendCopy ?? null;
+  const loadedNow = currentBell !== null;
+  const serverHasSendView = bellHasSendView(currentBell);
+  const sendOpenNow = Boolean(hasSendProp && resolvedSendCopy && loadedNow && serverHasSendView);
+  const sendConfiguredNow = Boolean(hasSendProp && resolvedSendCopy && (!loadedNow || serverHasSendView));
+  const currentMatchesView = !sendOpenNow || !currentBell || currentBell.view === viewFilter;
+  const viewLoadingNow = Boolean(sendConfiguredNow && (!loadedNow || (serverHasSendView && !currentMatchesView)));
+  const mentionsUnreadNow =
+    currentBell && 'mentionsUnread' in currentBell && typeof currentBell.mentionsUnread === 'number'
+      ? currentBell.mentionsUnread
+      : 0;
 
   const value = useMemo<BellContextValue | null>(
     () =>
@@ -325,16 +474,49 @@ function ActiveBellProvider({
         ? {
             organizationId: activeOrg,
             unread: currentBell?.unread ?? 0,
-            items: currentBell?.items ?? [],
-            more: currentBell?.more ?? false,
-            loaded: currentBell !== null,
+            items: currentMatchesView ? (currentBell?.items ?? []) : [],
+            more: currentMatchesView ? (currentBell?.more ?? false) : false,
+            loaded: loadedNow,
             copy: resolvedCopy,
             locale,
             refresh,
             markRead,
+            ...(hasSendProp
+              ? {
+                  sendConfigured: sendConfiguredNow,
+                  sendOpen: sendOpenNow,
+                  sendCopy: resolvedSendCopy,
+                  view: viewFilter,
+                  viewLoading: viewLoadingNow,
+                  mentionsUnread: mentionsUnreadNow,
+                  markingAll,
+                  setView: switchView,
+                  markAllRead,
+                }
+              : {}),
           }
         : null,
-    [activeNow, activeOrg, currentBell, resolvedCopy, locale, refresh, markRead],
+    [
+      activeNow,
+      activeOrg,
+      currentBell,
+      currentMatchesView,
+      loadedNow,
+      resolvedCopy,
+      locale,
+      refresh,
+      markRead,
+      hasSendProp,
+      sendConfiguredNow,
+      sendOpenNow,
+      resolvedSendCopy,
+      viewFilter,
+      viewLoadingNow,
+      mentionsUnreadNow,
+      markingAll,
+      switchView,
+      markAllRead,
+    ],
   );
 
   return <BellContext.Provider value={value}>{children}</BellContext.Provider>;

@@ -7,6 +7,7 @@
 import { formatRelativeTime } from '@/components/brand-studio/project-chip/model';
 import type { StudioLocale } from '@/components/brand-studio/copy';
 import { GENERAL_CHANNEL } from '@/lib/brand-rooms/message-contracts';
+import type { SendFileCard, SendInboxView } from '@/lib/brand-rooms/send-contracts';
 import type { Dictionary } from '@/lib/i18n/dictionaries';
 import { interpolate } from '@/lib/i18n/format';
 
@@ -45,10 +46,38 @@ export function pickBellCopy(dict: Pick<Dictionary, 'projectHome' | 'roomsChat'>
   };
 }
 
+export interface BellSendCopy {
+  viewAll: string;
+  viewMentions: string;
+  mentionMark: string;
+  markAllRead: string;
+  inboxMentionsEmpty: string;
+  fileGone: string;
+  unfiled: string;
+  someone: string;
+  loading: string;
+}
+
+export function pickBellSendCopy(
+  dict: Pick<Dictionary, 'brandSend' | 'roomsChat' | 'projectSpine'>,
+): BellSendCopy {
+  return {
+    viewAll: dict.roomsChat.inbox.filters.all,
+    viewMentions: dict.brandSend.viewMentions,
+    mentionMark: dict.brandSend.mentionMark,
+    markAllRead: dict.brandSend.markAllRead,
+    inboxMentionsEmpty: dict.brandSend.inboxMentionsEmpty,
+    fileGone: dict.brandSend.fileGone,
+    unfiled: dict.projectSpine.unfiled,
+    someone: dict.roomsChat.author.someone,
+    loading: dict.roomsChat.channel.loading,
+  };
+}
+
 /** Permanent stops on this page (matches contract §7 / useRoomUnread 401·404 stop rule). */
 export const BELL_STOP_CODES: ReadonlySet<string> = new Set(['rooms_closed', 'not_found', 'sign_in_required']);
 
-export type BellLineKind = 'storyboard' | 'review' | 'conversation';
+export type BellLineKind = 'storyboard' | 'review' | 'conversation' | 'thread';
 
 export interface BellItem {
   id: string;
@@ -64,12 +93,18 @@ export interface BellItem {
   unread: boolean;
   thumbUrl: string | null;
   href: string;
+  rootId?: string;
+  mentioned?: boolean;
+  actorName?: string | null;
+  file?: SendFileCard;
 }
 
 export interface BellState {
   unread: number;
   items: BellItem[];
   more: boolean;
+  view?: SendInboxView;
+  mentionsUnread?: number;
 }
 
 export interface BellPollMachine {
@@ -193,8 +228,23 @@ export function bellAccessibleLabel(unread: number, copy: Pick<Dictionary['proje
   return unread > 0 ? interpolate(copy.bellCount, { n: Math.floor(unread) }) : copy.bellTitle;
 }
 
-export function bellLineProjectLabel(item: Pick<BellItem, 'projectId' | 'projectTitle'>, generalLabel: string): string {
+export function bellLineProjectLabel(
+  item: Pick<BellItem, 'kind' | 'projectId' | 'projectTitle' | 'file'>,
+  generalLabel: string,
+  sendCopy?: Pick<BellSendCopy, 'fileGone' | 'unfiled'> | null,
+): string {
+  if (item.kind === 'thread' && sendCopy) {
+    if (item.file && !item.file.available) return sendCopy.fileGone;
+    return item.projectTitle ?? sendCopy.unfiled;
+  }
   return item.projectId === null ? generalLabel : (item.projectTitle ?? '');
+}
+
+export function bellThreadActorName(
+  item: Pick<BellItem, 'actorName'>,
+  sendCopy?: Pick<BellSendCopy, 'someone'> | null,
+): string {
+  return item.actorName?.trim() || sendCopy?.someone || '';
 }
 
 type BellInboxCopy = Pick<
@@ -205,6 +255,7 @@ type BellInboxCopy = Pick<
 export function bellLineText(
   item: Pick<BellItem, 'kind' | 'projectId' | 'line' | 'version' | 'openNotes'>,
   copy: BellInboxCopy,
+  options?: { sendOpen?: boolean },
 ): string {
   if (item.kind === 'storyboard') {
     return interpolate(copy.alertStoryboard, { version: item.version ?? 1 });
@@ -215,19 +266,83 @@ export function bellLineText(
       ? interpolate(copy.alertReviewNotes, { version, count: item.openNotes })
       : interpolate(copy.alertReview, { version });
   }
+  if (options?.sendOpen && item.kind === 'thread') return item.line ?? '';
   if (item.line !== null && item.line !== '') return item.line;
   return item.projectId === null ? copy.generalHint : copy.noMessages;
 }
 
-export function bellCanMarkRead(item: Pick<BellItem, 'kind' | 'unread'>): boolean {
-  return item.kind === 'conversation' && item.unread;
+export function bellCanMarkRead(
+  item: Pick<BellItem, 'kind' | 'unread'>,
+  options?: { sendOpen?: boolean },
+): boolean {
+  if (!item.unread) return false;
+  if (item.kind === 'conversation') return true;
+  return Boolean(options?.sendOpen && item.kind === 'thread');
 }
 
 export function bellMarkReadTarget(
   item: Pick<BellItem, 'kind' | 'projectId' | 'at' | 'unread'>,
 ): { channel: string; at: string } | null {
-  if (!bellCanMarkRead(item)) return null;
+  if (item.kind !== 'conversation' || !item.unread) return null;
   return { channel: item.projectId ?? GENERAL_CHANNEL, at: item.at };
+}
+
+export function bellThreadMarkReadTarget(
+  item: Pick<BellItem, 'id' | 'kind' | 'rootId' | 'at' | 'unread'>,
+): { rootId: string; at: string } | null {
+  if (item.kind !== 'thread' || !item.unread) return null;
+  const rootId = item.rootId?.trim() || (item.id.startsWith('thread:') ? item.id.slice('thread:'.length) : '');
+  return rootId ? { rootId, at: item.at } : null;
+}
+
+export function bellMarkAllConversationTargets(
+  items: readonly Pick<BellItem, 'kind' | 'projectId' | 'at' | 'unread'>[],
+): Array<{ channel: string; at: string }> {
+  const targets: Array<{ channel: string; at: string }> = [];
+  const seen = new Set<string>();
+  for (const item of items.slice(0, BELL_WINDOW_MAX)) {
+    const target = bellMarkReadTarget(item);
+    if (!target) continue;
+    const key = target.channel.toLowerCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      targets.push(target);
+    }
+  }
+  return targets;
+}
+
+export function bellCanMarkAllRead(
+  bell: Pick<BellState, 'unread' | 'items'> | null | undefined,
+  options?: { sendOpen?: boolean },
+): boolean {
+  if (!bell) return false;
+  const shown = bell.items.slice(0, BELL_WINDOW_MAX);
+  if (shown.some((item) => bellCanMarkRead(item, options))) return true;
+  const visibleAlerts = shown.filter((item) => item.kind === 'storyboard' || item.kind === 'review').length;
+  return bell.unread > visibleAlerts;
+}
+
+export function bellHasSendView(bell: BellState | null | undefined): boolean {
+  return Boolean(bell && 'view' in bell && (bell.view === 'all' || bell.view === 'mentions'));
+}
+
+export function bellAnswerForView(bell: BellState, desiredView: SendInboxView): BellState {
+  if (!bellHasSendView(bell) || bell.view === desiredView) return bell;
+  return { ...bell, items: [], more: false };
+}
+
+export function bellSeeAllHref(
+  organizationId: string,
+  options?: { sendOpen?: boolean; view?: SendInboxView },
+): string {
+  const org = encodeURIComponent(organizationId);
+  if (!options?.sendOpen) {
+    return `/brand/rooms?organizationId=${org}`;
+  }
+  return options.view === 'mentions'
+    ? `/brand/inbox?organizationId=${org}&view=mentions`
+    : `/brand/inbox?organizationId=${org}`;
 }
 
 export function bellLineTime(item: Pick<BellItem, 'at'>, locale: StudioLocale, now = new Date()): string {

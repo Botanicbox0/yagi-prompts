@@ -26,6 +26,9 @@ import { ProjectChip, ProjectGoneNotice, ProjectSpineProvider } from "@/componen
 // Imported here, not through the client module: a server component cannot read a class map a client module exports.
 import projectChipStyles from "@/components/brand-studio/project-chip/project-chip.module.css";
 import { WorkspaceBell } from "@/components/brand-workspace/bell";
+import { pickSendCopy, type ViewerSendProp } from "@/components/brand-send/model";
+import { brandSendOpenFor, brandSendSwitchesOn } from "@/lib/brand-rooms/members-channel";
+import { memberSeesBrandProjects } from "@/lib/brand-studio/brand-projects";
 import { VideoStudioWorkspace } from "@/components/brand-studio/video/workspace";
 import s from "@/components/brand-studio/video/video.module.css";
 import { scopedHref } from "@/lib/brands/workspace/selection";
@@ -198,6 +201,14 @@ export default async function StudioVideoPage({
     initialProjectId = validFilmId;
   }
 
+  const send: ViewerSendProp | null =
+    effectiveSpine &&
+    brandSendSwitchesOn() &&
+    memberSeesBrandProjects({ staff: access.staff, role: choice.role }) &&
+    (await brandSendOpenFor(ctx.deps.sql, choice.id).catch(() => false))
+      ? { organizationId: choice.id, copy: pickSendCopy(dict) }
+      : null;
+
   const title = <h1 className="bs-title">{t.title}</h1>;
   const page = (
     <div className={`bs-page ${s.page}`} data-brand-studio-v2 data-brand-studio-video>
@@ -264,6 +275,7 @@ export default async function StudioVideoPage({
               spineCopy: dict.projectSpine,
             }
           : {})}
+        {...(send ? { send } : {})}
         musicGeneration={studioEnv().musicGeneration === true}
       />
     </div>

@@ -18,9 +18,10 @@ import { RAIL_MODE_COOKIE, parseRailModeCookie } from "@/components/brand-worksp
 import { WorkspaceLanguage } from '@/components/brand-workspace/language';
 import { WorkspaceNavigation } from '@/components/brand-workspace/navigation';
 import { BellProvider } from '@/components/brand-workspace/bell/provider';
-import { pickBellCopy } from '@/components/brand-workspace/bell/model';
+import { pickBellCopy, pickBellSendCopy } from '@/components/brand-workspace/bell/model';
+import { brandSendOpenFor, brandSendSwitchesOn } from '@/lib/brand-rooms/members-channel';
 import { brandProjectSpineOpen, memberSeesBrandProjects } from '@/lib/brand-studio/brand-projects';
-import { studioCopyAllowed } from "@/lib/brand-studio/visibility";
+import { studioCopyAllowed, studioV2Visible } from "@/lib/brand-studio/visibility";
 import { WorkspaceIdentity } from '@/components/brand-workspace/identity';
 import { BrandErrorCopyProvider } from '@/components/brand-workspace/error-copy';
 import { WorkspaceSpotlight } from '@/components/brand-workspace/spotlight';
@@ -85,6 +86,22 @@ export default async function BrandLayout({
           ).catch((): Array<string | null> => [])
         ).filter((id): id is string => typeof id === 'string')
       : [];
+  const sendCandidates: string[] =
+    sql && scope && bellCandidates.length > 0 && brandSendSwitchesOn()
+      ? (
+          await Promise.all(
+            scope.choices
+              .filter(
+                (c) =>
+                  bellCandidates.some((id) => id.toLowerCase() === c.id.toLowerCase()) &&
+                  studioV2Visible(c, true),
+              )
+              .map(async (c): Promise<string | null> =>
+                (await brandSendOpenFor(sql, c.id).catch(() => false)) ? c.id : null,
+              ),
+          ).catch((): Array<string | null> => [])
+        ).filter((id): id is string => typeof id === 'string')
+      : [];
   const shell = (
         <div className="bw-shell">
           <aside className="bw-sidebar">
@@ -122,6 +139,10 @@ export default async function BrandLayout({
   );
   const bellLocale = locale === 'en' ? 'en' : 'ko';
   const bellCopy = bellCandidates.length > 0 && scope ? pickBellCopy(d) : undefined;
+  const bellSend =
+    bellCandidates.length > 0 && scope && sendCandidates.length > 0
+      ? { organizations: sendCandidates, copy: pickBellSendCopy(d) }
+      : undefined;
   return (
     <html lang={locale} className={fontVariables} data-brand-workspace>
       <head>
@@ -138,7 +159,7 @@ export default async function BrandLayout({
       <body>
         <a href="#main" className="bw-skip-link" data-skip-link>{b.skipToContent}</a>
         {bellCandidates.length > 0 && scope ? (
-          <BellProvider candidates={bellCandidates} scope={scope} railModes={railModes} rooms={rooms} bellCopy={bellCopy} locale={bellLocale}>
+          <BellProvider candidates={bellCandidates} scope={scope} railModes={railModes} rooms={rooms} bellCopy={bellCopy} locale={bellLocale} send={bellSend}>
             {shell}
           </BellProvider>
         ) : (
