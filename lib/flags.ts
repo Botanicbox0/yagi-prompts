@@ -405,6 +405,19 @@ export function brandRoomNotifyOpen(env: NodeJS.ProcessEnv = process.env): boole
 }
 
 /**
+ * docs/BRAND-PROJECT-SPINE.md §8 (slice 4) — 보내기: a member sends a studio file to colleagues with `@` on the
+ * organization's members channel, and reads and answers what they were sent (the 알림함 "나에게 온 것", the bell's thread
+ * lines). Default OFF: open only when the server environment says exactly `BRAND_SEND=on`. Even then 보내기 is open for
+ * an organization only while `BRAND_ROOMS` and `BRAND_ROOM_NOTIFY` are on, the spine is open for it
+ * (`BRAND_PROJECT_SPINE` + `BRAND_PROJECT_SPINE_ORGS` + migration 0194) and migration 0200 is applied
+ * (lib/brand-rooms/members-channel.ts `brandSendOpenFor`). Closed: every `send.*` operation answers exactly what an
+ * unknown operation answers, the bell and every existing read answer as before, and nothing is written.
+ */
+export function brandSendOpen(env: Record<string, string | undefined> = process.env): boolean {
+  return env.BRAND_SEND === 'on';
+}
+
+/**
  * docs/BRAND-ROOMS-FEEDBACK.md §12 — sharing a project room by invitation: brand owners and editors invite
  * people by e-mail to one project (view only or with comments), the share dialog's two link modes
  * ("초대한 사람만" by default, "링크가 있는 누구나" only when switched on), the invitation mail, single-use
