@@ -10,6 +10,12 @@
  * - Strictly zero internal model, vendor, or compiler jargon in customer-facing strings.
  */
 
+export const TARGET_HEAD_HEIGHT_RANGE_PCT = [32, 42] as const;
+export const TARGET_HEADROOM_RANGE_PCT = [12, 16] as const;
+export const TIGHT_FACE_CROP_RANGE_PCT = [60, 85] as const;
+export const WIDE_SLEEVE_REFERENCE_AUTHORITY_LINE =
+  "ignore any wide casual top/sleeve volume from @Image 1" as const;
+
 export type OpticalIdentityStage =
   | "stage1_passthrough_crop"
   | "stage2_surgical_inplace_edit"
@@ -18,18 +24,21 @@ export type OpticalIdentityStage =
 export type BustUpFramingVerdict =
   | "optimal_bust_up"
   | "tight_face_crop_warning"
-  | "headneck_runway_override";
+  | "headroom_or_distance_adjustment"
+  | "sleeve_volume_prompt_guard";
 
 export interface OpticalIdentityLockInput {
   focalLengthMm: number;
   exifOrientationNormalized?: boolean;
-  /** Percentage of frame width occupied by the subject's head (optimal: 35–55%). */
-  headWidthRatioPct: number;
+  /** Percentage of frame height occupied by the subject's head (optimal: 32–42%; tight crops 60–85% are banned). */
+  headHeightRatioPct: number;
+  /** Percentage of frame height above the crown (optimal: 12–16%). */
+  headroomPct?: number;
   /** True only when a hand, cup, or phone physically occludes part of the face. */
   hasFaceOcclusion?: boolean;
-  /** True when the reference photo has a baggy hoodie/cardigan that hides shoulder proportions. */
+  /** True when the reference photo has a baggy top/wide sleeves handled via Reference authority. */
   baggyCasualTopDetected?: boolean;
-  /** Cosine similarity score (0.0–1.0) when Stage 2 surgical edit is evaluated. */
+  /** Cosine similarity score (0.0–1.0) when surgical occlusion edit is evaluated. */
   measuredIdentitySimilarity?: number;
   locale?: string;
 }
@@ -41,7 +50,9 @@ export interface OpticalIdentityLockReport {
   exifOrientationNormalized: boolean;
   framingVerdict: BustUpFramingVerdict;
   recommendedCropRatio: "3:4";
-  targetHeadWidthRangePct: readonly [number, number];
+  targetHeadHeightRangePct: readonly [number, number];
+  targetHeadroomRangePct: readonly [number, number];
+  tightFaceCropRangePct: readonly [number, number];
   antiPlasticSkinActive: boolean;
   ambientShadowIntegrationActive: boolean;
   similarityThreshold: number;
@@ -133,8 +144,8 @@ export interface TwoStageProductionPlan {
 }
 
 /**
- * Module 1: Optical Identity Lock™ v2 (3-Stage Zero-Distortion Face & Physique Guard)
- * Protects creator/model facial identity and runway body proportions.
+ * Module 1: Zero-Distortion Face & 3:4 Distance Framing Guard
+ * Protects creator/model facial identity and 3:4 bust-up proportions without tight headshot crops.
  */
 export function evaluateOpticalIdentityLockV2(
   input: OpticalIdentityLockInput,
@@ -157,58 +168,73 @@ export function evaluateOpticalIdentityLockV2(
     selectedStage === "stage2_surgical_inplace_edit" ? 94 : 100;
 
   let framingVerdict: BustUpFramingVerdict = "optimal_bust_up";
-  if (input.baggyCasualTopDetected) {
-    framingVerdict = "headneck_runway_override";
-  } else if (input.headWidthRatioPct > 65) {
+  const headroomOutOfRange =
+    input.headroomPct !== undefined &&
+    (input.headroomPct < TARGET_HEADROOM_RANGE_PCT[0] ||
+      input.headroomPct > TARGET_HEADROOM_RANGE_PCT[1]);
+
+  if (input.headHeightRatioPct >= TIGHT_FACE_CROP_RANGE_PCT[0]) {
     framingVerdict = "tight_face_crop_warning";
+  } else if (
+    input.headHeightRatioPct < TARGET_HEAD_HEIGHT_RANGE_PCT[0] ||
+    input.headHeightRatioPct > TARGET_HEAD_HEIGHT_RANGE_PCT[1] ||
+    headroomOutOfRange
+  ) {
+    framingVerdict = "headroom_or_distance_adjustment";
+  } else if (input.baggyCasualTopDetected) {
+    framingVerdict = "sleeve_volume_prompt_guard";
   }
 
   const customerTitle = isEn
-    ? "Optical Identity Lock™ v2 · Zero-Distortion Face & Proportion Guard"
-    : "Optical Identity Lock™ v2 · 원본 얼굴 100% 보존 & 바스트업 비율 보호";
+    ? "Zero-Distortion Face & 3:4 Distance Framing Guard"
+    : "원본 얼굴 100% 보존 & 3:4 거리감 바스트업 비율 보호";
 
   const customerSummary =
     selectedStage === "stage1_passthrough_crop"
       ? isEn
-        ? "Unoccluded portrait detected: preserves 100% original facial pixels via deterministic 3:4 bust-up framing without generative face re-rendering."
-        : "가림 없는 클린 인물 사진 감지: 얼굴을 다시 그리지 않고 원본 얼굴 픽셀을 100% 보존하는 3:4 바스트업 스마트 크롭(Stage 1)이 적용됩니다."
+        ? "Unoccluded portrait detected: preserves 100% original facial pixels via deterministic 3:4 distance bust-up framing (32–42% head height, 12–16% headroom) without generative face re-rendering."
+        : "가림 없는 클린 인물 사진 감지: 얼굴을 다시 그리지 않고 원본 얼굴 픽셀을 100% 보존하는 3:4 거리감 바스트업 구도(머리 높이 32~42%, 헤드룸 12~16%)가 적용됩니다."
       : selectedStage === "stage2_surgical_inplace_edit"
         ? isEn
           ? `Face occlusion repaired in-place while passing the ≥90% likeness gate (${Math.round(measuredSim * 100)}% match).`
-          : `손·소품 가림 부위만 국소 복원(Stage 2)하며 인물 닮음도 90% 이상 게이트(${Math.round(measuredSim * 100)}% 일치)를 통과했습니다.`
+          : `손·소품 가림 부위만 국소 복원하며 인물 닮음도 90% 이상 게이트(${Math.round(measuredSim * 100)}% 일치)를 통과했습니다.`
         : isEn
-          ? "Likeness dropped below 90% during occlusion edit—automatically rolled back to Stage 1 original facial pixels to prevent aging or identity drift."
-          : "가림 복원 중 인물 닮음도가 90% 미만으로 감지되어, 노화·인상 변형을 막기 위해 원본 얼굴 픽셀 보존 모드(Stage 1)로 즉시 자동 롤백되었습니다.";
+          ? "Likeness dropped below 90% during occlusion edit—automatically rolled back to original facial pixels to prevent aging or identity drift."
+          : "가림 복원 중 인물 닮음도가 90% 미만으로 감지되어, 노화·인상 변형을 막기 위해 원본 얼굴 픽셀 보존 모드로 즉시 자동 롤백되었습니다.";
 
   let actionableAdvice: string;
   if (wideAngleRejected) {
     actionableAdvice = isEn
-      ? "⚠️ 24mm wide-angle close-up selfie rejected (causes nose/mid-face distortion). Use a 35mm–85mm portrait shot at chest level."
-      : "⚠️ 24mm 광각 초근접 셀카 자동 배제: 코·중안부가 부어 보이는 렌즈 왜곡을 막기 위해 50~85mm 표준·준망원 바스트업 사진을 권장합니다.";
+      ? "⚠️ Wide-angle close-up selfie rejected (causes nose/mid-face distortion). Use a standard portrait distance with 3:4 framing (head height 32–42%, 12–16% headroom)."
+      : "⚠️ 초근접 광각 셀카 자동 배제: 코·중안부가 부어 보이는 렌즈 왜곡을 막기 위해 인물과 거리를 둔 표준 화각의 3:4 바스트업 사진(머리 높이 32~42%, 헤드룸 12~16%)을 권장합니다.";
   } else if (framingVerdict === "tight_face_crop_warning") {
     actionableAdvice = isEn
-      ? "⚠️ Tight face-only crop (>65% head width) risks narrow shoulders in full-body scenes. Include neck, collarbone, and both shoulders (head width 35–55%)."
-      : "⚠️ 얼굴만 꽉 찬 클로즈업(머리 폭 65% 초과)은 전신 생성 시 대두·좁은 어깨 비율을 유발합니다. 목·쇄골·양쪽 어깨가 보이는 바스트업(머리 폭 35~55%)으로 올리면 런웨이 비율이 유지됩니다.";
-  } else if (framingVerdict === "headneck_runway_override") {
+      ? "⚠️ Close-up headshot crops where the face fills 60–85% of the frame height are banned because they make the head read too large. Keep 3:4 distance framing with head height 32–42%, 12–16% headroom above the crown, side margins, neck, collarbone, shoulders, and upper body."
+      : "⚠️ 얼굴이 프레임 높이의 60~85%를 차지하는 과도한 클로즈업 크롭은 머리가 크게 보이는 왜곡을 유발해 금지됩니다. 정수리 위 헤드룸 12~16%, 좌우 여백, 목·쇄골·어깨·상반신이 함께 담긴 3:4 거리감 구도(머리 높이 32~42%)를 유지하세요.";
+  } else if (framingVerdict === "headroom_or_distance_adjustment") {
     actionableAdvice = isEn
-      ? "✓ Baggy top detected: cropped to head & neck only and paired with slender runway model physique to prevent bulky shoulder carryover."
-      : "✓ 박시한 상의 감지: 부한 어깨 실루엣이 전이되지 않도록 헤드·넥 라인만 분리 참조하고 슬렌더 런웨이 체형 가드를 자동 연결했습니다.";
+      ? "Adjust 3:4 distance framing so head height stays 32–42% of frame height with 12–16% headroom above the crown, plus side margins, neck, collarbone, shoulders, and upper body."
+      : "정수리 위 헤드룸 12~16%와 좌우 여백, 목·쇄골·어깨·상반신이 포함되도록 3:4 거리감 구도(머리 높이 32~42%)를 맞춰 주세요.";
+  } else if (framingVerdict === "sleeve_volume_prompt_guard") {
+    actionableAdvice = isEn
+      ? `✓ Baggy top detected: kept full 3:4 distance framing (head height 32–42%, 12–16% headroom) without cropping; wide casual top/sleeve volume is handled once in Reference authority and Exclusions (${WIDE_SLEEVE_REFERENCE_AUTHORITY_LINE}) and is never repeated per shot.`
+      : "✓ 박시한 상의 감지: 얼굴만 잘라내지 않고 3:4 거리감 구도(머리 높이 32~42%, 헤드룸 12~16%)를 유지하며, 소매·상의 부피 차단은 레퍼런스 권한과 제외 규칙에 한 번만 선언해 샷별 반복 없이 슬림한 실루엣을 지킵니다.";
   } else {
     actionableAdvice = isEn
-      ? "✓ Optimal 3:4 bust-up framing (head width 35–55% with visible collarbone & shoulders) and room ambient shadow lock verified."
-      : "✓ 이상적인 3:4 바스트업 구도(머리 폭 35~55%, 쇄골·양쪽 어깨 포함) 및 실내 조명 그림자 일체화가 확인되었습니다.";
+      ? "✓ Optimal 3:4 distance framing verified (head height 32–42% of frame height, 12–16% headroom above the crown, side margins, neck, collarbone, shoulders, and upper body) with ambient room shadow lock."
+      : "✓ 이상적인 3:4 거리감 바스트업 구도(머리 높이 32~42%, 정수리 위 헤드룸 12~16%, 좌우 여백 및 목·쇄골·어깨·상반신 포함)와 실내 조명 그림자 일체화가 확인되었습니다.";
   }
 
   const guardrailBadges = isEn
     ? [
         `Face Pixels ${facePixelPreservationPct}% Preserved`,
-        "Bust-Up Proportion Lock (35–55%)",
-        "Natural Skin Pore & Flyaway Hair Guard",
+        "3:4 Distance Framing (Head 32–42% · Headroom 12–16%)",
+        "Natural Skin & Flyaway Hair Guard",
         "Ambient Room Shadow Integration",
       ]
     : [
         `원본 얼굴 픽셀 ${facePixelPreservationPct}% 보존`,
-        "바스트업 8등신 비율 가드 (머리 폭 35~55%)",
+        "3:4 거리감 바스트업 (머리 높이 32~42% · 헤드룸 12~16%)",
         "플라스틱 피부 배제 · 실제 솜털·잔머리 보존",
         "실내 환경광·얼굴 그림자 톤 일체화",
       ];
@@ -220,7 +246,9 @@ export function evaluateOpticalIdentityLockV2(
     exifOrientationNormalized: exifNormalized,
     framingVerdict,
     recommendedCropRatio: "3:4",
-    targetHeadWidthRangePct: [35, 55],
+    targetHeadHeightRangePct: TARGET_HEAD_HEIGHT_RANGE_PCT,
+    targetHeadroomRangePct: TARGET_HEADROOM_RANGE_PCT,
+    tightFaceCropRangePct: TIGHT_FACE_CROP_RANGE_PCT,
     antiPlasticSkinActive: true,
     ambientShadowIntegrationActive: true,
     similarityThreshold,

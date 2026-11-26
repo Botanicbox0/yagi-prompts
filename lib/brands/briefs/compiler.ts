@@ -42,13 +42,21 @@ export type CompilerTargetId = (typeof COMPILER_TARGET_IDS)[number];
 export type BriefRenderStage = 'draft' | 'approved' | 'final';
 
 /**
- * a10 matte skin reflectance 3-sentence contract (knowhow-corpus.md §2.2).
- * Automatically inserted into every shot that features a person (`skin_contract: true`).
+ * a10 matte skin reflectance 3-sentence still-image contract (knowhow-corpus.md §2.2).
+ * Automatically inserted into every still shot that features a person (`skin_contract: true`).
+ * Kept byte-for-byte unchanged for still grammars; `serializeSeedance` uses `SKIN_VIDEO_CONTRACT_SEEDANCE`.
  */
 export const SKIN_MATTE_CONTRACT_A10 =
   'Natural matte skin texture with visible pores and subtle micro-relief. ' +
   'Soft highlight roll-off across the cheekbones and bridge of the nose without specular plastic shine. ' +
   'True-to-life undertone with natural lip colour and zero beauty-filter smoothing.';
+
+/**
+ * Seedance 2.5 video skin and exposure contract (TWINGS-SOTA-BRIDGE.md §2-2, 2026-11-26).
+ * Inserted once per compiled video prompt (never per shot) by `serializeSeedance` when `hasPerson && spec.skin_contract`.
+ */
+export const SKIN_VIDEO_CONTRACT_SEEDANCE =
+  'looking like scanned, slightly underexposed 35mm film: soft contrast, cool lifted blacks (#14171C), fine organic grain, gentle halation on the brightest whites; one soft key light a stop under; skin stays natural and warm, unretouched matte-satin with visible micro-pores and fine stray flyaway hairs, never over-lit or glossy, with no blush';
 
 /** a12 camera & lighting equipment brand names forbidden in prompts. */
 export const BANNED_EQUIPMENT_BRANDS = [
@@ -427,6 +435,12 @@ function serializeSeedance(
 ): string {
   const isKling = target === 'kling-omni';
   const refs = activeReferences(spec);
+  // Canonical Seedance 2.5 reference modes (TWINGS-SOTA-BRIDGE.md §2-2):
+  // - Mode A (default): one 3:4 distance face master (`@Image 1`, head height 32–42%, 12–16% headroom),
+  //   wardrobe described in text; wide casual top/sleeve volume handled via Reference authority, not cropping.
+  // - Mode B: `@Image 1` face master + `@Image 2` separate faceless clothing / ghost-mannequin image.
+  // - Mode C (conditional only): 3-panel turnaround sheet strictly for multi-angle narrative or virtual
+  //   characters — never the default.
   const refBindings = refs
     .map((r, i) => {
       const token = isKling ? `<<<image_${i + 1}>>>` : `@Image ${i + 1}`;
@@ -464,7 +478,7 @@ function serializeSeedance(
   const productLock = spec.product
     ? `Product geometry lock: ${spec.product.name} keeps exact ${spec.product.vessel_geometry}, ${spec.product.label_lock}, and ${spec.product.material_finish} without morphing.`
     : '';
-  const skinLock = hasPerson && spec.skin_contract ? SKIN_MATTE_CONTRACT_A10 : '';
+  const skinLock = hasPerson && spec.skin_contract ? SKIN_VIDEO_CONTRACT_SEEDANCE : '';
 
   const shotLines = timeline.map((s) => {
     const startStr = s.start.toFixed(1);

@@ -314,7 +314,8 @@ export function ReviewStage({
   });
   const opticalIdentityReport = evaluateOpticalIdentityLockV2({
     focalLengthMm: 50,
-    headWidthRatioPct: 44,
+    headHeightRatioPct: 38,
+    headroomPct: 14,
     hasFaceOcclusion: false,
     locale,
   });

@@ -310,6 +310,23 @@ describe('P0-3 no assumed gender or ethnicity in identity prompts', () => {
     expect(rule.compilerRuleEn).not.toMatch(/actress/i);
     expect(rule.compilerRuleEn).toContain('graceful physique');
   });
+
+  it('replaces head-and-neck crop in MORPHIC_MODIFICATION_PLAYBOOK with canonical 3:4 framing and single-declaration sleeve rule (SB-1)', () => {
+    const rule = MORPHIC_MODIFICATION_PLAYBOOK.find((p) => p.id === 'silhouette_slim_arm_lock')!;
+    const sleeveLine = 'ignore any wide casual top/sleeve volume from @Image 1';
+    for (const field of [rule.howWeSolveKo, rule.howWeSolveEn, rule.sampleRequestKo, rule.sampleRequestEn, rule.compilerRuleEn]) {
+      expect(field).not.toMatch(/tight head-and-neck|head-and-neck crop|head & neck only|headneck/i);
+      expect(field).not.toMatch(/\btight\b/i);
+    }
+    expect(rule.compilerRuleEn).toContain('3:4');
+    expect(rule.compilerRuleEn).toMatch(/32[–-]42%/);
+    expect(rule.compilerRuleEn).toMatch(/12[–-]16%/);
+    expect(rule.compilerRuleEn).toMatch(/60[–-]85%.*banned/i);
+    expect(rule.compilerRuleEn).toMatch(/Reference authority/i);
+    expect(rule.compilerRuleEn).toMatch(/Exclusions/i);
+    expect(rule.compilerRuleEn.split(sleeveLine).length - 1).toBe(1);
+    expect(rule.howWeSolveEn).not.toContain(sleeveLine);
+  });
 });
 
 describe('P0-4 the compile path is reported, retried once, and keeps the user note out of shot 1', () => {

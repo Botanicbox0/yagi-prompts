@@ -516,6 +516,8 @@ Template styling:
 - 체형 문장("slender shoulders", "slim toned arms")은 성별 단어만 뺐고 규칙 자체는 그대로다. 남성 이용자에게도 같은 문장이 들어가므로 P1에서 다시 본다.
 - 오프라인 덧붙이기 경로에는 번역기가 없어 이용자의 한국어 메모가 그대로 들어간다.
 
+**정본 분리 노트 (2026-11-26, `docs/SEEDANCE-BRIDGE-2026-11-26.md`):** `D:\dev\Video-Creator` 정본 규격은 이제 정지 이미지 국소 편집(모공 강조 계속 배제)과 Seedance 2.5 영상(1스톱 언더 노출 35mm + `visible micro-pores` · 잔머리 공식)의 피부 규칙을 분리한다. 개인 영상 컴파일 경로(`lib/template-director/flash-director.ts`)에는 후속 슬라이스에서 환경변수 스위치 뒤에 영상 공식을 반영할 예정이며, 스위치가 켜지기 전까지 개인 사이드는 2026-11-24 결정대로 동작한다.
+
 정본에서 가져와 컴파일 결과에 반드시 들어가게 할 것.
 
 - `Reference authority`: 참조마다 무엇을 가져오고 무엇을 버리는지 한 줄씩.

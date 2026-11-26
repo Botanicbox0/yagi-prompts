@@ -86,6 +86,10 @@ import {
   getBrandWorkspaceTourSteps,
 } from '@/lib/brands/workspace/commission-tracks';
 import {
+  TARGET_HEADROOM_RANGE_PCT,
+  TARGET_HEAD_HEIGHT_RANGE_PCT,
+  TIGHT_FACE_CROP_RANGE_PCT,
+  WIDE_SLEEVE_REFERENCE_AUTHORITY_LINE,
   auditMultiShotContinuity,
   buildTwoStageApprovalAndReelsMasterPlan,
   compileOledCinemaColorGradePlan,
@@ -819,10 +823,15 @@ describe('Brand Studio Complete Suite (Video Reverse, 2D Spatial Stage, 3-Track 
   });
 
   it('integrates the 6 latest Video-Creator SOTA techniques as customer-facing utilities with zero internal jargon', () => {
-    // 1. Optical Identity Lock™ v2 (3-Stage Zero-Distortion Face & Bust-Up Proportion Guard)
+    // 1. 3:4 Distance Framing & Zero-Distortion Proportion Guard (head height 32-42%, headroom 12-16%, 60-85% tight crops banned)
+    expect(TARGET_HEAD_HEIGHT_RANGE_PCT).toEqual([32, 42]);
+    expect(TARGET_HEADROOM_RANGE_PCT).toEqual([12, 16]);
+    expect(TIGHT_FACE_CROP_RANGE_PCT).toEqual([60, 85]);
+
     const stage1Report = evaluateOpticalIdentityLockV2({
       focalLengthMm: 50,
-      headWidthRatioPct: 42,
+      headHeightRatioPct: 38,
+      headroomPct: 14,
       hasFaceOcclusion: false,
       locale: 'ko',
     });
@@ -830,12 +839,15 @@ describe('Brand Studio Complete Suite (Video Reverse, 2D Spatial Stage, 3-Track 
     expect(stage1Report.facePixelPreservationPct).toBe(100);
     expect(stage1Report.wideAngleRejected).toBe(false);
     expect(stage1Report.framingVerdict).toBe('optimal_bust_up');
+    expect(stage1Report.targetHeadHeightRangePct).toEqual([32, 42]);
+    expect(stage1Report.targetHeadroomRangePct).toEqual([12, 16]);
+    expect(stage1Report.tightFaceCropRangePct).toEqual([60, 85]);
 
     const wideAngleTightReport = evaluateOpticalIdentityLockV2({
       focalLengthMm: 24,
-      headWidthRatioPct: 80,
+      headHeightRatioPct: 72,
       hasFaceOcclusion: true,
-      measuredIdentitySimilarity: 0.84, // below 0.90 -> auto-rollback to stage 1!
+      measuredIdentitySimilarity: 0.84, // below 0.90 -> auto-rollback to passthrough!
       locale: 'ko',
     });
     expect(wideAngleTightReport.wideAngleRejected).toBe(true);
@@ -843,13 +855,58 @@ describe('Brand Studio Complete Suite (Video Reverse, 2D Spatial Stage, 3-Track 
     expect(wideAngleTightReport.facePixelPreservationPct).toBe(100);
     expect(wideAngleTightReport.framingVerdict).toBe('tight_face_crop_warning');
 
+    // Tight 60-85% crops stay banned even when a baggy top is present.
+    const tightWithBaggyTop = evaluateOpticalIdentityLockV2({
+      focalLengthMm: 50,
+      headHeightRatioPct: 68,
+      baggyCasualTopDetected: true,
+      locale: 'en',
+    });
+    expect(tightWithBaggyTop.framingVerdict).toBe('tight_face_crop_warning');
+    expect(tightWithBaggyTop.actionableAdvice).toMatch(/60[–-]85%/);
+    expect(tightWithBaggyTop.actionableAdvice).toMatch(/32[–-]42%/);
+    expect(tightWithBaggyTop.actionableAdvice).toMatch(/12[–-]16%/);
+
+    // Out-of-range headroom triggers distance/headroom adjustment.
+    const lowHeadroomReport = evaluateOpticalIdentityLockV2({
+      focalLengthMm: 50,
+      headHeightRatioPct: 38,
+      headroomPct: 6,
+      locale: 'en',
+    });
+    expect(lowHeadroomReport.framingVerdict).toBe('headroom_or_distance_adjustment');
+    expect(lowHeadroomReport.actionableAdvice).toMatch(/12[–-]16%/);
+
+    // Baggy top within canonical 3:4 distance framing uses single Reference-authority sleeve line instead of cropping.
     const baggyTopReport = evaluateOpticalIdentityLockV2({
       focalLengthMm: 50,
-      headWidthRatioPct: 45,
+      headHeightRatioPct: 38,
+      headroomPct: 14,
       baggyCasualTopDetected: true,
-      locale: 'ko',
+      locale: 'en',
     });
-    expect(baggyTopReport.framingVerdict).toBe('headneck_runway_override');
+    expect(baggyTopReport.framingVerdict).toBe('sleeve_volume_prompt_guard');
+    expect(baggyTopReport.actionableAdvice.split(WIDE_SLEEVE_REFERENCE_AUTHORITY_LINE).length - 1).toBe(1);
+    expect(baggyTopReport.actionableAdvice).toMatch(/Reference authority/i);
+    expect(baggyTopReport.actionableAdvice).toMatch(/Exclusions/i);
+    expect(baggyTopReport.actionableAdvice).not.toMatch(/tight head-and-neck|head-and-neck crop|head & neck only|cropped to head|headneck|\btight\b/i);
+
+    // Zero internal product, model, or pipeline jargon in any evaluateOpticalIdentityLockV2 string
+    const samples = [
+      stage1Report,
+      wideAngleTightReport,
+      tightWithBaggyTop,
+      lowHeadroomReport,
+      baggyTopReport,
+      evaluateOpticalIdentityLockV2({ focalLengthMm: 50, headHeightRatioPct: 38, headroomPct: 14, baggyCasualTopDetected: true, locale: 'ko' }),
+      evaluateOpticalIdentityLockV2({ focalLengthMm: 50, headHeightRatioPct: 72, locale: 'en' }),
+      evaluateOpticalIdentityLockV2({ focalLengthMm: 50, headHeightRatioPct: 38, headroomPct: 14, hasFaceOcclusion: true, measuredIdentitySimilarity: 0.95, locale: 'ko' }),
+    ];
+    for (const report of samples) {
+      const texts = [report.customerTitle, report.customerSummary, report.actionableAdvice, ...report.guardrailBadges].join('\n');
+      expect(texts).not.toMatch(/Optical Identity Lock|Stage\s*[123]|Seedance|Nano Banana|Morphic|Higgsfield|24mm|8등신/i);
+      expect(texts).not.toMatch(/tight head-and-neck|head-and-neck crop|head & neck only|cropped to head|headneck/i);
+    }
 
     // 2. OLED Cinema Color Grading & Reference Look Match
     const lookCatalog = getOledCinemaLookCatalog('ko');

@@ -395,7 +395,8 @@ function ExpressCommissionBrief({
   });
   const opticalGuide = evaluateOpticalIdentityLockV2({
     focalLengthMm: 50,
-    headWidthRatioPct: 42,
+    headHeightRatioPct: 38,
+    headroomPct: 14,
     hasFaceOcclusion: false,
     locale,
   });

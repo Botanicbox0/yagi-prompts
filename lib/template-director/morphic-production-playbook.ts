@@ -1,16 +1,17 @@
 /**
- * Morphic & Video-Creator Production Playbook for TWINGS Personal Side (2026-11-05)
+ * Morphic & Video-Creator Production Playbook for TWINGS Personal Side (2026-11-05; SOTA bridge update 2026-11-26)
  *
- * Distilled from 33+ real creator deliveries and revision loops under `D:\dev\Video-Creator`:
- * - `2026-11-03-brandazine-01a195e5` (Night Red Carpet Press Arrival — 18 creators, including
- *   `@love__coc0` 윤슬지 v3 black dress + passthrough crop, `@minach0ii` 최미나 head/neck crop for
- *   slender arm silhouette, `@princess__ej` 정은지 v3 mole removal + sleek low bun sync)
+ * Distilled from 33+ studio deliveries and revision loops under `D:\dev\Video-Creator`:
+ * - Night Red Carpet Press Arrival (a delivery to eighteen creators — passthrough 3:4 distance framing,
+ *   sleek low bun sync, and clean daily complexion rules)
  * - `2026-11-01-90s-interview-batch` (1994 Apgujeong Street Interview — understated lip-sync & daily makeup lock)
  * - `2026-10-29-fashion-runway-template` & `2026-11-01-twings-runway-remix` (Grounded on-set shadow integration,
  *   bare ear continuity, invisible-mannequin/neck-down outfit swap, strict No-BGM live runway Foley)
  * - `2026-11-05-twings-collagen-sheet` (CIELAB de-blush bare-skin preservation & close-mic ASMR skincare Foley)
- * - `2026-10-27-bridal-5shots-reverse` (Americano Living Skin Contract — low specular-to-diffuse ratio,
- *   banning "porcelain skin" plastic hotspots)
+ * - `2026-10-27-bridal-5shots-reverse` (Still vs. Seedance 2.5 video skin split: still-image local edits keep
+ *   excluding pore emphasis, while Seedance 2.5 video uses the 1-stop underexposed 35mm formula with visible
+ *   micro-pores and fine stray flyaway hairs to stop highlight clipping and temporal smoothing; 3:4 distance
+ *   framing replaces close-up headshot crops and handles wide sleeve volume via one Reference-authority sentence)
  */
 
 import type { PersonalAudioMode, PersonalBgmMood } from './schema';
@@ -91,7 +92,7 @@ export interface ApprovedVideoProductionLaw {
   id:
     | 'zero_distortion_passthrough_crop'
     | 'optical_50_85mm_distance'
-    | 'headneck_crop_against_wide_sleeves'
+    | 'distance_3x4_bustup_and_sleeve_authority'
     | 'neck_down_outfit_reference_crop'
     | 'americano_matte_satin_zero_mole_skin'
     | 'dynamic_hair_and_grounded_shadow_sync';
@@ -131,15 +132,15 @@ export const MORPHIC_APPROVED_VIDEO_LAWS: readonly ApprovedVideoProductionLaw[] 
       'Avoid 24mm ultra-close wide-angle barrel distortion on facial features; render @Image 1 with natural 50-85mm portrait lens facial compression and balanced mid-face proportions.'
   },
   {
-    id: 'headneck_crop_against_wide_sleeves',
-    titleKo: '넓은 소매·두꺼운 외투 사진의 팔뚝 부피 번짐 차단',
-    titleEn: 'Slim Arm & Shoulder Protection Against Bulky Selfie Clothes',
+    id: 'distance_3x4_bustup_and_sleeve_authority',
+    titleKo: '3:4 거리감 바스트업 & 넓은 소매·상의 부피 분리 원칙',
+    titleEn: '3:4 Distance Bust-Up Framing & Sleeve Volume Separation',
     customerTipKo:
-      '올리신 셀카에서 퍼프 소매나 품이 넓은 옷을 입고 있어도 영상에서 팔이나 어깨가 두꺼워 보이지 않도록 얼굴·목선만 깔끔하게 분리해 슬림한 실루엣으로 연출합니다.',
+      '정수리 위 12~16% 여백과 좌우 여백, 목·쇄골·어깨·상반신이 함께 보이는 3:4 거리감 구도(머리 높이 32~42%)를 유지하고, 얼굴만 60~85% 채우는 과도한 클로즈업은 제한합니다. 셀카의 넓은 소매나 두꺼운 상의 부피는 크롭이 아닌 지시 문구로 분리합니다.',
     customerTipEn:
-      'Even if your photo has puffy sleeves or bulky outerwear, we isolate your face and neck so your arms and shoulders look slender in the video.',
+      'Keep a 3:4 distance bust-up framing (head height 32–42% of frame height, 12–16% headroom above the crown, side margins, neck, collarbone, shoulders, and upper body; close-up headshots filling 60–85% of the frame are banned). Wide sleeves or casual top volume are handled in prompt authority instead of cropping.',
     compilerDirectiveEn:
-      'Strictly ignore any wide blouse sleeves, puffy shoulders, or bulky outerwear from @Image 1 (tight head-and-neck identity extraction); render @Image 1 with an overall petite, slender, graceful physique, slim toned arms, and delicate collarbones.'
+      'Keep @Image 1 in a 3:4 distance bust-up framing (head height 32–42% of frame height, 12–16% headroom above the crown, side margins, neck, collarbone, shoulders, and upper body in frame). Close-up headshot crops where the face fills 60–85% of the frame are banned because they make the head read too large. State once in Reference authority and Exclusions (never repeated per shot): ignore any wide casual top/sleeve volume from @Image 1; render a slender, graceful physique without cropping the upper body.'
   },
   {
     id: 'neck_down_outfit_reference_crop',
@@ -154,14 +155,14 @@ export const MORPHIC_APPROVED_VIDEO_LAWS: readonly ApprovedVideoProductionLaw[] 
   },
   {
     id: 'americano_matte_satin_zero_mole_skin',
-    titleKo: '번들거림·원치 않는 점 없는 맑은 매트 새틴 피부결',
-    titleEn: 'Clean Matte-Satin Skin Without Plastic Glare or Random Moles',
+    titleKo: '정지 이미지 무모공 · 영상 35mm 언더 노출 매트-새틴 피부결 분리 원칙',
+    titleEn: 'Still vs. Video Skin & Underexposed 35mm Matte-Satin Rule',
     customerTipKo:
-      '플래시 조명 아래에서도 이마나 코끝이 플라스틱처럼 번들거리거나 원래 없던 점·잡티가 생기지 않도록 깨끗하고 보송한 피부결로 표현합니다.',
+      '정지 이미지 부분 보정에서는 모공 강조를 피하고, 영상에서는 1스톱 언더 노출과 자연스러운 매트-새틴 피부결·미세 결·잔머리 표현으로 플래시 하이라이트 클리핑과 플라스틱 질감을 막습니다.',
     customerTipEn:
-      'Keeps skin clean and matte-satin under bright lights without plastic forehead glare or unintended moles and blemishes.',
+      'Still-image local edits keep excluding pore emphasis, while video uses slightly underexposed 35mm film contrast with matte-satin micro-texture and fine stray hairs so skin never clips or turns plastic.',
     compilerDirectiveEn:
-      'Render a clean, youthful matte-satin fair complexion faithful to @Image 1 with a very low specular-to-diffuse ratio (zero freckles, zero unintended moles or dark cheek spots, zero glossy white forehead bands, and zero aging pore exaggeration).'
+      'Still-image local edits keep excluding pore emphasis to prevent static portrait aging. For Seedance 2.5 video, apply once in Visual style (never per shot) to stop highlight clipping and temporal smoothing: looking like scanned, slightly underexposed 35mm film: soft contrast, cool lifted blacks (#14171C), fine organic grain, gentle halation on the brightest whites; one soft key light a stop under; skin stays natural and warm, unretouched matte-satin with visible micro-pores and fine stray flyaway hairs, never over-lit or glossy, with no blush.'
   },
   {
     id: 'dynamic_hair_and_grounded_shadow_sync',
@@ -217,20 +218,20 @@ export const MORPHIC_MODIFICATION_PLAYBOOK: readonly ModificationExecutionPatter
   },
   {
     id: 'silhouette_slim_arm_lock',
-    labelKo: '팔뚝·어깨 라인 슬림하고 여리여리하게 고정',
+    labelKo: '팔뚝·어깨 라인 슬림하고 자연스럽게 고정',
     labelEn: 'Keep Arms & Shoulders Slender',
     userSymptomKo: '셀카에 찍힌 넓은 블라우스 소매나 외투 때문에 민소매·드레스 컷에서 팔이 두꺼워 보일 때',
     userSymptomEn: 'When wide sleeves in your selfie make your arms look thick in sleeveless or dress shots',
     howWeSolveKo:
-      '셀카 속 소매 부피가 영상 체형에 영향을 주지 않도록 얼굴·목만 분리하고 슬림한 여배우 체형 비율로 고정합니다.',
+      '얼굴만 60~85% 채우는 크롭 대신 정수리 위 12~16% 여백과 목·쇄골·어깨·상반신이 보이는 3:4 거리감 구도(머리 높이 32~42%)를 유지하고, 상의 소매 부피 차단은 레퍼런스 권한과 제외 규칙에 한 번만 선언해 슬림한 실루엣을 유지합니다.',
     howWeSolveEn:
-      'Strips wide sleeve volume from your selfie and locks a slender, graceful shoulder and arm silhouette.',
+      'Preserves 3:4 distance framing (head height 32–42% of frame height, 12–16% headroom, neck, collarbone, shoulders, and upper body; 60–85% headshot crops banned) and strips wide sleeve volume once in Reference authority and Exclusions rather than cropping.',
     sampleRequestKo:
-      '내 사진 속 넓은 소매 옷 부피는 무시하고, 어깨선과 팔 라인이 슬림하고 여리여리한 비율로 나오게 해주세요.',
+      '내 사진 속 넓은 소매 옷 부피는 무시하고, 어깨선과 팔 라인이 슬림한 비율로 나오게 해주세요.',
     sampleRequestEn:
       'Ignore the wide sleeve volume from my selfie and keep my shoulders, collarbones, and arms slender and graceful.',
     compilerRuleEn:
-      'Apply tight head-and-neck crop authority on @Image 1; strip original wide sleeves/blouse volume and enforce an overall petite, slender, graceful physique with slim toned arms and delicate collarbones.'
+      'Keep @Image 1 in a 3:4 distance bust-up framing (head height 32–42% of frame height, 12–16% headroom above the crown, side margins, neck, collarbone, shoulders, and upper body in frame; close-up headshot crops filling 60–85% of the frame are banned). Declare once in Reference authority and Exclusions (never repeated per shot): ignore any wide casual top/sleeve volume from @Image 1, and maintain a slender, graceful physique with slim toned arms and delicate collarbones.'
   },
   {
     id: 'makeup_daily_clean_deblush',
@@ -360,7 +361,7 @@ export function enforcePersonalMorphicGuardrails(
     out = `${out}\n\nPET LOCK: Keep the pet's species, breed, coat colour, markings and proportions exactly as in its photo; no extra animals.`;
   }
 
-  // 3. When slender arm lock is active, enforce tight head-and-neck sleeve isolation
+  // 3. When slender arm lock is active, preserve legacy slender-arm lock output unchanged in SB-1 (unused on live paths)
   if (options.hasSlenderArmLock && options.cast !== 'pet' && !out.toLowerCase().includes('slender silhouette lock')) {
     out = `${out}\n\nSLENDER SILHOUETTE LOCK: Ignore any wide blouse or puff sleeves from @Image 1 and maintain naturally slender shoulders, collarbones, and slim toned arms (no random moles or blemishes on face or neck).`;
   }
