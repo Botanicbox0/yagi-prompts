@@ -15,9 +15,11 @@ import { RAIL_ICON } from '@/components/brand-workspace/rail-model';
 import type { RoomStep } from '@/lib/brand-rooms/overview';
 import { scopedHref } from '@/lib/brands/workspace/selection';
 import { interpolate } from '@/lib/i18n/format';
+import type { HomeAnnouncement } from '@/lib/brand-news/contracts';
 import type { BrandHomeCopy } from '@/messages/brand-home';
 import type { RoomsChatCopy } from '@/messages/rooms-chat';
 import type { RoomsShellCopy } from '@/messages/rooms-shell';
+import { HomeNewsLine, type BrandNewsCopy } from './news-line';
 import s from './home.module.css';
 
 export interface TeamHomeProject {
@@ -42,12 +44,14 @@ export interface WorkspaceTeamHomeProps {
   canRequest: boolean;
   viewerNote?: boolean;
   notice?: ReactNode;
+  news?: HomeAnnouncement | null;
   copy: {
     home: BrandHomeCopy;
     nav: RoomsShellCopy['nav'];
     space: RoomsShellCopy['space'];
     overview: RoomsShellCopy['overview'];
     inbox: RoomsChatCopy['inbox'];
+    brandNews?: BrandNewsCopy;
   };
 }
 
@@ -126,6 +130,7 @@ export function WorkspaceTeamHome(props: WorkspaceTeamHomeProps) {
         </p>
       ) : null}
       {props.notice}
+      {props.news && copy.brandNews ? <HomeNewsLine organizationId={organizationId} news={props.news} copy={copy.brandNews} /> : null}
 
       {waitingCount > 0 ? (
         <section className={s.block} aria-labelledby="workspace-home-waiting" data-home-team-waiting={waitingCount}>

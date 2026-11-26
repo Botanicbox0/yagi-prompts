@@ -8,7 +8,7 @@
  */
 import { z } from 'zod';
 
-export const BRAND_NEWS_SLOTS = ['home'] as const;
+export const BRAND_NEWS_SLOTS = ['home', 'team_home'] as const;
 export type BrandNewsSlot = (typeof BRAND_NEWS_SLOTS)[number];
 
 export const BRAND_NEWS_SHAPES = ['line', 'banner'] as const;
@@ -20,8 +20,13 @@ export type BrandNewsStatus = (typeof BRAND_NEWS_STATUSES)[number];
 /** The workspace's two rail modes (components/brand-workspace/rail-mode.ts): each has its own home. */
 export const BRAND_NEWS_MODES = ['make', 'team'] as const;
 export type BrandNewsMode = (typeof BRAND_NEWS_MODES)[number];
-/** An audience without `modes` reaches the 직접 만들기 home only (design §6: "기본 대상은 … 직접 만들기 홈"). */
-export const BRAND_NEWS_DEFAULT_MODES: readonly BrandNewsMode[] = ['make'];
+/** Default target mode per slot when an audience omits `modes` (direct home vs YAGI team home). */
+export const BRAND_NEWS_SLOT_DEFAULT_MODES: Record<BrandNewsSlot, readonly BrandNewsMode[]> = {
+  home: ['make'],
+  team_home: ['team'],
+};
+/** An audience without `modes` in the `home` slot reaches the 직접 만들기 home only (design §6: "기본 대상은 … 직접 만들기 홈"). */
+export const BRAND_NEWS_DEFAULT_MODES: readonly BrandNewsMode[] = BRAND_NEWS_SLOT_DEFAULT_MODES.home;
 
 /**
  * The plan an organization is on today (lib/brands/plans.ts `BRAND_PLAN_IDS`, an assignment active in KST), or
@@ -140,6 +145,10 @@ export function parseBrandNewsAudience(value: unknown): BrandNewsAudience | null
   return out;
 }
 
+/** Slot `'home'` only ever renders on `'make'`; `'team'` mode belongs exclusively to slot `'team_home'`. */
+export const homeSlotModesValid = (slot: BrandNewsSlot, audience: BrandNewsAudience): boolean =>
+  slot !== 'home' || !audience.modes?.some((mode) => mode !== 'make');
+
 /**
  * Does the audience take this organization, on one of `modes` (the homes in question: the one being drawn, or
  * every home the organization has when the question is "could this person ever have been shown it")?
@@ -147,8 +156,9 @@ export function parseBrandNewsAudience(value: unknown): BrandNewsAudience | null
 export function audienceAdmits(
   audience: BrandNewsAudience,
   who: { organizationId: string; plan: BrandNewsPlan | 'other'; modes: readonly BrandNewsMode[] },
+  slot: BrandNewsSlot = 'home',
 ): boolean {
-  const modes = audience.modes ?? BRAND_NEWS_DEFAULT_MODES;
+  const modes = audience.modes ?? BRAND_NEWS_SLOT_DEFAULT_MODES[slot];
   if (!who.modes.some((mode) => modes.includes(mode))) return false;
   if (audience.plans && !(audience.plans as readonly string[]).includes(who.plan)) return false;
   if (audience.orgs && !audience.orgs.includes(who.organizationId.toLowerCase())) return false;
@@ -249,11 +259,17 @@ export interface BrandNewsAdminItem extends BrandNewsWords {
   publishable: { ok: true } | { ok: false; reasons: BrandNewsPublishRefusal[] };
 }
 
-export type BrandNewsPublishRefusal = 'notDraft' | 'titleKo' | 'titleEn' | 'link' | 'image' | 'period' | 'over' | 'audience';
+export type BrandNewsPublishRefusal = 'notDraft' | 'titleKo' | 'titleEn' | 'link' | 'image' | 'period' | 'over' | 'audience' | 'audienceModes';
 
 /** The `brandNews.publish` rules, for a row as stored (also shown on the admin list). */
 export function publishRefusals(
-  row: Pick<BrandNewsWords, 'titleKo' | 'titleEn' | 'ctaHref' | 'shape' | 'imageKey'> & { status: BrandNewsStatus; startsAt: Date; endsAt: Date; audience: unknown },
+  row: Pick<BrandNewsWords, 'titleKo' | 'titleEn' | 'ctaHref' | 'shape' | 'imageKey'> & {
+    slot?: BrandNewsSlot;
+    status: BrandNewsStatus;
+    startsAt: Date;
+    endsAt: Date;
+    audience: unknown;
+  },
   now: Date,
 ): BrandNewsPublishRefusal[] {
   const out: BrandNewsPublishRefusal[] = [];
@@ -264,7 +280,9 @@ export function publishRefusals(
   if (row.shape === 'banner' && !row.imageKey) out.push('image');
   if (!periodValid(row.startsAt, row.endsAt)) out.push('period');
   if (row.endsAt.getTime() <= now.getTime()) out.push('over');
-  if (parseBrandNewsAudience(row.audience) === null) out.push('audience');
+  const audience = parseBrandNewsAudience(row.audience);
+  if (audience === null) out.push('audience');
+  else if (!homeSlotModesValid(row.slot ?? 'home', audience)) out.push('audienceModes');
   return out;
 }
 

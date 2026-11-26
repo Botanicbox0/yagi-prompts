@@ -18,11 +18,15 @@ import type { Viewer } from '@/lib/auth/identity';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import { publicContentUrl } from '@/lib/content/asset-url';
 import { assertBrandFeature, BrandFeatureDenied, isSandboxedClientOrganization, loadFeaturePolicies } from '@/lib/brands/entitlements';
+import { brandHomeVisible } from '@/lib/brands/workspace/home';
 import { scopedHref } from '@/lib/brands/workspace/selection';
+import { roomsOpenFor } from '@/components/brand-rooms/room/visibility';
+import { railModes } from '@/components/brand-workspace/rail-mode';
 import { brandNewsOpen, brandRoomsOpen, brandStudioV2Open } from '@/lib/flags';
 import {
   BRAND_NEWS_LIMITS,
   BRAND_NEWS_PLANS,
+  BRAND_NEWS_SLOTS,
   announcementAnswer,
   audienceAdmits,
   isUuid,
@@ -54,6 +58,7 @@ const defaultImageUrl = (key: string): string | null => publicContentUrl(key);
 
 const RECHECK_MS = 60_000;
 let probe: { ready: boolean; at: number } | null = null;
+let slotsProbe: { ready: boolean; at: number } | null = null;
 
 /**
  * True once both tables of migration 0196 exist. A miss is looked up again after a minute, so applying the
@@ -69,9 +74,37 @@ export async function brandNewsTablesReady(sql: SqlRunner, now = Date.now()): Pr
   return probe.ready;
 }
 
+/**
+ * True once migration 0204's `brand_announcements_slot` check accepts `'team_home'`. Remembered with the same
+ * 60s miss / permanent hit policy so N2 code can deploy before 0204/0205 lands.
+ */
+export async function brandNewsSlotsReady(sql: SqlRunner, now = Date.now()): Promise<boolean> {
+  if (slotsProbe && (slotsProbe.ready || now - slotsProbe.at < RECHECK_MS)) return slotsProbe.ready;
+  const found = await sql.query<{ ok: boolean }>(
+    `select exists(
+       select 1
+         from pg_constraint c
+         join pg_class r on r.oid = c.conrelid
+         join pg_namespace n on n.oid = r.relnamespace
+        where n.nspname = current_schema()
+          and r.relname = 'brand_announcements'
+          and c.conname = 'brand_announcements_slot'
+          and pg_get_constraintdef(c.oid) like '%team_home%'
+     ) as ok`,
+  );
+  slotsProbe = { ready: Boolean(found.rows[0]?.ok), at: now };
+  return slotsProbe.ready;
+}
+
 /** Forget the lookup (tests change the schema under one process). */
 export function resetBrandNewsProbe(): void {
   probe = null;
+  slotsProbe = null;
+}
+
+/** Forget only the slot-constraint probe (when a rolled-back 0204 surfaces SQLSTATE 23514). */
+export function resetBrandNewsSlotsProbe(): void {
+  slotsProbe = null;
 }
 
 /** The switch, then the tables. While the switch says closed the database is not asked anything. */
@@ -87,7 +120,11 @@ export async function brandNewsReady(sql: SqlRunner, env: Env = process.env): Pr
  * generation closed), then an active membership, then 직접 만들기 open. Null on any no, and on malformed input.
  * Never inside a transaction (the policy reads tolerate a table that is not there yet).
  */
-async function newsSeat(sql: SqlRunner, viewer: Viewer, organizationId: unknown): Promise<{ organizationId: string; userId: string } | null> {
+async function newsSeat(
+  sql: SqlRunner,
+  viewer: Viewer,
+  organizationId: unknown,
+): Promise<{ organizationId: string; organizationName: string; userId: string } | null> {
   if (!isUuid(viewer.userId) || !isUuid(organizationId)) return null;
   const org = (await sql.query<{ id: string; name: string }>('select id, name from brand_organizations where id = $1', [organizationId])).rows[0];
   if (!org || isSandboxedClientOrganization(org)) return null;
@@ -107,7 +144,21 @@ async function newsSeat(sql: SqlRunner, viewer: Viewer, organizationId: unknown)
     if (error instanceof BrandFeatureDenied) return null;
     throw error;
   }
-  return { organizationId: organizationId.toLowerCase(), userId: viewer.userId };
+  return { organizationId: organizationId.toLowerCase(), organizationName: String(org.name ?? ''), userId: viewer.userId };
+}
+
+/**
+ * Which home modes an active member of `org` sees, reusing the exact home page decision
+ * (`brandHomeVisible` + `roomsOpenFor` + `railModes`). Closed/sandboxed/project-only organizations get `[]`.
+ */
+type HomeVisibleOrg = NonNullable<Parameters<typeof brandHomeVisible>[0]>;
+
+function orgModesForHome(org: { id: string; name: string; denied?: HomeVisibleOrg['denied'] | null }, env: Env): BrandNewsMode[] {
+  const choice = { id: org.id, name: org.name, denied: org.denied ?? [], role: 'owner' as const };
+  if (!brandHomeVisible(choice, brandStudioV2Open(env as NodeJS.ProcessEnv))) return [];
+  const rooms = roomsOpenFor(choice, brandRoomsOpen(env as NodeJS.ProcessEnv));
+  const modes = railModes({ studio: true, rooms });
+  return modes.length > 0 ? modes : ['make'];
 }
 
 /** The homes an organization of an open seat has: 직접 만들기 always, 야기 팀과 while project rooms are open. */
@@ -184,32 +235,39 @@ const CANDIDATES_MAX = 10;
 export async function loadHomeAnnouncement(
   deps: BrandNewsDeps,
   viewer: Viewer,
-  input: { organizationId: string; mode: BrandNewsMode; locale: 'ko' | 'en' },
-  env: Env = process.env,
+  input: { organizationId: string; mode: BrandNewsMode; locale: 'ko' | 'en'; slot?: BrandNewsSlot },
+  slotOrEnv?: BrandNewsSlot | Env,
+  maybeEnv?: Env,
 ): Promise<HomeAnnouncement | null> {
+  const slot: BrandNewsSlot = typeof slotOrEnv === 'string' ? slotOrEnv : (input.slot ?? 'home');
+  const env: Env = typeof slotOrEnv === 'object' && slotOrEnv !== null ? slotOrEnv : (maybeEnv ?? process.env);
+  if (!(BRAND_NEWS_SLOTS as readonly string[]).includes(slot)) return null;
   if (!brandNewsOpen(env) || !brandStudioV2Open(env as NodeJS.ProcessEnv)) return null;
   if (input.mode !== 'make' && input.mode !== 'team') return null;
+  if (slot === 'team_home' && input.mode !== 'team') return null;
   if (input.mode === 'team' && !brandRoomsOpen(env as NodeJS.ProcessEnv)) return null;
   try {
     if (!(await brandNewsTablesReady(deps.sql))) return null;
+    if (slot === 'team_home' && !(await brandNewsSlotsReady(deps.sql))) return null;
     const seat = await newsSeat(deps.sql, viewer, input.organizationId);
     if (!seat) return null;
+    if (!orgModesForHome({ id: seat.organizationId, name: seat.organizationName }, env).includes(input.mode)) return null;
     const rows = (
       await deps.sql.query<WordRow & { audience: unknown; plan_id: string | null }>(
         `select ${WORD_COLUMNS}, a.audience, ${ACTIVE_PLAN('$2::uuid')} as plan_id
            from brand_announcements a
-          where a.slot = 'home' and ${SHOWING('a')}
+          where a.slot = $3 and ${SHOWING('a')}
             and not exists (select 1 from brand_announcement_dismissals d where d.announcement_id = a.id and d.user_id = $1)
           order by a.starts_at desc, a.id desc
           limit ${CANDIDATES_MAX}`,
-        [seat.userId, seat.organizationId],
+        [seat.userId, seat.organizationId, slot],
       )
     ).rows;
     const locale = input.locale === 'en' ? 'en' : 'ko';
     for (const row of rows) {
       const audience = parseBrandNewsAudience(row.audience);
       if (!audience) continue;
-      if (!audienceAdmits(audience, { organizationId: seat.organizationId, plan: planKey(row.plan_id), modes: [input.mode] })) continue;
+      if (!audienceAdmits(audience, { organizationId: seat.organizationId, plan: planKey(row.plan_id), modes: [input.mode] }, slot)) continue;
       const answer = announcementAnswer(wordsOf(row), locale, {
         imageUrl: deps.imageUrl ?? defaultImageUrl,
         scope: (path) => scopedHref(path, { id: seat.organizationId }),
@@ -248,17 +306,22 @@ export async function dismissHomeAnnouncement(
   const seat = await newsSeat(deps.sql, viewer, raw.organizationId);
   if (!seat) return notFound;
   const announcementId = raw.announcementId.toLowerCase();
+  const slotsReady = await brandNewsSlotsReady(deps.sql);
   const row = (
-    await deps.sql.query<WordRow & { audience: unknown; plan_id: string | null }>(
-      `select ${WORD_COLUMNS}, a.audience, ${ACTIVE_PLAN('$2::uuid')} as plan_id
+    await deps.sql.query<WordRow & { slot: string; audience: unknown; plan_id: string | null }>(
+      `select ${WORD_COLUMNS}, a.slot, a.audience, ${ACTIVE_PLAN('$2::uuid')} as plan_id
          from brand_announcements a
-        where a.id = $1 and a.slot = 'home' and ${SHOWING('a')}`,
+        where a.id = $1 and ${slotsReady ? "a.slot in ('home', 'team_home')" : "a.slot = 'home'"} and ${SHOWING('a')}`,
       [announcementId, seat.organizationId],
     )
   ).rows[0];
   if (!row) return notFound;
+  const slot = (row.slot === 'team_home' ? 'team_home' : 'home') as BrandNewsSlot;
+  if (slot === 'team_home' && !brandRoomsOpen(env as NodeJS.ProcessEnv)) return notFound;
+  const orgModes = orgModesForHome({ id: seat.organizationId, name: seat.organizationName }, env);
+  const modes: BrandNewsMode[] = slot === 'team_home' ? (orgModes.includes('team') ? ['team'] : []) : homesOf(env);
   const audience = parseBrandNewsAudience(row.audience);
-  if (!audience || !audienceAdmits(audience, { organizationId: seat.organizationId, plan: planKey(row.plan_id), modes: homesOf(env) })) return notFound;
+  if (!audience || !audienceAdmits(audience, { organizationId: seat.organizationId, plan: planKey(row.plan_id), modes }, slot)) return notFound;
   if (!announcementAnswer(wordsOf(row), 'ko', { imageUrl: () => null, scope: (path) => path })) return notFound;
   await deps.sql.query(
     'insert into brand_announcement_dismissals (announcement_id, user_id) values ($1, $2) on conflict (announcement_id, user_id) do nothing',
@@ -313,14 +376,15 @@ export async function loadBrandNewsAdmin(
   const imageUrl = deps.imageUrl ?? defaultImageUrl;
   const items = rows.map((row): BrandNewsAdminItem => {
     const words = wordsOf(row);
+    const slot = (row.slot === 'team_home' ? 'team_home' : 'home') as BrandNewsSlot;
     const status = row.status as BrandNewsStatus;
     const refusals =
       status === 'draft'
-        ? publishRefusals({ ...words, status, startsAt: new Date(row.starts_at), endsAt: new Date(row.ends_at), audience: row.audience }, new Date(row.db_now))
+        ? publishRefusals({ ...words, slot, status, startsAt: new Date(row.starts_at), endsAt: new Date(row.ends_at), audience: row.audience }, new Date(row.db_now))
         : ['notDraft' as const];
     return {
       ...words,
-      slot: row.slot as BrandNewsSlot,
+      slot,
       status,
       showing: Boolean(row.showing),
       over: Boolean(row.over),
@@ -345,8 +409,14 @@ export async function loadBrandNewsAdmin(
  * so the count is 0, as the read answers null. A number only: no organization is named. A constant number of
  * statements, whatever the number of organizations.
  */
-export async function countBrandNewsReach(sql: SqlRunner, audience: BrandNewsAudience, env: Env = process.env): Promise<number> {
+export async function countBrandNewsReach(
+  sql: SqlRunner,
+  audience: BrandNewsAudience,
+  env: Env = process.env,
+  slot: BrandNewsSlot = 'home',
+): Promise<number> {
   if (!brandStudioV2Open(env as NodeJS.ProcessEnv)) return 0;
+  if (slot === 'team_home' && !brandRoomsOpen(env as NodeJS.ProcessEnv)) return 0;
   const listed = audience.orgs ?? null;
   const orgs = (
     await sql.query<{ id: string; name: string }>(
@@ -355,6 +425,7 @@ export async function countBrandNewsReach(sql: SqlRunner, audience: BrandNewsAud
     )
   ).rows.filter((org) => !isSandboxedClientOrganization(org));
   if (orgs.length === 0) return 0;
+  const orgNames = new Map(orgs.map((org) => [String(org.id).toLowerCase(), String(org.name ?? '')] as const));
   const ids = orgs.map((org) => String(org.id).toLowerCase());
   const denied = await loadFeaturePolicies(sql, ids);
   const open = ids.filter((id) => {
@@ -381,9 +452,15 @@ export async function countBrandNewsReach(sql: SqlRunner, audience: BrandNewsAud
       )
     ).rows.map((row) => [String(row.organization_id).toLowerCase(), row.plan_id] as const),
   );
-  const homes = homesOf(env);
-  return open.filter((id) => members.has(id) && audienceAdmits(audience, { organizationId: id, plan: planKey(plans.get(id) ?? null), modes: homes }))
-    .length;
+  return open.filter((id) => {
+    if (!members.has(id)) return false;
+    const orgModes = orgModesForHome({ id, name: orgNames.get(id) ?? '', denied: denied[id] ?? [] }, env);
+    const modes: BrandNewsMode[] =
+      slot === 'team_home'
+        ? orgModes.includes('team') ? ['team'] : []
+        : orgModes.includes('make') ? ['make'] : [];
+    return audienceAdmits(audience, { organizationId: id, plan: planKey(plans.get(id) ?? null), modes }, slot);
+  }).length;
 }
 
 /** `/admin/brand-news`: the reach of one stored announcement (a draft, typically), as a number. Admins only. */
@@ -396,10 +473,12 @@ export async function loadBrandNewsReach(
   if (!viewer.isAdmin) return { ok: false, code: 'forbidden' };
   if (!(await brandNewsReady(deps.sql, env))) return { ok: false, code: 'disabled' };
   if (!isUuid(announcementId)) return { ok: false, code: 'notFound' };
-  const row = (await deps.sql.query<{ audience: unknown }>('select audience from brand_announcements where id = $1', [announcementId])).rows[0];
+  const row = (await deps.sql.query<{ slot: string; audience: unknown }>('select slot, audience from brand_announcements where id = $1', [announcementId])).rows[0];
   if (!row) return { ok: false, code: 'notFound' };
+  const slot = (row.slot === 'team_home' ? 'team_home' : 'home') as BrandNewsSlot;
+  if (slot === 'team_home' && !(await brandNewsSlotsReady(deps.sql))) return { ok: true, organizations: 0 };
   const audience = parseBrandNewsAudience(row.audience);
   // A stored audience that does not parse is never shown: it reaches nobody.
   if (!audience) return { ok: true, organizations: 0 };
-  return { ok: true, organizations: await countBrandNewsReach(deps.sql, audience, env) };
+  return { ok: true, organizations: await countBrandNewsReach(deps.sql, audience, env, slot) };
 }

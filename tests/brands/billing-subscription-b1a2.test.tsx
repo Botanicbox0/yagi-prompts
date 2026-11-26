@@ -223,7 +223,8 @@ const NON_WRITER_OPS: readonly string[] = [
   'brandEngine.storageQuota',
   'brandEngine.storageReconcile',
   'brandInquiry.status',
-  // docs/BRAND-PROJECT-SPINE.md §6 (slice 3b): the home's news slot (brand_announcements + an audit row), nothing billed.
+  // docs/BRAND-PROJECT-SPINE.md §6 (slice 3b + N2): the home's news slots (brand_announcements + an audit row), nothing billed.
+  'brandNews.delete',
   'brandNews.end',
   'brandNews.publish',
   'brandNews.save',

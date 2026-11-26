@@ -208,10 +208,17 @@ describe('0196 — the tables', () => {
     expect((await db.query('select count(*)::int as n from brand_announcement_dismissals where user_id = $1', [admin])).rows[0]).toEqual({ n: 0 });
     expect((await db.query('select created_by from brand_announcements where id = $1', [a])).rows[0]).toEqual({ created_by: null });
 
-    // The announcement goes (by hand; the app never deletes one): its dismissals go with it.
+    // 0204 blocks deleting an ended announcement even by hand; a draft's dismissals still cascade with its announcement.
     await db.query("update brand_announcements set status = 'ended', ended_at = now() where id = $1", [a]);
-    await db.query('delete from brand_announcements where id = $1', [a]);
-    expect((await db.query('select count(*)::int as n from brand_announcement_dismissals')).rows[0]).toEqual({ n: 0 });
+    expect(
+      await expectReject(() => db.query('delete from brand_announcements where id = $1', [a])),
+    ).toMatch(/brand_announcements: only a draft can be deleted/);
+    const draft = await insert({ created_by: member });
+    await db.query('insert into brand_announcement_dismissals (announcement_id, user_id) values ($1, $2)', [draft, member]);
+    await db.query('delete from brand_announcements where id = $1', [draft]);
+    expect(
+      (await db.query('select count(*)::int as n from brand_announcement_dismissals where announcement_id = $1', [draft])).rows[0],
+    ).toEqual({ n: 0 });
   });
 });
 

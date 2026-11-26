@@ -1,0 +1,36 @@
+{
+  "flagOff": {
+    "save": {
+      "ok": false,
+      "code": "disabled",
+      "detail": "BRAND_NEWS"
+    },
+    "publish": {
+      "ok": false,
+      "code": "disabled",
+      "detail": "BRAND_NEWS"
+    },
+    "end": {
+      "ok": false,
+      "code": "disabled",
+      "detail": "BRAND_NEWS"
+    }
+  },
+  "flagOnPre0204": {
+    "save": {
+      "ok": true,
+      "code": "saved",
+      "detail": "55555555-5555-4555-8555-555555555555"
+    },
+    "publish": {
+      "ok": true,
+      "code": "published",
+      "detail": "55555555-5555-4555-8555-555555555555"
+    },
+    "end": {
+      "ok": true,
+      "code": "unpublished",
+      "detail": "55555555-5555-4555-8555-555555555555"
+    }
+  }
+}

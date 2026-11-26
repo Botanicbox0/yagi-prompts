@@ -74,6 +74,7 @@ function recording(inner: SqlRunner) {
 const readsAnnouncements = (texts: string[]) => texts.some((t) => /brand_announcement/.test(t) && !/information_schema/.test(t));
 
 interface Over {
+  slot?: 'home' | 'team_home';
   status?: 'draft' | 'live' | 'ended';
   startsAt?: string;
   endsAt?: string;
@@ -95,11 +96,12 @@ async function announce(over: Over = {}): Promise<string> {
   const banner = over.shape === 'banner';
   const imageKey = banner ? (over.imageKey === undefined ? `${'b'.repeat(64)}.webp` : over.imageKey) : null;
   await f.sql.query(
-    `insert into brand_announcements (id, kicker_ko, kicker_en, title_ko, title_en, cta_label_ko, cta_label_en, cta_href, shape, image_key, image_w, image_h,
+    `insert into brand_announcements (id, slot, kicker_ko, kicker_en, title_ko, title_en, cta_label_ko, cta_label_en, cta_href, shape, image_key, image_w, image_h,
        starts_at, ends_at, audience, status, created_by, published_at, ended_at)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15::jsonb, $16, $17, $18, $19)`,
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16::jsonb, $17, $18, $19, $20)`,
     [
       id,
+      over.slot ?? 'home',
       over.kickerKo ?? '새 기능',
       over.kickerEn ?? 'New',
       over.titleKo ?? '영상 스튜디오에 참고 영상 모드가 생겼습니다',
@@ -502,10 +504,25 @@ describe('the admin’s count follows the same rule', () => {
         let shown = 0;
         for (const organizationId of orgs) {
           const make = await read(owner(), organizationId, { mode: 'make' });
-          const team = await read(owner(), organizationId, { mode: 'team' });
-          if (make || team) shown += 1;
+          if (make) shown += 1;
         }
         expect(await countBrandNewsReach(f.sql, audience as never), `${rooms} ${JSON.stringify(audience)}`).toBe(shown);
+      }
+      for (const audience of [{ modes: ['team'] }, { modes: ['make', 'team'], orgs: [f.orgId] }]) {
+        await f.sql.query("delete from brand_announcement_dismissals");
+        await f.sql.query("update brand_announcements set status = 'ended', ended_at = now() where status = 'live'");
+        await announce({ slot: 'team_home', audience });
+        let teamShown = 0;
+        for (const organizationId of orgs) {
+          const team = await loadHomeAnnouncement(
+            { sql: f.sql, imageUrl: media },
+            owner(),
+            { organizationId, mode: 'team', locale: 'ko' },
+            'team_home',
+          );
+          if (team) teamShown += 1;
+        }
+        expect(await countBrandNewsReach(f.sql, audience as never, process.env, 'team_home'), `team_home ${rooms} ${JSON.stringify(audience)}`).toBe(teamShown);
       }
     }
     // No home without studio v2: the read answers null and the count is 0.

@@ -169,7 +169,7 @@ describe('/brand/home news line wiring (slice 3b)', () => {
     expect(spineHtml.indexOf('data-home-news')).toBeLessThan(spineHtml.indexOf('data-home-prompt'));
   });
 
-  it('never calls loadHomeAnnouncement in team mode or for a sandboxed Morphic organization', async () => {
+  it('loads the team_home slot in team mode (not home slot) and never calls loadHomeAnnouncement for a sandboxed Morphic organization', async () => {
     vi.stubEnv('BRAND_STUDIO_V2', 'on');
     vi.stubEnv('BRAND_ROOMS', 'on');
     vi.stubEnv('BRAND_NEWS', 'on');
@@ -179,7 +179,8 @@ describe('/brand/home news line wiring (slice 3b)', () => {
     mocks.modeCookie = `${fx.orgId}:team`;
 
     const teamEl = await renderHomePage(fx.orgId);
-    expect(mocks.loadHomeSpy).not.toHaveBeenCalled();
+    expect(mocks.loadHomeSpy).toHaveBeenCalledTimes(1);
+    expect(mocks.loadHomeSpy.mock.calls[0]![3]).toBe('team_home');
     const teamHtml = renderToStaticMarkup(teamEl);
     expect(teamHtml).toContain('data-home-mode="team"');
     expect(teamHtml).not.toContain('data-home-news');

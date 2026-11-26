@@ -107,7 +107,7 @@ export const ADMIN_OPERATIONS = {
   ...ACCOUNT_DELETION_OPERATIONS,
   // docs/PERSONAL-STUDIO.md §6.1 — correct a stored 19+ answer's birth year (audited).
   ...ADULT_CONFIRMATION_OPERATIONS,
-  // docs/BRAND-PROJECT-SPINE.md §6 (slice 3b) — the home's news slot: save a draft, publish (ends the live one), end. Behind BRAND_NEWS.
+  // docs/BRAND-PROJECT-SPINE.md §6 (slice 3b + N2) — the home's news slots: save a draft, publish (ends the slot's live one), end, delete draft. Behind BRAND_NEWS.
   ...BRAND_NEWS_OPERATIONS,
 };
 
