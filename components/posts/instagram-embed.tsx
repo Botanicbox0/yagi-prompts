@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { instagramEmbedHeight } from '@/lib/posts/instagram-embed-size';
 import { parseInstagramPost } from '@/lib/posts/schema';
 
 export interface InstagramEmbedLabels {
@@ -26,8 +27,31 @@ export function InstagramEmbed({
   labels: InstagramEmbedLabels;
 }) {
   const [loaded, setLoaded] = useState(false);
+  const [measured, setMeasured] = useState<{ embedUrl: string; height: number } | null>(null);
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const parsed = parseInstagramPost(url);
+  const embedUrl = parsed?.embedUrl ?? null;
+
+  useEffect(() => {
+    if (!loaded || !embedUrl) return;
+    function onMessage(event: MessageEvent) {
+      const frameWindow = iframeRef.current?.contentWindow;
+      if (!frameWindow || event.source !== frameWindow) return;
+      const nextHeight = instagramEmbedHeight(event.origin, event.data);
+      if (nextHeight !== null) {
+        setMeasured({ embedUrl: embedUrl!, height: nextHeight });
+      }
+    }
+    window.addEventListener('message', onMessage);
+    return () => {
+      window.removeEventListener('message', onMessage);
+    };
+  }, [loaded, embedUrl]);
+
   if (!parsed) return null;
+
+  const measuredHeight = measured?.embedUrl === parsed.embedUrl ? measured.height : null;
+  const initialHeightClass = parsed.kind === 'reel' ? 'h-[56rem]' : 'h-[44rem]';
 
   return (
     <div
@@ -60,15 +84,19 @@ export function InstagramEmbed({
         </div>
       ) : (
         <div className="bg-[#F4F4F5]">
-          <iframe
-            data-instagram-iframe
-            src={parsed.embedUrl}
-            title={labels.placeholderLabel}
-            loading="lazy"
-            referrerPolicy="no-referrer"
-            sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
-            className="h-[30rem] w-full border-0 bg-white sm:h-[34rem]"
-          />
+          <div className="mx-auto w-full max-w-[25rem]">
+            <iframe
+              ref={iframeRef}
+              data-instagram-iframe
+              src={parsed.embedUrl}
+              title={labels.placeholderLabel}
+              loading="lazy"
+              referrerPolicy="no-referrer"
+              sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+              style={measuredHeight !== null ? { height: `${measuredHeight}px` } : undefined}
+              className={`${initialHeightClass} block w-full border-0 bg-white`}
+            />
+          </div>
           <p className="border-t border-[#09090B]/[0.08] px-4 py-2 text-xs text-[#71717A]">
             {labels.fallback}
           </p>

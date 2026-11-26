@@ -435,6 +435,83 @@ export function parseRecipe(raw: unknown, options: ParseRecipeOptions = {}): Rec
   return issues.length ? { ok: false, issues } : { ok: true, recipe, medium: recipeMedium(recipe) };
 }
 
+const MAX_SHAPE_HINTS = 8;
+const MAX_SHAPE_HINT_CHARS = 160;
+const MAX_HINT_VALUE_CHARS = 40;
+
+function trimHintToken(value: string): string {
+  return value.length > MAX_HINT_VALUE_CHARS ? `${value.slice(0, MAX_HINT_VALUE_CHARS - 1)}…` : value;
+}
+
+function formatShapePath(path: readonly PropertyKey[]): string {
+  return path.length === 0 ? 'recipe' : path.map((segment) => trimHintToken(String(segment))).join('.');
+}
+
+type RecipeZodIssue = z.core.$ZodIssue;
+
+function formatShapeReason(issue: RecipeZodIssue): string {
+  const last = issue.path[issue.path.length - 1];
+  if (last === 'asset' && issue.code === 'invalid_format') {
+    return 'upload the file first with upload_file and put the returned ast_… id here';
+  }
+  switch (issue.code) {
+    case 'invalid_type':
+      return `expected ${issue.expected}`;
+    case 'invalid_value':
+      return `expected ${issue.values.map((v) => JSON.stringify(v)).join(' | ')}`;
+    case 'invalid_format':
+      return issue.format === 'regex' && issue.pattern ? `must match ${issue.pattern}` : `invalid ${issue.format}`;
+    case 'too_small':
+      return issue.origin === 'array'
+        ? `must have at least ${issue.minimum} item(s)`
+        : issue.origin === 'string'
+          ? `must be at least ${issue.minimum} characters`
+          : `must be >= ${issue.minimum}`;
+    case 'too_big':
+      return issue.origin === 'array'
+        ? `must have at most ${issue.maximum} item(s)`
+        : issue.origin === 'string'
+          ? `must be at most ${issue.maximum} characters`
+          : `must be <= ${issue.maximum}`;
+    case 'unrecognized_keys':
+      return `unexpected key(s): ${issue.keys.slice(0, 4).map(trimHintToken).join(', ')}`;
+    case 'invalid_key':
+      return 'invalid key name (lowercase letters, digits, underscores; max 24 chars)';
+    case 'invalid_union':
+      if (last === 'source') return 'expected "user" | "creator"';
+      if (last === 'kind') return 'expected "image" | "video"';
+      if (last === 'output') return 'must be { from: "<step_id>" } or { frames: ["<step_id>", ...] }';
+      return 'does not match any allowed shape';
+    default:
+      return 'invalid value';
+  }
+}
+
+/**
+ * Human- and agent-readable hints when a recipe fails `RecipeShape` validation.
+ * Runs the same Zod schema as `parseRecipe`, caps output at 8 lines of at most 160 chars,
+ * and never echoes prompt text or any input value longer than 40 characters.
+ */
+export function recipeShapeHints(raw: unknown): string[] {
+  let value: unknown = raw;
+  if (typeof value === 'string') {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      return ['recipe: not valid JSON'];
+    }
+  }
+  const parsed = RecipeShape.safeParse(value);
+  if (parsed.success) return [];
+  const hints: string[] = [];
+  for (const issue of parsed.error.issues) {
+    if (hints.length >= MAX_SHAPE_HINTS) break;
+    const line = `${formatShapePath(issue.path)}: ${formatShapeReason(issue)}`;
+    hints.push(line.length > MAX_SHAPE_HINT_CHARS ? `${line.slice(0, MAX_SHAPE_HINT_CHARS - 1)}…` : line);
+  }
+  return hints;
+}
+
 /** Convenience wrapper for brand/studio recipes that may be faceless (product, scene, look, mask). */
 export function parseBrandRecipe(raw: unknown): RecipeCheck {
   return parseRecipe(raw, { studio: true, allowFaceless: true });

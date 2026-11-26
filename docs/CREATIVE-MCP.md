@@ -50,7 +50,7 @@ http_headers = { Authorization = "Bearer <YOUR_TOKEN>" }
 | --- | --- |
 | `whoami` | 내 핸들, 공개 프로필 URL, 프로그램·셀프 공개 가능 여부, 계정·파일 한도 확인 |
 | `get_recipe_guide` | 레시피 구조, 허용 엔진·비율·길이, 클립 카드(`guide[]`) 규칙, 파일 한도, 예시 2종(`example`, `exampleWithClips`) 조회 |
-| `validate_recipe` | 저장 없이 레시피 규칙 검사(`ok`, `issues`) 및 `guide[]`의 알 수 없는 `{{이름}}` 비차단 경고(`warnings`) 반환 |
+| `validate_recipe` | 저장 없이 레시피 규칙 검사(`ok`, `issues`) 및 `guide[]`의 알 수 없는 `{{이름}}` 비차단 경고(`warnings`) 반환. 레시피 모양이 틀리면 어느 칸이 왜 틀렸는지 `hints`(최대 8줄)로 알려 준다 |
 | `list_templates` | 내 템플릿 목록(초안·검수 중·공개·반려), 상태, 검수 메모, 공개된 레시피 열람 회원 수 조회 |
 | `get_template` | 특정 템플릿의 레시피 JSON, 업로드 파일(`ast_...`), 테스트 렌더 이력, 웹 편집기 주소(`editor`), 공개 시 `url` 반환 |
 | `save_template` | 초안 생성 또는 수정. `editor` 주소, 미완성 사유(`issues`), `guide[]` 토큰 경고(`warnings`) 반환 |
@@ -139,3 +139,12 @@ http_headers = { Authorization = "Bearer <YOUR_TOKEN>" }
 | `publish_post` | | `rightsConfirmed: true` 확인 및 1개 이상 블록·소유 미디어·공개 템플릿 검증 후 즉시 공개 |
 | `unpublish_post` | | 공개 중인 글을 `draft`로 되돌리기(`hidden` 상태는 잠김) |
 
+### 블로그 글의 모델·도구 이름 (대표 결정 2026-11-26)
+
+블로그 글은 AI 크리에이티브가 직접 쓰는 글이라, 쓴 모델과 도구 이름(Seedance 2.5, Seedream 5.5, Nano Banana 2.1, Kling, Midjourney, ComfyUI 등)을 소제목·본문·목록·대표 작업 설명·프롬프트 카드(제목, 조건 한 줄, 프롬프트, 팁) 어디에나 적을 수 있다. 글 스키마·저장·공개 읽기·화면 어디에서도 이 이름을 거르거나 바꾸지 않는다(`tests/posts/model-names.test.ts`가 고정). `get_post_guide`의 `naming`이 에이전트에게 같은 내용을 알려 준다.
+
+이 결정은 블로그 글에만 해당한다. TWINGS가 쓰는 화면 문구에는 여전히 모델 이름을 넣지 않고, 템플릿 클립 카드의 제목과 조건 한 줄(`recipe.guide[].title`, `recipe.guide[].meta`)에 모델 이름을 넣지 않는다는 규칙도 그대로다.
+
+### 문구와 이름 확정 (2026-11-26)
+
+클립 보기·MCP 안내·블로그의 화면 문구와 이름 "블로그"는 2026-11-26 대표가 확정했다. Gemma 4 윤문(`docs/wording/ai-tell-quick-rules.md`)을 거쳐 말투를 해요체로 맞췄고, 권리 확인 문장("내가 권리를 가진 내용만 올립니다.")은 본인이 하는 확인이라 그대로 두었다.
