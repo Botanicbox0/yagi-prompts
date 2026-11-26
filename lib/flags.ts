@@ -317,6 +317,20 @@ export function brandProjectSpineFor(
 }
 
 /**
+ * The home's news slot (docs/BRAND-PROJECT-SPINE.md §6, slice 3b; migrations 0196/0197): one announcement on the
+ * 직접 만들기 home, written from the admin console (`brandNews.save` / `brandNews.publish` / `brandNews.end`) and
+ * closed by each person for themselves (`news.dismiss`). Default OFF: open only when the server environment says
+ * exactly `BRAND_NEWS=on`. Off means the home read answers "none" without asking the database, `news.dismiss` answers
+ * exactly like an unknown operation and the three admin operations refuse with `disabled`. The server additionally
+ * keeps it closed until both tables of 0196 exist (lib/brand-news/service.ts `brandNewsReady`). There is no
+ * organization list: an announcement's own `audience.orgs` is how it is tried on a test organization first. The
+ * hardline gates (sandboxed client, generation closed) run before anything is read, whatever this says.
+ */
+export function brandNewsOpen(env: Record<string, string | undefined> = process.env): boolean {
+  return env.BRAND_NEWS === 'on';
+}
+
+/**
  * docs/CAST-CATEGORIES.md §4 — couple templates (the buyer and one partner). Default OFF: open only
  * when the server environment says exactly `TWINGS_COUPLE_TEMPLATES=on`. Terms §5.3 say "your own
  * face only" and cannot change while Toss reviews subscription billing, so off means couples do not
