@@ -17,6 +17,7 @@ import type { ReactNode } from 'react';
 import type { RoomAlertItem } from '@/components/brand-rooms/seams';
 import { roomHref } from '@/components/brand-rooms/room/visibility';
 import { HOME_STARTERS, homeTileRatio, homeWallRows, type HomeDoorKey, type HomeLayout, type HomeResult } from '@/lib/brands/workspace/home';
+import type { HomeAnnouncement } from '@/lib/brand-news/contracts';
 import type { BillingPlanCatalogueItem } from '@/lib/brands/billing-ui';
 import type { FirstRunChecklistState } from '@/lib/brands/workspace/home-checklist';
 import { scopedHref } from '@/lib/brands/workspace/selection';
@@ -30,6 +31,7 @@ import type { RailSummary } from '../rail-activity';
 import { FirstRunChecklist } from './first-run-checklist';
 import { WorkspaceBell } from '../bell';
 import { HomePrompt, HomeStarterButton, HomeWallTile, type HomePromptCopy } from './home-actions';
+import { HomeNewsLine, type BrandNewsCopy } from './news-line';
 import { HomeProjectCards, topRowClassName, type ProjectCardsCopy, type SpineHomeProps } from './project-cards';
 import s from './home.module.css';
 
@@ -48,6 +50,7 @@ type BaseHomeCopy = {
   closedRequestDraft?: string;
   closedRequestOrgFallback?: string;
   billingCustomer?: BrandBillingCopy['customer'];
+  brandNews?: BrandNewsCopy;
 };
 
 type WorkspaceHomeBaseProps = {
@@ -73,6 +76,8 @@ type WorkspaceHomeBaseProps = {
   checklist?: FirstRunChecklistState | null;
   canOpenBilling?: boolean;
   planCatalogue?: readonly BillingPlanCatalogueItem[];
+  /** Live announcement for the home's news line (slice 3b); omitted when closed or absent. */
+  news?: HomeAnnouncement | null;
 };
 
 export type WorkspaceHomeProps =
@@ -152,6 +157,7 @@ export function WorkspaceHome(props: WorkspaceHomeProps) {
         </p>
       ) : null}
       {props.notice}
+      {props.news && copy.brandNews ? <HomeNewsLine organizationId={organizationId} news={props.news} copy={copy.brandNews} /> : null}
 
       {props.readOnly ? null : (
         <HomePrompt
