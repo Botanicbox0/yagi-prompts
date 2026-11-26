@@ -1,0 +1,303 @@
+{
+  "benign": {
+    "calls": [
+      {
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-4-hydrogen:generateContent",
+        "body": "{\"systemInstruction\":{\"parts\":[{\"text\":\"You are a cinematographer inspecting up to 9 reference images and an optional reference video shot-sheet for a film director.\\nExtract concrete visual evidence in English:\\n- paletteHex: 3 to 4 exact #RRGGBB hex codes representing the shadow floor, primary surface/wardrobe, and key/accent tones.\\n- lightingNotes: motivated light source direction, shadow floor depth, and ambient color spill (no studio gear brand names).\\n- textureNotes: natural skin, fabric, prop, and lens texture (never use plastic or beauty-filter words).\\n- subjectNotes: concise physical description of people, wardrobe, and product geometry/labels.\\n- referenceNotes: one entry per @Image token describing what is visible in that image.\\nReturn JSON only.\"}]},\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"{\\\"prompt\\\":\\\"A serum bottle on dark stone, she lifts it QXPROMPT\\\",\\\"references\\\":[{\\\"token\\\":\\\"@Image 1\\\",\\\"kind\\\":\\\"image\\\",\\\"role\\\":\\\"product\\\",\\\"notes\\\":\\\"role: product\\\"}],\\\"film\\\":null}\"},{\"text\":\"Attached @Image 1 (\\\"Image 1\\\", role: product):\"},{\"inlineData\":{\"mimeType\":\"image/png\",\"data\":\"iVBORw0KGgoAAAANSUhEUg==\"}}]}],\"generationConfig\":{\"responseMimeType\":\"application/json\",\"responseJsonSchema\":{\"type\":\"object\",\"properties\":{\"paletteHex\":{\"type\":\"array\",\"items\":{\"type\":\"string\"},\"description\":\"3 to 4 dominant hex colors (#RRGGBB) from the attached images and scene.\"},\"lightingNotes\":{\"type\":\"string\",\"description\":\"Motivated key light direction, softness, ambient shadow floor, and color spill.\"},\"textureNotes\":{\"type\":\"string\",\"description\":\"Natural skin, fabric, prop, and lens texture without plastic beauty-filter glare.\"},\"subjectNotes\":{\"type\":\"string\",\"description\":\"Key subjects, wardrobe, and product geometry observed in the references.\"},\"referenceNotes\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"token\":{\"type\":\"string\"},\"visualNotes\":{\"type\":\"string\"}},\"required\":[\"token\",\"visualNotes\"]}}},\"required\":[\"paletteHex\",\"lightingNotes\",\"textureNotes\",\"subjectNotes\",\"referenceNotes\"]},\"thinkingConfig\":{\"thinkingLevel\":\"LOW\"}}}"
+      },
+      {
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-4-hydrogen:generateContent",
+        "body": "{\"systemInstruction\":{\"parts\":[{\"text\":\"You are a veteran Film Director writing a production-ready Seedance 2.5 video prompt in English.\\nMode: EXPAND. Expand the user's brief into a complete, film-directed Seedance 2.5 sequence grounded in physical staging, motivated lighting, and cut rhythm.\\n\\nMandatory Seedance 2.5 Grammar & Quality Rules:\\n1. OMIT all redundant boilerplate headers: never write \\\"Create a Seedance video\\\", aspect ratio (9:16, 16:9), resolution (480p, 1080p, 4K), FPS, or model names.\\n2. Exact block order separated by line breaks:\\n   - \\\"Reference authority:\\\" (when references are attached) locking identity, exact facial bone structure, wardrobe, and product geometry/labels to @Image 1 (and any additional @Image N tokens).\\n   - \\\"Visual style:\\\" concrete #Hex color palette roles (shadow floor, primary surface/wardrobe, key/accent), motivated light source & grounded shadow floor, lens feel, and material texture.\\n   - Anti-composite lighting: match ambient shadow floor and color spill across subject and environment — never pasted-on or flat front-lit.\\n   - Anti-plastic skin: enforce natural skin texture faithful to @Image 1, zero plastic/waxy beauty-filter glare. NEVER write \\\"glass-skin\\\", \\\"poreless porcelain\\\", or \\\"dewy highlighter\\\" (causes upscaler boiling).\\n   - Seconds-based timeline from 0.0s to 6.0s (\\\"0.0s–Xs: …\\\") with contiguous ranges, off-axis eyelines & camera angle alternation across cuts (18° / 45° / 90° / OTS — never repetitive flat passport front-stares), concrete camera start-to-end movement, and an explicit cut handoff at the end of every shot except the final shot (\\\"hard cut\\\", \\\"match cut on …\\\", or \\\"continuous\\\").\\n   - Audio rule (Strict No-BGM Default): write ONE \\\"Audio:\\\" line specifying diegetic Foley, room ambience and requested dialogue only — no background music, no score, no musical instruments (music is layered cleanly in Sequence Rail post-production).\\n3. Reference rule: bind only the attached @Image N / @Audio N tokens; invent no unattached tokens.\\n4. Spoken dialogue only when the user's brief provides words; keep spoken lines verbatim in quotes. Never expose internal tool, provider, or infrastructure names.\\nReturn JSON matching { \\\"prompt\\\": string, \\\"notes\\\": string } where \\\"notes\\\" is one concise sentence in the user's language.\"}]},\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"{\\\"intent\\\":\\\"expand\\\",\\\"request\\\":\\\"A serum bottle on dark stone, she lifts it QXPROMPT\\\",\\\"change\\\":null,\\\"customerLanguage\\\":\\\"en\\\",\\\"seconds\\\":6,\\\"audioMode\\\":\\\"on\\\",\\\"references\\\":[{\\\"token\\\":\\\"@Image 1\\\",\\\"role\\\":\\\"product\\\",\\\"label\\\":\\\"Image 1\\\",\\\"take\\\":null,\\\"avoid\\\":null,\\\"frame\\\":null}],\\\"mediaDigest\\\":{\\\"paletteHex\\\":[\\\"#14181F\\\",\\\"#EAE4DC\\\",\\\"#3875C5\\\"],\\\"lightingNotes\\\":\\\"soft window key from camera-left\\\",\\\"textureNotes\\\":\\\"matte glass grain\\\",\\\"subjectNotes\\\":\\\"a matte serum bottle\\\",\\\"filmSummary\\\":null},\\\"shots\\\":null,\\\"brand\\\":null,\\\"playbooks\\\":[]}\"},{\"text\":\"Attached @Image 1 (\\\"Image 1\\\", product):\"},{\"inlineData\":{\"mimeType\":\"image/png\",\"data\":\"iVBORw0KGgoAAAANSUhEUg==\"}}]}],\"generationConfig\":{\"responseMimeType\":\"application/json\",\"responseJsonSchema\":{\"type\":\"object\",\"properties\":{\"prompt\":{\"type\":\"string\",\"description\":\"The complete text sent to the model.\"},\"notes\":{\"type\":\"string\",\"description\":\"One short sentence in the customer's language.\"}},\"required\":[\"prompt\",\"notes\"],\"additionalProperties\":false},\"thinkingConfig\":{\"thinkingLevel\":\"LOW\"}}}"
+      }
+    ],
+    "result": {
+      "prompt": "Reference authority: lock the bottle geometry to @Image 1.\nVisual style: dark stone, a cool key from above and a soft rim on the glass.\n0.0s–6.0s: 18° off-axis medium shot, she lifts @Image 1 from the stone; slow push-in settling on the label.\nAudio: the bottle lifting off stone and quiet room tone — diegetic Foley, room ambience and requested dialogue only; no background music, no score, no musical instruments.",
+      "notes": "Refined camera staging, lighting, cut handoffs, and diegetic sound around your references.",
+      "source": "model",
+      "intent": "expand",
+      "provider": "gemini-4-hydrogen",
+      "analysis": {
+        "provider": "gemini-4-hydrogen",
+        "fallbackUsed": false,
+        "paletteHex": [
+          "#14181F",
+          "#EAE4DC",
+          "#3875C5"
+        ],
+        "lightingNotes": "soft window key from camera-left",
+        "textureNotes": "matte glass grain",
+        "subjectNotes": "a matte serum bottle",
+        "references": [
+          {
+            "index": 1,
+            "token": "@Image 1",
+            "kind": "image",
+            "role": "product",
+            "visualNotes": "matte glass bottle"
+          }
+        ],
+        "filmSummary": null
+      },
+      "playbooksApplied": 0
+    },
+    "fallbacks": []
+  },
+  "full": {
+    "calls": [
+      {
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-4-hydrogen:generateContent",
+        "body": "{\"systemInstruction\":{\"parts\":[{\"text\":\"You are a cinematographer inspecting up to 9 reference images and an optional reference video shot-sheet for a film director.\\nExtract concrete visual evidence in English:\\n- paletteHex: 3 to 4 exact #RRGGBB hex codes representing the shadow floor, primary surface/wardrobe, and key/accent tones.\\n- lightingNotes: motivated light source direction, shadow floor depth, and ambient color spill (no studio gear brand names).\\n- textureNotes: natural skin, fabric, prop, and lens texture (never use plastic or beauty-filter words).\\n- subjectNotes: concise physical description of people, wardrobe, and product geometry/labels.\\n- referenceNotes: one entry per @Image token describing what is visible in that image.\\nReturn JSON only.\"}]},\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"{\\\"prompt\\\":\\\"A serum bottle on dark stone, she lifts it QXPROMPT\\\",\\\"references\\\":[{\\\"token\\\":\\\"@Image 1\\\",\\\"kind\\\":\\\"image\\\",\\\"role\\\":\\\"product\\\",\\\"notes\\\":\\\"role: product\\\"}],\\\"film\\\":null}\"},{\"text\":\"Attached @Image 1 (\\\"Image 1\\\", role: product):\"},{\"inlineData\":{\"mimeType\":\"image/png\",\"data\":\"iVBORw0KGgoAAAANSUhEUg==\"}}]}],\"generationConfig\":{\"responseMimeType\":\"application/json\",\"responseJsonSchema\":{\"type\":\"object\",\"properties\":{\"paletteHex\":{\"type\":\"array\",\"items\":{\"type\":\"string\"},\"description\":\"3 to 4 dominant hex colors (#RRGGBB) from the attached images and scene.\"},\"lightingNotes\":{\"type\":\"string\",\"description\":\"Motivated key light direction, softness, ambient shadow floor, and color spill.\"},\"textureNotes\":{\"type\":\"string\",\"description\":\"Natural skin, fabric, prop, and lens texture without plastic beauty-filter glare.\"},\"subjectNotes\":{\"type\":\"string\",\"description\":\"Key subjects, wardrobe, and product geometry observed in the references.\"},\"referenceNotes\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"token\":{\"type\":\"string\"},\"visualNotes\":{\"type\":\"string\"}},\"required\":[\"token\",\"visualNotes\"]}}},\"required\":[\"paletteHex\",\"lightingNotes\",\"textureNotes\",\"subjectNotes\",\"referenceNotes\"]},\"thinkingConfig\":{\"thinkingLevel\":\"LOW\"}}}"
+      },
+      {
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-4-hydrogen:generateContent",
+        "body": "{\"systemInstruction\":{\"parts\":[{\"text\":\"You are a veteran Film Director writing a production-ready Seedance 2.5 video prompt in English.\\nMode: EXPAND. Expand the user's brief into a complete, film-directed Seedance 2.5 sequence grounded in physical staging, motivated lighting, and cut rhythm.\\n\\nMandatory Seedance 2.5 Grammar & Quality Rules:\\n1. OMIT all redundant boilerplate headers: never write \\\"Create a Seedance video\\\", aspect ratio (9:16, 16:9), resolution (480p, 1080p, 4K), FPS, or model names.\\n2. Exact block order separated by line breaks:\\n   - \\\"Reference authority:\\\" (when references are attached) locking identity, exact facial bone structure, wardrobe, and product geometry/labels to @Image 1 (and any additional @Image N tokens).\\n   - \\\"Visual style:\\\" concrete #Hex color palette roles (shadow floor, primary surface/wardrobe, key/accent), motivated light source & grounded shadow floor, lens feel, and material texture.\\n   - Anti-composite lighting: match ambient shadow floor and color spill across subject and environment — never pasted-on or flat front-lit.\\n   - Anti-plastic skin: enforce natural skin texture faithful to @Image 1, zero plastic/waxy beauty-filter glare. NEVER write \\\"glass-skin\\\", \\\"poreless porcelain\\\", or \\\"dewy highlighter\\\" (causes upscaler boiling).\\n   - Seconds-based timeline from 0.0s to 6.0s (\\\"0.0s–Xs: …\\\") with contiguous ranges, off-axis eyelines & camera angle alternation across cuts (18° / 45° / 90° / OTS — never repetitive flat passport front-stares), concrete camera start-to-end movement, and an explicit cut handoff at the end of every shot except the final shot (\\\"hard cut\\\", \\\"match cut on …\\\", or \\\"continuous\\\").\\n   - Audio rule (Strict No-BGM Default): write ONE \\\"Audio:\\\" line specifying diegetic Foley, room ambience and requested dialogue only — no background music, no score, no musical instruments (music is layered cleanly in Sequence Rail post-production).\\n3. Reference rule: bind only the attached @Image N / @Audio N tokens; invent no unattached tokens.\\n4. Spoken dialogue only when the user's brief provides words; keep spoken lines verbatim in quotes. Never expose internal tool, provider, or infrastructure names.\\nReturn JSON matching { \\\"prompt\\\": string, \\\"notes\\\": string } where \\\"notes\\\" is one concise sentence in the user's language.\"}]},\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"{\\\"intent\\\":\\\"expand\\\",\\\"request\\\":\\\"A serum bottle on dark stone, she lifts it QXPROMPT\\\",\\\"change\\\":null,\\\"customerLanguage\\\":\\\"en\\\",\\\"seconds\\\":6,\\\"audioMode\\\":\\\"on\\\",\\\"references\\\":[{\\\"token\\\":\\\"@Image 1\\\",\\\"role\\\":\\\"product\\\",\\\"label\\\":\\\"Image 1\\\",\\\"take\\\":null,\\\"avoid\\\":null,\\\"frame\\\":null}],\\\"mediaDigest\\\":{\\\"paletteHex\\\":[\\\"#14181F\\\",\\\"#EAE4DC\\\",\\\"#3875C5\\\"],\\\"lightingNotes\\\":\\\"soft window key from camera-left\\\",\\\"textureNotes\\\":\\\"matte glass grain\\\",\\\"subjectNotes\\\":\\\"a matte serum bottle\\\",\\\"filmSummary\\\":null},\\\"shots\\\":null,\\\"brand\\\":null,\\\"playbooks\\\":[]}\"},{\"text\":\"Attached @Image 1 (\\\"Image 1\\\", product):\"},{\"inlineData\":{\"mimeType\":\"image/png\",\"data\":\"iVBORw0KGgoAAAANSUhEUg==\"}}]}],\"generationConfig\":{\"responseMimeType\":\"application/json\",\"responseJsonSchema\":{\"type\":\"object\",\"properties\":{\"prompt\":{\"type\":\"string\",\"description\":\"The complete text sent to the model.\"},\"notes\":{\"type\":\"string\",\"description\":\"One short sentence in the customer's language.\"}},\"required\":[\"prompt\",\"notes\"],\"additionalProperties\":false},\"thinkingConfig\":{\"thinkingLevel\":\"LOW\"}}}"
+      }
+    ],
+    "result": {
+      "prompt": "Reference authority: lock the bottle geometry to @Image 1.\nVisual style: dark stone, a cool key from above and a soft rim on the glass.\n0.0s–6.0s: 18° off-axis medium shot, she lifts @Image 1 from the stone; slow push-in settling on the label.\nAudio: the bottle lifting off stone and quiet room tone — diegetic Foley, room ambience and requested dialogue only; no background music, no score, no musical instruments.\nYou are a veteran Film Director writing a production-ready Seedance 2.5 video prompt in English.\nMode: EXPAND. Expand the user's brief into a complete, film-directed Seedance 2.5 sequence grounded in physical staging, motivated lighting, and cut rhythm.\n\nMandatory Seedance 2.5 Grammar & Quality Rules:\n1. OMIT all redundant boilerplate headers: never write \"Create a Seedance video\", aspect ratio (9:16, 16:9), resolution (480p, 1080p, ), FPS, or model names.\n2. Exact block order separated by line breaks:\n- \"Reference authority:\" (when references are attached) locking identity, exact facial bone structure, wardrobe, and product geometry/labels to @Image 1 (and any additional @Image N tokens).\n- \"Visual style:\" concrete #Hex color palette roles (shadow floor, primary surface/wardrobe, key/accent), motivated light source & grounded shadow floor, lens feel, and material texture.\n- Anti-composite lighting: match ambient shadow floor and color spill across subject and environment — never pasted-on or flat front-lit.\n- Anti-plastic skin: enforce natural skin texture faithful to @Image 1, zero plastic/waxy beauty-filter glare. NEVER write \"\", \"\", or \"\" (causes upscaler boiling).\n- Seconds-based timeline from 0.0s to 6.0s (\"0.0s–Xs: …\") with contiguous ranges, off-axis eyelines & camera angle alternation across cuts (18° / 45° / 90° / OTS — never repetitive flat passport front-stares), concrete camera start-to-end movement, and an explicit cut handoff at the end of every shot except the final shot (\"hard cut\", \"match cut on …\", or \"continuous\").\n- Audio rule (Strict No-BGM Default): write ONE \"Audio:\" line specifying diegetic Foley, room ambience and requested dialogue only — no background music, no score, no musical instruments (music is layered cleanly in Sequence Rail post-production).\n3. Reference rule: bind only the attached @Image N / @Audio N tokens; invent no unattached tokens.\n4. Spoken dialogue only when the user's brief provides words; keep spoken lines verbatim in quotes. Never expose internal tool, provider, or infrastructure names.\nReturn JSON matching { \"prompt\": string, \"notes\": string } where \"notes\" is one concise sentence in the user's language.",
+      "notes": "Refined camera staging, lighting, cut handoffs, and diegetic sound around your references.",
+      "source": "model",
+      "intent": "expand",
+      "provider": "gemini-4-hydrogen",
+      "analysis": {
+        "provider": "gemini-4-hydrogen",
+        "fallbackUsed": false,
+        "paletteHex": [
+          "#14181F",
+          "#EAE4DC",
+          "#3875C5"
+        ],
+        "lightingNotes": "soft window key from camera-left",
+        "textureNotes": "matte glass grain",
+        "subjectNotes": "a matte serum bottle",
+        "references": [
+          {
+            "index": 1,
+            "token": "@Image 1",
+            "kind": "image",
+            "role": "product",
+            "visualNotes": "matte glass bottle"
+          }
+        ],
+        "filmSummary": null
+      },
+      "playbooksApplied": 0
+    },
+    "fallbacks": []
+  },
+  "window60": {
+    "calls": [
+      {
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-4-hydrogen:generateContent",
+        "body": "{\"systemInstruction\":{\"parts\":[{\"text\":\"You are a cinematographer inspecting up to 9 reference images and an optional reference video shot-sheet for a film director.\\nExtract concrete visual evidence in English:\\n- paletteHex: 3 to 4 exact #RRGGBB hex codes representing the shadow floor, primary surface/wardrobe, and key/accent tones.\\n- lightingNotes: motivated light source direction, shadow floor depth, and ambient color spill (no studio gear brand names).\\n- textureNotes: natural skin, fabric, prop, and lens texture (never use plastic or beauty-filter words).\\n- subjectNotes: concise physical description of people, wardrobe, and product geometry/labels.\\n- referenceNotes: one entry per @Image token describing what is visible in that image.\\nReturn JSON only.\"}]},\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"{\\\"prompt\\\":\\\"A serum bottle on dark stone, she lifts it QXPROMPT\\\",\\\"references\\\":[{\\\"token\\\":\\\"@Image 1\\\",\\\"kind\\\":\\\"image\\\",\\\"role\\\":\\\"product\\\",\\\"notes\\\":\\\"role: product\\\"}],\\\"film\\\":null}\"},{\"text\":\"Attached @Image 1 (\\\"Image 1\\\", role: product):\"},{\"inlineData\":{\"mimeType\":\"image/png\",\"data\":\"iVBORw0KGgoAAAANSUhEUg==\"}}]}],\"generationConfig\":{\"responseMimeType\":\"application/json\",\"responseJsonSchema\":{\"type\":\"object\",\"properties\":{\"paletteHex\":{\"type\":\"array\",\"items\":{\"type\":\"string\"},\"description\":\"3 to 4 dominant hex colors (#RRGGBB) from the attached images and scene.\"},\"lightingNotes\":{\"type\":\"string\",\"description\":\"Motivated key light direction, softness, ambient shadow floor, and color spill.\"},\"textureNotes\":{\"type\":\"string\",\"description\":\"Natural skin, fabric, prop, and lens texture without plastic beauty-filter glare.\"},\"subjectNotes\":{\"type\":\"string\",\"description\":\"Key subjects, wardrobe, and product geometry observed in the references.\"},\"referenceNotes\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"token\":{\"type\":\"string\"},\"visualNotes\":{\"type\":\"string\"}},\"required\":[\"token\",\"visualNotes\"]}}},\"required\":[\"paletteHex\",\"lightingNotes\",\"textureNotes\",\"subjectNotes\",\"referenceNotes\"]},\"thinkingConfig\":{\"thinkingLevel\":\"LOW\"}}}"
+      },
+      {
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-4-hydrogen:generateContent",
+        "body": "{\"systemInstruction\":{\"parts\":[{\"text\":\"You are a veteran Film Director writing a production-ready Seedance 2.5 video prompt in English.\\nMode: EXPAND. Expand the user's brief into a complete, film-directed Seedance 2.5 sequence grounded in physical staging, motivated lighting, and cut rhythm.\\n\\nMandatory Seedance 2.5 Grammar & Quality Rules:\\n1. OMIT all redundant boilerplate headers: never write \\\"Create a Seedance video\\\", aspect ratio (9:16, 16:9), resolution (480p, 1080p, 4K), FPS, or model names.\\n2. Exact block order separated by line breaks:\\n   - \\\"Reference authority:\\\" (when references are attached) locking identity, exact facial bone structure, wardrobe, and product geometry/labels to @Image 1 (and any additional @Image N tokens).\\n   - \\\"Visual style:\\\" concrete #Hex color palette roles (shadow floor, primary surface/wardrobe, key/accent), motivated light source & grounded shadow floor, lens feel, and material texture.\\n   - Anti-composite lighting: match ambient shadow floor and color spill across subject and environment — never pasted-on or flat front-lit.\\n   - Anti-plastic skin: enforce natural skin texture faithful to @Image 1, zero plastic/waxy beauty-filter glare. NEVER write \\\"glass-skin\\\", \\\"poreless porcelain\\\", or \\\"dewy highlighter\\\" (causes upscaler boiling).\\n   - Seconds-based timeline from 0.0s to 6.0s (\\\"0.0s–Xs: …\\\") with contiguous ranges, off-axis eyelines & camera angle alternation across cuts (18° / 45° / 90° / OTS — never repetitive flat passport front-stares), concrete camera start-to-end movement, and an explicit cut handoff at the end of every shot except the final shot (\\\"hard cut\\\", \\\"match cut on …\\\", or \\\"continuous\\\").\\n   - Audio rule (Strict No-BGM Default): write ONE \\\"Audio:\\\" line specifying diegetic Foley, room ambience and requested dialogue only — no background music, no score, no musical instruments (music is layered cleanly in Sequence Rail post-production).\\n3. Reference rule: bind only the attached @Image N / @Audio N tokens; invent no unattached tokens.\\n4. Spoken dialogue only when the user's brief provides words; keep spoken lines verbatim in quotes. Never expose internal tool, provider, or infrastructure names.\\nReturn JSON matching { \\\"prompt\\\": string, \\\"notes\\\": string } where \\\"notes\\\" is one concise sentence in the user's language.\"}]},\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"{\\\"intent\\\":\\\"expand\\\",\\\"request\\\":\\\"A serum bottle on dark stone, she lifts it QXPROMPT\\\",\\\"change\\\":null,\\\"customerLanguage\\\":\\\"en\\\",\\\"seconds\\\":6,\\\"audioMode\\\":\\\"on\\\",\\\"references\\\":[{\\\"token\\\":\\\"@Image 1\\\",\\\"role\\\":\\\"product\\\",\\\"label\\\":\\\"Image 1\\\",\\\"take\\\":null,\\\"avoid\\\":null,\\\"frame\\\":null}],\\\"mediaDigest\\\":{\\\"paletteHex\\\":[\\\"#14181F\\\",\\\"#EAE4DC\\\",\\\"#3875C5\\\"],\\\"lightingNotes\\\":\\\"soft window key from camera-left\\\",\\\"textureNotes\\\":\\\"matte glass grain\\\",\\\"subjectNotes\\\":\\\"a matte serum bottle\\\",\\\"filmSummary\\\":null},\\\"shots\\\":null,\\\"brand\\\":null,\\\"playbooks\\\":[]}\"},{\"text\":\"Attached @Image 1 (\\\"Image 1\\\", product):\"},{\"inlineData\":{\"mimeType\":\"image/png\",\"data\":\"iVBORw0KGgoAAAANSUhEUg==\"}}]}],\"generationConfig\":{\"responseMimeType\":\"application/json\",\"responseJsonSchema\":{\"type\":\"object\",\"properties\":{\"prompt\":{\"type\":\"string\",\"description\":\"The complete text sent to the model.\"},\"notes\":{\"type\":\"string\",\"description\":\"One short sentence in the customer's language.\"}},\"required\":[\"prompt\",\"notes\"],\"additionalProperties\":false},\"thinkingConfig\":{\"thinkingLevel\":\"LOW\"}}}"
+      }
+    ],
+    "result": {
+      "prompt": "Reference authority: lock the bottle geometry to @Image 1.\nVisual style: dark stone, a cool key from above and a soft rim on the glass.\n0.0s–6.0s: 18° off-axis medium shot, she lifts @Image 1 from the stone; slow push-in settling on the label.\nAudio: the bottle lifting off stone and quiet room tone — diegetic Foley, room ambience and requested dialogue only; no background music, no score, no musical instruments.\nroles (shadow floor, primary surface/wardrobe, key/accent), motivated light source & grounded shadow floor, lens feel, and material texture. - Anti-composite lighting: match ambient shadow floor and color spill across subject and environment — never pasted-on or flat front-lit. - Anti-plastic skin: enforce natural skin texture faithful to @Image 1, zero plastic/waxy beauty-filter glare. NEVER write \"\", \"\", or \"dewy",
+      "notes": "Refined camera staging, lighting, cut handoffs, and diegetic sound around your references.",
+      "source": "model",
+      "intent": "expand",
+      "provider": "gemini-4-hydrogen",
+      "analysis": {
+        "provider": "gemini-4-hydrogen",
+        "fallbackUsed": false,
+        "paletteHex": [
+          "#14181F",
+          "#EAE4DC",
+          "#3875C5"
+        ],
+        "lightingNotes": "soft window key from camera-left",
+        "textureNotes": "matte glass grain",
+        "subjectNotes": "a matte serum bottle",
+        "references": [
+          {
+            "index": 1,
+            "token": "@Image 1",
+            "kind": "image",
+            "role": "product",
+            "visualNotes": "matte glass bottle"
+          }
+        ],
+        "filmSummary": null
+      },
+      "playbooksApplied": 0
+    },
+    "fallbacks": []
+  },
+  "canary": {
+    "calls": [
+      {
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-4-hydrogen:generateContent",
+        "body": "{\"systemInstruction\":{\"parts\":[{\"text\":\"You are a cinematographer inspecting up to 9 reference images and an optional reference video shot-sheet for a film director.\\nExtract concrete visual evidence in English:\\n- paletteHex: 3 to 4 exact #RRGGBB hex codes representing the shadow floor, primary surface/wardrobe, and key/accent tones.\\n- lightingNotes: motivated light source direction, shadow floor depth, and ambient color spill (no studio gear brand names).\\n- textureNotes: natural skin, fabric, prop, and lens texture (never use plastic or beauty-filter words).\\n- subjectNotes: concise physical description of people, wardrobe, and product geometry/labels.\\n- referenceNotes: one entry per @Image token describing what is visible in that image.\\nReturn JSON only.\"}]},\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"{\\\"prompt\\\":\\\"A serum bottle on dark stone, she lifts it QXPROMPT\\\",\\\"references\\\":[{\\\"token\\\":\\\"@Image 1\\\",\\\"kind\\\":\\\"image\\\",\\\"role\\\":\\\"product\\\",\\\"notes\\\":\\\"role: product\\\"}],\\\"film\\\":null}\"},{\"text\":\"Attached @Image 1 (\\\"Image 1\\\", role: product):\"},{\"inlineData\":{\"mimeType\":\"image/png\",\"data\":\"iVBORw0KGgoAAAANSUhEUg==\"}}]}],\"generationConfig\":{\"responseMimeType\":\"application/json\",\"responseJsonSchema\":{\"type\":\"object\",\"properties\":{\"paletteHex\":{\"type\":\"array\",\"items\":{\"type\":\"string\"},\"description\":\"3 to 4 dominant hex colors (#RRGGBB) from the attached images and scene.\"},\"lightingNotes\":{\"type\":\"string\",\"description\":\"Motivated key light direction, softness, ambient shadow floor, and color spill.\"},\"textureNotes\":{\"type\":\"string\",\"description\":\"Natural skin, fabric, prop, and lens texture without plastic beauty-filter glare.\"},\"subjectNotes\":{\"type\":\"string\",\"description\":\"Key subjects, wardrobe, and product geometry observed in the references.\"},\"referenceNotes\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"token\":{\"type\":\"string\"},\"visualNotes\":{\"type\":\"string\"}},\"required\":[\"token\",\"visualNotes\"]}}},\"required\":[\"paletteHex\",\"lightingNotes\",\"textureNotes\",\"subjectNotes\",\"referenceNotes\"]},\"thinkingConfig\":{\"thinkingLevel\":\"LOW\"}}}"
+      },
+      {
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-4-hydrogen:generateContent",
+        "body": "{\"systemInstruction\":{\"parts\":[{\"text\":\"You are a veteran Film Director writing a production-ready Seedance 2.5 video prompt in English.\\nMode: EXPAND. Expand the user's brief into a complete, film-directed Seedance 2.5 sequence grounded in physical staging, motivated lighting, and cut rhythm.\\n\\nMandatory Seedance 2.5 Grammar & Quality Rules:\\n1. OMIT all redundant boilerplate headers: never write \\\"Create a Seedance video\\\", aspect ratio (9:16, 16:9), resolution (480p, 1080p, 4K), FPS, or model names.\\n2. Exact block order separated by line breaks:\\n   - \\\"Reference authority:\\\" (when references are attached) locking identity, exact facial bone structure, wardrobe, and product geometry/labels to @Image 1 (and any additional @Image N tokens).\\n   - \\\"Visual style:\\\" concrete #Hex color palette roles (shadow floor, primary surface/wardrobe, key/accent), motivated light source & grounded shadow floor, lens feel, and material texture.\\n   - Anti-composite lighting: match ambient shadow floor and color spill across subject and environment — never pasted-on or flat front-lit.\\n   - Anti-plastic skin: enforce natural skin texture faithful to @Image 1, zero plastic/waxy beauty-filter glare. NEVER write \\\"glass-skin\\\", \\\"poreless porcelain\\\", or \\\"dewy highlighter\\\" (causes upscaler boiling).\\n   - Seconds-based timeline from 0.0s to 6.0s (\\\"0.0s–Xs: …\\\") with contiguous ranges, off-axis eyelines & camera angle alternation across cuts (18° / 45° / 90° / OTS — never repetitive flat passport front-stares), concrete camera start-to-end movement, and an explicit cut handoff at the end of every shot except the final shot (\\\"hard cut\\\", \\\"match cut on …\\\", or \\\"continuous\\\").\\n   - Audio rule (Strict No-BGM Default): write ONE \\\"Audio:\\\" line specifying diegetic Foley, room ambience and requested dialogue only — no background music, no score, no musical instruments (music is layered cleanly in Sequence Rail post-production).\\n3. Reference rule: bind only the attached @Image N / @Audio N tokens; invent no unattached tokens.\\n4. Spoken dialogue only when the user's brief provides words; keep spoken lines verbatim in quotes. Never expose internal tool, provider, or infrastructure names.\\nReturn JSON matching { \\\"prompt\\\": string, \\\"notes\\\": string } where \\\"notes\\\" is one concise sentence in the user's language.\"}]},\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"{\\\"intent\\\":\\\"expand\\\",\\\"request\\\":\\\"A serum bottle on dark stone, she lifts it QXPROMPT\\\",\\\"change\\\":null,\\\"customerLanguage\\\":\\\"en\\\",\\\"seconds\\\":6,\\\"audioMode\\\":\\\"on\\\",\\\"references\\\":[{\\\"token\\\":\\\"@Image 1\\\",\\\"role\\\":\\\"product\\\",\\\"label\\\":\\\"Image 1\\\",\\\"take\\\":null,\\\"avoid\\\":null,\\\"frame\\\":null}],\\\"mediaDigest\\\":{\\\"paletteHex\\\":[\\\"#14181F\\\",\\\"#EAE4DC\\\",\\\"#3875C5\\\"],\\\"lightingNotes\\\":\\\"soft window key from camera-left\\\",\\\"textureNotes\\\":\\\"matte glass grain\\\",\\\"subjectNotes\\\":\\\"a matte serum bottle\\\",\\\"filmSummary\\\":null},\\\"shots\\\":null,\\\"brand\\\":null,\\\"playbooks\\\":[]}\"},{\"text\":\"Attached @Image 1 (\\\"Image 1\\\", product):\"},{\"inlineData\":{\"mimeType\":\"image/png\",\"data\":\"iVBORw0KGgoAAAANSUhEUg==\"}}]}],\"generationConfig\":{\"responseMimeType\":\"application/json\",\"responseJsonSchema\":{\"type\":\"object\",\"properties\":{\"prompt\":{\"type\":\"string\",\"description\":\"The complete text sent to the model.\"},\"notes\":{\"type\":\"string\",\"description\":\"One short sentence in the customer's language.\"}},\"required\":[\"prompt\",\"notes\"],\"additionalProperties\":false},\"thinkingConfig\":{\"thinkingLevel\":\"LOW\"}}}"
+      }
+    ],
+    "result": {
+      "prompt": "Reference authority: lock the bottle geometry to @Image 1.\nVisual style: dark stone, a cool key from above and a soft rim on the glass.\n0.0s–6.0s: 18° off-axis medium shot, she lifts @Image 1 from the stone; slow push-in settling on the label.\nAudio: the bottle lifting off stone and quiet room tone — diegetic Foley, room ambience and requested dialogue only; no background music, no score, no musical instruments.\nReference: pgcnocanarywasinthisrequest",
+      "notes": "Refined camera staging, lighting, cut handoffs, and diegetic sound around your references.",
+      "source": "model",
+      "intent": "expand",
+      "provider": "gemini-4-hydrogen",
+      "analysis": {
+        "provider": "gemini-4-hydrogen",
+        "fallbackUsed": false,
+        "paletteHex": [
+          "#14181F",
+          "#EAE4DC",
+          "#3875C5"
+        ],
+        "lightingNotes": "soft window key from camera-left",
+        "textureNotes": "matte glass grain",
+        "subjectNotes": "a matte serum bottle",
+        "references": [
+          {
+            "index": 1,
+            "token": "@Image 1",
+            "kind": "image",
+            "role": "product",
+            "visualNotes": "matte glass bottle"
+          }
+        ],
+        "filmSummary": null
+      },
+      "playbooksApplied": 0
+    },
+    "fallbacks": []
+  },
+  "reordered8": {
+    "calls": [
+      {
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-4-hydrogen:generateContent",
+        "body": "{\"systemInstruction\":{\"parts\":[{\"text\":\"You are a cinematographer inspecting up to 9 reference images and an optional reference video shot-sheet for a film director.\\nExtract concrete visual evidence in English:\\n- paletteHex: 3 to 4 exact #RRGGBB hex codes representing the shadow floor, primary surface/wardrobe, and key/accent tones.\\n- lightingNotes: motivated light source direction, shadow floor depth, and ambient color spill (no studio gear brand names).\\n- textureNotes: natural skin, fabric, prop, and lens texture (never use plastic or beauty-filter words).\\n- subjectNotes: concise physical description of people, wardrobe, and product geometry/labels.\\n- referenceNotes: one entry per @Image token describing what is visible in that image.\\nReturn JSON only.\"}]},\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"{\\\"prompt\\\":\\\"A serum bottle on dark stone, she lifts it QXPROMPT\\\",\\\"references\\\":[{\\\"token\\\":\\\"@Image 1\\\",\\\"kind\\\":\\\"image\\\",\\\"role\\\":\\\"product\\\",\\\"notes\\\":\\\"role: product\\\"}],\\\"film\\\":null}\"},{\"text\":\"Attached @Image 1 (\\\"Image 1\\\", role: product):\"},{\"inlineData\":{\"mimeType\":\"image/png\",\"data\":\"iVBORw0KGgoAAAANSUhEUg==\"}}]}],\"generationConfig\":{\"responseMimeType\":\"application/json\",\"responseJsonSchema\":{\"type\":\"object\",\"properties\":{\"paletteHex\":{\"type\":\"array\",\"items\":{\"type\":\"string\"},\"description\":\"3 to 4 dominant hex colors (#RRGGBB) from the attached images and scene.\"},\"lightingNotes\":{\"type\":\"string\",\"description\":\"Motivated key light direction, softness, ambient shadow floor, and color spill.\"},\"textureNotes\":{\"type\":\"string\",\"description\":\"Natural skin, fabric, prop, and lens texture without plastic beauty-filter glare.\"},\"subjectNotes\":{\"type\":\"string\",\"description\":\"Key subjects, wardrobe, and product geometry observed in the references.\"},\"referenceNotes\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"token\":{\"type\":\"string\"},\"visualNotes\":{\"type\":\"string\"}},\"required\":[\"token\",\"visualNotes\"]}}},\"required\":[\"paletteHex\",\"lightingNotes\",\"textureNotes\",\"subjectNotes\",\"referenceNotes\"]},\"thinkingConfig\":{\"thinkingLevel\":\"LOW\"}}}"
+      },
+      {
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-4-hydrogen:generateContent",
+        "body": "{\"systemInstruction\":{\"parts\":[{\"text\":\"You are a veteran Film Director writing a production-ready Seedance 2.5 video prompt in English.\\nMode: EXPAND. Expand the user's brief into a complete, film-directed Seedance 2.5 sequence grounded in physical staging, motivated lighting, and cut rhythm.\\n\\nMandatory Seedance 2.5 Grammar & Quality Rules:\\n1. OMIT all redundant boilerplate headers: never write \\\"Create a Seedance video\\\", aspect ratio (9:16, 16:9), resolution (480p, 1080p, 4K), FPS, or model names.\\n2. Exact block order separated by line breaks:\\n   - \\\"Reference authority:\\\" (when references are attached) locking identity, exact facial bone structure, wardrobe, and product geometry/labels to @Image 1 (and any additional @Image N tokens).\\n   - \\\"Visual style:\\\" concrete #Hex color palette roles (shadow floor, primary surface/wardrobe, key/accent), motivated light source & grounded shadow floor, lens feel, and material texture.\\n   - Anti-composite lighting: match ambient shadow floor and color spill across subject and environment — never pasted-on or flat front-lit.\\n   - Anti-plastic skin: enforce natural skin texture faithful to @Image 1, zero plastic/waxy beauty-filter glare. NEVER write \\\"glass-skin\\\", \\\"poreless porcelain\\\", or \\\"dewy highlighter\\\" (causes upscaler boiling).\\n   - Seconds-based timeline from 0.0s to 6.0s (\\\"0.0s–Xs: …\\\") with contiguous ranges, off-axis eyelines & camera angle alternation across cuts (18° / 45° / 90° / OTS — never repetitive flat passport front-stares), concrete camera start-to-end movement, and an explicit cut handoff at the end of every shot except the final shot (\\\"hard cut\\\", \\\"match cut on …\\\", or \\\"continuous\\\").\\n   - Audio rule (Strict No-BGM Default): write ONE \\\"Audio:\\\" line specifying diegetic Foley, room ambience and requested dialogue only — no background music, no score, no musical instruments (music is layered cleanly in Sequence Rail post-production).\\n3. Reference rule: bind only the attached @Image N / @Audio N tokens; invent no unattached tokens.\\n4. Spoken dialogue only when the user's brief provides words; keep spoken lines verbatim in quotes. Never expose internal tool, provider, or infrastructure names.\\nReturn JSON matching { \\\"prompt\\\": string, \\\"notes\\\": string } where \\\"notes\\\" is one concise sentence in the user's language.\"}]},\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"{\\\"intent\\\":\\\"expand\\\",\\\"request\\\":\\\"A serum bottle on dark stone, she lifts it QXPROMPT\\\",\\\"change\\\":null,\\\"customerLanguage\\\":\\\"en\\\",\\\"seconds\\\":6,\\\"audioMode\\\":\\\"on\\\",\\\"references\\\":[{\\\"token\\\":\\\"@Image 1\\\",\\\"role\\\":\\\"product\\\",\\\"label\\\":\\\"Image 1\\\",\\\"take\\\":null,\\\"avoid\\\":null,\\\"frame\\\":null}],\\\"mediaDigest\\\":{\\\"paletteHex\\\":[\\\"#14181F\\\",\\\"#EAE4DC\\\",\\\"#3875C5\\\"],\\\"lightingNotes\\\":\\\"soft window key from camera-left\\\",\\\"textureNotes\\\":\\\"matte glass grain\\\",\\\"subjectNotes\\\":\\\"a matte serum bottle\\\",\\\"filmSummary\\\":null},\\\"shots\\\":null,\\\"brand\\\":null,\\\"playbooks\\\":[]}\"},{\"text\":\"Attached @Image 1 (\\\"Image 1\\\", product):\"},{\"inlineData\":{\"mimeType\":\"image/png\",\"data\":\"iVBORw0KGgoAAAANSUhEUg==\"}}]}],\"generationConfig\":{\"responseMimeType\":\"application/json\",\"responseJsonSchema\":{\"type\":\"object\",\"properties\":{\"prompt\":{\"type\":\"string\",\"description\":\"The complete text sent to the model.\"},\"notes\":{\"type\":\"string\",\"description\":\"One short sentence in the customer's language.\"}},\"required\":[\"prompt\",\"notes\"],\"additionalProperties\":false},\"thinkingConfig\":{\"thinkingLevel\":\"LOW\"}}}"
+      }
+    ],
+    "result": {
+      "prompt": "Reference authority: lock the bottle geometry to @Image 1.\nVisual style: dark stone, a cool key from above and a soft rim on the glass.\n0.0s–6.0s: 18° off-axis medium shot, she lifts @Image 1 from the stone; slow push-in settling on the label.\nAudio: the bottle lifting off stone and quiet room tone — diegetic Foley, room ambience and requested dialogue only; no background music, no score, no musical instruments.\n1, zero plastic/waxy beauty-filter glare. NEVER write \"\",. flat front-lit. - Anti-plastic skin: enforce natural skin. floor and color spill across subject and environment. floor, lens feel, and material texture. - Anti-composite. roles (shadow floor, primary surface/wardrobe, key/accent), motivated light",
+      "notes": "Refined camera staging, lighting, cut handoffs, and diegetic sound around your references.",
+      "source": "model",
+      "intent": "expand",
+      "provider": "gemini-4-hydrogen",
+      "analysis": {
+        "provider": "gemini-4-hydrogen",
+        "fallbackUsed": false,
+        "paletteHex": [
+          "#14181F",
+          "#EAE4DC",
+          "#3875C5"
+        ],
+        "lightingNotes": "soft window key from camera-left",
+        "textureNotes": "matte glass grain",
+        "subjectNotes": "a matte serum bottle",
+        "references": [
+          {
+            "index": 1,
+            "token": "@Image 1",
+            "kind": "image",
+            "role": "product",
+            "visualNotes": "matte glass bottle"
+          }
+        ],
+        "filmSummary": null
+      },
+      "playbooksApplied": 0
+    },
+    "fallbacks": []
+  },
+  "base64": {
+    "calls": [
+      {
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-4-hydrogen:generateContent",
+        "body": "{\"systemInstruction\":{\"parts\":[{\"text\":\"You are a cinematographer inspecting up to 9 reference images and an optional reference video shot-sheet for a film director.\\nExtract concrete visual evidence in English:\\n- paletteHex: 3 to 4 exact #RRGGBB hex codes representing the shadow floor, primary surface/wardrobe, and key/accent tones.\\n- lightingNotes: motivated light source direction, shadow floor depth, and ambient color spill (no studio gear brand names).\\n- textureNotes: natural skin, fabric, prop, and lens texture (never use plastic or beauty-filter words).\\n- subjectNotes: concise physical description of people, wardrobe, and product geometry/labels.\\n- referenceNotes: one entry per @Image token describing what is visible in that image.\\nReturn JSON only.\"}]},\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"{\\\"prompt\\\":\\\"A serum bottle on dark stone, she lifts it QXPROMPT\\\",\\\"references\\\":[{\\\"token\\\":\\\"@Image 1\\\",\\\"kind\\\":\\\"image\\\",\\\"role\\\":\\\"product\\\",\\\"notes\\\":\\\"role: product\\\"}],\\\"film\\\":null}\"},{\"text\":\"Attached @Image 1 (\\\"Image 1\\\", role: product):\"},{\"inlineData\":{\"mimeType\":\"image/png\",\"data\":\"iVBORw0KGgoAAAANSUhEUg==\"}}]}],\"generationConfig\":{\"responseMimeType\":\"application/json\",\"responseJsonSchema\":{\"type\":\"object\",\"properties\":{\"paletteHex\":{\"type\":\"array\",\"items\":{\"type\":\"string\"},\"description\":\"3 to 4 dominant hex colors (#RRGGBB) from the attached images and scene.\"},\"lightingNotes\":{\"type\":\"string\",\"description\":\"Motivated key light direction, softness, ambient shadow floor, and color spill.\"},\"textureNotes\":{\"type\":\"string\",\"description\":\"Natural skin, fabric, prop, and lens texture without plastic beauty-filter glare.\"},\"subjectNotes\":{\"type\":\"string\",\"description\":\"Key subjects, wardrobe, and product geometry observed in the references.\"},\"referenceNotes\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"token\":{\"type\":\"string\"},\"visualNotes\":{\"type\":\"string\"}},\"required\":[\"token\",\"visualNotes\"]}}},\"required\":[\"paletteHex\",\"lightingNotes\",\"textureNotes\",\"subjectNotes\",\"referenceNotes\"]},\"thinkingConfig\":{\"thinkingLevel\":\"LOW\"}}}"
+      },
+      {
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-4-hydrogen:generateContent",
+        "body": "{\"systemInstruction\":{\"parts\":[{\"text\":\"You are a veteran Film Director writing a production-ready Seedance 2.5 video prompt in English.\\nMode: EXPAND. Expand the user's brief into a complete, film-directed Seedance 2.5 sequence grounded in physical staging, motivated lighting, and cut rhythm.\\n\\nMandatory Seedance 2.5 Grammar & Quality Rules:\\n1. OMIT all redundant boilerplate headers: never write \\\"Create a Seedance video\\\", aspect ratio (9:16, 16:9), resolution (480p, 1080p, 4K), FPS, or model names.\\n2. Exact block order separated by line breaks:\\n   - \\\"Reference authority:\\\" (when references are attached) locking identity, exact facial bone structure, wardrobe, and product geometry/labels to @Image 1 (and any additional @Image N tokens).\\n   - \\\"Visual style:\\\" concrete #Hex color palette roles (shadow floor, primary surface/wardrobe, key/accent), motivated light source & grounded shadow floor, lens feel, and material texture.\\n   - Anti-composite lighting: match ambient shadow floor and color spill across subject and environment — never pasted-on or flat front-lit.\\n   - Anti-plastic skin: enforce natural skin texture faithful to @Image 1, zero plastic/waxy beauty-filter glare. NEVER write \\\"glass-skin\\\", \\\"poreless porcelain\\\", or \\\"dewy highlighter\\\" (causes upscaler boiling).\\n   - Seconds-based timeline from 0.0s to 6.0s (\\\"0.0s–Xs: …\\\") with contiguous ranges, off-axis eyelines & camera angle alternation across cuts (18° / 45° / 90° / OTS — never repetitive flat passport front-stares), concrete camera start-to-end movement, and an explicit cut handoff at the end of every shot except the final shot (\\\"hard cut\\\", \\\"match cut on …\\\", or \\\"continuous\\\").\\n   - Audio rule (Strict No-BGM Default): write ONE \\\"Audio:\\\" line specifying diegetic Foley, room ambience and requested dialogue only — no background music, no score, no musical instruments (music is layered cleanly in Sequence Rail post-production).\\n3. Reference rule: bind only the attached @Image N / @Audio N tokens; invent no unattached tokens.\\n4. Spoken dialogue only when the user's brief provides words; keep spoken lines verbatim in quotes. Never expose internal tool, provider, or infrastructure names.\\nReturn JSON matching { \\\"prompt\\\": string, \\\"notes\\\": string } where \\\"notes\\\" is one concise sentence in the user's language.\"}]},\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"{\\\"intent\\\":\\\"expand\\\",\\\"request\\\":\\\"A serum bottle on dark stone, she lifts it QXPROMPT\\\",\\\"change\\\":null,\\\"customerLanguage\\\":\\\"en\\\",\\\"seconds\\\":6,\\\"audioMode\\\":\\\"on\\\",\\\"references\\\":[{\\\"token\\\":\\\"@Image 1\\\",\\\"role\\\":\\\"product\\\",\\\"label\\\":\\\"Image 1\\\",\\\"take\\\":null,\\\"avoid\\\":null,\\\"frame\\\":null}],\\\"mediaDigest\\\":{\\\"paletteHex\\\":[\\\"#14181F\\\",\\\"#EAE4DC\\\",\\\"#3875C5\\\"],\\\"lightingNotes\\\":\\\"soft window key from camera-left\\\",\\\"textureNotes\\\":\\\"matte glass grain\\\",\\\"subjectNotes\\\":\\\"a matte serum bottle\\\",\\\"filmSummary\\\":null},\\\"shots\\\":null,\\\"brand\\\":null,\\\"playbooks\\\":[]}\"},{\"text\":\"Attached @Image 1 (\\\"Image 1\\\", product):\"},{\"inlineData\":{\"mimeType\":\"image/png\",\"data\":\"iVBORw0KGgoAAAANSUhEUg==\"}}]}],\"generationConfig\":{\"responseMimeType\":\"application/json\",\"responseJsonSchema\":{\"type\":\"object\",\"properties\":{\"prompt\":{\"type\":\"string\",\"description\":\"The complete text sent to the model.\"},\"notes\":{\"type\":\"string\",\"description\":\"One short sentence in the customer's language.\"}},\"required\":[\"prompt\",\"notes\"],\"additionalProperties\":false},\"thinkingConfig\":{\"thinkingLevel\":\"LOW\"}}}"
+      }
+    ],
+    "result": {
+      "prompt": "Reference authority: lock the bottle geometry to @Image 1.\nVisual style: dark stone, a cool key from above and a soft rim on the glass.\n0.0s–6.0s: 18° off-axis medium shot, she lifts @Image 1 from the stone; slow push-in settling on the label.\nAudio: the bottle lifting off stone and quiet room tone — diegetic Foley, room ambience and requested dialogue only; no background music, no score, no musical instruments.\nCode: cm9sZXMgKHNoYWRvdyBmbG9vciwgcHJpbWFyeSBzdXJmYWNlL3dhcmRyb2JlLCBrZXkvYWNjZW50KSwgbW90aXZhdGVkIGxpZ2h0IHNvdXJjZSAmIGdyb3VuZGVkIHNoYWRvdyBmbG9vciwgbGVucyBmZWVsLCBhbmQgbWF0ZXJpYWwgdGV4dHVyZS4gLSBBbnRpLWNvbXBvc2l0ZSBsaWdodGluZzogbWF0Y2ggYW1iaWVudCBzaGFkb3cgZmxvb3IgYW5kIGNvbG9yIHNwaWxsIGFjcm9zcyBzdWJqZWN0IGFuZCBlbnZpcm9ubWVudCDigJQgbmV2ZXIgcGFzdGVkLW9uIG9yIGZsYXQgZnJvbnQtbGl0LiAtIEFudGktcGxhc3RpYw==",
+      "notes": "Refined camera staging, lighting, cut handoffs, and diegetic sound around your references.",
+      "source": "model",
+      "intent": "expand",
+      "provider": "gemini-4-hydrogen",
+      "analysis": {
+        "provider": "gemini-4-hydrogen",
+        "fallbackUsed": false,
+        "paletteHex": [
+          "#14181F",
+          "#EAE4DC",
+          "#3875C5"
+        ],
+        "lightingNotes": "soft window key from camera-left",
+        "textureNotes": "matte glass grain",
+        "subjectNotes": "a matte serum bottle",
+        "references": [
+          {
+            "index": 1,
+            "token": "@Image 1",
+            "kind": "image",
+            "role": "product",
+            "visualNotes": "matte glass bottle"
+          }
+        ],
+        "filmSummary": null
+      },
+      "playbooksApplied": 0
+    },
+    "fallbacks": []
+  },
+  "notes8": {
+    "calls": [
+      {
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-4-hydrogen:generateContent",
+        "body": "{\"systemInstruction\":{\"parts\":[{\"text\":\"You are a cinematographer inspecting up to 9 reference images and an optional reference video shot-sheet for a film director.\\nExtract concrete visual evidence in English:\\n- paletteHex: 3 to 4 exact #RRGGBB hex codes representing the shadow floor, primary surface/wardrobe, and key/accent tones.\\n- lightingNotes: motivated light source direction, shadow floor depth, and ambient color spill (no studio gear brand names).\\n- textureNotes: natural skin, fabric, prop, and lens texture (never use plastic or beauty-filter words).\\n- subjectNotes: concise physical description of people, wardrobe, and product geometry/labels.\\n- referenceNotes: one entry per @Image token describing what is visible in that image.\\nReturn JSON only.\"}]},\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"{\\\"prompt\\\":\\\"A serum bottle on dark stone, she lifts it QXPROMPT\\\",\\\"references\\\":[{\\\"token\\\":\\\"@Image 1\\\",\\\"kind\\\":\\\"image\\\",\\\"role\\\":\\\"product\\\",\\\"notes\\\":\\\"role: product\\\"}],\\\"film\\\":null}\"},{\"text\":\"Attached @Image 1 (\\\"Image 1\\\", role: product):\"},{\"inlineData\":{\"mimeType\":\"image/png\",\"data\":\"iVBORw0KGgoAAAANSUhEUg==\"}}]}],\"generationConfig\":{\"responseMimeType\":\"application/json\",\"responseJsonSchema\":{\"type\":\"object\",\"properties\":{\"paletteHex\":{\"type\":\"array\",\"items\":{\"type\":\"string\"},\"description\":\"3 to 4 dominant hex colors (#RRGGBB) from the attached images and scene.\"},\"lightingNotes\":{\"type\":\"string\",\"description\":\"Motivated key light direction, softness, ambient shadow floor, and color spill.\"},\"textureNotes\":{\"type\":\"string\",\"description\":\"Natural skin, fabric, prop, and lens texture without plastic beauty-filter glare.\"},\"subjectNotes\":{\"type\":\"string\",\"description\":\"Key subjects, wardrobe, and product geometry observed in the references.\"},\"referenceNotes\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"token\":{\"type\":\"string\"},\"visualNotes\":{\"type\":\"string\"}},\"required\":[\"token\",\"visualNotes\"]}}},\"required\":[\"paletteHex\",\"lightingNotes\",\"textureNotes\",\"subjectNotes\",\"referenceNotes\"]},\"thinkingConfig\":{\"thinkingLevel\":\"LOW\"}}}"
+      },
+      {
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-4-hydrogen:generateContent",
+        "body": "{\"systemInstruction\":{\"parts\":[{\"text\":\"You are a veteran Film Director writing a production-ready Seedance 2.5 video prompt in English.\\nMode: EXPAND. Expand the user's brief into a complete, film-directed Seedance 2.5 sequence grounded in physical staging, motivated lighting, and cut rhythm.\\n\\nMandatory Seedance 2.5 Grammar & Quality Rules:\\n1. OMIT all redundant boilerplate headers: never write \\\"Create a Seedance video\\\", aspect ratio (9:16, 16:9), resolution (480p, 1080p, 4K), FPS, or model names.\\n2. Exact block order separated by line breaks:\\n   - \\\"Reference authority:\\\" (when references are attached) locking identity, exact facial bone structure, wardrobe, and product geometry/labels to @Image 1 (and any additional @Image N tokens).\\n   - \\\"Visual style:\\\" concrete #Hex color palette roles (shadow floor, primary surface/wardrobe, key/accent), motivated light source & grounded shadow floor, lens feel, and material texture.\\n   - Anti-composite lighting: match ambient shadow floor and color spill across subject and environment — never pasted-on or flat front-lit.\\n   - Anti-plastic skin: enforce natural skin texture faithful to @Image 1, zero plastic/waxy beauty-filter glare. NEVER write \\\"glass-skin\\\", \\\"poreless porcelain\\\", or \\\"dewy highlighter\\\" (causes upscaler boiling).\\n   - Seconds-based timeline from 0.0s to 6.0s (\\\"0.0s–Xs: …\\\") with contiguous ranges, off-axis eyelines & camera angle alternation across cuts (18° / 45° / 90° / OTS — never repetitive flat passport front-stares), concrete camera start-to-end movement, and an explicit cut handoff at the end of every shot except the final shot (\\\"hard cut\\\", \\\"match cut on …\\\", or \\\"continuous\\\").\\n   - Audio rule (Strict No-BGM Default): write ONE \\\"Audio:\\\" line specifying diegetic Foley, room ambience and requested dialogue only — no background music, no score, no musical instruments (music is layered cleanly in Sequence Rail post-production).\\n3. Reference rule: bind only the attached @Image N / @Audio N tokens; invent no unattached tokens.\\n4. Spoken dialogue only when the user's brief provides words; keep spoken lines verbatim in quotes. Never expose internal tool, provider, or infrastructure names.\\nReturn JSON matching { \\\"prompt\\\": string, \\\"notes\\\": string } where \\\"notes\\\" is one concise sentence in the user's language.\"}]},\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"{\\\"intent\\\":\\\"expand\\\",\\\"request\\\":\\\"A serum bottle on dark stone, she lifts it QXPROMPT\\\",\\\"change\\\":null,\\\"customerLanguage\\\":\\\"en\\\",\\\"seconds\\\":6,\\\"audioMode\\\":\\\"on\\\",\\\"references\\\":[{\\\"token\\\":\\\"@Image 1\\\",\\\"role\\\":\\\"product\\\",\\\"label\\\":\\\"Image 1\\\",\\\"take\\\":null,\\\"avoid\\\":null,\\\"frame\\\":null}],\\\"mediaDigest\\\":{\\\"paletteHex\\\":[\\\"#14181F\\\",\\\"#EAE4DC\\\",\\\"#3875C5\\\"],\\\"lightingNotes\\\":\\\"soft window key from camera-left\\\",\\\"textureNotes\\\":\\\"matte glass grain\\\",\\\"subjectNotes\\\":\\\"a matte serum bottle\\\",\\\"filmSummary\\\":null},\\\"shots\\\":null,\\\"brand\\\":null,\\\"playbooks\\\":[]}\"},{\"text\":\"Attached @Image 1 (\\\"Image 1\\\", product):\"},{\"inlineData\":{\"mimeType\":\"image/png\",\"data\":\"iVBORw0KGgoAAAANSUhEUg==\"}}]}],\"generationConfig\":{\"responseMimeType\":\"application/json\",\"responseJsonSchema\":{\"type\":\"object\",\"properties\":{\"prompt\":{\"type\":\"string\",\"description\":\"The complete text sent to the model.\"},\"notes\":{\"type\":\"string\",\"description\":\"One short sentence in the customer's language.\"}},\"required\":[\"prompt\",\"notes\"],\"additionalProperties\":false},\"thinkingConfig\":{\"thinkingLevel\":\"LOW\"}}}"
+      }
+    ],
+    "result": {
+      "prompt": "Reference authority: lock the bottle geometry to @Image 1.\nVisual style: dark stone, a cool key from above and a soft rim on the glass.\n0.0s–6.0s: 18° off-axis medium shot, she lifts @Image 1 from the stone; slow push-in settling on the label.\nAudio: the bottle lifting off stone and quiet room tone — diegetic Foley, room ambience and requested dialogue only; no background music, no score, no musical instruments.",
+      "notes": "roles (shadow floor, primary surface/wardrobe, key/accent), motivated light source.",
+      "source": "model",
+      "intent": "expand",
+      "provider": "gemini-4-hydrogen",
+      "analysis": {
+        "provider": "gemini-4-hydrogen",
+        "fallbackUsed": false,
+        "paletteHex": [
+          "#14181F",
+          "#EAE4DC",
+          "#3875C5"
+        ],
+        "lightingNotes": "soft window key from camera-left",
+        "textureNotes": "matte glass grain",
+        "subjectNotes": "a matte serum bottle",
+        "references": [
+          {
+            "index": 1,
+            "token": "@Image 1",
+            "kind": "image",
+            "role": "product",
+            "visualNotes": "matte glass bottle"
+          }
+        ],
+        "filmSummary": null
+      },
+      "playbooksApplied": 0
+    },
+    "fallbacks": []
+  }
+}

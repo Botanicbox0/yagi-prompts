@@ -1,0 +1,242 @@
+{
+  "benign": {
+    "calls": [
+      "{\"systemInstruction\":{\"parts\":[{\"text\":\"You are a veteran Film Director writing a production-ready Seedance 2.5 video prompt in English.\\nMode: EXPAND. Expand the user's brief into a complete, film-directed Seedance 2.5 sequence grounded in physical staging, motivated lighting, and cut rhythm.\\n\\nMandatory Seedance 2.5 Grammar & Quality Rules:\\n1. OMIT all redundant boilerplate headers: never write \\\"Create a Seedance video\\\", aspect ratio (9:16, 16:9), resolution (480p, 1080p, 4K), FPS, or model names.\\n2. Exact block order separated by line breaks:\\n   - \\\"Reference authority:\\\" (when references are attached) locking identity, exact facial bone structure, wardrobe, and product geometry/labels to the attached references only.\\n   - \\\"Visual style:\\\" concrete #Hex color palette roles (shadow floor, primary surface/wardrobe, key/accent), motivated light source & grounded shadow floor, lens feel, and material texture.\\n   - Anti-composite lighting: match ambient shadow floor and color spill across subject and environment — never pasted-on or flat front-lit.\\n   - Anti-plastic skin: enforce natural skin texture when people appear (no image is attached: write no @Image token), zero plastic/waxy beauty-filter glare. NEVER write \\\"glass-skin\\\", \\\"poreless porcelain\\\", or \\\"dewy highlighter\\\" (causes upscaler boiling).\\n   - Seconds-based timeline from 0.0s to 5.0s (\\\"0.0s–Xs: …\\\") with contiguous ranges, off-axis eyelines & camera angle alternation across cuts (18° / 45° / 90° / OTS — never repetitive flat passport front-stares), concrete camera start-to-end movement, and an explicit cut handoff at the end of every shot except the final shot (\\\"hard cut\\\", \\\"match cut on …\\\", or \\\"continuous\\\").\\n   - Audio rule (Strict No-BGM Default): write ONE \\\"Audio:\\\" line specifying diegetic Foley, room ambience and requested dialogue only — no background music, no score, no musical instruments (music is layered cleanly in Sequence Rail post-production).\\n3. Reference rule: bind only the attached @Image N / @Audio N tokens; invent no unattached tokens.\\n4. Spoken dialogue only when the user's brief provides words; keep spoken lines verbatim in quotes. Never expose internal tool, provider, or infrastructure names.\\nReturn JSON matching { \\\"prompt\\\": string, \\\"notes\\\": string } where \\\"notes\\\" is one concise sentence in the user's language.\"}]},\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"{\\\"intent\\\":\\\"expand\\\",\\\"request\\\":\\\"대리석 위 향수병을 손이 천천히 들어 올리는 장면\\\",\\\"change\\\":null,\\\"customerLanguage\\\":\\\"ko\\\",\\\"seconds\\\":5,\\\"audioMode\\\":\\\"native\\\",\\\"references\\\":[],\\\"mediaDigest\\\":null,\\\"shots\\\":null,\\\"brand\\\":{\\\"name\\\":\\\"Studio fixture brand\\\",\\\"rules\\\":[]},\\\"playbooks\\\":[]}\"}]}],\"generationConfig\":{\"responseMimeType\":\"application/json\",\"responseJsonSchema\":{\"type\":\"object\",\"properties\":{\"prompt\":{\"type\":\"string\",\"description\":\"The complete text sent to the model.\"},\"notes\":{\"type\":\"string\",\"description\":\"One short sentence in the customer's language.\"}},\"required\":[\"prompt\",\"notes\"],\"additionalProperties\":false},\"thinkingConfig\":{\"thinkingLevel\":\"LOW\"}}}",
+      "{\"systemInstruction\":{\"parts\":[{\"text\":\"You are a veteran Film Director writing a production-ready Seedance 2.5 video prompt in English.\\nMode: EXPAND. Expand the user's brief into a complete, film-directed Seedance 2.5 sequence grounded in physical staging, motivated lighting, and cut rhythm.\\n\\nMandatory Seedance 2.5 Grammar & Quality Rules:\\n1. OMIT all redundant boilerplate headers: never write \\\"Create a Seedance video\\\", aspect ratio (9:16, 16:9), resolution (480p, 1080p, 4K), FPS, or model names.\\n2. Exact block order separated by line breaks:\\n   - \\\"Reference authority:\\\" (when references are attached) locking identity, exact facial bone structure, wardrobe, and product geometry/labels to the attached references only.\\n   - \\\"Visual style:\\\" concrete #Hex color palette roles (shadow floor, primary surface/wardrobe, key/accent), motivated light source & grounded shadow floor, lens feel, and material texture.\\n   - Anti-composite lighting: match ambient shadow floor and color spill across subject and environment — never pasted-on or flat front-lit.\\n   - Anti-plastic skin: enforce natural skin texture when people appear (no image is attached: write no @Image token), zero plastic/waxy beauty-filter glare. NEVER write \\\"glass-skin\\\", \\\"poreless porcelain\\\", or \\\"dewy highlighter\\\" (causes upscaler boiling).\\n   - Seconds-based timeline from 0.0s to 5.0s (\\\"0.0s–Xs: …\\\") with contiguous ranges, off-axis eyelines & camera angle alternation across cuts (18° / 45° / 90° / OTS — never repetitive flat passport front-stares), concrete camera start-to-end movement, and an explicit cut handoff at the end of every shot except the final shot (\\\"hard cut\\\", \\\"match cut on …\\\", or \\\"continuous\\\").\\n   - Audio rule (Strict No-BGM Default): write ONE \\\"Audio:\\\" line specifying diegetic Foley, room ambience and requested dialogue only — no background music, no score, no musical instruments (music is layered cleanly in Sequence Rail post-production).\\n3. Reference rule: bind only the attached @Image N / @Audio N tokens; invent no unattached tokens.\\n4. Spoken dialogue only when the user's brief provides words; keep spoken lines verbatim in quotes. Never expose internal tool, provider, or infrastructure names.\\nReturn JSON matching { \\\"prompt\\\": string, \\\"notes\\\": string } where \\\"notes\\\" is one concise sentence in the user's language.\"}]},\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"{\\\"intent\\\":\\\"expand\\\",\\\"request\\\":\\\"대리석 위 향수병을 손이 천천히 들어 올리는 장면\\\",\\\"change\\\":null,\\\"customerLanguage\\\":\\\"ko\\\",\\\"seconds\\\":5,\\\"audioMode\\\":\\\"native\\\",\\\"references\\\":[],\\\"mediaDigest\\\":null,\\\"shots\\\":null,\\\"brand\\\":{\\\"name\\\":\\\"Studio fixture brand\\\",\\\"rules\\\":[]},\\\"playbooks\\\":[]}\"}]}],\"generationConfig\":{\"responseMimeType\":\"application/json\",\"responseJsonSchema\":{\"type\":\"object\",\"properties\":{\"prompt\":{\"type\":\"string\",\"description\":\"The complete text sent to the model.\"},\"notes\":{\"type\":\"string\",\"description\":\"One short sentence in the customer's language.\"}},\"required\":[\"prompt\",\"notes\"],\"additionalProperties\":false},\"thinkingConfig\":{\"thinkingLevel\":\"LOW\"}}}"
+    ],
+    "preview": {
+      "ok": true,
+      "prompt": "Visual style: pale marble, soft window light from the left and a grounded shadow under the bottle.\n0.0s–2.5s: 18° off-axis medium shot, a hand slowly lifts the perfume bottle from the marble; slow push-in. Hard cut.\n2.5s–5.0s: close-up on the bottle in the hand as light moves across the glass; the camera settles.\nAudio: the glass leaving the stone and quiet room tone — diegetic Foley, room ambience and requested dialogue only; no background music, no score, no musical instruments.",
+      "notes": "장면과 참조를 구체적으로 적었어요.",
+      "source": "model"
+    },
+    "job": {
+      "kind": "video",
+      "status": "succeeded",
+      "lane": "sunra_api",
+      "model": "seedance-2.5",
+      "prompt": "대리석 위 향수병을 손이 천천히 들어 올리는 장면",
+      "final_prompt": "Visual style: pale marble, soft window light from the left and a grounded shadow under the bottle.\n0.0s–2.5s: 18° off-axis medium shot, a hand slowly lifts the perfume bottle from the marble; slow push-in. Hard cut.\n2.5s–5.0s: close-up on the bottle in the hand as light moves across the glass; the camera settles.\nAudio: the glass leaving the stone and quiet room tone — diegetic Foley, room ambience and requested dialogue only; no background music, no score, no musical instruments.",
+      "enhance": true,
+      "estimate_usd": "1.1700",
+      "cost_usd": "1.1700",
+      "estimate_krw": 1820,
+      "usage_krw": 1820,
+      "error_code": null,
+      "error_detail": null,
+      "attempts": 0,
+      "finished": true,
+      "work": {
+        "inputs": [],
+        "results": {
+          "0": {
+            "url": "fake://video/<task>",
+            "mime": "video/mp4",
+            "costUsd": null,
+            "seconds": 5,
+            "draftTaskId": null
+          }
+        },
+        "enhancer": {
+          "source": "model",
+          "profile": "seedance",
+          "llmModel": null,
+          "skinMode": "off",
+          "toneMatch": false,
+          "coreVersion": "core@2026-11-19.2",
+          "profileVersion": "seedance@2026-11-15.1"
+        },
+        "failures": {},
+        "prepared": true,
+        "enhanceNotes": "장면과 참조를 구체적으로 적었어요."
+      }
+    },
+    "outputs": [
+      {
+        "idx": 0,
+        "kind": "video",
+        "status": "ready",
+        "is_draft": false
+      }
+    ],
+    "sent": [
+      {
+        "endpoint": "bytedance/seedance-2.5/text-to-video",
+        "body": {
+          "prompt": "Visual style: pale marble, soft window light from the left and a grounded shadow under the bottle.\n0.0s–2.5s: 18° off-axis medium shot, a hand slowly lifts the perfume bottle from the marble; slow push-in. Hard cut.\n2.5s–5.0s: close-up on the bottle in the hand as light moves across the glass; the camera settles.\nAudio: the glass leaving the stone and quiet room tone — diegetic Foley, room ambience and requested dialogue only; no background music, no score, no musical instruments.",
+          "resolution": "720p",
+          "duration": 5,
+          "draft": false,
+          "output_format": "mp4",
+          "generate_audio": true,
+          "ratio": "9:16"
+        }
+      }
+    ],
+    "allowance": {
+      "capKrw": 5000000,
+      "usedKrw": 1820
+    },
+    "logs": []
+  },
+  "window60": {
+    "calls": [
+      "{\"systemInstruction\":{\"parts\":[{\"text\":\"You are a veteran Film Director writing a production-ready Seedance 2.5 video prompt in English.\\nMode: EXPAND. Expand the user's brief into a complete, film-directed Seedance 2.5 sequence grounded in physical staging, motivated lighting, and cut rhythm.\\n\\nMandatory Seedance 2.5 Grammar & Quality Rules:\\n1. OMIT all redundant boilerplate headers: never write \\\"Create a Seedance video\\\", aspect ratio (9:16, 16:9), resolution (480p, 1080p, 4K), FPS, or model names.\\n2. Exact block order separated by line breaks:\\n   - \\\"Reference authority:\\\" (when references are attached) locking identity, exact facial bone structure, wardrobe, and product geometry/labels to the attached references only.\\n   - \\\"Visual style:\\\" concrete #Hex color palette roles (shadow floor, primary surface/wardrobe, key/accent), motivated light source & grounded shadow floor, lens feel, and material texture.\\n   - Anti-composite lighting: match ambient shadow floor and color spill across subject and environment — never pasted-on or flat front-lit.\\n   - Anti-plastic skin: enforce natural skin texture when people appear (no image is attached: write no @Image token), zero plastic/waxy beauty-filter glare. NEVER write \\\"glass-skin\\\", \\\"poreless porcelain\\\", or \\\"dewy highlighter\\\" (causes upscaler boiling).\\n   - Seconds-based timeline from 0.0s to 5.0s (\\\"0.0s–Xs: …\\\") with contiguous ranges, off-axis eyelines & camera angle alternation across cuts (18° / 45° / 90° / OTS — never repetitive flat passport front-stares), concrete camera start-to-end movement, and an explicit cut handoff at the end of every shot except the final shot (\\\"hard cut\\\", \\\"match cut on …\\\", or \\\"continuous\\\").\\n   - Audio rule (Strict No-BGM Default): write ONE \\\"Audio:\\\" line specifying diegetic Foley, room ambience and requested dialogue only — no background music, no score, no musical instruments (music is layered cleanly in Sequence Rail post-production).\\n3. Reference rule: bind only the attached @Image N / @Audio N tokens; invent no unattached tokens.\\n4. Spoken dialogue only when the user's brief provides words; keep spoken lines verbatim in quotes. Never expose internal tool, provider, or infrastructure names.\\nReturn JSON matching { \\\"prompt\\\": string, \\\"notes\\\": string } where \\\"notes\\\" is one concise sentence in the user's language.\"}]},\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"{\\\"intent\\\":\\\"expand\\\",\\\"request\\\":\\\"대리석 위 향수병을 손이 천천히 들어 올리는 장면\\\",\\\"change\\\":null,\\\"customerLanguage\\\":\\\"ko\\\",\\\"seconds\\\":5,\\\"audioMode\\\":\\\"native\\\",\\\"references\\\":[],\\\"mediaDigest\\\":null,\\\"shots\\\":null,\\\"brand\\\":{\\\"name\\\":\\\"Studio fixture brand\\\",\\\"rules\\\":[]},\\\"playbooks\\\":[]}\"}]}],\"generationConfig\":{\"responseMimeType\":\"application/json\",\"responseJsonSchema\":{\"type\":\"object\",\"properties\":{\"prompt\":{\"type\":\"string\",\"description\":\"The complete text sent to the model.\"},\"notes\":{\"type\":\"string\",\"description\":\"One short sentence in the customer's language.\"}},\"required\":[\"prompt\",\"notes\"],\"additionalProperties\":false},\"thinkingConfig\":{\"thinkingLevel\":\"LOW\"}}}",
+      "{\"systemInstruction\":{\"parts\":[{\"text\":\"You are a veteran Film Director writing a production-ready Seedance 2.5 video prompt in English.\\nMode: EXPAND. Expand the user's brief into a complete, film-directed Seedance 2.5 sequence grounded in physical staging, motivated lighting, and cut rhythm.\\n\\nMandatory Seedance 2.5 Grammar & Quality Rules:\\n1. OMIT all redundant boilerplate headers: never write \\\"Create a Seedance video\\\", aspect ratio (9:16, 16:9), resolution (480p, 1080p, 4K), FPS, or model names.\\n2. Exact block order separated by line breaks:\\n   - \\\"Reference authority:\\\" (when references are attached) locking identity, exact facial bone structure, wardrobe, and product geometry/labels to the attached references only.\\n   - \\\"Visual style:\\\" concrete #Hex color palette roles (shadow floor, primary surface/wardrobe, key/accent), motivated light source & grounded shadow floor, lens feel, and material texture.\\n   - Anti-composite lighting: match ambient shadow floor and color spill across subject and environment — never pasted-on or flat front-lit.\\n   - Anti-plastic skin: enforce natural skin texture when people appear (no image is attached: write no @Image token), zero plastic/waxy beauty-filter glare. NEVER write \\\"glass-skin\\\", \\\"poreless porcelain\\\", or \\\"dewy highlighter\\\" (causes upscaler boiling).\\n   - Seconds-based timeline from 0.0s to 5.0s (\\\"0.0s–Xs: …\\\") with contiguous ranges, off-axis eyelines & camera angle alternation across cuts (18° / 45° / 90° / OTS — never repetitive flat passport front-stares), concrete camera start-to-end movement, and an explicit cut handoff at the end of every shot except the final shot (\\\"hard cut\\\", \\\"match cut on …\\\", or \\\"continuous\\\").\\n   - Audio rule (Strict No-BGM Default): write ONE \\\"Audio:\\\" line specifying diegetic Foley, room ambience and requested dialogue only — no background music, no score, no musical instruments (music is layered cleanly in Sequence Rail post-production).\\n3. Reference rule: bind only the attached @Image N / @Audio N tokens; invent no unattached tokens.\\n4. Spoken dialogue only when the user's brief provides words; keep spoken lines verbatim in quotes. Never expose internal tool, provider, or infrastructure names.\\nReturn JSON matching { \\\"prompt\\\": string, \\\"notes\\\": string } where \\\"notes\\\" is one concise sentence in the user's language.\"}]},\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"{\\\"intent\\\":\\\"expand\\\",\\\"request\\\":\\\"대리석 위 향수병을 손이 천천히 들어 올리는 장면\\\",\\\"change\\\":null,\\\"customerLanguage\\\":\\\"ko\\\",\\\"seconds\\\":5,\\\"audioMode\\\":\\\"native\\\",\\\"references\\\":[],\\\"mediaDigest\\\":null,\\\"shots\\\":null,\\\"brand\\\":{\\\"name\\\":\\\"Studio fixture brand\\\",\\\"rules\\\":[]},\\\"playbooks\\\":[]}\"}]}],\"generationConfig\":{\"responseMimeType\":\"application/json\",\"responseJsonSchema\":{\"type\":\"object\",\"properties\":{\"prompt\":{\"type\":\"string\",\"description\":\"The complete text sent to the model.\"},\"notes\":{\"type\":\"string\",\"description\":\"One short sentence in the customer's language.\"}},\"required\":[\"prompt\",\"notes\"],\"additionalProperties\":false},\"thinkingConfig\":{\"thinkingLevel\":\"LOW\"}}}"
+    ],
+    "preview": {
+      "ok": true,
+      "prompt": "Visual style: pale marble, soft window light from the left and a grounded shadow under the bottle.\n0.0s–2.5s: 18° off-axis medium shot, a hand slowly lifts the perfume bottle from the marble; slow push-in. Hard cut.\n2.5s–5.0s: close-up on the bottle in the hand as light moves across the glass; the camera settles.\nAudio: the glass leaving the stone and quiet room tone — diegetic Foley, room ambience and requested dialogue only; no background music, no score, no musical instruments.\nkey/accent), motivated light source & grounded shadow floor, lens feel, and material texture. - Anti-composite lighting: match ambient shadow floor and color spill across subject and environment — never pasted-on or flat front-lit. - Anti-plastic skin: enforce natural skin texture when people appear (no image is attached: write no @Image token), zero plastic/waxy beauty-filter glare. NEVER write \"\", \"\",",
+      "notes": "장면과 참조를 구체적으로 적었어요.",
+      "source": "model"
+    },
+    "job": {
+      "kind": "video",
+      "status": "succeeded",
+      "lane": "sunra_api",
+      "model": "seedance-2.5",
+      "prompt": "대리석 위 향수병을 손이 천천히 들어 올리는 장면",
+      "final_prompt": "Visual style: pale marble, soft window light from the left and a grounded shadow under the bottle.\n0.0s–2.5s: 18° off-axis medium shot, a hand slowly lifts the perfume bottle from the marble; slow push-in. Hard cut.\n2.5s–5.0s: close-up on the bottle in the hand as light moves across the glass; the camera settles.\nAudio: the glass leaving the stone and quiet room tone — diegetic Foley, room ambience and requested dialogue only; no background music, no score, no musical instruments.\nkey/accent), motivated light source & grounded shadow floor, lens feel, and material texture. - Anti-composite lighting: match ambient shadow floor and color spill across subject and environment — never pasted-on or flat front-lit. - Anti-plastic skin: enforce natural skin texture when people appear (no image is attached: write no @Image token), zero plastic/waxy beauty-filter glare. NEVER write \"\", \"\",",
+      "enhance": true,
+      "estimate_usd": "1.1700",
+      "cost_usd": "1.1700",
+      "estimate_krw": 1820,
+      "usage_krw": 1820,
+      "error_code": null,
+      "error_detail": null,
+      "attempts": 0,
+      "finished": true,
+      "work": {
+        "inputs": [],
+        "results": {
+          "0": {
+            "url": "fake://video/<task>",
+            "mime": "video/mp4",
+            "costUsd": null,
+            "seconds": 5,
+            "draftTaskId": null
+          }
+        },
+        "enhancer": {
+          "source": "model",
+          "profile": "seedance",
+          "llmModel": null,
+          "skinMode": "off",
+          "toneMatch": false,
+          "coreVersion": "core@2026-11-19.2",
+          "profileVersion": "seedance@2026-11-15.1"
+        },
+        "failures": {},
+        "prepared": true,
+        "enhanceNotes": "장면과 참조를 구체적으로 적었어요."
+      }
+    },
+    "outputs": [
+      {
+        "idx": 0,
+        "kind": "video",
+        "status": "ready",
+        "is_draft": false
+      }
+    ],
+    "sent": [
+      {
+        "endpoint": "bytedance/seedance-2.5/text-to-video",
+        "body": {
+          "prompt": "Visual style: pale marble, soft window light from the left and a grounded shadow under the bottle.\n0.0s–2.5s: 18° off-axis medium shot, a hand slowly lifts the perfume bottle from the marble; slow push-in. Hard cut.\n2.5s–5.0s: close-up on the bottle in the hand as light moves across the glass; the camera settles.\nAudio: the glass leaving the stone and quiet room tone — diegetic Foley, room ambience and requested dialogue only; no background music, no score, no musical instruments.\nkey/accent), motivated light source & grounded shadow floor, lens feel, and material texture. - Anti-composite lighting: match ambient shadow floor and color spill across subject and environment — never pasted-on or flat front-lit. - Anti-plastic skin: enforce natural skin texture when people appear (no image is attached: write no @Image token), zero plastic/waxy beauty-filter glare. NEVER write \"\", \"\",",
+          "resolution": "720p",
+          "duration": 5,
+          "draft": false,
+          "output_format": "mp4",
+          "generate_audio": true,
+          "ratio": "9:16"
+        }
+      }
+    ],
+    "allowance": {
+      "capKrw": 5000000,
+      "usedKrw": 1820
+    },
+    "logs": []
+  },
+  "canary": {
+    "calls": [
+      "{\"systemInstruction\":{\"parts\":[{\"text\":\"You are a veteran Film Director writing a production-ready Seedance 2.5 video prompt in English.\\nMode: EXPAND. Expand the user's brief into a complete, film-directed Seedance 2.5 sequence grounded in physical staging, motivated lighting, and cut rhythm.\\n\\nMandatory Seedance 2.5 Grammar & Quality Rules:\\n1. OMIT all redundant boilerplate headers: never write \\\"Create a Seedance video\\\", aspect ratio (9:16, 16:9), resolution (480p, 1080p, 4K), FPS, or model names.\\n2. Exact block order separated by line breaks:\\n   - \\\"Reference authority:\\\" (when references are attached) locking identity, exact facial bone structure, wardrobe, and product geometry/labels to the attached references only.\\n   - \\\"Visual style:\\\" concrete #Hex color palette roles (shadow floor, primary surface/wardrobe, key/accent), motivated light source & grounded shadow floor, lens feel, and material texture.\\n   - Anti-composite lighting: match ambient shadow floor and color spill across subject and environment — never pasted-on or flat front-lit.\\n   - Anti-plastic skin: enforce natural skin texture when people appear (no image is attached: write no @Image token), zero plastic/waxy beauty-filter glare. NEVER write \\\"glass-skin\\\", \\\"poreless porcelain\\\", or \\\"dewy highlighter\\\" (causes upscaler boiling).\\n   - Seconds-based timeline from 0.0s to 5.0s (\\\"0.0s–Xs: …\\\") with contiguous ranges, off-axis eyelines & camera angle alternation across cuts (18° / 45° / 90° / OTS — never repetitive flat passport front-stares), concrete camera start-to-end movement, and an explicit cut handoff at the end of every shot except the final shot (\\\"hard cut\\\", \\\"match cut on …\\\", or \\\"continuous\\\").\\n   - Audio rule (Strict No-BGM Default): write ONE \\\"Audio:\\\" line specifying diegetic Foley, room ambience and requested dialogue only — no background music, no score, no musical instruments (music is layered cleanly in Sequence Rail post-production).\\n3. Reference rule: bind only the attached @Image N / @Audio N tokens; invent no unattached tokens.\\n4. Spoken dialogue only when the user's brief provides words; keep spoken lines verbatim in quotes. Never expose internal tool, provider, or infrastructure names.\\nReturn JSON matching { \\\"prompt\\\": string, \\\"notes\\\": string } where \\\"notes\\\" is one concise sentence in the user's language.\"}]},\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"{\\\"intent\\\":\\\"expand\\\",\\\"request\\\":\\\"대리석 위 향수병을 손이 천천히 들어 올리는 장면\\\",\\\"change\\\":null,\\\"customerLanguage\\\":\\\"ko\\\",\\\"seconds\\\":5,\\\"audioMode\\\":\\\"native\\\",\\\"references\\\":[],\\\"mediaDigest\\\":null,\\\"shots\\\":null,\\\"brand\\\":{\\\"name\\\":\\\"Studio fixture brand\\\",\\\"rules\\\":[]},\\\"playbooks\\\":[]}\"}]}],\"generationConfig\":{\"responseMimeType\":\"application/json\",\"responseJsonSchema\":{\"type\":\"object\",\"properties\":{\"prompt\":{\"type\":\"string\",\"description\":\"The complete text sent to the model.\"},\"notes\":{\"type\":\"string\",\"description\":\"One short sentence in the customer's language.\"}},\"required\":[\"prompt\",\"notes\"],\"additionalProperties\":false},\"thinkingConfig\":{\"thinkingLevel\":\"LOW\"}}}",
+      "{\"systemInstruction\":{\"parts\":[{\"text\":\"You are a veteran Film Director writing a production-ready Seedance 2.5 video prompt in English.\\nMode: EXPAND. Expand the user's brief into a complete, film-directed Seedance 2.5 sequence grounded in physical staging, motivated lighting, and cut rhythm.\\n\\nMandatory Seedance 2.5 Grammar & Quality Rules:\\n1. OMIT all redundant boilerplate headers: never write \\\"Create a Seedance video\\\", aspect ratio (9:16, 16:9), resolution (480p, 1080p, 4K), FPS, or model names.\\n2. Exact block order separated by line breaks:\\n   - \\\"Reference authority:\\\" (when references are attached) locking identity, exact facial bone structure, wardrobe, and product geometry/labels to the attached references only.\\n   - \\\"Visual style:\\\" concrete #Hex color palette roles (shadow floor, primary surface/wardrobe, key/accent), motivated light source & grounded shadow floor, lens feel, and material texture.\\n   - Anti-composite lighting: match ambient shadow floor and color spill across subject and environment — never pasted-on or flat front-lit.\\n   - Anti-plastic skin: enforce natural skin texture when people appear (no image is attached: write no @Image token), zero plastic/waxy beauty-filter glare. NEVER write \\\"glass-skin\\\", \\\"poreless porcelain\\\", or \\\"dewy highlighter\\\" (causes upscaler boiling).\\n   - Seconds-based timeline from 0.0s to 5.0s (\\\"0.0s–Xs: …\\\") with contiguous ranges, off-axis eyelines & camera angle alternation across cuts (18° / 45° / 90° / OTS — never repetitive flat passport front-stares), concrete camera start-to-end movement, and an explicit cut handoff at the end of every shot except the final shot (\\\"hard cut\\\", \\\"match cut on …\\\", or \\\"continuous\\\").\\n   - Audio rule (Strict No-BGM Default): write ONE \\\"Audio:\\\" line specifying diegetic Foley, room ambience and requested dialogue only — no background music, no score, no musical instruments (music is layered cleanly in Sequence Rail post-production).\\n3. Reference rule: bind only the attached @Image N / @Audio N tokens; invent no unattached tokens.\\n4. Spoken dialogue only when the user's brief provides words; keep spoken lines verbatim in quotes. Never expose internal tool, provider, or infrastructure names.\\nReturn JSON matching { \\\"prompt\\\": string, \\\"notes\\\": string } where \\\"notes\\\" is one concise sentence in the user's language.\"}]},\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"{\\\"intent\\\":\\\"expand\\\",\\\"request\\\":\\\"대리석 위 향수병을 손이 천천히 들어 올리는 장면\\\",\\\"change\\\":null,\\\"customerLanguage\\\":\\\"ko\\\",\\\"seconds\\\":5,\\\"audioMode\\\":\\\"native\\\",\\\"references\\\":[],\\\"mediaDigest\\\":null,\\\"shots\\\":null,\\\"brand\\\":{\\\"name\\\":\\\"Studio fixture brand\\\",\\\"rules\\\":[]},\\\"playbooks\\\":[]}\"}]}],\"generationConfig\":{\"responseMimeType\":\"application/json\",\"responseJsonSchema\":{\"type\":\"object\",\"properties\":{\"prompt\":{\"type\":\"string\",\"description\":\"The complete text sent to the model.\"},\"notes\":{\"type\":\"string\",\"description\":\"One short sentence in the customer's language.\"}},\"required\":[\"prompt\",\"notes\"],\"additionalProperties\":false},\"thinkingConfig\":{\"thinkingLevel\":\"LOW\"}}}"
+    ],
+    "preview": {
+      "ok": true,
+      "prompt": "Visual style: pale marble, soft window light from the left and a grounded shadow under the bottle.\n0.0s–2.5s: 18° off-axis medium shot, a hand slowly lifts the perfume bottle from the marble; slow push-in. Hard cut.\n2.5s–5.0s: close-up on the bottle in the hand as light moves across the glass; the camera settles.\nAudio: the glass leaving the stone and quiet room tone — diegetic Foley, room ambience and requested dialogue only; no background music, no score, no musical instruments.\nReference: pgcnocanarywasinthisrequest",
+      "notes": "장면과 참조를 구체적으로 적었어요.",
+      "source": "model"
+    },
+    "job": {
+      "kind": "video",
+      "status": "succeeded",
+      "lane": "sunra_api",
+      "model": "seedance-2.5",
+      "prompt": "대리석 위 향수병을 손이 천천히 들어 올리는 장면",
+      "final_prompt": "Visual style: pale marble, soft window light from the left and a grounded shadow under the bottle.\n0.0s–2.5s: 18° off-axis medium shot, a hand slowly lifts the perfume bottle from the marble; slow push-in. Hard cut.\n2.5s–5.0s: close-up on the bottle in the hand as light moves across the glass; the camera settles.\nAudio: the glass leaving the stone and quiet room tone — diegetic Foley, room ambience and requested dialogue only; no background music, no score, no musical instruments.\nReference: pgcnocanarywasinthisrequest",
+      "enhance": true,
+      "estimate_usd": "1.1700",
+      "cost_usd": "1.1700",
+      "estimate_krw": 1820,
+      "usage_krw": 1820,
+      "error_code": null,
+      "error_detail": null,
+      "attempts": 0,
+      "finished": true,
+      "work": {
+        "inputs": [],
+        "results": {
+          "0": {
+            "url": "fake://video/<task>",
+            "mime": "video/mp4",
+            "costUsd": null,
+            "seconds": 5,
+            "draftTaskId": null
+          }
+        },
+        "enhancer": {
+          "source": "model",
+          "profile": "seedance",
+          "llmModel": null,
+          "skinMode": "off",
+          "toneMatch": false,
+          "coreVersion": "core@2026-11-19.2",
+          "profileVersion": "seedance@2026-11-15.1"
+        },
+        "failures": {},
+        "prepared": true,
+        "enhanceNotes": "장면과 참조를 구체적으로 적었어요."
+      }
+    },
+    "outputs": [
+      {
+        "idx": 0,
+        "kind": "video",
+        "status": "ready",
+        "is_draft": false
+      }
+    ],
+    "sent": [
+      {
+        "endpoint": "bytedance/seedance-2.5/text-to-video",
+        "body": {
+          "prompt": "Visual style: pale marble, soft window light from the left and a grounded shadow under the bottle.\n0.0s–2.5s: 18° off-axis medium shot, a hand slowly lifts the perfume bottle from the marble; slow push-in. Hard cut.\n2.5s–5.0s: close-up on the bottle in the hand as light moves across the glass; the camera settles.\nAudio: the glass leaving the stone and quiet room tone — diegetic Foley, room ambience and requested dialogue only; no background music, no score, no musical instruments.\nReference: pgcnocanarywasinthisrequest",
+          "resolution": "720p",
+          "duration": 5,
+          "draft": false,
+          "output_format": "mp4",
+          "generate_audio": true,
+          "ratio": "9:16"
+        }
+      }
+    ],
+    "allowance": {
+      "capKrw": 5000000,
+      "usedKrw": 1820
+    },
+    "logs": []
+  }
+}
