@@ -395,12 +395,12 @@ describe("§4.6 Moving: controller, 200-item cap, tile more-menu, multi-select b
 
   it("formats family line, done toast, and computes runs leaving the open scope", () => {
     expect(moveFamilyLine(1, ko)).toBeNull();
-    expect(moveFamilyLine(3, ko)).toBe("함께 만든 결과와 버전까지 3개가 옮겨집니다.");
+    expect(moveFamilyLine(3, ko)).toBe("함께 만든 결과와 버전까지 3개가 옮겨져요.");
     // Two chosen, two move: nothing came along, no line. Two chosen, five move: the line.
     expect(moveFamilyLine(2, ko, 2)).toBeNull();
-    expect(moveFamilyLine(5, ko, 2)).toBe("함께 만든 결과와 버전까지 5개가 옮겨집니다.");
-    expect(moveDoneToast(P1, projects, ko)).toBe("'봄 향수' 프로젝트로 옮겼습니다.");
-    expect(moveDoneToast(null, projects, ko)).toBe("미분류로 옮겼습니다.");
+    expect(moveFamilyLine(5, ko, 2)).toBe("함께 만든 결과와 버전까지 5개가 옮겨져요.");
+    expect(moveDoneToast(P1, projects, ko)).toBe("'봄 향수' 프로젝트로 옮겼어요.");
+    expect(moveDoneToast(null, projects, ko)).toBe("미분류로 옮겼어요.");
 
     expect(movedJobsLeavingScope(["j1", "j2"], P2, { kind: "project", id: P1 })).toEqual(["j1", "j2"]);
     expect(movedJobsLeavingScope(["j1", "j2"], P1, { kind: "project", id: P1 })).toEqual([]);
@@ -452,7 +452,7 @@ describe("§4.6 Moving: controller, 200-item cap, tile more-menu, multi-select b
     expect(ok).toEqual({
       ok: true,
       projectId: P2,
-      toast: "'겨울 립' 프로젝트로 옮겼습니다.",
+      toast: "'겨울 립' 프로젝트로 옮겼어요.",
       removedJobIds: ["j1", "j2", "j3"],
     });
   });
@@ -572,7 +572,7 @@ describe("§4.6 Moving: controller, 200-item cap, tile more-menu, multi-select b
     expect(dialogHtml).toContain("봄 향수");
     expect(dialogHtml).toContain("겨울 립");
     expect(dialogHtml).toContain(ko.unfiled);
-    expect(dialogHtml).toContain("함께 만든 결과와 버전까지 4개가 옮겨집니다.");
+    expect(dialogHtml).toContain("함께 만든 결과와 버전까지 4개가 옮겨져요.");
     expect(dialogHtml).toContain(ko.moveSubmit);
     expect(dialogHtml).toContain(ko.cancel);
     expect(dialogHtml.match(/data-variant="solid"/g)).toHaveLength(1);
