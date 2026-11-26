@@ -11,6 +11,7 @@ import {
   STUDIO_OPERATIONS,
   type StudioAssetReserved,
   type StudioAssetSaved,
+  type StudioBrandProjectCards,
   type StudioDone,
   type StudioLyricsDraft,
   type StudioMusicDesign,
@@ -27,6 +28,7 @@ import {
   type StudioState,
   type StudioStateScope,
 } from './contracts';
+import { brandStudioV2Open } from '@/lib/flags';
 import { studioSeat } from './access';
 import { isBrandProjectRead, runBrandProjectRead, type BrandProjectReadResult } from './brand-project-files';
 import {
@@ -88,6 +90,17 @@ const SELF_STUDIO_OPS: ReadonlySet<StudioOperation> = new Set([
   'handoff.campaign',
   'job.assign_project',
 ]);
+
+/**
+ * The 직접 만들기 home's project cards for a server page (`project.cards`, ./brand-project-files.ts): what
+ * `POST /api/brand-studio` answers the same caller, the route's own flag gate included (studio v2 off: `studio_closed`;
+ * spine closed for the organization: `invalid`). Sign-in is the seat's (`sign_in_required`). `env` reaches the studio
+ * switch only; the spine's own switch is read from the process environment, as the POST route reads it.
+ */
+export async function loadProjectCards(deps: StudioDeps, viewer: Viewer, organizationId: string, env: NodeJS.ProcessEnv = process.env): Promise<StudioBrandProjectCards | StudioFailure> {
+  if (!brandStudioV2Open(env)) return failure('studio_closed');
+  return (await runBrandProjectRead(deps, viewer, 'project.cards', { organizationId })) as StudioBrandProjectCards | StudioFailure;
+}
 
 /** One `POST /api/brand-studio` operation. Unknown names are `invalid`. */
 export async function runStudioOperation(deps: StudioDeps, viewer: Viewer, operation: unknown, input: unknown): Promise<StudioOperationResult> {

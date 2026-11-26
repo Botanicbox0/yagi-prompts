@@ -1,12 +1,16 @@
-import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { StudioBrandProject } from "@/lib/brand-studio/contracts";
 import type { StudioSpineProps } from "@/lib/brand-studio/open-project";
 import {
+  MoveToProjectDialog,
   PROJECT_SEARCH_THRESHOLD,
   ProjectChip,
   ProjectGoneNotice,
   ProjectSpineProvider,
+  createMoveToProjectController,
   createProjectErrorLine,
   filterProjects,
   formatRelativeTime,
@@ -14,6 +18,7 @@ import {
   projectCoverThumb,
   projectSecondLine,
 } from "@/components/brand-studio/project-chip";
+import { moveControllerContentKey } from "@/components/brand-studio/project-chip/model";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 
 const ORG = "a0000000-0000-4000-8000-00000000000a";
@@ -244,5 +249,105 @@ describe("ProjectChip markup, markers and list states (§4.2)", () => {
     expect(html).toContain(en.newProject);
     expect(html).toContain(en.pickerFooter);
     expect(html.replace(/&#x27;/g, "'")).toContain(en.goneNotice);
+  });
+});
+
+describe("MoveToProjectDialog controller stability & scope guards (Fix 3-1, Fix 3-5)", () => {
+  it("sends jobs-only preview without extra keys, keeps equal-content controller keys stable, and avoids inline = [] defaults", async () => {
+    const p1 = proj(1);
+    const keyA = moveControllerContentKey({
+      jobIds: ["j1", "j2"],
+      assetIds: [],
+      filmIds: [],
+      openScope: { kind: "unfiled" },
+    });
+    const keyB = moveControllerContentKey({
+      jobIds: ["j1", "j2"],
+      openScope: { kind: "unfiled" },
+    });
+    expect(keyA).toBe(keyB);
+
+    const calls: Array<Record<string, unknown>> = [];
+    const moveSpy = vi.fn(async (input: Record<string, unknown>) => {
+      calls.push(input);
+      return { ok: true as const, projectId: input.projectId as string | null, jobIds: ["j1", "j2"], assetIds: [], filmIds: [] };
+    });
+    const ctrl = createMoveToProjectController({
+      jobIds: ["j1", "j2"],
+      projects: [p1],
+      openScope: { kind: "unfiled" },
+      copy: getDictionary("ko").projectSpine,
+      move: moveSpy,
+    });
+
+    await ctrl.preview(p1.id);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toEqual({ projectId: p1.id, jobIds: ["j1", "j2"], preview: true });
+    expect("assetIds" in calls[0]!).toBe(false);
+    expect("filmIds" in calls[0]!).toBe(false);
+
+    const dialogSrc = readFileSync(
+      join(process.cwd(), "components", "brand-studio", "project-chip", "move-dialog.tsx"),
+      "utf8",
+    );
+    expect(dialogSrc).not.toMatch(/=\s*\[\s*\]/);
+    expect(dialogSrc).toContain("moveControllerContentKey");
+  });
+
+  it("leaves all options unmarked (no 미분류 current mark) and blocks moving brand materials to 미분류 (Fix 3-5)", async () => {
+    const ko = getDictionary("ko").projectSpine;
+    const p1 = proj(1, { title: "봄 향수" });
+    const html = renderToStaticMarkup(
+      <MoveToProjectDialog
+        projects={[p1]}
+        currentScope={{ kind: "brand_materials" }}
+        jobIds={[]}
+        assetIds={["a1"]}
+        filmIds={[]}
+        locale="ko"
+        copy={ko}
+        onMove={async () => ({ ok: true, projectId: p1.id, jobIds: [], assetIds: ["a1"], filmIds: [] })}
+        onMoved={() => {}}
+        onClose={() => {}}
+      />,
+    );
+    expect(html).not.toContain('data-current="true"');
+    expect(html).not.toContain('data-project-move-option="unfiled"');
+    expect(html).toContain(`data-project-move-option="${p1.id}"`);
+    expect(html).toMatch(/<button[^>]*data-project-move-submit[^>]*disabled=""/);
+
+    const moveSpy = vi.fn();
+    const ctrl = createMoveToProjectController({
+      jobIds: [],
+      assetIds: ["a1"],
+      projects: [p1],
+      openScope: { kind: "brand_materials" },
+      copy: ko,
+      move: moveSpy,
+    });
+    expect(await ctrl.submit(null)).toEqual({ ok: false, ignored: true });
+    expect(moveSpy).not.toHaveBeenCalled();
+  });
+
+  it("leaves 미분류 unmarked and unselected while keeping it selectable when currentScope is unknown (Fix 4-10)", () => {
+    const ko = getDictionary("ko").projectSpine;
+    const p1 = proj(1, { title: "봄 향수" });
+    const html = renderToStaticMarkup(
+      <MoveToProjectDialog
+        projects={[p1]}
+        currentScope={{ kind: "unknown" }}
+        jobIds={["j1"]}
+        locale="ko"
+        copy={ko}
+        onMove={async () => ({ ok: true, projectId: null, jobIds: ["j1"], assetIds: [], filmIds: [] })}
+        onMoved={() => {}}
+        onClose={() => {}}
+      />,
+    );
+    expect(html).not.toContain('data-current="true"');
+    expect(html).toContain('data-project-move-option="unfiled"');
+    expect(html).not.toContain(ko.selectedMark);
+    expect(html).not.toContain('checked=""');
+    expect(html).toMatch(/<button[^>]*data-project-move-submit[^>]*disabled=""/);
   });
 });

@@ -30,6 +30,9 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
       'billing_payments',
       'blocks',
       'brand_allowance_grants',
+      // docs/BRAND-PROJECT-SPINE.md §6 (0196) — the home's news slot: announcements and who closed them, server only.
+      'brand_announcement_dismissals',
+      'brand_announcements',
       'brand_attachments',
       'brand_billing_profiles',
       'brand_content_decisions',

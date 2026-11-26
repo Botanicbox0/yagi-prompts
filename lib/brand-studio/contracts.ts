@@ -12,6 +12,8 @@ import type { StudioStorageQuotaView } from '@/lib/brands/storage-quota-format';
 import type { UploadLimitReason } from '@/lib/brands/upload-limits-format';
 import type { AllowanceRefillView, AllowanceWindowView } from './allowance-window';
 import type { VideoProjectSummary } from './video-projects/contracts';
+import type { RoomStage } from '@/components/brand-rooms/seams';
+import type { RoomStep } from '@/lib/brand-rooms/overview';
 import { STUDIO_IMAGE_BACKGROUNDS, STUDIO_IMAGE_QUALITIES, type StudioImageQuality } from './models';
 import { LYRIC_STRUCTURES } from './sound/lyrics';
 import type { LyricsModel } from './sound/lyrics-model';
@@ -676,7 +678,7 @@ export const BRAND_PROJECT_LIMITS = {
    */
   createPerDay: 20,
   /** `project.overview`: cover tiles per group (the newest image and video results; for 브랜드 자료, the newest files). */
-  overviewCovers: 4,
+  overviewCovers: 6,
   /** `project.files`: items per page (a run with all its results, a library entry or a film is one item). */
   filesPage: 40,
   /** `project.files`: the longest cursor accepted. */
@@ -735,12 +737,13 @@ export interface BrandProjectFilingInput {
 export type StudioStateScope = { kind: 'project'; brandProjectId: string } | { kind: 'unfiled' };
 
 /**
- * The assets page's two reads, by project (docs/BRAND-PROJECT-SPINE.md §7, slice 2a; lib/brand-studio/brand-project-files.ts):
- * `project.overview` (the 프로젝트별 tab in one answer) and `project.files` (one scope's files, page by page). Members
- * of the workspace only, through the same gate as `project.list`; while the spine is closed for the organization
- * both answer exactly like an unknown operation (`{ ok: false, code: 'invalid' }`, HTTP 400).
+ * The spine's member reads (lib/brand-studio/brand-project-files.ts): the assets page's two, by project
+ * (docs/BRAND-PROJECT-SPINE.md §7, slice 2a): `project.overview` (the 프로젝트별 tab in one answer) and `project.files`
+ * (one scope's files, page by page); and the 직접 만들기 home's `project.cards` (§5, slice 3a: one card per project that
+ * can take work, then 미분류). Members of the workspace only, through the same gate as `project.list`; while the spine is
+ * closed for the organization each answers exactly like an unknown operation (`{ ok: false, code: 'invalid' }`, HTTP 400).
  */
-export const BRAND_PROJECT_READS = ['project.overview', 'project.files'] as const;
+export const BRAND_PROJECT_READS = ['project.overview', 'project.files', 'project.cards'] as const;
 export type BrandProjectRead = (typeof BRAND_PROJECT_READS)[number];
 
 /**
@@ -781,6 +784,16 @@ export const BrandProjectFilesSchema = z.object({
   cursor: z.string().min(1).max(BRAND_PROJECT_LIMITS.cursorMax).optional(),
 });
 export type BrandProjectFilesInput = z.input<typeof BrandProjectFilesSchema>;
+
+/** `project.cards`: the organization only. */
+export const BrandProjectCardsSchema = z.object({ organizationId: Id });
+export type BrandProjectCardsInput = z.input<typeof BrandProjectCardsSchema>;
+
+/** The home's project cards (`project.cards`, slice 3a). Kept apart from `BRAND_PROJECT_LIMITS` on purpose. */
+export const BRAND_PROJECT_CARD_LIMITS = {
+  /** Pictures on one card (one large and two small on the design); never more than `BRAND_PROJECT_LIMITS.overviewCovers`. */
+  covers: 3,
+} as const;
 
 /** Save a result into the library. Same bytes twice returns the existing asset. */
 export const AssetFromOutputSchema = z.object({
@@ -1180,6 +1193,75 @@ export interface StudioBrandProjectFiles {
   /** The page's films, in page order, as the films' list builds them. */
   films: VideoProjectSummary[];
   next: string | null;
+}
+
+/**
+ * A picture on a home card. `result`: one image or video result (`id` = the output id, the wall's media addresses,
+ * the overview's own covers); `library`: a library entry with a picture (`id` = the asset id, the library's media
+ * addresses); `team_cover`: a team project's cover image as the project list (`/brand`) shows it (`id` = the
+ * attachment id; `url` is the workspace attachment route, which checks the reader again; no size, no thumbnail).
+ */
+export interface StudioBrandProjectCardCover {
+  source: 'result' | 'library' | 'team_cover';
+  id: string;
+  kind: 'image' | 'video';
+  url: string;
+  thumbUrl: string | null;
+  width: number | null;
+  height: number | null;
+}
+
+/**
+ * The newest file of a project: the item `project.files` lists first for it (no `kind`), with the kind it counts as
+ * and who added it. `actorName` is that person's display name only while they are an active member of this
+ * organization and have set one (the rule the room's activity lines use); otherwise null. Never an email address.
+ */
+export interface StudioBrandProjectActivity {
+  at: string;
+  kind: BrandProjectFileKind;
+  item: BrandProjectFileItem;
+  actorName: string | null;
+}
+
+/**
+ * The stage line of a team project, as today's 야기 팀과 home draws it (lib/brand-rooms/overview.ts `roomStageOf`):
+ * the stage it is at, and each of the five steps with its state and when it was reached (ISO, or null).
+ */
+export interface StudioBrandProjectStage {
+  stage: RoomStage;
+  steps: RoomStep[];
+}
+
+/** One card of the 직접 만들기 home (`project.cards`). */
+export interface StudioBrandProjectCard {
+  /** Exactly the project as `project.list` answers it. */
+  project: StudioBrandProject;
+  /** The same numbers `project.overview` gives this project (one shared computation). */
+  counts: StudioBrandProjectCounts;
+  /**
+   * At most `BRAND_PROJECT_CARD_LIMITS.covers`, newest first: the overview's own result covers; when the project has no
+   * image or video result, its newest library entries with a picture; for a team project with neither, its cover image.
+   */
+  covers: StudioBrandProjectCardCover[];
+  /** Null when nothing is filed in it yet. */
+  lastActivity: StudioBrandProjectActivity | null;
+  /**
+   * Unread messages of the project's room for this person (the room's own read rule; the same number as its channel in
+   * the 알림함). 0 for a project of the brand's own (until slice 4) and whenever project rooms are closed.
+   */
+  unread: number;
+  /** A team project while project rooms are open: the data behind its stage line. Null otherwise. */
+  stage: StudioBrandProjectStage | null;
+}
+
+/**
+ * `project.cards`: one card per project `project.list` lists (same set, same order), then 미분류 exactly as
+ * `project.overview` gives it.
+ */
+export interface StudioBrandProjectCards {
+  ok: true;
+  projects: StudioBrandProjectCard[];
+  unfiled: { counts: StudioBrandProjectCounts; covers: StudioBrandProjectCover[] };
 }
 
 /** `job.assign_project`: every run that moved (the run and its family) and where they are now. */

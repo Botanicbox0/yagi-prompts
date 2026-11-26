@@ -1,0 +1,273 @@
+/*
+ * The home's news line (docs/BRAND-PROJECT-SPINE.md §6, slice 3b): line and banner shapes.
+ * Self-contained module using workspace tokens only (--ys-*); no colour literals, no accent tokens.
+ * Uses only the home's 15px and 12.5px steps.
+ */
+
+.line {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 45px;
+  min-width: 0;
+  margin: 0 0 18px;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid var(--ys-hairline);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.kicker {
+  flex: none;
+  color: var(--ys-ink-secondary);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 20px;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.line .kicker {
+  padding: 1px 8px;
+  border-radius: var(--ys-r-pill, 999px);
+  background: var(--ys-panel);
+  color: var(--ys-ink);
+}
+
+.title {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--ys-ink);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 22px;
+  letter-spacing: -0.015em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:global(.bw-main) a.link.link,
+.link {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--ys-r-pill, 999px);
+  background: var(--ys-panel);
+  color: var(--ys-ink);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 20px;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background-color 160ms var(--ys-ease);
+}
+
+:global(.bw-main) a.link.link:hover,
+.link:hover {
+  background: var(--ys-hover);
+  color: var(--ys-ink);
+  text-decoration: none;
+}
+
+.link:focus-visible {
+  outline: 2px solid var(--ys-focus);
+  outline-offset: 2px;
+  border-radius: var(--ys-r-pill, 999px);
+}
+
+.lineClose {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ys-ink-secondary);
+  cursor: pointer;
+  transition: background-color 160ms var(--ys-ease), color 160ms var(--ys-ease);
+}
+
+.lineClose:hover {
+  background: var(--ys-panel);
+  color: var(--ys-ink);
+}
+
+.lineClose:focus-visible {
+  outline: 2px solid var(--ys-focus);
+  outline-offset: 2px;
+}
+
+.lineClose :global(.bs-icon) {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ------------------------------------------------------------------ banner shape (prototype strip) */
+
+.banner {
+  box-sizing: border-box;
+  position: relative;
+  display: grid;
+  align-items: center;
+  width: 100%;
+  height: 120px;
+  min-height: 120px;
+  margin: 0 0 18px;
+  overflow: hidden;
+  border-radius: var(--ys-r-panel, 16px);
+  background: var(--ys-surface);
+  box-shadow: var(--ys-card);
+  isolation: isolate;
+}
+
+.banner::after {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(
+    90deg,
+    var(--ys-bg) 0%,
+    color-mix(in srgb, var(--ys-bg) 90%, transparent) 44%,
+    color-mix(in srgb, var(--ys-bg) 55%, transparent) 58%,
+    transparent 80%
+  );
+  content: '';
+  pointer-events: none;
+}
+
+.bannerMedia {
+  position: absolute;
+  inset: 0 0 0 44%;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.bannerImage {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 42%;
+  pointer-events: none;
+}
+
+.bannerCopy {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  justify-items: start;
+  gap: 2px;
+  max-width: 600px;
+  padding: 7px 56px 7px 26px;
+}
+
+.bannerCopy .kicker {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bannerTitle {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: var(--ys-ink);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 21px;
+  letter-spacing: -0.015em;
+  text-overflow: ellipsis;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+.bannerActions {
+  max-width: 100%;
+  margin-top: 2px;
+}
+
+:global(.bw-main) .bannerActions a.link.link,
+.bannerActions .link {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bannerClose {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--ys-stage-border);
+  border-radius: var(--ys-r-pill, 9999px);
+  background: var(--ys-glass-dark);
+  color: var(--color-white);
+  cursor: pointer;
+  transition: transform 160ms var(--ys-ease);
+}
+
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  .bannerClose {
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+  }
+}
+
+.bannerClose:hover:not(:disabled) {
+  transform: scale(1.04);
+}
+
+.bannerClose:focus-visible {
+  outline: 2px solid var(--ys-focus);
+  outline-offset: 2px;
+}
+
+.bannerClose :global(.bs-icon) {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .link,
+  .lineClose,
+  .bannerClose {
+    transition: none;
+  }
+
+  .bannerClose:hover:not(:disabled) {
+    transform: none;
+  }
+}

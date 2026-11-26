@@ -46,18 +46,26 @@ export const RAIL_GROUP: Readonly<Record<RailItemId, RailGroupId>> = {
  */
 export type RailTier = 'main' | 'lower';
 const RAIL_LOWER: ReadonlySet<RailItemId> = new Set<RailItemId>(['workflows']);
-export function railTier(id: RailItemId): RailTier {
-  return RAIL_LOWER.has(id) ? 'lower' : 'main';
+export function railTier(id: RailItemId, mode?: RailGroupId | null): RailTier {
+  if (RAIL_LOWER.has(id)) return 'lower';
+  if (mode === 'make' && id === 'messages') return 'lower';
+  return 'main';
+}
+
+/** The active group a row belongs to in `mode`: `messages` belongs to `make` only when `makeInbox` is open. */
+export function railGroupOf(id: RailItemId, mode?: RailGroupId | null, makeInbox = false): RailGroupId {
+  if (makeInbox && mode === 'make' && id === 'messages') return 'make';
+  return RAIL_GROUP[id];
 }
 
 /** The rows in the order the wide rail shows them: everything above the divider, then what is under it. */
-export function railShownOrder(items: readonly RailItemId[]): RailItemId[] {
-  return [...items.filter((id) => railTier(id) === 'main'), ...items.filter((id) => railTier(id) === 'lower')];
+export function railShownOrder(items: readonly RailItemId[], mode?: RailGroupId | null): RailItemId[] {
+  return [...items.filter((id) => railTier(id, mode) === 'main'), ...items.filter((id) => railTier(id, mode) === 'lower')];
 }
 
 /** A list of rows as the rail draws it: above the divider, under it. Each keeps the list's own order. */
-export function railTiers(items: readonly RailItemId[]): Record<RailTier, RailItemId[]> {
-  return { main: items.filter((id) => railTier(id) === 'main'), lower: items.filter((id) => railTier(id) === 'lower') };
+export function railTiers(items: readonly RailItemId[], mode?: RailGroupId | null): Record<RailTier, RailItemId[]> {
+  return { main: items.filter((id) => railTier(id, mode) === 'main'), lower: items.filter((id) => railTier(id, mode) === 'lower') };
 }
 
 /** localStorage: `{ expanded: boolean }`. */
@@ -243,28 +251,28 @@ export function dropItem(items: readonly RailItemId[], source: RailItemId, targe
  * `list` after moving `id` by one place among the rows of its own band. The other band's rows keep their
  * places in the list, so the saved order stays one flat list. Unchanged at either end of the band.
  */
-export function moveInTier(list: readonly RailItemId[], id: RailItemId, direction: -1 | 1): RailItemId[] {
-  const tier = railTier(id);
+export function moveInTier(list: readonly RailItemId[], id: RailItemId, direction: -1 | 1, mode?: RailGroupId | null): RailItemId[] {
+  const tier = railTier(id, mode);
   const moved = moveItem(
-    list.filter((item) => railTier(item) === tier),
+    list.filter((item) => railTier(item, mode) === tier),
     id,
     direction,
   );
   let at = 0;
-  return list.map((item) => (railTier(item) === tier ? moved[at++]! : item));
+  return list.map((item) => (railTier(item, mode) === tier ? moved[at++]! : item));
 }
 
 /** `list` after dropping `source` where `target` is; null when they sit on different sides of the divider. */
-export function dropInTier(list: readonly RailItemId[], source: RailItemId, target: RailItemId): RailItemId[] | null {
-  const tier = railTier(source);
-  if (tier !== railTier(target)) return null;
+export function dropInTier(list: readonly RailItemId[], source: RailItemId, target: RailItemId, mode?: RailGroupId | null): RailItemId[] | null {
+  const tier = railTier(source, mode);
+  if (tier !== railTier(target, mode)) return null;
   const dropped = dropItem(
-    list.filter((item) => railTier(item) === tier),
+    list.filter((item) => railTier(item, mode) === tier),
     source,
     target,
   );
   let at = 0;
-  return list.map((item) => (railTier(item) === tier ? dropped[at++]! : item));
+  return list.map((item) => (railTier(item, mode) === tier ? dropped[at++]! : item));
 }
 
 /* ------------------------------------------------------------- groups (project rooms) */
@@ -278,10 +286,11 @@ export interface RailGroups {
  * The saved order applied inside each group. An item never leaves its group, whatever an older saved
  * order says: the order only decides positions among the items of the same group.
  */
-export function groupItems(items: readonly RailItemId[], order: readonly string[]): RailGroups {
+export function groupItems(items: readonly RailItemId[], order: readonly string[], options?: { makeInbox?: boolean }): RailGroups {
+  const makeInbox = Boolean(options?.makeInbox);
   return {
     make: orderItems(
-      items.filter((id) => RAIL_GROUP[id] === 'make'),
+      items.filter((id) => RAIL_GROUP[id] === 'make' || (makeInbox && id === 'messages')),
       order,
     ),
     team: orderItems(
@@ -295,19 +304,33 @@ export function groupItems(items: readonly RailItemId[], order: readonly string[
  * The whole saved order after moving `id` by one place within its group, among the rows of its own band
  * (above or under the divider). Unchanged at the band's ends.
  */
-export function moveInGroup(groups: RailGroups, id: RailItemId, direction: -1 | 1): RailItemId[] {
-  const group = RAIL_GROUP[id];
-  const moved = moveInTier(groups[group], id, direction);
-  return group === 'make' ? [...moved, ...groups.team] : [...groups.make, ...moved];
+export function moveInGroup(
+  groups: RailGroups,
+  id: RailItemId,
+  direction: -1 | 1,
+  mode?: RailGroupId | null,
+  makeInbox = false,
+): RailItemId[] {
+  const group = railGroupOf(id, mode, makeInbox);
+  const moved = moveInTier(groups[group], id, direction, mode);
+  if (group === 'make') return [...moved, ...groups.team.filter((item) => !moved.includes(item))];
+  return [...groups.make.filter((item) => !moved.includes(item)), ...moved];
 }
 
 /** The whole saved order after dropping `source` on `target`; null when they sit in different groups or bands. */
-export function dropInGroup(groups: RailGroups, source: RailItemId, target: RailItemId): RailItemId[] | null {
-  const group = RAIL_GROUP[source];
-  if (group !== RAIL_GROUP[target]) return null;
-  const dropped = dropInTier(groups[group], source, target);
+export function dropInGroup(
+  groups: RailGroups,
+  source: RailItemId,
+  target: RailItemId,
+  mode?: RailGroupId | null,
+  makeInbox = false,
+): RailItemId[] | null {
+  const group = railGroupOf(source, mode, makeInbox);
+  if (group !== railGroupOf(target, mode, makeInbox)) return null;
+  const dropped = dropInTier(groups[group], source, target, mode);
   if (!dropped) return null;
-  return group === 'make' ? [...dropped, ...groups.team] : [...groups.make, ...dropped];
+  if (group === 'make') return [...dropped, ...groups.team.filter((item) => !dropped.includes(item))];
+  return [...groups.make.filter((item) => !dropped.includes(item)), ...dropped];
 }
 
 export type RailCreateKey = 'image' | 'video' | 'reverse' | 'compose' | 'campaign' | 'commission';

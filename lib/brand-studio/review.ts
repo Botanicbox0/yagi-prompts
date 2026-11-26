@@ -681,6 +681,22 @@ export function reviewNoticeBody(
 
 /* --------------------------------------------------------------- brand reads */
 
+/**
+ * The thumbnail each deliverable's list item shows (`ReviewListItem.thumbUrl`, the list's own select and builder:
+ * null when the file is gone), by id; one statement. It decides nothing about access: the caller has already seated
+ * the person and takes the ids from what that person may open (the bell's lines, lib/brand-rooms/bell.ts).
+ */
+export async function reviewThumbUrls(sql: SqlRunner, media: StudioMediaStore, organizationId: string, reviewIds: readonly string[]): Promise<Map<string, string | null>> {
+  if (reviewIds.length === 0) return new Map();
+  const rows = (await sql.query<ReviewRow>(`${await reviewSelect(sql)} and r.organization_id = $1 and r.id = any($2::uuid[])`, [organizationId, [...reviewIds]])).rows;
+  return new Map(
+    rows.map((row) => {
+      const item = listItem(row, media);
+      return [item.id.toLowerCase(), item.thumbUrl] as const;
+    }),
+  );
+}
+
 /** `GET /api/brand-studio/review?organizationId=…` */
 export async function loadReviewList(deps: ReviewDeps, viewer: Viewer, organizationId: string): Promise<ReviewList | ReviewFailure> {
   return guard(() =>

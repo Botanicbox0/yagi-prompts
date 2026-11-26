@@ -44,7 +44,7 @@ export function formatRelativeTime(iso: string, locale: StudioLocale, now = new 
   const tag = locale === "ko" ? "ko-KR" : "en-US";
   const rtf = new Intl.RelativeTimeFormat(tag, { numeric: "auto" });
 
-  if (absSec < 60) return rtf.format(0, "minute");
+  if (absSec < 60) return rtf.format(0, "second");
   if (absSec < 3600) return rtf.format(Math.round(diffMs / 60_000), "minute");
   if (absSec < 86_400) return rtf.format(Math.round(diffMs / 3_600_000), "hour");
   const days = Math.round(diffMs / 86_400_000);
@@ -213,6 +213,38 @@ export function collectMoveJobIds(
   };
 }
 
+/** Deduplicate mixed runs, library assets, and films against the combined `BRAND_PROJECT_LIMITS.moveMax` (200) limit. */
+export function collectMoveTargets(
+  targets: {
+    jobIds?: readonly string[];
+    assetIds?: readonly string[];
+    filmIds?: readonly string[];
+  },
+  limit = BRAND_PROJECT_LIMITS.moveMax,
+): { jobIds: string[]; assetIds: string[]; filmIds: string[]; totalUnique: number; overLimit: boolean } {
+  const dedup = (ids: readonly string[] = []) => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const id of ids) {
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      out.push(id);
+    }
+    return out;
+  };
+  const jobIds = dedup(targets.jobIds);
+  const assetIds = dedup(targets.assetIds);
+  const filmIds = dedup(targets.filmIds);
+  const totalUnique = jobIds.length + assetIds.length + filmIds.length;
+  return {
+    jobIds: jobIds.slice(0, limit),
+    assetIds: assetIds.slice(0, Math.max(0, limit - jobIds.length)),
+    filmIds: filmIds.slice(0, Math.max(0, limit - jobIds.length - assetIds.length)),
+    totalUnique,
+    overLimit: totalUnique > limit,
+  };
+}
+
 /**
  * Family-size line of MoveToProjectDialog (§4.6): shown only when MORE runs will move than were chosen (results
  * made together and their versions come along). Moving exactly what was chosen needs no line.
@@ -237,18 +269,43 @@ export function moveDoneToast(
   return fill(copy.moveDone, { name: hit?.title ?? "" });
 }
 
+export type MoveDialogScope = OpenProject | { kind: "brand_materials" } | { kind: "unknown" };
+
 /** Which moved runs leave the currently displayed wall (all moved ids when destination != open scope). */
 export function movedJobsLeavingScope(
   movedJobIds: readonly string[],
   targetProjectId: string | null,
-  openScope: OpenProject,
+  openScope: MoveDialogScope,
 ): string[] {
+  if (openScope.kind === "brand_materials" || openScope.kind === "unknown") {
+    return targetProjectId === null ? [] : [...movedJobIds];
+  }
   return belongsToOpenProject(targetProjectId, openScope) ? [] : [...movedJobIds];
+}
+
+/**
+ * Stable content key for memoising `createMoveToProjectController` (Fix 3-1):
+ * keyed on the scope key and id sequences so wrapper arrays/objects with equal contents
+ * never rebuild the controller or re-fire `preview: true` on parent re-renders.
+ */
+export function moveControllerContentKey(input: {
+  jobIds: readonly string[];
+  assetIds?: readonly string[];
+  filmIds?: readonly string[];
+  openScope: MoveDialogScope;
+}): string {
+  const scopeKey =
+    input.openScope.kind === "project"
+      ? `project:${input.openScope.id.toLowerCase()}`
+      : input.openScope.kind;
+  return `${scopeKey}|${input.jobIds.join(",")}|${(input.assetIds ?? []).join(",")}|${(input.filmIds ?? []).join(",")}`;
 }
 
 export type MoveApiFn = (input: {
   projectId: string | null;
   jobIds?: string[];
+  assetIds?: string[];
+  filmIds?: string[];
   preview?: boolean;
 }) => Promise<StudioBrandProjectMoved | StudioFailure>;
 
@@ -258,41 +315,58 @@ export type MoveSubmitOutcome =
   | { ok: false; error: string };
 
 /**
- * Plain async controller for MoveToProjectDialog (§4.6):
+ * Plain async controller for MoveToProjectDialog (§4.6 & slice 2b §5.5):
  * - Sequence-guards `preview: true` calls so late responses from an earlier target never overwrite the count.
  * - Guards against double-submit and computes the toast + wall removals from the returned moved family.
  */
 export function createMoveToProjectController(opts: {
   jobIds: readonly string[];
+  assetIds?: readonly string[];
+  filmIds?: readonly string[];
   projects: readonly Pick<StudioBrandProject, "id" | "title">[];
-  openScope: OpenProject;
+  openScope: MoveDialogScope;
   copy: Pick<ProjectSpineCopy, "moveDone" | "moveDoneUnfiled" | "moveFailed">;
   move: MoveApiFn;
 }) {
-  const collected = collectMoveJobIds(opts.jobIds);
-  const capped = collected.jobIds;
+  const collected = collectMoveTargets({
+    jobIds: opts.jobIds,
+    assetIds: opts.assetIds,
+    filmIds: opts.filmIds,
+  });
+  const payloadIds = () => ({
+    ...(collected.jobIds.length > 0 ? { jobIds: collected.jobIds } : {}),
+    ...(collected.assetIds.length > 0 ? { assetIds: collected.assetIds } : {}),
+    ...(collected.filmIds.length > 0 ? { filmIds: collected.filmIds } : {}),
+  });
   let previewSeq = 0;
   let familyCount: number | null = null;
   let submitting = false;
 
   return {
-    getState: () => ({ jobIds: capped, familyCount, submitting, overLimit: collected.overLimit }),
+    getState: () => ({ jobIds: collected.jobIds, familyCount, submitting, overLimit: collected.overLimit }),
     preview: async (targetProjectId: string | null): Promise<{ familyCount: number | null } | { stale: true }> => {
       const seq = ++previewSeq;
-      if (capped.length === 0 || collected.overLimit) {
+      if (collected.totalUnique === 0 || collected.overLimit) {
         familyCount = 0;
         return { familyCount: 0 };
       }
-      const answer = await opts.move({ projectId: targetProjectId, jobIds: capped, preview: true });
+      const answer = await opts.move({ projectId: targetProjectId, ...payloadIds(), preview: true });
       if (seq !== previewSeq) return { stale: true };
       familyCount = answer.ok ? answer.jobIds.length : null;
       return { familyCount };
     },
     submit: async (targetProjectId: string | null): Promise<MoveSubmitOutcome> => {
-      if (submitting || capped.length === 0 || collected.overLimit) return { ok: false, ignored: true };
+      if (
+        submitting ||
+        collected.totalUnique === 0 ||
+        collected.overLimit ||
+        (opts.openScope.kind === "brand_materials" && targetProjectId === null)
+      ) {
+        return { ok: false, ignored: true };
+      }
       submitting = true;
       try {
-        const answer = await opts.move({ projectId: targetProjectId, jobIds: capped });
+        const answer = await opts.move({ projectId: targetProjectId, ...payloadIds() });
         if (!answer.ok) return { ok: false, error: opts.copy.moveFailed };
         return {
           ok: true,

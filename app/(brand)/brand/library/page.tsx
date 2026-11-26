@@ -9,7 +9,7 @@ import { StaffNotice } from "@/components/brand-workspace/staff-notice";
 import { loadAssetProjectLinks } from "@/lib/brand-studio/asset-projects";
 import { brandProjectSpineOpen, memberSeesBrandProjects } from "@/lib/brand-studio/brand-projects";
 import { studioRuntimeDeps } from "@/lib/brand-studio/runtime";
-import { loadStudioState } from "@/lib/brand-studio/service";
+import { loadStudioState, runStudioOperation } from "@/lib/brand-studio/service";
 import { assetHubVisible, studioV2Visible } from "@/lib/brand-studio/visibility";
 import { scopedHref, sectionVisibility } from "@/lib/brands/workspace/selection";
 import { brandStudioV2Open } from "@/lib/flags";
@@ -52,17 +52,43 @@ export default async function ContentLibrary({
     isKo = locale !== "en";
 
   if (choice && hubVisible) {
+    const spineOpen =
+      memberSeesBrandProjects({ staff: choice.role === "studio", role: choice.role }) &&
+      (await brandProjectSpineOpen(sql, choice.id));
     const canTransact = typeof (sql as { transaction?: unknown }).transaction === "function";
-    // The studio state and the project links are read side by side; both pass the same seat check
-    // (membership, the sandbox hardline, the feature policy), and the links are ids only.
-    const [loaded, links] = canTransact
+    // The studio state, project links and (when spine is open) project overview are read side by side;
+    // all pass the same seat check (membership, the sandbox hardline, the feature policy).
+    const deps = canTransact ? await studioRuntimeDeps(sql) : null;
+    const [loaded, links, overviewResult] = canTransact
       ? await Promise.all([
-          loadStudioState(await studioRuntimeDeps(sql), viewer, choice.id).catch(() => null),
+          loadStudioState(deps!, viewer, choice.id).catch(() => null),
           loadAssetProjectLinks({ sql }, viewer, choice.id).catch(() => null),
+          spineOpen
+            ? runStudioOperation(deps!, viewer, "project.overview", { organizationId: choice.id }).catch(() => null)
+            : Promise.resolve(null),
         ])
-      : [null, null];
+      : [null, null, null];
     const initialState = loaded && loaded.ok ? loaded : null;
     const projectLinks = initialState && links && links.ok ? { self: links.self, team: links.team } : null;
+    const overview =
+      spineOpen && overviewResult && overviewResult.ok && "brandMaterials" in overviewResult
+        ? overviewResult
+        : null;
+    const orgLogo = choice.logoUrl
+      ? {
+          url: choice.logoUrl,
+          editHref: choice.role === "owner" ? `${scopedHref("/brand/settings", choice)}#brand-logo-heading` : null,
+        }
+      : null;
+    const spine = overview
+      ? {
+          overview,
+          canMove: initialState ? initialState.canCreate : false,
+          copy: dict.projectSpine,
+          filmMeta: dict.studioVideo.workspace.projects.meta,
+          orgLogo,
+        }
+      : undefined;
     const deliverables = contents.map(({ p, c }) => ({
       id: c.id,
       projectId: p.id,
@@ -89,10 +115,6 @@ export default async function ContentLibrary({
       </div>
     ) : null;
 
-    const spineOpen =
-      memberSeesBrandProjects({ staff: choice.role === "studio", role: choice.role }) &&
-      (await brandProjectSpineOpen(sql, choice.id));
-
     return (
       <>
         {choice.role === "studio" && <StaffNotice b={b} />}
@@ -107,6 +129,7 @@ export default async function ContentLibrary({
           deliverables={deliverables}
           canOpenStudio={canOpenStudio}
           {...(spineOpen ? { useFilmParam: true } : {})}
+          {...(spine ? { spine } : {})}
         />
       </>
     );

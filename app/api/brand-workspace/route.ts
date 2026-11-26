@@ -63,6 +63,7 @@ import { enqueueNotices } from "@/lib/brand-rooms/notices";
 import { brandOrgInviteEmailOpen, brandRoomInvitesOpen } from "@/lib/flags";
 import { getMailer } from "@/lib/notify/service";
 import { deliverOrgInviteEmail } from "@/lib/brands/workspace/invite-mail";
+import { BRAND_NEWS_CLOSED, dismissHomeAnnouncement } from "@/lib/brand-news/service";
 export const dynamic = "force-dynamic";
 /**
  * A staff note that must never hold up or fail the client's request: after the response where the
@@ -387,6 +388,14 @@ export async function POST(request: NextRequest) {
           typeof input.id === "string" ? input.id : "",
         );
         break;
+      case "news.dismiss": {
+        // docs/BRAND-PROJECT-SPINE.md §6 (slice 3b): close the home's announcement for this person. While the slot
+        // is closed (BRAND_NEWS off, or migration 0196 missing) this answers exactly like an unknown operation.
+        const dismissed = await dismissHomeAnnouncement({ sql }, viewer, input);
+        if (dismissed === BRAND_NEWS_CLOSED) return json({ ok: false, code: "invalid" }, 400);
+        result = dismissed;
+        break;
+      }
       default:
         return json({ ok: false, code: "invalid" }, 400);
     }

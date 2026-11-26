@@ -75,6 +75,9 @@ export default async function AdminHomePage() {
             <a href="/admin/campaigns/new" className="admin-btn">
               + {a.newCampaign}
             </a>
+            <a href="/admin/brand-news" data-admin-brand-news className="admin-btn">
+              {dict.brandNewsAdmin.title}
+            </a>
           </div>
         }
       />

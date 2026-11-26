@@ -209,7 +209,7 @@ export function filterHubEntries(
     .map((item) => item.entry);
 }
 
-export type HubActionKey = "useImage" | "decorate" | "makeVideo" | "compose" | "reverse" | "share" | "similar" | "project" | "edit";
+export type HubActionKey = "useImage" | "decorate" | "makeVideo" | "compose" | "reverse" | "share" | "similar" | "project" | "projectMove" | "edit";
 
 export interface HubAction {
   key: HubActionKey;
@@ -217,7 +217,7 @@ export interface HubAction {
   /** Where the action goes; the ones without an address change something on this page. */
   href?: string;
   /** The `data-*` marker tests and scripts find the control by. */
-  marker: `data-asset-hub-${string}`;
+  marker: `data-asset-hub-${string}` | "data-project-move";
 }
 
 export interface HubActionCopy {
@@ -244,6 +244,8 @@ export function hubActions(
     copy: HubActionCopy;
     /** The "put in a project" line for a studio result, or null while runs cannot belong to a project. */
     projectLabel?: ((entry: HubEntry) => string) | null;
+    /** Spine move label (`프로젝트로 옮기기`) replacing `projectLabel` on runs & library uploads when `canMove` is true. */
+    moveProjectLabel?: string | null;
   },
 ): { main: HubAction | null; more: HubAction[] } {
   const { organizationId, canOpenStudio, canCreate, copy } = opts;
@@ -267,7 +269,9 @@ export function hubActions(
     more.push({ key: "share", label: copy.share, marker: "data-asset-hub-share-review" });
   }
   more.push({ key: "similar", label: copy.similar, marker: "data-asset-hub-similar" });
-  if (opts.projectLabel && canOpenStudio && canCreate && entry.jobId) {
+  if (opts.moveProjectLabel && (entry.jobId || entry.asset)) {
+    more.push({ key: "projectMove", label: opts.moveProjectLabel, marker: "data-project-move" });
+  } else if (opts.projectLabel && canOpenStudio && canCreate && entry.jobId) {
     more.push({ key: "project", label: opts.projectLabel(entry), marker: "data-asset-hub-project-assign" });
   }
   if (canCreate && entry.asset) more.push({ key: "edit", label: copy.edit, marker: "data-asset-hub-edit" });
@@ -480,4 +484,24 @@ export function jobFamily(jobs: readonly Pick<StudioJobView, "id" | "parentOutpu
 export function familySize(jobs: readonly Pick<StudioJobView, "id" | "parentOutputId" | "outputs">[], jobId: string): number {
   const family = new Set(jobFamily(jobs, jobId));
   return jobs.reduce((sum, job) => (family.has(job.id) ? sum + job.outputs.length : sum), 0);
+}
+
+/**
+ * Resolves the active entry for `detail` or `similarAnchor` (Fix 2-2).
+ * Without `spine`, a missing key means the file was deleted so returns `null` (closes detail / clears similar bar).
+ * With `spine`, paged `ScopeView` entries live outside `entries`, so keeps `stored` until invalidated by deletion.
+ */
+export function resolveHubEntry(
+  entries: readonly HubEntry[],
+  key: string | null,
+  stored: HubEntry | null,
+  spineOn: boolean,
+): HubEntry | null {
+  if (!key) return null;
+  return entries.find((e) => e.key === key) ?? (spineOn && stored?.key === key ? stored : null);
+}
+
+/** Whether a cached `detailEntry` / `similarEntry` belongs to a deleted library asset (Fix 2-5). */
+export function entryMatchesAsset(entry: HubEntry | null, assetId: string): boolean {
+  return entry?.asset?.id === assetId;
 }
