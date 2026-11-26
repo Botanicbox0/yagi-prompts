@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import {
   compileModelSpecificIdentityPrompt,
@@ -579,6 +581,45 @@ describe('Template Baseline Disclosure & Predictive Creator Revision Taxonomy', 
     expect(guarded).toContain('NECK-DOWN GARMENT LOCK');
     expect(guarded).toContain('SLENDER SILHOUETTE LOCK');
     expect(guarded).toContain('no random moles');
+  });
+
+  it('aligns MORPHIC_APPROVED_VIDEO_LAWS and header with canonical 3:4 distance framing and video/still skin split (SB-1)', () => {
+    const playbookPath = join(process.cwd(), 'lib', 'template-director', 'morphic-production-playbook.ts');
+    const playbookHeader = readFileSync(playbookPath, 'utf8').split('\n').slice(0, 20).join('\n');
+    expect(playbookHeader).not.toMatch(/@[a-z0-9_]+/i);
+    expect(playbookHeader).not.toMatch(/2026-11-03-|head\/neck crop/i);
+    expect(playbookHeader).toContain('eighteen creators');
+
+    const ids = MORPHIC_APPROVED_VIDEO_LAWS.map((law) => law.id);
+    expect(ids).not.toContain('headneck_crop_against_wide_sleeves');
+    expect(ids).toContain('distance_3x4_bustup_and_sleeve_authority');
+
+    for (const law of MORPHIC_APPROVED_VIDEO_LAWS) {
+      const combined = `${law.titleKo}\n${law.titleEn}\n${law.customerTipKo}\n${law.customerTipEn}\n${law.compilerDirectiveEn}`;
+      expect(combined).not.toMatch(/tight head-and-neck|head-and-neck crop|head & neck only|headneck/i);
+      expect(combined).not.toMatch(/\btight\b/i);
+    }
+
+    const framingLaw = MORPHIC_APPROVED_VIDEO_LAWS.find(
+      (law) => law.id === 'distance_3x4_bustup_and_sleeve_authority'
+    )!;
+    expect(framingLaw.compilerDirectiveEn).toContain('3:4');
+    expect(framingLaw.compilerDirectiveEn).toMatch(/32[–-]42%/);
+    expect(framingLaw.compilerDirectiveEn).toMatch(/12[–-]16%/);
+    expect(framingLaw.compilerDirectiveEn).toMatch(/60[–-]85%.*banned/i);
+    const sleeveLine = 'ignore any wide casual top/sleeve volume from @Image 1';
+    expect(framingLaw.compilerDirectiveEn.split(sleeveLine).length - 1).toBe(1);
+    expect(framingLaw.customerTipEn).not.toContain(sleeveLine);
+
+    const videoFormula =
+      'looking like scanned, slightly underexposed 35mm film: soft contrast, cool lifted blacks (#14171C), fine organic grain, gentle halation on the brightest whites; one soft key light a stop under; skin stays natural and warm, unretouched matte-satin with visible micro-pores and fine stray flyaway hairs, never over-lit or glossy, with no blush';
+    const skinLaw = MORPHIC_APPROVED_VIDEO_LAWS.find(
+      (law) => law.id === 'americano_matte_satin_zero_mole_skin'
+    )!;
+    expect(skinLaw.compilerDirectiveEn).toContain('Still-image local edits keep excluding pore emphasis');
+    expect(skinLaw.compilerDirectiveEn).toContain('Seedance 2.5');
+    expect(skinLaw.compilerDirectiveEn).toContain(videoFormula);
+    expect(skinLaw.compilerDirectiveEn).not.toMatch(/\b(?:porcelain|glass-skin|dewy|flawless)\b/i);
   });
 });
 

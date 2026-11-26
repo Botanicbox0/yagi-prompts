@@ -103,7 +103,7 @@
 
 - GPT Image는 쓰지 않는다.
   - 2026-11-19 대표: "인물은 GPT Image로 만들어도 됨. 이거는 이전 gpt image2.0이고 패션 룩북 특화 이미지였어서 그래." 위 금지는 GPT Image 2.0으로 만든 패션 룩북 인물에 대한 판정이었다. 브랜드 스튜디오에서 GPT Image 2.6으로 인물을 만드는 것은 허용한다(인물 프롬프트 규칙은 `lib/brand-studio/enhancer/profiles/gpt-image.ts`·`skin.ts`).
-- Morphic MCP가 인증돼 있으면 같은 모델을 Morphic으로 먼저 돌린다. Soul과 Genjutsu는 Higgsfield에서 돌린다.
+- 클라우드 생성은 Sunra를 기본으로 쓰며, Higgsfield 사용은 회사 전역 금지다(Soul·Genjutsu 포함).
 - Pinterest, 인스타그램 같은 제3자 이미지와 영상은 글로 분석만 한다. 모델 입력이나 공개에 쓰지 않는다. 인물은 가상 인물만 쓴다.
 - 고해상도 렌더는 드래프트를 키운 것이 아니라 새로 뽑은 것이라 색과 인물이 달라질 수 있다. 영상은 480p 드래프트를 먼저 만들어 대표에게 보여 주고, 승인받은 뒤에 고해상도로 간다(`D:\dev\Video-Creator\AGENTS.md`). 프롬프트는 `seedance-film-director` 스킬로 쓴다.
 - 업체가 정책으로 거부한 이미지는 다른 업체에 올리거나 잘라서 다시 시도하지 않는다. 대표에게 알린다.
@@ -149,6 +149,7 @@ HEX VALUES: ["#f3f7fa", "#e3ebf3", "#d0dbe7", "#bbcadd", "#a5b4cb", "#8e9ab2", "
 - **원본을 따라 할 때는 움직임을 먼저 잰다.** `extract_video.py --interval 0.1`로 뽑고 `shots.json`의 `camera_analysis`(팬, 틸트, 줌, 배경 움직임)를 샷마다 읽은 뒤, 샷의 처음·중간·끝 프레임을 비교한다. 샷당 한 장짜리 개요 시트로는 카메라를 알 수 없다(2026-10-30 대표 지적).
 - **카메라는 시작과 끝을 쓴다.** "a few degrees", "slowly"만 쓰면 거의 안 움직인다. 시작 위치, 경로, 끝 위치, 각도를 쓰고 원본보다 조금 크게 쓴다. 롤, 오빗, 줌을 구분해 쓴다. 긴 동작을 넣은 첫 샷은 길어지기 쉽다.
 - **피부 결점은 글로 막히지 않는다.** "no freckles"를 써도 주근깨가 나왔다. 글로 만든 인물을 고정해야 하면 깨끗한 기준 사진을 먼저 만들어 얼굴·머리·피부 전용 레퍼런스로 넣는다.
+- **영상 피부와 노출 (정지 이미지와 분리).** 정지 이미지 국소 편집은 기존 피부 규칙을 유지한다. Seedance 2.5 영상은 하이라이트 클리핑(`p99 > 230`)과 시간축 플라스틱 평활화를 막기 위해 프롬프트당 1회 `looking like scanned, slightly underexposed 35mm film: soft contrast, cool lifted blacks (#14171C), fine organic grain, gentle halation on the brightest whites; one soft key light a stop under; skin stays natural and warm, unretouched matte-satin with visible micro-pores and fine stray flyaway hairs, never over-lit or glossy, with no blush` 공식을 쓰고, 물광 표현(`porcelain`, `glass-skin`, `dewy`, `flawless`)은 계속 차단한다.
 - **제외 목록을 끝에 쓴다.** 글자, 자막, 로고, 슬라이드 쇼, 크로스페이드.
 - 영상 속 글자는 제품에 인쇄된 것뿐이다. 카피는 화면(HTML)에서 얹는다.
 
@@ -216,7 +217,7 @@ HEX VALUES: ["#f3f7fa", "#e3ebf3", "#d0dbe7", "#bbcadd", "#a5b4cb", "#8e9ab2", "
 
 **의상 단독 이미지:** Americano의 정리 방식을 따른다. 입은 사진을 Nano Banana Pro에 넣고 "사람은 보이지 않는 마네킹, 옷은 그대로, 흰 배경의 정면 고스트 마네킹 컷"이라고 쓴다. 영상 속 옷을 바꿀 때 참고 이미지로 쓴다(`D:\dev\Video-Creator\projects\2026-11-01-twings-runway-remix`).
 
-**기준 영상:** `D:\dev\Video-Creator\projects\2026-10-30-twings-fashion-reverse`의 패션 필름(4K 마스터 `seedance_2160p_16x9_v2_french-blue.mp4`, 프롬프트 `prompt_v2_higgsfield.txt`). 대표가 "아주 좋다"고 한 영상이자 `/brands` 히어로다. 영상의 감도는 이 필름과 나란히 놓고 판단한다.
+**기준 영상:** `D:\dev\Video-Creator\projects\2026-10-30-twings-fashion-reverse`의 패션 필름(4K 마스터 `seedance_2160p_16x9_v2_french-blue.mp4`). 대표가 "아주 좋다"고 한 영상이자 `/brands` 히어로이며, 영상의 감도는 이 필름과 나란히 놓고 판단한다(과거 기록에 남은 Higgsfield 경로 실행은 전역 금지).
 
 Soul 2.0에 이미지 레퍼런스를 넣으면 그 옷과 포즈를 거의 그대로 베낀다. 새 룩을 만들 때는 레퍼런스 없이 글과 `HEX VALUES`만 쓴다(2026-10-30 비교).
 

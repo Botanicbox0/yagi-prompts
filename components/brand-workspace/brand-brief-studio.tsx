@@ -1431,7 +1431,8 @@ export function BrandBriefStudio({
 
   const silentOpticalGuard = evaluateOpticalIdentityLockV2({
     focalLengthMm: cameraFocalMm,
-    headWidthRatioPct: 42,
+    headHeightRatioPct: 38,
+    headroomPct: 14,
     hasFaceOcclusion: false,
     locale,
   });

@@ -1,11 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import {
+  BANNED_AI_BUZZWORDS,
   COMPILER_GRAMMAR_IDS,
   ImageAnalysisSchema,
+  PreserveChangeMatrixSchema,
   SKIN_MATTE_CONTRACT_A10,
+  SKIN_VIDEO_CONTRACT_SEEDANCE,
   ShotSpecSchema,
+  VIDEO_REVERSE_PRESETS,
   approveBrief,
   compilePrompt,
+  compileVideoReverseAdaptation,
   createDraftBrief,
   measurementToShotSpec,
   promoteBriefToFinal,
@@ -15,6 +20,7 @@ import {
   type ImageAnalysis,
   type ShotSpec
 } from '@/lib/brands/briefs';
+import { SEEDANCE_25_PROMPT_CHARS } from '@/lib/engines/prompt-limits';
 import { markConfirmedBrandIdentity, twingsDefaultIdentity } from '@/lib/brands/identity/schema';
 
 const IDENTITY = markConfirmedBrandIdentity(twingsDefaultIdentity());
@@ -537,5 +543,288 @@ describe('draft (480p) -> approve -> final state machine & baseline+delta gate',
     expect(finalized.data.compiled.params.resolution).toBe('1080p');
     expect(finalized.data.compiled.params.draft).toBe(false);
     expect(finalized.data.compiled.params.bitrateMode).toBe('high');
+  });
+});
+
+describe('Seedance 2.5 video skin split, glossy guard & 15,000-char limit (SB-1)', () => {
+  const CANONICAL_VIDEO_SKIN_FORMULA =
+    'looking like scanned, slightly underexposed 35mm film: soft contrast, cool lifted blacks (#14171C), fine organic grain, gentle halation on the brightest whites; one soft key light a stop under; skin stays natural and warm, unretouched matte-satin with visible micro-pores and fine stray flyaway hairs, never over-lit or glossy, with no blush';
+
+  const PRE_CHANGE_STILL_SNAPSHOTS = {
+    gpt_base:
+      '[1. MEDIUM & CROP] product still (4:5) for feed — 쿨 데이라이트 스튜디오의 유리 세럼 보틀 클로즈업.\n\n[2. REFERENCE AUTHORITY] Image 1 (product): lend vessel-silhouette, label-typography, cap-finish; ignore studio-stand, background-reflection.\n\n[3. POSE & WARDROBE] Hero product TWINGS Hydro Serum 50ml with cylindrical thick glass bottle, TWINGS HYDRO SERUM, and frosted blue glass with silver dropper.\n\n[4. SPACE & LAYERS] Foreground: clean unobstructed foreground plane. Midground: primary subject anchored on clean studio plane. Background: architectural matte paper backdrop with soft tonal gradient on seamless matte paper.\n\n[5. LIGHT, PALETTE & OPTICS] Lighting: large strip softbox from camera-left at slightly above eye-level (close), creating controlled directional highlight roll-off without clipping; fill via white bounce card camera-right, one stop under at 6200K. Tonal anchors (balanced): lifted black #161b22, shadow #243447, midtone #6c87a6, highlight #f3f7fa, saturation 22%, shadow share 53%. Palette (blue world): #3875c5, #d0dbe7, #16233f, #ffffff, #f4f4f5, #09090b (warm notes reserved for skin, lips). Optics: 85mm lens at 3.2m, f/2.8, camera height shoulder, tilt 0 deg, subject width 32% with 15% frame margin, halation 0.3, fine film grain sigma 1.4. Frame remains clean and free of text, free of watermark, free of logo, free of beauty-filter smoothing, free of visible blush, free of 무료 크레딧, free of 무제한 생성, free of AI 생성 표시, free of 혁신적인, free of 압도적인, free of 완벽한 AI, free of 마법 같은.',
+    gpt_person:
+      '[1. MEDIUM & CROP] product still (4:5) for feed — 쿨 데이라이트 스튜디오의 유리 세럼 보틀 클로즈업.\n\n[2. REFERENCE AUTHORITY] Image 1 (identity): lend face, skin, hair; ignore outfit, background.\n\n[3. POSE & WARDROBE] Subject (20s, sleek low bun hair): torso angled 25 deg, head tilt slight left, gaze off-axis camera-left, hands holding serum bottle at collarbone height. Natural matte skin texture with visible pores and subtle micro-relief. Soft highlight roll-off across the cheekbones and bridge of the nose without specular plastic shine. True-to-life undertone with natural lip colour and zero beauty-filter smoothing.\n\n[4. SPACE & LAYERS] Foreground: clean unobstructed foreground plane. Midground: primary subject anchored on clean studio plane. Background: architectural matte paper backdrop with soft tonal gradient on seamless matte paper.\n\n[5. LIGHT, PALETTE & OPTICS] Lighting: large strip softbox from camera-left at slightly above eye-level (close), creating controlled directional highlight roll-off without clipping; fill via white bounce card camera-right, one stop under at 6200K. Tonal anchors (balanced): lifted black #161b22, shadow #243447, midtone #6c87a6, highlight #f3f7fa, saturation 22%, shadow share 53%. Palette (blue world): #3875c5, #d0dbe7, #16233f, #ffffff, #f4f4f5, #09090b (warm notes reserved for skin, lips). Optics: 85mm lens at 3.2m, f/2.8, camera height shoulder, tilt 0 deg, subject width 32% with 15% frame margin, halation 0.3, fine film grain sigma 1.4. Frame remains clean and free of text, free of watermark, free of logo, free of beauty-filter smoothing, free of visible blush, free of 무료 크레딧, free of 무제한 생성, free of AI 생성 표시, free of 혁신적인, free of 압도적인, free of 완벽한 AI, free of 마법 같은.',
+    nb_pro_base:
+      'IDENTITY LOCK: Faceless product/scene composition — no person in frame.\nCOMPOSITION LOCK: Framing at 85mm, distance 3.2m, subject width 32%, minimum 15% clean margin.\nPOSE LOCK: Hero product TWINGS Hydro Serum 50ml with cylindrical thick glass bottle, TWINGS HYDRO SERUM, and frosted blue glass with silver dropper.\nOUTFIT & PROPS: Product lock: TWINGS Hydro Serum 50ml (cylindrical thick glass bottle; TWINGS HYDRO SERUM; frosted blue glass with silver dropper). Image 1 (product): lend vessel-silhouette, label-typography, cap-finish; ignore studio-stand, background-reflection.\nSETTING: Foreground clean unobstructed foreground plane; midground primary subject anchored on clean studio plane; background architectural matte paper backdrop with soft tonal gradient (seamless matte paper).\nCOLOR GRADE & LIGHT: large strip softbox camera-left (slightly above eye-level), white bounce card camera-right, one stop under, 6200K. Tonal hex anchors #161b22 / #243447 / #6c87a6 / #f3f7fa. Palette #3875c5, #d0dbe7, #16233f, #ffffff, #f4f4f5, #09090b.\nCAMERA & OPTICS: 85mm, f/2.8, DOF ratio 2.5, halation 0.3, grain sigma 1.4.\nNEGATIVE: text, watermark, logo, beauty-filter smoothing, visible blush, 무료 크레딧, 무제한 생성, AI 생성 표시, 혁신적인, 압도적인, 완벽한 AI, 마법 같은.',
+    nb_pro_person:
+      'IDENTITY LOCK: Preserve the exact facial geometry, bone structure, eye spacing, and natural skin tone of Image 1 (ast_creator_face). Natural matte skin texture with visible pores and subtle micro-relief. Soft highlight roll-off across the cheekbones and bridge of the nose without specular plastic shine. True-to-life undertone with natural lip colour and zero beauty-filter smoothing.\nCOMPOSITION LOCK: Framing at 85mm, distance 3.2m, subject width 32%, minimum 15% clean margin.\nPOSE LOCK: Subject (20s, sleek low bun hair): torso angled 25 deg, head tilt slight left, gaze off-axis camera-left, hands holding serum bottle at collarbone height.\nOUTFIT & PROPS: Product lock: TWINGS Hydro Serum 50ml (cylindrical thick glass bottle; TWINGS HYDRO SERUM; frosted blue glass with silver dropper).\nSETTING: Foreground clean unobstructed foreground plane; midground primary subject anchored on clean studio plane; background architectural matte paper backdrop with soft tonal gradient (seamless matte paper).\nCOLOR GRADE & LIGHT: large strip softbox camera-left (slightly above eye-level), white bounce card camera-right, one stop under, 6200K. Tonal hex anchors #161b22 / #243447 / #6c87a6 / #f3f7fa. Palette #3875c5, #d0dbe7, #16233f, #ffffff, #f4f4f5, #09090b.\nCAMERA & OPTICS: 85mm, f/2.8, DOF ratio 2.5, halation 0.3, grain sigma 1.4.\nNEGATIVE: text, watermark, logo, beauty-filter smoothing, visible blush, 무료 크레딧, 무제한 생성, AI 생성 표시, 혁신적인, 압도적인, 완벽한 AI, 마법 같은.',
+    nb_21_person:
+      'IDENTITY LOCK: Preserve the exact facial geometry, bone structure, eye spacing, and natural skin tone of Image 1 (ast_creator_face). Natural matte skin texture with visible pores and subtle micro-relief. Soft highlight roll-off across the cheekbones and bridge of the nose without specular plastic shine. True-to-life undertone with natural lip colour and zero beauty-filter smoothing.\nCOMPOSITION LOCK: Framing at 85mm, distance 3.2m, subject width 32%, minimum 15% clean margin.\nPOSE LOCK: Subject (20s, sleek low bun hair): torso angled 25 deg, head tilt slight left, gaze off-axis camera-left, hands holding serum bottle at collarbone height.\nOUTFIT & PROPS: Product lock: TWINGS Hydro Serum 50ml (cylindrical thick glass bottle; TWINGS HYDRO SERUM; frosted blue glass with silver dropper).\nSETTING: Foreground clean unobstructed foreground plane; midground primary subject anchored on clean studio plane; background architectural matte paper backdrop with soft tonal gradient (seamless matte paper).\nCOLOR GRADE & LIGHT: large strip softbox camera-left (slightly above eye-level), white bounce card camera-right, one stop under, 6200K. Tonal hex anchors #161b22 / #243447 / #6c87a6 / #f3f7fa. Palette #3875c5, #d0dbe7, #16233f, #ffffff, #f4f4f5, #09090b.\nCAMERA & OPTICS: 85mm, f/2.8, DOF ratio 2.5, halation 0.3, grain sigma 1.4.\nNEGATIVE: text, watermark, logo, beauty-filter smoothing, visible blush, 무료 크레딧, 무제한 생성, AI 생성 표시, 혁신적인, 압도적인, 완벽한 AI, 마법 같은.',
+    seedream_person:
+      'Reference preservation rules: Image 1 (identity): lend face, skin, hair; ignore outfit, background.\n\nSubject (20s, sleek low bun hair): torso angled 25 deg, head tilt slight left, gaze off-axis camera-left, hands holding serum bottle at collarbone height. Environment: clean unobstructed foreground plane leading to primary subject anchored on clean studio plane against architectural matte paper backdrop with soft tonal gradient (seamless matte paper). Natural matte skin texture with visible pores and subtle micro-relief. Soft highlight roll-off across the cheekbones and bridge of the nose without specular plastic shine. True-to-life undertone with natural lip colour and zero beauty-filter smoothing.\n\nLighting: large strip softbox from camera-left at slightly above eye-level (close), creating controlled directional highlight roll-off without clipping; fill via white bounce card camera-right, one stop under at 6200K. Tonal anchors (balanced): lifted black #161b22, shadow #243447, midtone #6c87a6, highlight #f3f7fa, saturation 22%, shadow share 53%. Palette (blue world): #3875c5, #d0dbe7, #16233f, #ffffff, #f4f4f5, #09090b (warm notes reserved for skin, lips). Optics: 85mm lens at 3.2m, f/2.8, camera height shoulder, tilt 0 deg, subject width 32% with 15% frame margin, halation 0.3, fine film grain sigma 1.4.\n\nDeliverable: product still for feed, clean uncropped frame free of text, watermark, logo, beauty-filter smoothing, visible blush, 무료 크레딧, 무제한 생성, AI 생성 표시, 혁신적인, 압도적인, 완벽한 AI, 마법 같은.',
+    flux_person:
+      '1. CAMERA & OPTICS: Maintain the exact facial identity and bone structure of Image 1 while placing the subject into the directed studio environment. 85mm focal length, f/2.8, shoulder camera height, 15% clean margin.\n2. SUBJECT & MATERIAL: Subject (20s, sleek low bun hair): torso angled 25 deg, head tilt slight left, gaze off-axis camera-left, hands holding serum bottle at collarbone height.  Natural matte skin texture with visible pores and subtle micro-relief. Soft highlight roll-off across the cheekbones and bridge of the nose without specular plastic shine. True-to-life undertone with natural lip colour and zero beauty-filter smoothing.\n3. SPACE: clean unobstructed foreground plane, primary subject anchored on clean studio plane, architectural matte paper backdrop with soft tonal gradient on seamless matte paper.\n4. LIGHT: large strip softbox from camera-left (slightly above eye-level), white bounce card camera-right, one stop under, 6200K.\n5. COLOUR WORLD: Tonal anchors #161b22, #243447, #6c87a6, #f3f7fa within palette #3875c5, #d0dbe7, #16233f, #ffffff, #f4f4f5, #09090b, clean bare frame with natural optical grain sigma 1.4.',
+    soul_base:
+      'Editorial direction: 쿨 데이라이트 스튜디오의 유리 세럼 보틀 클로즈업.\n\nSubject & garment architecture: Hero product TWINGS Hydro Serum 50ml with cylindrical thick glass bottle, TWINGS HYDRO SERUM, and frosted blue glass with silver dropper. \n\nAtmosphere & colour world (blue): palette #3875c5, #d0dbe7, #16233f, #ffffff, #f4f4f5, #09090b with lifted black #161b22, midtone #6c87a6, highlight #f3f7fa.\n\nLight & optical finish: large strip softbox from camera-left at 6200K, 85mm lens (f/2.8), native optical halation 0.3 and organic film grain sigma 1.4.',
+    soul_person:
+      'Editorial direction: 쿨 데이라이트 스튜디오의 유리 세럼 보틀 클로즈업.\n\nSubject & garment architecture: Subject (20s, sleek low bun hair): torso angled 25 deg, head tilt slight left, gaze off-axis camera-left, hands holding serum bottle at collarbone height.  Natural matte skin texture with visible pores and subtle micro-relief. Soft highlight roll-off across the cheekbones and bridge of the nose without specular plastic shine. True-to-life undertone with natural lip colour and zero beauty-filter smoothing.\n\nAtmosphere & colour world (blue): palette #3875c5, #d0dbe7, #16233f, #ffffff, #f4f4f5, #09090b with lifted black #161b22, midtone #6c87a6, highlight #f3f7fa.\n\nLight & optical finish: large strip softbox from camera-left at 6200K, 85mm lens (f/2.8), native optical halation 0.3 and organic film grain sigma 1.4.',
+    ideogram_base:
+      '1. SUMMARY: product still for feed — 쿨 데이라이트 스튜디오의 유리 세럼 보틀 클로즈업.\n2. STYLE & HEX PALETTE: Strict brand palette #3875c5, #d0dbe7, #16233f, #ffffff, #f4f4f5, #09090b with tonal anchors #161b22 and #f3f7fa, clean architectural grid.\n3. COMPOSITION & EXACT TEXT: Center-weighted layout on seamless matte paper (architectural matte paper backdrop with soft tonal gradient) with exact quoted typography "TWINGS HYDRO SERUM" and 15% clear margin.'
+  } as const;
+
+  const baseSpec: ShotSpec = measurementToShotSpec(sampleAnalysis(), {
+    brief: '쿨 데이라이트 스튜디오의 유리 세럼 보틀 클로즈업',
+    identity: IDENTITY,
+    references: [
+      {
+        asset_id: 'ast_product_01',
+        role: 'product',
+        controls: ['vessel-silhouette', 'label-typography', 'cap-finish'],
+        ignore: ['studio-stand', 'background-reflection']
+      }
+    ],
+    product: {
+      name: 'TWINGS Hydro Serum 50ml',
+      vessel_geometry: 'cylindrical thick glass bottle',
+      label_lock: 'TWINGS HYDRO SERUM',
+      material_finish: 'frosted blue glass with silver dropper'
+    }
+  });
+
+  const personSpec = ShotSpecSchema.parse({
+    ...baseSpec,
+    references: [
+      {
+        asset_id: 'ast_creator_face',
+        role: 'identity',
+        consented: true,
+        controls: ['face', 'skin', 'hair'],
+        ignore: ['outfit', 'background']
+      }
+    ],
+    subject: {
+      kind: 'consented_creator',
+      cast_id: 'cast_01',
+      age_band: '20s',
+      hair: 'sleek low bun',
+      pose: {
+        torso_deg: 25,
+        head_tilt: 'slight left',
+        gaze: 'off-axis camera-left',
+        hands: 'holding serum bottle at collarbone height'
+      }
+    }
+  });
+
+  const soulSpec = ShotSpecSchema.parse({
+    ...baseSpec,
+    cutKind: 'editorial_full_body',
+    references: []
+  });
+
+  const personSoulSpec = ShotSpecSchema.parse({
+    ...personSpec,
+    cutKind: 'editorial_full_body',
+    references: []
+  });
+
+  const filmSpec = ShotSpecSchema.parse({
+    ...baseSpec,
+    cutKind: 'short_film_clip',
+    deliverable: { medium: 'short film', aspect: '9:16', use: 'reel' },
+    duration_s: 5,
+    timeline: [
+      {
+        shot: 1,
+        start: 0,
+        end: 0.6,
+        edit: 'hard cut',
+        focal_mm: 85,
+        camera: 'locked macro frame on dropper tip',
+        action: 'Single serum drop forms at the glass tip.',
+        audio: { sfx: 'subtle glass droplet resonance', no_bgm: true }
+      },
+      {
+        shot: 2,
+        start: 0.6,
+        end: 5.0,
+        edit: 'continuous',
+        focal_mm: 50,
+        camera: 'slow orbital arc camera-left to center',
+        action: 'Light band sweeps across the frosted bottle label.',
+        audio: {
+          dialogue: {
+            speaker: 'Mina',
+            language: 'Korean',
+            tone: 'quietly',
+            line: '차가운 아침 빛 그대로.'
+          },
+          no_bgm: true
+        }
+      }
+    ]
+  });
+
+  const personFilmSpec = ShotSpecSchema.parse({
+    ...filmSpec,
+    references: personSpec.references,
+    subject: personSpec.subject
+  });
+
+  it('keeps still-image outputs byte-identical to pre-change snapshots and preserves SKIN_MATTE_CONTRACT_A10 on stills', () => {
+    const compiledStills = {
+      gpt_base: compilePrompt(baseSpec, IDENTITY, undefined, { target: 'gpt-image-2.5-flare' }).prompt,
+      gpt_person: compilePrompt(personSpec, IDENTITY, undefined, { target: 'gpt-image-2.5-flare' }).prompt,
+      nb_pro_base: compilePrompt(baseSpec, IDENTITY, undefined, { target: 'nano-banana-pro', finalResolution: '4k' }).prompt,
+      nb_pro_person: compilePrompt(personSpec, IDENTITY, undefined, { target: 'nano-banana-pro' }).prompt,
+      nb_21_person: compilePrompt(personSpec, IDENTITY, undefined, { target: 'nano-banana-2.1' }).prompt,
+      seedream_person: compilePrompt(personSpec, IDENTITY, undefined, { target: 'seedream-5.5' }).prompt,
+      flux_person: compilePrompt(personSpec, IDENTITY, undefined, { target: 'flux-kontext' }).prompt,
+      soul_base: compilePrompt(soulSpec, IDENTITY, undefined, { target: 'text2image_soul_v2' }).prompt,
+      soul_person: compilePrompt(personSoulSpec, IDENTITY, undefined, { target: 'text2image_soul_v2' }).prompt,
+      ideogram_base: compilePrompt(baseSpec, IDENTITY, undefined, { target: 'ideogram-4.5' }).prompt
+    };
+
+    for (const [key, snapshot] of Object.entries(PRE_CHANGE_STILL_SNAPSHOTS)) {
+      const actual = compiledStills[key as keyof typeof compiledStills];
+      expect(actual, key).toBe(snapshot);
+      expect(actual, key).not.toContain(CANONICAL_VIDEO_SKIN_FORMULA);
+    }
+    expect(compiledStills.gpt_person).toContain(SKIN_MATTE_CONTRACT_A10);
+    expect(compiledStills.nb_pro_person).toContain(SKIN_MATTE_CONTRACT_A10);
+    expect(compiledStills.nb_21_person).toContain(SKIN_MATTE_CONTRACT_A10);
+    expect(compiledStills.seedream_person).toContain(SKIN_MATTE_CONTRACT_A10);
+    expect(compiledStills.flux_person).toContain(SKIN_MATTE_CONTRACT_A10);
+    expect(compiledStills.soul_person).toContain(SKIN_MATTE_CONTRACT_A10);
+  });
+
+  it('inserts the canonical Seedance 2.5 video skin formula exactly once per person video prompt (never per shot)', () => {
+    expect(SKIN_VIDEO_CONTRACT_SEEDANCE).toBe(CANONICAL_VIDEO_SKIN_FORMULA);
+
+    // Faceless film: neither still nor video skin contract
+    const facelessSeedance = compilePrompt(filmSpec, IDENTITY, undefined, {
+      target: 'seedance-2.5',
+      stage: 'draft'
+    });
+    expect(facelessSeedance.prompt).not.toContain(SKIN_VIDEO_CONTRACT_SEEDANCE);
+    expect(facelessSeedance.prompt).not.toContain(SKIN_MATTE_CONTRACT_A10);
+    expect(facelessSeedance.lint).toEqual([]);
+
+    // Person film on Seedance 2.5 and Kling Omni, plus all Video Reverse presets
+    const personResults = [
+      compilePrompt(personFilmSpec, IDENTITY, undefined, { target: 'seedance-2.5', stage: 'draft' }),
+      compilePrompt(personFilmSpec, IDENTITY, undefined, { target: 'kling-omni', stage: 'final', finalResolution: '1080p' }),
+      ...Object.values(VIDEO_REVERSE_PRESETS).map((analysis) => {
+        const adapted = compileVideoReverseAdaptation({
+          analysis,
+          matrix: PreserveChangeMatrixSchema.parse({}),
+          identity: IDENTITY
+        });
+        return compilePrompt(adapted.spec, IDENTITY, undefined, { target: 'seedance-2.5', stage: 'draft' });
+      })
+    ];
+
+    for (const result of personResults) {
+      expect(result.lint).toEqual([]);
+      expect(result.prompt.split(SKIN_VIDEO_CONTRACT_SEEDANCE).length - 1).toBe(1);
+      expect(result.prompt).not.toContain(SKIN_MATTE_CONTRACT_A10);
+      const shotLines = result.prompt.split('\n').filter((line) => line.startsWith('[Shot '));
+      for (const shotLine of shotLines) {
+        expect(shotLine).not.toContain('underexposed 35mm');
+        expect(shotLine).not.toContain('micro-pores');
+      }
+    }
+  });
+
+  it('never emits banned glossy or buzzword tokens in any compiled output and keeps existing lint blocks intact', () => {
+    const glossyTokens = ['porcelain', 'glass-skin', 'dewy', 'flawless', 'poreless'] as const;
+
+    const cleanOutputs = [
+      compilePrompt(personSpec, IDENTITY, undefined, { target: 'nano-banana-pro' }).prompt,
+      compilePrompt(personSpec, IDENTITY, undefined, { target: 'seedream-5.5' }).prompt,
+      compilePrompt(personFilmSpec, IDENTITY, undefined, { target: 'seedance-2.5', stage: 'draft' }).prompt,
+      ...Object.values(VIDEO_REVERSE_PRESETS).map((analysis) => {
+        const adapted = compileVideoReverseAdaptation({
+          analysis,
+          matrix: PreserveChangeMatrixSchema.parse({}),
+          identity: IDENTITY
+        });
+        return compilePrompt(adapted.spec, IDENTITY, undefined, { target: 'seedance-2.5', stage: 'draft' }).prompt;
+      })
+    ];
+
+    for (const output of cleanOutputs) {
+      const lower = output.toLowerCase();
+      for (const token of [...glossyTokens, ...BANNED_AI_BUZZWORDS]) {
+        expect(lower).not.toContain(token);
+      }
+    }
+
+    for (const token of ['porcelain', 'flawless'] as const) {
+      const badBriefSpec = ShotSpecSchema.parse({
+        ...personFilmSpec,
+        brief: `Editorial close-up featuring ${token} complexion`
+      });
+      const res = compilePrompt(badBriefSpec, IDENTITY, undefined, { target: 'seedance-2.5', stage: 'draft' });
+      expect(res.lint.some((issue) => issue.rule === 'ai_buzzword'), token).toBe(true);
+    }
+  });
+
+  it('keeps compiled Seedance 2.5 video prompts within 15,000 characters for presets and the largest 15-shot fixture', () => {
+    for (const [presetId, analysis] of Object.entries(VIDEO_REVERSE_PRESETS)) {
+      const adapted = compileVideoReverseAdaptation({
+        analysis,
+        matrix: PreserveChangeMatrixSchema.parse({}),
+        identity: IDENTITY
+      });
+      const compiled = compilePrompt(adapted.spec, IDENTITY, undefined, {
+        target: 'seedance-2.5',
+        stage: 'draft'
+      });
+      expect(compiled.prompt.length, presetId).toBeLessThanOrEqual(SEEDANCE_25_PROMPT_CHARS);
+    }
+
+    // Largest fixture: max 15 timeline shots with full action, camera, audio, wardrobe, product, exclusions
+    const maxTimeline = Array.from({ length: 15 }, (_, idx) => ({
+      shot: idx + 1,
+      start: idx,
+      end: idx + 1,
+      edit: idx === 0 ? ('hard cut' as const) : ('match cut' as const),
+      focal_mm: 50,
+      camera: 'smooth Steadicam orbital tracking from 18-degree profile toward three-quarter rear framing with foreground parallax',
+      action:
+        'Subject turns with calm off-axis gaze and softly closed lips while fine stray flyaway hairs move in cool studio air beside the product.',
+      audio: {
+        sfx: 'crisp wool-silk movement and subtle glass contact on honed travertine plinth',
+        dialogue: {
+          speaker: 'Model',
+          language: 'Korean',
+          tone: 'quietly',
+          line: '차분한 빛 속에서 흔들리지 않는 실루엣 그대로.'
+        },
+        no_bgm: true
+      }
+    }));
+
+    const largestFilmSpec = ShotSpecSchema.parse({
+      ...personFilmSpec,
+      brief: '가나다라마바사 '.repeat(40).trim().slice(0, 580),
+      wardrobe: {
+        silhouette: 'asymmetric tailored double-breasted wool coat over structured column skirt',
+        fabric: 'matte heavyweight virgin wool and fine poplin shirting',
+        construction: 'sharp shoulder seam, concealed placket, clean tailored hem',
+        lock: true
+      },
+      duration_s: 15,
+      timeline: maxTimeline
+    });
+
+    const largestCompiled = compilePrompt(largestFilmSpec, IDENTITY, undefined, {
+      target: 'seedance-2.5',
+      stage: 'draft'
+    });
+    expect(largestCompiled.prompt.length).toBeLessThanOrEqual(SEEDANCE_25_PROMPT_CHARS);
+    expect(largestCompiled.prompt.split(SKIN_VIDEO_CONTRACT_SEEDANCE).length - 1).toBe(1);
   });
 });
