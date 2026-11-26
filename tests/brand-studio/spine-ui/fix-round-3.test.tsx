@@ -161,7 +161,7 @@ describe("H3: MoveToProjectDialog uses native <dialog class='bs-dialog'> and nat
     expect(html).toContain("data-project-move-dialog");
     expect(html).toContain('class="bs-dialog-body"');
     expect(html).toContain('type="radio"');
-    expect(html).toContain("함께 만든 결과와 버전까지 3개가 옮겨집니다.");
+    expect(html).toContain("함께 만든 결과와 버전까지 3개가 옮겨져요.");
     expect(html.match(/data-variant="solid"/g)).toHaveLength(1);
     expect(html).not.toContain("scrim");
   });
@@ -227,7 +227,7 @@ describe("H6: more than 200 selected runs disables move button with moveTooMany 
   it("reports overLimit when more than 200 unique runs are selected and renders disabled move button with moveTooMany", () => {
     const ko = getDictionary("ko").projectSpine;
     const en = getDictionary("en").projectSpine;
-    expect(ko.moveTooMany).toBe("한 번에 200개까지 옮길 수 있습니다.");
+    expect(ko.moveTooMany).toBe("한 번에 200개까지 옮길 수 있어요.");
     expect(en.moveTooMany).toBe("You can move up to 200 at a time.");
 
     const jobs201 = Array.from({ length: BRAND_PROJECT_LIMITS.moveMax + 1 }, (_, i) =>

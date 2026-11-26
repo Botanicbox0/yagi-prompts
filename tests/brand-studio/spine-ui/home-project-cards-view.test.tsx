@@ -279,7 +279,7 @@ describe('WorkspaceHome with spineHome (projects present)', () => {
     expect(markup).toContain(`data-origin="self"`);
     expect(markup).toContain(`href="/brand/studio?organizationId=${ORG}&amp;project=${P_SELF}"`);
     expect(markup).toContain('이미지 24 · 영상 6 · 사운드 2');
-    expect(markup).toContain('김서아 님이 영상을 추가했습니다');
+    expect(markup).toContain('김서아 님이 영상을 추가했어요');
 
     expect(markup).toContain(`data-home-project="${P_TEAM}"`);
     expect(markup).toContain(`data-origin="team"`);
@@ -313,7 +313,7 @@ describe('WorkspaceHome with spineHome (projects present)', () => {
       expect(img).toContain('decoding="async"');
     }
 
-    expect(markup).toContain('편집본이 만들어졌습니다');
+    expect(markup).toContain('편집본이 만들어졌어요');
     expect(markup).toContain(ko.projectHome.cardEmpty);
     expect(markup).toContain('야기 팀과');
 

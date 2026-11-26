@@ -22,6 +22,7 @@ import { randomUUID } from 'node:crypto';
 import type { Viewer } from '@/lib/auth/identity';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import { resetSpineProbe, spineColumnsReady } from '@/lib/brands/project-origin';
+import { moveFileThreads } from '@/lib/brand-rooms/members-schema';
 import { brandProjectSpineFor } from '@/lib/flags';
 import { lockOrganization, requireCreate, StudioDenied, studioSeat, type StudioSeat } from './access';
 import {
@@ -526,6 +527,9 @@ export async function moveToBrandProject(deps: StudioDeps, viewer: Viewer, raw: 
         if (family.length) await sql.query('update brand_studio_jobs set brand_project_id = $3 where organization_id = $2 and id = any($1::uuid[])', [family, v.organizationId, v.projectId]);
         if (assetIds.length) await sql.query('update brand_studio_assets set brand_project_id = $3 where organization_id = $2 and id = any($1::uuid[])', [assetIds, v.organizationId, v.projectId]);
         if (filmIds.length) await sql.query('update brand_studio_video_projects set brand_project_id = $3 where organization_id = $2 and id = any($1::uuid[])', [filmIds, v.organizationId, v.projectId]);
+        // The members threads about the moved files follow them (보내기, §8.3), in this same transaction: a failed move
+        // leaves the files and their threads where they were. Nothing is sent.
+        await moveFileThreads(sql, v.organizationId, { jobIds: family, assetIds, projectId: v.projectId });
       }
       return { ok: true as const, projectId: v.projectId, jobIds: family, assetIds, filmIds };
     }),

@@ -1198,7 +1198,7 @@ describe("BrandAssetHub with spine prop (§5.2, §5.3)", () => {
       />,
     );
     expect(editorSelecting).toContain("data-asset-hub-selected-count");
-    expect(editorSelecting).toContain("2개를 선택했습니다");
+    expect(editorSelecting).toContain("2개를 선택했어요");
     expect(editorSelecting).toContain("data-asset-hub-move");
     expect(editorSelecting).toContain(ko.projectSpine.move);
     expect(editorSelecting).toContain(ko.projectSpine.cancel);
@@ -2041,7 +2041,7 @@ describe("/brand/library page.tsx spine prop gating (§5.1)", () => {
         initialSelectedKeys={[`a:${uploadedLogo.id}`]}
       />,
     );
-    expect(selectingScope).toContain("1개를 선택했습니다");
+    expect(selectingScope).toContain("1개를 선택했어요");
     const orgLogoSlice = selectingScope.slice(
       selectingScope.indexOf("data-asset-hub-org-logo"),
       selectingScope.indexOf(`data-asset-hub-card="a:${uploadedLogo.id}"`),
