@@ -6,6 +6,7 @@
  */
 import { prepareMusic } from './sound/prepare-music';
 import { confirmedIdentityFor } from '@/lib/brands/identity/service';
+import { promptCharLimit } from '@/lib/engines/prompt-limits';
 import type { FilmDepth, FilmSheet, FilmShot, StudioErrorCode, StudioReference } from './contracts';
 import { extractStoredFilmSheet, isFilmSheetExpired, readCachedFilmSheet, writeCachedFilmSheet } from './film-sheet';
 import { imageInfo, sniffMime, thumbnailWebp } from './files';
@@ -82,10 +83,13 @@ export async function regionEditPlan(
   return { plan, crop, regionWindow: { ...describeSelection(plan), closeUp } };
 }
 
-/** Region edit v2: the words sent end with where the part is, since the engine gets no mask. */
-export function withSelectionLine(prompt: string, plan: RegionPlan): string {
+/**
+ * Region edit v2: the words sent end with where the part is, since the engine gets no mask. The line counts
+ * inside `limit` (the run's whole text, `promptCharLimit` of its model).
+ */
+export function withSelectionLine(prompt: string, plan: RegionPlan, limit: number): string {
   const line = selectionLine(describeSelection(plan));
-  return `${prompt.trim().slice(0, 8000 - line.length - 1)}\n${line}`;
+  return `${prompt.trim().slice(0, limit - line.length - 1)}\n${line}`;
 }
 
 /** The confirmed brand identity in the enhancer's words; null when there is none or brand learning is closed. */
@@ -510,6 +514,11 @@ export async function prepareJob(deps: StudioDeps, job: JobRow): Promise<{ final
     work.region = { ...(work.region ?? {}), plan, cropKey, sourceKey: row.storage_key };
   }
   const windowPlan = job.kind === 'region_edit' && job.params.regionWindow ? work.region?.plan ?? null : null;
+  // The longest text one run may send, appended lines included (lib/engines/prompt-limits.ts): Seedance 2.5
+  // takes 15,000 characters per clip (founder, 2026-11-25); every other engine keeps the previous 8,000 until
+  // its provider limit is recorded there. No structural trimmer runs on this path, so a longer text is cut at
+  // the limit as the last resort.
+  const limit = promptCharLimit(model.id);
 
   let sheet: FilmSheet | null = null;
   let toEnhance = resolved;
@@ -530,7 +539,7 @@ export async function prepareJob(deps: StudioDeps, job: JobRow): Promise<{ final
   // Enhancement off: the customer's words go as they are, or the rewritten sentence they already read.
   if (!job.enhance) {
     const words = job.params?.reviewedPrompt?.trim() || null;
-    return { finalPrompt: windowPlan ? withSelectionLine(words ?? job.prompt, windowPlan) : words, work: { ...work, prepared: true } };
+    return { finalPrompt: windowPlan ? withSelectionLine(words ?? job.prompt, windowPlan, limit) : words, work: { ...work, prepared: true } };
   }
   const organization = (await deps.sql.query<{ name: string }>('select name from brand_organizations where id = $1', [job.organization_id])).rows[0];
   const history = await revisionInput(deps, job, resolved);
@@ -553,7 +562,7 @@ export async function prepareJob(deps: StudioDeps, job: JobRow): Promise<{ final
     regionWindow,
   );
   const result = await runEnhancer({ ...deps, organizationId: job.organization_id }, input);
-  const finalPrompt = windowPlan ? withSelectionLine(result.prompt, windowPlan) : result.prompt.slice(0, 8000);
+  const finalPrompt = windowPlan ? withSelectionLine(result.prompt, windowPlan, limit) : result.prompt.slice(0, limit);
   // Which rules wrote the prompt (profile version, writer, fallback, skin rules): internal, never shown.
   const enhancer = result.meta ?? enhanceMeta(input, result.source, { env: deps.intelDeps.env });
   return { finalPrompt, work: { ...work, enhanceNotes: result.notes.slice(0, 2000), enhancer, prepared: true } };
