@@ -58,6 +58,10 @@ import { PersonalIdentity } from '@/components/audience/personal-identity';
 import { defaultTimelineKeyframes, splitKeyframes } from '@/lib/prompts/keyframes';
 import { cachedPromptKeyframes } from '@/lib/prompts/keyframes-cached';
 import { partRows, templatePartsView } from '@/lib/template-director/parts-view';
+import { makerBlogOpen } from '@/lib/posts/flag';
+import { cachedTemplateOriginalInstagram, cachedTemplateStories } from '@/lib/posts/cached-public';
+import { TemplateStories } from '@/components/posts/template-stories';
+import { InstagramEmbed } from '@/components/posts/instagram-embed';
 
 /**
  * `/[locale]/t/[slug]` — one template, which is also where it is made (docs/TEMPLATES-IA.md §2).
@@ -134,9 +138,12 @@ export default async function TemplatePage({ params }: RouteParams) {
   const recipe = publicRecipeText(await cachedPublicRecipe(card.id, { selfie: mr.selfieLabel, reference: mr.referenceLabel, step: mr.stepResultLabel, pet: dict.cast.photo.petTitle, partner: dict.cast.photo.partnerTitle }));
   // docs/CAST-CATEGORIES.md §3: what the make card asks for (selfie · pet · partner). Null = a pet or
   // couple template without a matching recipe — shown, but not offered for making.
-  const [makeInputs, storedKeyframes] = await Promise.all([
+  const blogEnabled = makerBlogOpen();
+  const [makeInputs, storedKeyframes, templateStories, originalInstagram] = await Promise.all([
     cachedMakeInputs(card.id, card.cast ?? 'solo'),
     card.medium === 'video' ? cachedPromptKeyframes(card.slug) : Promise.resolve(null),
+    blogEnabled ? cachedTemplateStories(card.id) : Promise.resolve([]),
+    blogEnabled ? cachedTemplateOriginalInstagram(card.id) : Promise.resolve(null),
   ]);
   // The column holds beats (the keyframe strip) and marks (docs/PERSONAL-STUDIO.md §3.4.4, T1a); a row without beats
   // keeps the default beats, as a row without keyframes always did.
@@ -640,6 +647,37 @@ export default async function TemplatePage({ params }: RouteParams) {
                 />
               </div>
             )}
+
+            {blogEnabled && templateStories.length > 0 ? (
+              <TemplateStories
+                stories={templateStories}
+                locale={locale}
+                heading={dict.makerBlog.templateStoriesHeading}
+                lede={dict.makerBlog.templateStoriesLede}
+              />
+            ) : null}
+
+            {blogEnabled && originalInstagram ? (
+              <section
+                data-template-original-instagram
+                className="mt-16 border-t border-[#09090B]/[0.08] pt-10"
+              >
+                <h2 className="font-display text-xl font-bold tracking-[-0.025em] break-keep text-[#09090B]">
+                  {dict.makerBlog.originalPostHeading}
+                </h2>
+                <div className="mt-5 max-w-detail">
+                  <InstagramEmbed
+                    url={originalInstagram.url}
+                    labels={{
+                      placeholderLabel: dict.makerBlog.instagramPlaceholderLabel,
+                      showEmbed: dict.makerBlog.instagramShowEmbed,
+                      openExternal: dict.makerBlog.instagramOpenExternal,
+                      fallback: dict.makerBlog.instagramFallback,
+                    }}
+                  />
+                </div>
+              </section>
+            ) : null}
 
             {await TemplateRatings({templateId:card.id,copy:dict.community})}
             <RelatedPrompts

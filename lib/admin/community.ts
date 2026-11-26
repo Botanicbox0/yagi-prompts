@@ -7,6 +7,9 @@ import {
 import { loadSocialQueue } from "@/lib/influencers/admin";
 import { lastSocialWorker } from "@/lib/influencers/worker";
 import { loadReviewEntries, type ReviewEntry } from "@/lib/recipes/review";
+import { makerBlogOpen } from "@/lib/posts/flag";
+import { postsReady } from "@/lib/posts/repo";
+import type { PostStatus } from "@/lib/posts/schema";
 
 /**
  * `/admin/community` read model (docs/ADMIN.md §9 slice d, ADMIN-AUDIT-2026-11-03 C2 & M4).
@@ -105,6 +108,19 @@ export type AdminSocialQueue = Awaited<ReturnType<typeof loadSocialQueue>>;
 export type AdminSocialWorker = Awaited<ReturnType<typeof lastSocialWorker>>;
 export type AdminApplicationQueue = Awaited<ReturnType<typeof loadApplicationQueue>>;
 
+export interface PlatformPostRow {
+  id: string;
+  user_id: string;
+  handle: string | null;
+  slug: string;
+  title: string;
+  status: PostStatus;
+  hidden_reason: string | null;
+  block_count: number;
+  published_at: string | null;
+  updated_at: string;
+}
+
 export type AdminCommunityBoard =
   | {
       ready: false;
@@ -123,6 +139,7 @@ export type AdminCommunityBoard =
       creators: PlatformCreatorRow[];
       offers: PlatformOfferRow[];
       history: PlatformAuditRow[];
+      posts?: PlatformPostRow[];
       applications: AdminApplicationQueue;
       notes: Map<string, string | null>;
       recipes: Map<string, ReviewEntry>;
@@ -170,10 +187,24 @@ export async function loadAdminCommunity(sql: SqlRunner | null): Promise<AdminCo
   ]);
 
   const formatIds = formats.rows.map((f) => f.id);
-  const [applications, notes, recipes] = await Promise.all([
+  const [applications, notes, recipes, posts] = await Promise.all([
     loadApplicationQueue(sql),
     loadFormatReviewNotes(sql, formatIds),
     loadReviewEntries(sql, formatIds),
+    makerBlogOpen() && (await postsReady(sql))
+      ? sql
+          .query<PlatformPostRow>(
+            `select cp.id, cp.user_id, pc.handle, cp.slug, cp.title, cp.status, cp.hidden_reason,
+                    coalesce(jsonb_array_length(cp.blocks), 0)::int as block_count,
+                    cp.published_at::text as published_at, cp.updated_at::text as updated_at
+               from creator_posts cp
+               left join platform_creators pc on pc.user_id = cp.user_id
+              where cp.status <> 'draft'
+              order by cp.updated_at desc
+              limit 40`,
+          )
+          .then((result) => result.rows)
+      : Promise.resolve([] as PlatformPostRow[]),
   ]);
 
   const openApps = applications ? applications.open.length : 0;
@@ -199,6 +230,7 @@ export async function loadAdminCommunity(sql: SqlRunner | null): Promise<AdminCo
     creators: creators.rows,
     offers: offers.rows,
     history: history.rows,
+    posts,
     applications,
     notes,
     recipes,

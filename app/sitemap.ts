@@ -4,6 +4,8 @@ import { getPromptCatalog } from '@/lib/prompts/public-catalog';
 import { buildSitemap } from '@/lib/seo/sitemap';
 import { siteUrl } from '@/lib/seo/site-url';
 import { creatorProgramOpen } from '@/lib/creator-platform/links';
+import { makerBlogOpen } from '@/lib/posts/flag';
+import { cachedSitemapMakerPosts } from '@/lib/posts/cached-public';
 
 /**
  * `/sitemap.xml` — PLAN §8 M5.
@@ -25,12 +27,17 @@ import { creatorProgramOpen } from '@/lib/creator-platform/links';
 export const revalidate = 3600;
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const [catalog, templates] = await Promise.all([getPublicCatalog(), getPromptCatalog()]);
+  const [catalog, templates, makerPosts] = await Promise.all([
+    getPublicCatalog(),
+    getPromptCatalog(),
+    makerBlogOpen() ? cachedSitemapMakerPosts() : Promise.resolve([]),
+  ]);
   return buildSitemap({
     origin: siteUrl(),
     cards: catalog.cards,
     templates: [...templates.video, ...templates.image],
     makers: templates.makers ?? [],
+    makerPosts,
     pageModifiedAt: { '/brands': '2026-10-08T00:00:00+09:00' },
     includeCreatorProgram: creatorProgramOpen(),
   });

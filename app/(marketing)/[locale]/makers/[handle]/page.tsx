@@ -25,6 +25,9 @@ import { WorksGallery } from '@/components/makers/works-gallery';
 import { MakerRecipeHub } from '@/components/makers/recipe-hub';
 import { templateLookOpen } from '@/lib/flags';
 import { TemplateLookIsland } from '@/components/template-look/look-island';
+import { makerBlogOpen } from '@/lib/posts/flag';
+import { cachedPublicPostCount } from '@/lib/posts/cached-public';
+import { ProfileTabs } from '@/components/posts/profile-tabs';
 
 /**
  * `/[locale]/makers/[handle]` — an AI creative's public page (docs/PLATFORM-2.0.md §7.5·§20).
@@ -130,7 +133,11 @@ export default async function MakerPage({ params }: RouteParams) {
   const labels = promptLabels(dict);
   const useCaseLabels = Object.fromEntries(USE_CASES.map((value) => [value, useCaseLabel(dict, value)]));
   const { maker, cards } = found;
-  const works = await cachedPublicWorks(maker.handle);
+  const blogEnabled = makerBlogOpen();
+  const [works, postCount] = await Promise.all([
+    cachedPublicWorks(maker.handle),
+    blogEnabled ? cachedPublicPostCount(maker.handle) : Promise.resolve(0),
+  ]);
   const place = placeOf(maker.country, maker.city, locale);
   const origin = siteUrl();
   const shortUrl = `${origin}${makerShortPath(maker.handle)}`;
@@ -211,6 +218,21 @@ export default async function MakerPage({ params }: RouteParams) {
             <MakerRecipeHub handle={maker.handle} openRecipes={maker.openRecipeCount ?? 0} copy={t} />
           </div>
 
+          {blogEnabled && postCount > 0 ? (
+            <ProfileTabs
+              locale={locale}
+              handle={maker.handle}
+              active="profile"
+              hasWorks={works.length > 0}
+              postCount={postCount}
+              labels={{
+                templates: dict.makerBlog.tabTemplates,
+                blog: dict.makerBlog.tabBlog,
+                works: dict.makerBlog.tabWorks,
+              }}
+            />
+          ) : null}
+
           {cards.length === 0 ? (
             <p data-maker-empty className="mt-14 border-t border-hairline pt-8 text-sm text-black/60">{t.empty}</p>
           ) : (
@@ -229,7 +251,11 @@ export default async function MakerPage({ params }: RouteParams) {
           )}
 
           {works.length > 0 && (
-            <section data-creative-works-section className="mt-16">
+            <section
+              {...(blogEnabled && postCount > 0 ? { id: 'works' } : {})}
+              data-creative-works-section
+              className={blogEnabled && postCount > 0 ? 'mt-16 scroll-mt-24' : 'mt-16'}
+            >
               <div className="mb-6 flex items-baseline justify-between gap-4">
                 <h2 className="font-display text-[clamp(1.4rem,2.6vw,2rem)] leading-[0.95] font-black uppercase">{t.worksHeading}</h2>
                 <span className="font-mono text-xs text-black/50">{works.length}</span>

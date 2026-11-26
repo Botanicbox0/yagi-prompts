@@ -340,6 +340,8 @@ const NON_WRITER_OPS: readonly string[] = [
   'playbook.archive',
   'playbook.create',
   'policy.update',
+  'post.hide',
+  'post.restore',
   'prompt.announce',
   'prompt.approve',
   'prompt.archive',
