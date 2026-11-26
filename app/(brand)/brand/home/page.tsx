@@ -12,6 +12,7 @@ import { roomsOpenFor } from '@/components/brand-rooms/room/visibility';
 import type { RoomAlertItem } from '@/components/brand-rooms/seams';
 import { loadRoomSummary } from '@/lib/brand-rooms/messages';
 import { loadRoomOverview, roomUnreadCounts } from '@/lib/brand-rooms/overview';
+import { loadHomeAnnouncement } from '@/lib/brand-news/service';
 import { brandProjectSpineOpen, memberSeesBrandProjects } from '@/lib/brand-studio/brand-projects';
 import { studioEnv } from '@/lib/brand-studio/env';
 import { createStudioMediaStore } from '@/lib/brand-studio/media-store';
@@ -155,13 +156,14 @@ export default async function BrandWorkspaceHome({
 
   const readOnly = choice.role === 'viewer' || access.staff;
   const media = createStudioMediaStore();
+  const studioLocale: 'ko' | 'en' = locale === 'en' ? 'en' : 'ko';
   const spineCardsPromise = memberSeesBrandProjects({ staff: access.staff, role: choice.role })
     ? brandProjectSpineOpen(sql, choice.id)
         .then((open) => (open ? studioRuntimeDeps(sql).then((deps) => loadProjectCards(deps, viewer, choice.id)) : null))
         .catch(() => null)
     : Promise.resolve(null);
   // Every read is scoped to the brand the guard above resolved for this account.
-  const [allowance, jobs, summary, workspace, spineCards] = await Promise.all([
+  const [allowance, jobs, summary, workspace, spineCards, news] = await Promise.all([
     loadAllowance(sql, choice.id, studioEnv()).catch(() => null),
     jobsOf(sql, choice.id, RECENT_JOBS)
       .then((rows) => viewsOf(sql, rows, media))
@@ -169,6 +171,7 @@ export default async function BrandWorkspaceHome({
     rooms ? loadRoomSummary({ sql }, viewer, choice.id).catch(() => null) : Promise.resolve(null),
     loadBrandWorkspace({ sql, verifiedEmail }, viewer, { organizationId: choice.id }).catch(() => ({ organizations: [], projects: [] })),
     spineCardsPromise,
+    loadHomeAnnouncement({ sql }, viewer, { organizationId: choice.id, mode, locale: studioLocale }).catch(() => null),
   ]);
   const spineHome: SpineHomeProps | undefined =
     spineCards && spineCards.ok
@@ -185,7 +188,6 @@ export default async function BrandWorkspaceHome({
         }).catch(() => null);
   const reviews: RoomAlertItem[] = summary && summary.ok ? (summary.alerts ?? []) : [];
   const activeProjects = workspace.projects.filter((p) => p.status === 'active').length;
-  const studioLocale: 'ko' | 'en' = locale === 'en' ? 'en' : 'ko';
   const dock = dict.brandStudio.dock;
   // R4: the refill fact beside the window (no statement unless the base cap is 0); a failed read keeps today's view.
   const allowanceForScreen = allowance
@@ -203,6 +205,7 @@ export default async function BrandWorkspaceHome({
     closedRequestDraft: dock.closedRequestDraft,
     closedRequestOrgFallback: dock.closedRequestOrgFallback,
     billingCustomer: dict.brandBilling.customer,
+    ...(news ? { brandNews: dict.brandNews } : {}),
   };
   const sharedProps = {
     organizationId: choice.id,
@@ -220,6 +223,7 @@ export default async function BrandWorkspaceHome({
     checklist,
     canOpenBilling: billingChecklistLinkVisible(choice, viewer.isAdmin),
     planCatalogue: billingPlanCatalogue(),
+    ...(news ? { news } : {}),
   };
 
   return spineHome ? (
