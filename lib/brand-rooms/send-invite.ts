@@ -495,7 +495,12 @@ const LEFTOVER_INVITATIONS = 5;
  * release; with leftovers, it takes the organization row `for key share` first (the lock order of every write here).
  */
 export async function deliverLeftovers(sql: SqlRunner, organizationId: string, userId: string, env: Env = process.env): Promise<number> {
-  await sql.query('savepoint brand_send_invite_leftovers');
+  try {
+    await sql.query('savepoint brand_send_invite_leftovers');
+  } catch {
+    // Not inside a transaction (no reader of today calls it that way): deliver nothing rather than write unguarded.
+    return 0;
+  }
   try {
     const invites = (
       await sql.query<{ id: string }>(

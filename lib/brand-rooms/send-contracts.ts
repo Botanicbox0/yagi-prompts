@@ -266,7 +266,8 @@ export interface SendInviteOutcome {
   /**
    * `member`: an active member of this organization, named like any mention (`memberId`; no invitation).
    * `invited`: a new workspace invitation (role viewer, 7 days) was issued and this line waits for it.
-   * `reused`: a live invitation to this organization already existed; this line waits for it too (nothing new is sent).
+   * `reused`: a live organization VIEWER invitation the YAGI team did not issue already existed; this line waits for it
+   * too (nothing new is sent). An address with any other live invitation refuses the request (`invite_refused`).
    */
   result: 'member' | 'invited' | 'reused';
   memberId: string | null;
@@ -286,8 +287,9 @@ export interface SendLookup {
   email: string;
   /**
    * `member`: an active member of this organization (name them: `member` is filled). `invitable`: the caller may invite
-   * it (owner or editor, 초대하고 보내기 open). `not_allowed`: the caller may not invite here (a viewer, whatever the address,
-   * a member's included; or the switch is closed); nothing is looked up.
+   * it (owner or editor). `not_allowed`: the caller may not invite it here: a viewer, whatever the address (nothing is
+   * looked up); or the address has a live invitation that is not 보내기's to reuse, or (for an editor) belongs to someone
+   * an owner removed; one answer for all. While 초대하고 보내기 is closed the operation does not exist (`invalid`).
    */
   status: 'member' | 'invitable' | 'not_allowed';
   member: { id: string; name: string } | null;

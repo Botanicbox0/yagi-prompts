@@ -43,8 +43,12 @@ create table if not exists brand_room_pending_mentions (
   constraint brand_room_pending_mentions_message_fk foreign key (message_id, organization_id)
     references brand_room_messages (id, organization_id) on delete cascade
 );
+-- A copy of this table made from an earlier text of this file (a local database) gets the column too.
+alter table brand_room_pending_mentions add column if not exists created_invite boolean not null default false;
 -- Acceptance reads one invitation's rows; the invitation's cascade finds them here too.
 create index if not exists idx_brand_room_pending_mentions_invite on brand_room_pending_mentions (invite_id);
+-- A member's leftover check on each inbox and bell read starts from the organization.
+create index if not exists idx_brand_room_pending_mentions_org on brand_room_pending_mentions (organization_id, invite_id);
 
 -- What a foreign key cannot say. Checked on every insert and update.
 create or replace function brand_room_pending_mentions_guard() returns trigger language plpgsql set search_path = public, pg_temp as $$

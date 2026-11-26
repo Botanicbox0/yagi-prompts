@@ -86,6 +86,10 @@ describe('0202 — core', () => {
     await insertRow(root, invite, org);
     await db.exec(readFileSync(join(MIGRATIONS_DIR, CORE), 'utf8'));
     expect(await rows()).toBe(1);
+    // A copy made from this file's earlier text (no created_invite column) gets the column when it runs again.
+    await db.exec('alter table brand_room_pending_mentions drop column created_invite');
+    await db.exec(readFileSync(join(MIGRATIONS_DIR, CORE), 'utf8'));
+    expect((await db.query<{ created_invite: boolean }>('select created_invite from brand_room_pending_mentions')).rows).toEqual([{ created_invite: false }]);
     const statements = readFileSync(join(MIGRATIONS_DIR, CORE), 'utf8').replace(/--[^\n]*/g, '');
     // Only the new table (and its trigger and function) is created or altered; no existing table, column or check.
     for (const altered of statements.match(/alter\s+table\s+(\w+)/gi) ?? []) expect(altered.split(/\s+/).pop()).toBe('brand_room_pending_mentions');
