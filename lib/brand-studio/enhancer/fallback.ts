@@ -22,14 +22,24 @@ function sentence(text: string): string {
   return /[.!?。…)"”'’]$/.test(t) ? t : `${t}.`;
 }
 
-function referenceLines(input: EnhanceInput, bound: readonly BoundReference[], skipVideo = false): string[] {
+function referenceLines(
+  input: EnhanceInput,
+  bound: readonly BoundReference[],
+  skipVideo = false,
+  env: Record<string, string | undefined> = process.env,
+): string[] {
   return bound
     .filter((b) => b.token && !(skipVideo && b.ref.kind === 'video'))
-    .map((b) => referenceClause(input.profile, b));
+    .map((b) => referenceClause(input.profile, b, env));
 }
 
-function imagePrompt(input: EnhanceInput, binding: Binding, request: string): string {
-  const refs = referenceLines(input, binding.bound);
+function imagePrompt(
+  input: EnhanceInput,
+  binding: Binding,
+  request: string,
+  env: Record<string, string | undefined> = process.env,
+): string {
+  const refs = referenceLines(input, binding.bound, false, env);
   if (input.kind === 'region_edit') {
     const target = binding.editTarget ?? 'image 1';
     const wide = input.regionWindow;
@@ -55,13 +65,18 @@ function framesLines(binding: Binding): string[] {
   return lines;
 }
 
-function videoPrompt(input: EnhanceInput, binding: Binding, request: string): string {
+function videoPrompt(
+  input: EnhanceInput,
+  binding: Binding,
+  request: string,
+  env: Record<string, string | undefined> = process.env,
+): string {
   const video = input.video;
   const audio = audioLine(video?.audio ?? 'native');
   const seconds = effectiveSeconds(input.kind, video);
   const lines: string[] = [];
 
-  if (isBlueprint(input)) return composeBlueprintPrompt(input, binding, request, seconds);
+  if (isBlueprint(input)) return composeBlueprintPrompt(input, binding, request, seconds, env);
   if (input.kind === 'video_remix') {
     const ref = binding.bound.find((b) => b.ref.kind === 'video')?.token ?? '@Video1';
     const change = mapCustomerMentions(video?.change?.trim() ?? '', binding.bound);
@@ -69,12 +84,12 @@ function videoPrompt(input: EnhanceInput, binding: Binding, request: string): st
       const what = [change, request].filter(Boolean).map(sentence).join(' ');
       lines.push(`In ${ref}, change only the following: ${what || 'nothing else.'}`);
       lines.push('Everything else stays as it is.');
-      lines.push(...referenceLines(input, binding.bound, true));
+      lines.push(...referenceLines(input, binding.bound, true, env));
     } else {
       const kept = keepPhrase(video?.keep) || 'its overall structure';
       lines.push(`Follow ${ref} for ${kept}.`);
       if (change) lines.push(`Change: ${sentence(change)}`);
-      lines.push(...referenceLines(input, binding.bound, true));
+      lines.push(...referenceLines(input, binding.bound, true, env));
       if (request) lines.push(sentence(request));
       const keep = new Set(video?.keep ?? []);
       const shots = planShots(seconds, video);
@@ -92,7 +107,7 @@ function videoPrompt(input: EnhanceInput, binding: Binding, request: string): st
       }
     }
   } else {
-    lines.push(...referenceLines(input, binding.bound));
+    lines.push(...referenceLines(input, binding.bound, false, env));
     lines.push(sentence(request));
     lines.push(...framesLines(binding));
   }
@@ -123,7 +138,10 @@ function markWords(input: EnhanceInput): MarkWords[] {
   return Array.from({ length: words.length }, (_, i) => words[i] ?? {});
 }
 
-export function composeFallbackPrompt(input: EnhanceInput): EnhanceResult {
+export function composeFallbackPrompt(
+  input: EnhanceInput,
+  options: { env?: Record<string, string | undefined> } = {},
+): EnhanceResult {
   const binding = bindReferences(input);
   // A revision's ①②③ become what each spot is on; the video model never reads the signs. The answer to
   // the one question asked about it follows the request, so what was meant reaches the model too.
@@ -133,6 +151,6 @@ export function composeFallbackPrompt(input: EnhanceInput): EnhanceResult {
   if (input.revision?.mode === 'reshoot' && input.profile === 'seedance') {
     return { prompt: reshootPrompt(input, binding, request), notes: FALLBACK_NOTES[input.locale], source: 'fallback' };
   }
-  const prompt = input.profile === 'seedance' ? videoPrompt(input, binding, request) : imagePrompt(input, binding, request);
+  const prompt = input.profile === 'seedance' ? videoPrompt(input, binding, request, options.env) : imagePrompt(input, binding, request, options.env);
   return { prompt, notes: FALLBACK_NOTES[input.locale], source: 'fallback' };
 }

@@ -1,0 +1,28 @@
+{
+  "id": "01-person-product-editorial",
+  "label": "Person + product editorial brief",
+  "intent": "slot_fill",
+  "directorRequests": [
+    {
+      "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-4-hydrogen:generateContent",
+      "systemText": "You are a veteran Film Director writing a production-ready Seedance 2.5 video prompt in English.\nMode: SLOT-FILL. Preserve the user's exact story beats, subject actions, and spoken lines while filling missing Reference authority, Visual style (#Hex palette + lighting + skin/material texture), off-axis shot angles, explicit cut handoffs, and the Audio line.\n\nMandatory Seedance 2.5 Grammar & Quality Rules:\n1. OMIT all redundant boilerplate headers: never write \"Create a Seedance video\", aspect ratio (9:16, 16:9), resolution (480p, 1080p, 4K), FPS, or model names.\n2. Exact block order separated by line breaks:\n   - \"Reference authority:\" (when references are attached) locking identity, exact facial bone structure, wardrobe, and product geometry/labels to @Image 1 (and any additional @Image N tokens).\n   - \"Visual style:\" concrete #Hex color palette roles (shadow floor, primary surface/wardrobe, key/accent), motivated light source & grounded shadow floor, lens feel, and material texture.\n   - Anti-composite lighting: match ambient shadow floor and color spill across subject and environment — never pasted-on or flat front-lit.\n   - Anti-plastic skin: enforce natural skin texture faithful to @Image 1, zero plastic/waxy beauty-filter glare. NEVER write \"glass-skin\", \"poreless porcelain\", or \"dewy highlighter\" (causes upscaler boiling).\n   - Seconds-based timeline from 0.0s to 8.0s (\"0.0s–Xs: …\") with contiguous ranges, off-axis eyelines & camera angle alternation across cuts (18° / 45° / 90° / OTS — never repetitive flat passport front-stares), concrete camera start-to-end movement, and an explicit cut handoff at the end of every shot except the final shot (\"hard cut\", \"match cut on …\", or \"continuous\").\n   - Audio rule (Strict No-BGM Default): write ONE \"Audio:\" line specifying diegetic Foley, room ambience and requested dialogue only — no background music, no score, no musical instruments (music is layered cleanly in Sequence Rail post-production).\n3. Reference rule: bind only the attached @Image N / @Audio N tokens; invent no unattached tokens.\n4. Spoken dialogue only when the user's brief provides words; keep spoken lines verbatim in quotes. Never expose internal tool, provider, or infrastructure names.\nReturn JSON matching { \"prompt\": string, \"notes\": string } where \"notes\" is one concise sentence in the user's language.",
+      "userTexts": [
+        "{\"intent\":\"slot_fill\",\"request\":\"창가 테이블에서 여자가 천천히 @Image1 세럼 병을 들어 올리고 고개를 살짝 돌리는 패션 에디토리얼 룩북 장면\",\"change\":null,\"customerLanguage\":\"ko\",\"seconds\":8,\"audioMode\":\"on\",\"references\":[{\"token\":\"@Image 1\",\"role\":\"product\",\"label\":\"이미지 1\",\"take\":\"병 모양과 라벨\",\"avoid\":\"배경\",\"frame\":null}],\"mediaDigest\":null,\"shots\":null,\"brand\":{\"name\":\"Atelier North\",\"tone\":\"calm editorial\",\"palette\":[\"#14171C\",\"#E6DFD5\",\"#3875C5\"],\"rules\":[\"Keep bottle label upright and legible\"]},\"playbooks\":[]}"
+      ]
+    }
+  ],
+  "compiledResult": {
+    "prompt": "Reference authority: @Image 1 supplies only the serum bottle with its exact glass shape and label.\nVisual style: #14171C lifted shadow floor, #E6DFD5 warm limestone, #3875C5 cool accent; one soft window key light from the left.\n0.0s–4.0s: 18° three-quarter framing, the woman lifts @Image 1 from the stone table with a small weight shift and slow head turn; quiet breath. Hard cut.\n4.0s–8.0s: 45° close framing as sunlight catches the glass label and a hair strand moves gently.\nAudio: soft glass lift on stone and quiet room ambience — diegetic Foley, room ambience and requested dialogue only; no background music, no score, no musical instruments.",
+    "notes": "인물과 제품 참조를 기준으로 화면 빛과 컷 구성을 정리했어요.",
+    "source": "model",
+    "intent": "slot_fill",
+    "provider": "gemini-4-hydrogen",
+    "playbooksApplied": 0
+  },
+  "fallbackResult": {
+    "prompt": "Reference authority: lock identity, exact proportions, label geometry and surface details to @Image 1; maintain natural skin texture faithful to @Image 1, zero plastic/waxy beauty-filter glare.\nVisual style: palette anchored by #14171C shadow floor, #E6DFD5 primary surfaces, and #3875C5 key accents; motivated directional key light, match ambient shadow floor and color spill, never pasted-on or flat front-lit; organic lens roll-off and authentic material micro-texture. Natural skin texture faithful to @Image 1, zero plastic/waxy beauty-filter glare.\n0.0s–3.6s: 18° off-axis medium shot with natural off-axis eyeline — 창가 테이블에서 여자가 천천히 @Image1 세럼 병을 들어 올리고 고개를 살짝 돌리는 패션 에디토리얼 룩북 장면; camera glides in with gentle parallax. Hard cut.\n3.6s–6.2s: 45° three-quarter close-up — physical interaction continues with grounded weight and natural material response; subtle handheld tracking. Match cut on motion.\n6.2s–8.0s: OTS / 90° profile payoff — action completes cleanly and settles into a composed final frame; slow locked-off hold.\nAudio: diegetic Foley, room ambience and requested dialogue only — no background music, no score, no musical instruments.",
+    "notes": "요청하신 장면에 참조 기준, 조명·질감, 컷 전환과 현장음 규칙을 안전하게 적용했어요.",
+    "source": "fallback"
+  },
+  "profileVersion": "seedance@2026-11-15.1"
+}

@@ -1,0 +1,28 @@
+{
+  "id": "05-two-references",
+  "label": "Brief with two references (garment @Image 1 + person @Image 2)",
+  "intent": "expand",
+  "directorRequests": [
+    {
+      "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-4-hydrogen:generateContent",
+      "systemText": "You are a veteran Film Director writing a production-ready Seedance 2.5 video prompt in English.\nMode: EXPAND. Expand the user's brief into a complete, film-directed Seedance 2.5 sequence grounded in physical staging, motivated lighting, and cut rhythm.\n\nMandatory Seedance 2.5 Grammar & Quality Rules:\n1. OMIT all redundant boilerplate headers: never write \"Create a Seedance video\", aspect ratio (9:16, 16:9), resolution (480p, 1080p, 4K), FPS, or model names.\n2. Exact block order separated by line breaks:\n   - \"Reference authority:\" (when references are attached) locking identity, exact facial bone structure, wardrobe, and product geometry/labels to @Image 1 (and any additional @Image N tokens).\n   - \"Visual style:\" concrete #Hex color palette roles (shadow floor, primary surface/wardrobe, key/accent), motivated light source & grounded shadow floor, lens feel, and material texture.\n   - Anti-composite lighting: match ambient shadow floor and color spill across subject and environment — never pasted-on or flat front-lit.\n   - Anti-plastic skin: enforce natural skin texture faithful to @Image 1, zero plastic/waxy beauty-filter glare. NEVER write \"glass-skin\", \"poreless porcelain\", or \"dewy highlighter\" (causes upscaler boiling).\n   - Seconds-based timeline from 0.0s to 8.0s (\"0.0s–Xs: …\") with contiguous ranges, off-axis eyelines & camera angle alternation across cuts (18° / 45° / 90° / OTS — never repetitive flat passport front-stares), concrete camera start-to-end movement, and an explicit cut handoff at the end of every shot except the final shot (\"hard cut\", \"match cut on …\", or \"continuous\").\n   - Audio rule (Strict No-BGM Default): write ONE \"Audio:\" line specifying diegetic Foley, room ambience and requested dialogue only — no background music, no score, no musical instruments (music is layered cleanly in Sequence Rail post-production).\n3. Reference rule: bind only the attached @Image N / @Audio N tokens; invent no unattached tokens.\n4. Spoken dialogue only when the user's brief provides words; keep spoken lines verbatim in quotes. Never expose internal tool, provider, or infrastructure names.\nReturn JSON matching { \"prompt\": string, \"notes\": string } where \"notes\" is one concise sentence in the user's language.",
+      "userTexts": [
+        "{\"intent\":\"expand\",\"request\":\"@Image2 인물이 @Image1 코트 의상을 입고 대리석 로비를 천천히 걸어가는 패션 필름\",\"change\":null,\"customerLanguage\":\"ko\",\"seconds\":8,\"audioMode\":\"on\",\"references\":[{\"token\":\"@Image 1\",\"role\":\"product\",\"label\":\"이미지 1\",\"take\":\"아이보리 코트 의상 실루엣과 소재만 유지\",\"avoid\":\"배경\",\"frame\":null},{\"token\":\"@Image 2\",\"role\":\"person\",\"label\":\"이미지 2\",\"take\":\"얼굴과 헤어만 유지\",\"avoid\":\"원본 상의와 배경\",\"frame\":null}],\"mediaDigest\":null,\"shots\":null,\"brand\":null,\"playbooks\":[]}"
+      ]
+    }
+  ],
+  "compiledResult": {
+    "prompt": "Reference authority: @Image 2 supplies only the person face and hair; @Image 1 supplies only the tailored coat silhouette and wool texture.\nVisual style: #14171C shadow floor, #DFD8CD marble lobby, #3875C5 cool reflection; soft overhead skylight.\n0.0s–4.0s: 18° medium framing as she walks slowly across the marble wearing @Image 1 with calm off-axis gaze. Hard cut.\n4.0s–8.0s: 45° three-quarter framing, she pauses near the column with a slow head turn and subtle breath.\nAudio: quiet heels on marble and soft room ambience — diegetic Foley, room ambience and requested dialogue only; no background music, no score, no musical instruments.",
+    "notes": "의상과 인물 참조 역할을 분리해 룩북 동선을 구성했어요.",
+    "source": "model",
+    "intent": "expand",
+    "provider": "gemini-4-hydrogen",
+    "playbooksApplied": 0
+  },
+  "fallbackResult": {
+    "prompt": "Reference authority: lock identity, exact proportions, label geometry and surface details to @Image 1, @Image 2; maintain natural skin texture faithful to @Image 1, zero plastic/waxy beauty-filter glare.\nVisual style: palette anchored by #1B1F24 shadow floor, #D8CFC2 primary surfaces, and #3875C5 key accents; motivated directional key light, match ambient shadow floor and color spill, never pasted-on or flat front-lit; organic lens roll-off and authentic material micro-texture. Natural skin texture faithful to @Image 1, zero plastic/waxy beauty-filter glare.\n0.0s–3.6s: 18° off-axis medium shot with natural off-axis eyeline — @Image2 인물이 @Image1 코트 의상을 입고 대리석 로비를 천천히 걸어가는 패션 필름; camera glides in with gentle parallax. Hard cut.\n3.6s–6.2s: 45° three-quarter close-up — physical interaction continues with grounded weight and natural material response; subtle handheld tracking. Match cut on motion.\n6.2s–8.0s: OTS / 90° profile payoff — action completes cleanly and settles into a composed final frame; slow locked-off hold.\nAudio: diegetic Foley, room ambience and requested dialogue only — no background music, no score, no musical instruments.",
+    "notes": "요청하신 장면에 참조 기준, 조명·질감, 컷 전환과 현장음 규칙을 안전하게 적용했어요.",
+    "source": "fallback"
+  },
+  "profileVersion": "seedance@2026-11-15.1"
+}

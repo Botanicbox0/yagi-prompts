@@ -4,6 +4,7 @@
  * against them so a required line is never missing.
  */
 import type { StudioAudioMode, StudioKeepKey } from '@/lib/brand-studio/contracts';
+import { brandSeedanceRulesV2Open } from '@/lib/flags';
 import type { BoundReference } from './references';
 import type { EnhanceInput, EnhanceVideo } from './types';
 
@@ -31,7 +32,7 @@ function clean(note: string | undefined): string | null {
 }
 
 /** One sentence on what a reference supplies and what it does not. English, model syntax. */
-export function referenceClause(profile: EnhanceInput['profile'], b: BoundReference): string {
+export function referenceClause(profile: EnhanceInput['profile'], b: BoundReference, env: Record<string, string | undefined> = process.env): string {
   const t = b.token ?? b.name;
   const take = clean(b.ref.use);
   const leave = clean(b.ref.avoid);
@@ -51,6 +52,11 @@ export function referenceClause(profile: EnhanceInput['profile'], b: BoundRefere
             : `Use ${t} only for the product and keep the exact label, proportions and colours of ${t}`;
         break;
       case 'person':
+        if (profile === 'seedance' && brandSeedanceRulesV2Open(env)) {
+          const sleeveTarget = t.replace(/^@Image(\d+)$/i, '@Image $1');
+          base = `${t} supplies only the person's face and hair, not the background, lighting or clothing; ignore any wide casual top/sleeve volume from ${sleeveTarget}`;
+          break;
+        }
         base = `${profile === 'seedance' ? `${t} supplies` : `Use ${t} for`} only the person's face, hair and build, not the background, lighting or clothing`;
         break;
       case 'logo':

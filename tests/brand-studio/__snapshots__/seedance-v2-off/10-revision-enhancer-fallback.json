@@ -1,0 +1,12 @@
+{
+  "editFallback": {
+    "prompt": "In @Video1, change only the following: @Image1 인물의 표정은 두고 병 라벨만 또렷하게.\nEverything else stays as it is.\n@Image1 supplies only the person's face, hair and build, not the background, lighting or clothing; take from it: 얼굴 유지; do not take: 원본 옷.\n@Image2 supplies only the product: keep its exact shape, label, proportions and colours in every shot; take from it: 라벨 geometry.\nAudio: no music, only location sound and effects. No background music, score, melody or beat.",
+    "notes": "입력하신 문장에 참조 표기와 기본 지시만 더해 보냈어요.",
+    "source": "fallback"
+  },
+  "reshootFallback": {
+    "prompt": "Reference authority: @Image1 supplies only the person.\n0.0–6.0s: she stands beside stone.\nAudio: soft room tone.\n\n배경을 밝은 석재로.\n@Image1 인물 클로즈업 비중을 조금 늘려 줘.",
+    "notes": "입력하신 문장에 참조 표기와 기본 지시만 더해 보냈어요.",
+    "source": "fallback"
+  }
+}

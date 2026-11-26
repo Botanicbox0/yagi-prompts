@@ -11,7 +11,7 @@ import { CORE_HEADER, coreBlock } from './core';
 import { GPT_IMAGE_26_BLOCK, GPT_IMAGE_HEADER, GPT_IMAGE_MARKUP_RULE, GPT_IMAGE_PROFILE } from './gpt-image';
 import type { ModelBlock, ProfileHeader } from './meta';
 import { NANO_BANANA_21_BLOCK, NANO_BANANA_HEADER, NANO_BANANA_PRO_BLOCK, NANO_BANANA_PROFILE } from './nano-banana';
-import { SEEDANCE_HEADER, SEEDANCE_PROFILE } from './seedance';
+import { SEEDANCE_HEADER, seedanceHeader, SEEDANCE_PROFILE, seedanceProfile } from './seedance';
 import { SEEDREAM_HEADER, SEEDREAM_PROFILE } from './seedream';
 import { planSkin, skinRules, type SkinPlan, type SkinVariant } from './skin';
 import { taskBlock } from './tasks';
@@ -43,8 +43,8 @@ export const MODEL_BLOCKS: Readonly<Record<string, ModelBlock>> = {
 };
 
 /** `seedream@2026-11-19.1` or `nano-banana@2026-11-19.1+nano-banana-2.1@2026-11-19.1`: what a job records. */
-export function profileVersionOf(profile: StudioPromptProfile, model?: string | null): string {
-  const family = PROFILE_HEADERS[profile];
+export function profileVersionOf(profile: StudioPromptProfile, model?: string | null, env: Record<string, string | undefined> = process.env): string {
+  const family = profile === 'seedance' ? seedanceHeader(env) : PROFILE_HEADERS[profile];
   const own = model ? MODEL_BLOCKS[model] : undefined;
   return own ? `${family.id}@${family.version}+${own.header.id}@${own.header.version}` : `${family.id}@${family.version}`;
 }
@@ -80,6 +80,8 @@ export interface SystemOptions {
    * shot table) is not written into these rules; they point at the user turn, which carries it.
    */
   shotsInUserTurn?: boolean;
+  /** Runtime env override so switched Seedance v2 rules follow per-call `deps.env` (defaults to `process.env`). */
+  env?: Record<string, string | undefined>;
 }
 
 /** The people rules this run gets, and the plan they come from (also recorded on the job). */
@@ -103,7 +105,8 @@ export function buildSystemInstruction(
   options: SystemOptions = {},
 ): string {
   const wide = input.kind === 'region_edit' && Boolean(input.regionWindow);
-  const profileBlock = input.kind === 'region_edit' ? regionEditProfileBlock(input.profile, wide) : PROFILE_BLOCKS[input.profile];
+  const baseBlock = input.profile === 'seedance' ? seedanceProfile(options.env) : PROFILE_BLOCKS[input.profile];
+  const profileBlock = input.kind === 'region_edit' ? regionEditProfileBlock(input.profile, wide) : baseBlock;
   const own = input.kind !== 'region_edit' && input.model ? MODEL_BLOCKS[input.model]?.text : undefined;
   const markup = options.markup && input.model?.startsWith('gpt-image-2.6') ? GPT_IMAGE_MARKUP_RULE : '';
   const skin = skinFor(input, binding, options.skinVariant).text;

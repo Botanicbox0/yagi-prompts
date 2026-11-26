@@ -30,6 +30,7 @@ import { composeFallbackPrompt, effectiveSeconds, enhancePrompt } from '@/lib/br
 import { blueprintShots, isBlueprint } from '@/lib/brand-studio/enhancer/blueprint';
 import { callGeminiJson, inlinePart, studioGeminiConfig, type GeminiPart } from '@/lib/brand-studio/enhancer/gemini';
 import { planShots } from '@/lib/brand-studio/enhancer/lines';
+import { enhanceMeta } from '@/lib/brand-studio/enhancer/meta';
 import { bindReferences, mapCustomerMentions, type Binding } from '@/lib/brand-studio/enhancer/references';
 import {
   cleanNotes,
@@ -40,8 +41,18 @@ import {
   tidyPrompt,
 } from '@/lib/brand-studio/enhancer/schema';
 import type { EnhanceInput, EnhanceResult } from '@/lib/brand-studio/enhancer/types';
+import { brandSeedanceRulesV2Open } from '@/lib/flags';
 import { createMediaAnalyzer, DIRECTOR_THUMBS_MAX, resolveDirectorProvider } from './analyzer';
 import { loadDirectorPlaybooks, playbookRuleLines } from './playbooks';
+import {
+  buildSeedanceDirectorSystemInstructionV2,
+  composeDirectorFallbackPromptV2,
+  directorAllowV2,
+  hasPersonInDirectorScene,
+  isGarmentReference,
+  scrubSeedanceAntiPatternsV2,
+  SEEDANCE_25_PROMPT_CHARS,
+} from './rules-v2';
 import type {
   DirectorAudioMode,
   DirectorCompileDeps,
@@ -319,7 +330,14 @@ export function buildSeedanceDirectorSystemInstruction(options: {
   explicitMusic: boolean;
   hasImageRefs: boolean;
   hasVideoRef: boolean;
+  rulesV2?: boolean;
+  hasPerson?: boolean;
+  personTokens?: readonly string[];
+  hasSeparateGarmentRef?: boolean;
 }): string {
+  if (options.rulesV2) {
+    return buildSeedanceDirectorSystemInstructionV2(options);
+  }
   const modeGuidance =
     options.intent === 'slot_fill'
       ? `Mode: SLOT-FILL. Preserve the user's exact story beats, subject actions, and spoken lines while filling missing Reference authority, Visual style (#Hex palette + lighting + skin/material texture), off-axis shot angles, explicit cut handoffs, and the Audio line.`
@@ -410,10 +428,12 @@ export function composeDirectorFallbackPrompt(
   options: {
     analysis?: MediaAnalysisDigest | null;
     playbooks?: readonly DirectorPlaybookRule[];
+    env?: Record<string, string | undefined>;
   } = {},
 ): EnhanceResult {
   const playbookLines = playbookRuleLines(options.playbooks ?? []);
   const enhanceInput = toEnhanceInput(input, playbookLines);
+  const rulesV2 = brandSeedanceRulesV2Open(options.env);
 
   if (enhanceInput.profile !== 'seedance') {
     return composeFallbackPrompt(enhanceInput);
@@ -421,7 +441,8 @@ export function composeDirectorFallbackPrompt(
 
   // A new version of a clip keeps the prompt it was made from: the enhancer's revision fallback, not a new direction.
   if (enhanceInput.revision) {
-    return finishRevisionPrompt(composeFallbackPrompt(revisionEnhanceInput(enhanceInput)), input);
+    const revised = finishRevisionPrompt(composeFallbackPrompt(revisionEnhanceInput(enhanceInput), { env: options.env }), input);
+    return rulesV2 ? { ...revised, meta: enhanceMeta(enhanceInput, 'fallback', { env: options.env }) } : revised;
   }
 
   const binding = bindReferences(enhanceInput);
@@ -430,6 +451,31 @@ export function composeDirectorFallbackPrompt(
   const rawRequest = mapCustomerMentions(enhanceInput.prompt.trim(), binding.bound);
   const rawChange = mapCustomerMentions(enhanceInput.video?.change?.trim() ?? '', binding.bound);
   const userText = `${enhanceInput.prompt}\n${enhanceInput.video?.change ?? ''}`;
+
+  if (rulesV2) {
+    const plannedV2 = blueprint
+      ? blueprintShots(seconds, enhanceInput.video)
+      : enhanceInput.kind === 'video_remix'
+        ? planShots(seconds, enhanceInput.video)
+        : [];
+    return composeDirectorFallbackPromptV2({
+      enhanceInput,
+      binding,
+      blueprint,
+      seconds,
+      rawRequest,
+      rawChange,
+      userText,
+      playbookLines,
+      planned: plannedV2,
+      analysis: options.analysis,
+      enforceAudio: enforceDirectorAudioPolicy,
+      audioMode: input.video?.audio ?? 'on',
+      locale: input.locale,
+      notes: DIRECTOR_FALLBACK_NOTES[input.locale],
+      env: options.env,
+    });
+  }
 
   const hexes =
     options.analysis?.paletteHex && options.analysis.paletteHex.length >= 2
@@ -606,6 +652,7 @@ export class DefaultPromptCompiler implements PromptCompiler {
     const playbookLines = playbookRuleLines(playbooks);
     const enhanceInput = toEnhanceInput(input, playbookLines);
     const binding = bindReferences(enhanceInput);
+    const rulesV2 = brandSeedanceRulesV2Open(deps.env);
 
     // 0. A new version of a generated clip: written from the clip's own history, never re-directed
     //    (a request such as "make the bottle green" is not a scene to direct). See `revisionEnhanceInput`.
@@ -669,9 +716,17 @@ export class DefaultPromptCompiler implements PromptCompiler {
       } catch {
         // ignore logger errors
       }
-      const fb = composeDirectorFallbackPrompt(input, { analysis, playbooks });
+      const fb = composeDirectorFallbackPrompt(input, { analysis, playbooks, env: deps.env });
       return {
         ...fb,
+        ...(rulesV2
+          ? {
+              meta: {
+                ...(fb.meta ?? enhanceMeta(enhanceInput, 'fallback', { env: deps.env })),
+                fallbackReason: reason,
+              },
+            }
+          : {}),
         intent,
         provider,
         analysis,
@@ -693,6 +748,11 @@ export class DefaultPromptCompiler implements PromptCompiler {
     const explicitMusic =
       audioMode !== 'sfx' && audioMode !== 'ambient' && requestsExplicitMusicPerformance(userText);
 
+    const personTokens = rulesV2
+      ? binding.bound
+          .filter((b) => b.token && b.ref.kind === 'image' && b.ref.role === 'person')
+          .map((b) => spacedSeedanceToken(b.token)!)
+      : [];
     const system = buildSeedanceDirectorSystemInstruction({
       intent,
       seconds,
@@ -701,6 +761,14 @@ export class DefaultPromptCompiler implements PromptCompiler {
       explicitMusic,
       hasImageRefs: binding.bound.some((b) => b.token && b.ref.kind === 'image'),
       hasVideoRef: !blueprint && binding.bound.some((b) => b.token && b.ref.kind === 'video'),
+      ...(rulesV2
+        ? {
+            rulesV2: true,
+            hasPerson: hasPersonInDirectorScene(input, analysis),
+            personTokens,
+            hasSeparateGarmentRef: binding.bound.some((b) => b.token && b.ref.kind === 'image' && isGarmentReference(b.ref)),
+          }
+        : {}),
     });
 
     const plannedShots = blueprint
@@ -757,11 +825,15 @@ export class DefaultPromptCompiler implements PromptCompiler {
       if (!parsed.success) return fallback('bad_shape');
 
       let cleaned = tidyPrompt(parsed.data.prompt, userText);
-      cleaned = scrubSeedanceAntiPatterns(cleaned, userText);
+      cleaned = rulesV2
+        ? scrubSeedanceAntiPatternsV2(cleaned, userText, stripRedundantVideoHeaders)
+        : scrubSeedanceAntiPatterns(cleaned, userText);
       if (cleaned.length < 20) return fallback('too_short');
+      if (rulesV2 && cleaned.length > SEEDANCE_25_PROMPT_CHARS) return fallback('too_long');
       if (containsInternalTerm(cleaned, userText)) return fallback('internal_term');
 
       cleaned = enforceDirectorAudioPolicy(cleaned, audioMode, userText);
+      if (rulesV2 && cleaned.length > SEEDANCE_25_PROMPT_CHARS) return fallback('too_long');
 
       // A run with no image or video reference at all (start/end frames are image references, so they are
       // untouched): a token the model invented is refused by the bar and sent to the provider as is.
@@ -783,7 +855,18 @@ export class DefaultPromptCompiler implements PromptCompiler {
             enhanceInput.brand?.tone ?? '',
             ...(enhanceInput.brand?.rules ?? []),
           ],
-          allow: directorAllow(input, guard.system, analysis, playbooks),
+          allow: rulesV2
+            ? directorAllowV2(
+                input,
+                binding,
+                guard.system,
+                analysis,
+                playbooks,
+                composeDirectorFallbackPrompt,
+                DIRECTOR_NO_BGM_AUDIO_LINE,
+                deps.env,
+              )
+            : directorAllow(input, guard.system, analysis, playbooks),
           shapes: { prompt: { noMarkup: true }, notes: { maxChars: NOTES_MAX, oneSentence: true } },
         },
       );
@@ -793,6 +876,7 @@ export class DefaultPromptCompiler implements PromptCompiler {
         prompt: cleaned,
         notes: verdict.blocked.includes('notes') ? DIRECTOR_MODEL_NOTES[input.locale] : notes,
         source: 'model',
+        ...(rulesV2 ? { meta: enhanceMeta(enhanceInput, 'model', { llmModel: config.model, env: deps.env }) } : {}),
         intent,
         provider,
         analysis,

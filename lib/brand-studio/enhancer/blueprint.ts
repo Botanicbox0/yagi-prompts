@@ -125,14 +125,20 @@ function rangeLine(shot: BlueprintShot, last: boolean, keep: ReadonlySet<StudioK
 }
 
 /** The deterministic blueprint prompt (the shot table written out as a timeline). */
-export function composeBlueprintPrompt(input: EnhanceInput, binding: Binding, request: string, seconds: number | null): string {
+export function composeBlueprintPrompt(
+  input: EnhanceInput,
+  binding: Binding,
+  request: string,
+  seconds: number | null,
+  env: Record<string, string | undefined> = process.env,
+): string {
   const video = input.video;
   const keep = new Set<StudioKeepKey>(video?.keep ?? []);
   const sheet = video?.sheet ?? null;
   const shots = blueprintShots(seconds, video);
   const change = mapCustomerMentions(video?.change?.trim() ?? '', binding.bound);
   const lines: string[] = [];
-  lines.push(...binding.bound.filter((b) => b.token && b.ref.kind !== 'video').map((b) => referenceClause(input.profile, b)));
+  lines.push(...binding.bound.filter((b) => b.token && b.ref.kind !== 'video').map((b) => referenceClause(input.profile, b, env)));
   if (binding.seedanceMode === 'frames') {
     lines.push('Start from the opening frame and move on from it.');
     if (binding.bound.some((b) => b.ref.frame === 'end')) lines.push('End on the closing frame.');
