@@ -43,6 +43,8 @@ import type { VideoProjectDetail, VideoProjectStatus, VideoProjectSummary } from
 import type { BillingPlanCatalogueItem } from "@/lib/brands/billing-ui";
 import type { BrandBillingCopy } from "@/messages/brand-billing";
 import type { Dictionary } from "@/lib/i18n/dictionaries";
+import { SendPageScope } from "@/components/brand-send/file-send";
+import type { ViewerSendProp } from "@/components/brand-send/model";
 import type { StudioVideoCopy } from "@/messages/studio-video";
 import { createStudioApi, isFailure, measureInBrowser, uploadProblem, type StudioApi } from "../api";
 import { ClosedAllowanceBanner } from "../closed-allowance-banner";
@@ -117,6 +119,8 @@ export interface VideoStudioWorkspaceProps {
   spine?: StudioSpineProps | null;
   /** `dict.projectSpine` (spine open only, for the bar's `편집본` noun). */
   spineCopy?: ProjectSpineCopy;
+  /** Server-gated 보내기 prop (`BRAND_SEND` open for an active member; null/omitted otherwise). */
+  send?: ViewerSendProp | null;
   api?: StudioApi;
   /** `BRAND_STUDIO_MUSIC_GENERATION`: music generation controls in the sequence rail. Closed by default. */
   musicGeneration?: boolean;
@@ -475,6 +479,7 @@ export function VideoStudioWorkspace({
   initialProjectDetail = null,
   spine = null,
   spineCopy,
+  send = null,
   api,
   musicGeneration = false,
 }: VideoStudioWorkspaceProps) {
@@ -1977,6 +1982,36 @@ export function VideoStudioWorkspace({
   const pillDrag = usePageDrag(Boolean(dockOpen && dockCollapsed), acceptsDrag);
   const [pillOver, setPillOver] = useState(false);
 
+  const viewerModal = viewer.open && viewer.index >= 0 && (
+    <Viewer
+      items={viewer.items}
+      index={viewer.index}
+      copy={copy}
+      locale={locale}
+      organizationId={organizationId}
+      organizationName={organizationName}
+      billingCopy={billingCopy}
+      planCatalogue={planCatalogue}
+      allowance={effectiveAllowance ?? state?.allowance ?? null}
+      canCreate={canCreate}
+      canGenerate={dockOpen}
+      busy={viewer.busy}
+      notice={viewer.notice}
+      regionPreset={viewer.preset}
+      revise={viewer.revise}
+      region={null}
+      parentOf={parentOf}
+      parentAssetOf={parentAssetOf}
+      onIndex={(index) => {
+        const item = viewer.items[index];
+        if (item && viewer.open) viewer.show({ list: viewer.open.list, key: itemKey(item) });
+      }}
+      onClose={() => viewer.show(null)}
+      actions={viewer.actions}
+      {...(send ? { send } : {})}
+    />
+  );
+
   return (
     <div
       className={`bs-studio ${w.videoRoot}`}
@@ -2293,34 +2328,7 @@ export function VideoStudioWorkspace({
         )}
       </div>
 
-      {viewer.open && viewer.index >= 0 && (
-        <Viewer
-          items={viewer.items}
-          index={viewer.index}
-          copy={copy}
-          locale={locale}
-          organizationId={organizationId}
-          organizationName={organizationName}
-          billingCopy={billingCopy}
-          planCatalogue={planCatalogue}
-          allowance={effectiveAllowance ?? state?.allowance ?? null}
-          canCreate={canCreate}
-          canGenerate={dockOpen}
-          busy={viewer.busy}
-          notice={viewer.notice}
-          regionPreset={viewer.preset}
-          revise={viewer.revise}
-          region={null}
-          parentOf={parentOf}
-          parentAssetOf={parentAssetOf}
-          onIndex={(index) => {
-            const item = viewer.items[index];
-            if (item && viewer.open) viewer.show({ list: viewer.open.list, key: itemKey(item) });
-          }}
-          onClose={() => viewer.show(null)}
-          actions={viewer.actions}
-        />
-      )}
+      {send ? <SendPageScope>{viewerModal}</SendPageScope> : viewerModal}
 
       {handoff && state && (
         <HandoffDialog

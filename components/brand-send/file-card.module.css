@@ -1,0 +1,139 @@
+.card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: var(--ys-r-card);
+  background: var(--ys-panel);
+  box-shadow: var(--ys-card);
+  color: var(--ys-ink);
+}
+
+.card[data-gone='true'] {
+  background: var(--ys-surface);
+  color: var(--ys-ink-secondary);
+}
+
+.thumb {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 132px;
+  height: 99px;
+  overflow: hidden;
+  border-radius: var(--ys-r-media);
+  background: var(--ys-card-media);
+  box-shadow: var(--ys-ring);
+  color: var(--ys-ink-secondary);
+}
+
+.thumbImg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.thumbIcon {
+  width: 24px;
+  height: 24px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: -0.015em;
+  color: var(--ys-ink);
+}
+
+.card[data-gone='true'] .title {
+  color: var(--ys-ink-secondary);
+}
+
+.subtitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--ys-ink-secondary);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+:global(.bw-main) a.openLink.openLink,
+a.openLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: var(--ys-r-control);
+  background: var(--ys-raised);
+  box-shadow: var(--ys-ring);
+  color: var(--ys-ink);
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    background-color var(--ys-dur) var(--ys-ease),
+    box-shadow var(--ys-dur) var(--ys-ease),
+    color var(--ys-dur) var(--ys-ease);
+}
+
+:global(.bw-main) a.openLink.openLink:hover,
+a.openLink:hover {
+  background: var(--ys-hover);
+  box-shadow: var(--ys-card-hover);
+  color: var(--ys-ink-hover);
+}
+
+.openLink:focus-visible {
+  outline: 2px solid var(--ys-focus);
+  outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .card {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .thumb {
+    width: 96px;
+    height: 72px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :global(.bw-main) a.openLink.openLink,
+  a.openLink {
+    transition: none;
+  }
+}

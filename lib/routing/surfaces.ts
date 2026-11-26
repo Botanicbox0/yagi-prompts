@@ -61,8 +61,9 @@ export function isBrandPath(pathname: string): boolean {
   // `creators`: the creator pool (docs/PLATFORM-2.0.md §17.3).
   // `identity`: the fixed brand identity layer, memory, and looks (docs/BRAND-PRODUCT.md §5).
   // `rooms`: messages and project rooms (docs/BRAND-ROOMS.md §3); each page gates itself.
+  // `inbox`: the workspace 알림함 (docs/BRAND-PROJECT-SPINE.md §8; slice 4b); gates itself.
   // `home`: the workspace home; `start`: the default landing that picks it or `/brand` (docs/BRAND-STUDIO-V3.md §12).
-  return pathname === '/brand' || /^\/brand\/(?:projects|members|invite|settings|billing|library|studio|usage|creators|identity|rooms|home|start)(?:\/|$)/.test(pathname);
+  return pathname === '/brand' || /^\/brand\/(?:projects|members|invite|settings|billing|library|studio|usage|creators|identity|rooms|inbox|home|start)(?:\/|$)/.test(pathname);
 }
 
 const AUTH_METHODS: Record<string, readonly string[]> = {

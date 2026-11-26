@@ -98,7 +98,15 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   padding: 8px 10px;
+}
+
+.headMain {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
 }
 
 .title {
@@ -107,6 +115,82 @@
   font-weight: 650;
   letter-spacing: -0.02em;
   color: var(--ys-ink);
+}
+
+.views {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.viewBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: var(--ys-ring);
+  color: var(--ys-ink-secondary);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color var(--ys-dur, 150ms) var(--ys-ease, ease), color var(--ys-dur, 150ms) var(--ys-ease, ease);
+}
+
+.viewBtn:hover {
+  background: var(--ys-hover);
+  color: var(--ys-ink);
+}
+
+.viewBtn[aria-pressed='true'] {
+  background: var(--ys-active-bg);
+  box-shadow: none;
+  color: var(--ys-active-fg);
+  font-weight: 600;
+}
+
+.viewBtn:focus-visible {
+  outline: 2px solid var(--ys-focus);
+  outline-offset: 2px;
+}
+
+.viewCount {
+  font-size: 11.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.markAll {
+  padding: 2px 4px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ys-ink-secondary);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--ys-dur, 150ms) var(--ys-ease, ease);
+}
+
+.markAll:hover:not(:disabled) {
+  color: var(--ys-ink);
+}
+
+.markAll:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.markAll:focus-visible {
+  outline: 2px solid var(--ys-focus);
+  outline-offset: 2px;
 }
 
 .scroll {
@@ -204,6 +288,40 @@
   color: var(--ys-ink);
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.actor {
+  flex: none;
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ys-ink);
+}
+
+.context {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  color: var(--ys-ink-secondary);
+}
+
+.mentionBadge {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--ys-raised);
+  box-shadow: var(--ys-ring);
+  color: var(--ys-ink);
+  font-size: 11.5px;
+  font-weight: 600;
   white-space: nowrap;
 }
 
@@ -305,6 +423,32 @@
   outline-offset: 2px;
 }
 
+.row[data-kind='thread'][data-can-mark='true'] .sideMeta {
+  position: relative;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.row[data-kind='thread'][data-can-mark='true'] .markRead {
+  position: relative;
+  z-index: 2;
+  pointer-events: auto;
+}
+
+.row[data-kind='thread'][data-can-mark='true']:hover .sideMeta,
+.row[data-kind='thread'][data-can-mark='true']:focus-within .sideMeta {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.row[data-kind='thread'][data-can-mark='true']:hover .markRead,
+.row[data-kind='thread'][data-can-mark='true']:focus-within .markRead,
+.row[data-kind='thread'][data-can-mark='true'] .markRead:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  z-index: 3;
+}
+
 @media (hover: none) {
   .side {
     grid-template-areas:
@@ -363,6 +507,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .button,
+  .viewBtn,
+  .markAll,
   .row,
   .sideMeta,
   .markRead,

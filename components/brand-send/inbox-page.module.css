@@ -1,0 +1,422 @@
+:global(.bw-main):has(.shell) {
+  max-width: none;
+  padding: 16px 20px;
+}
+
+.shell {
+  display: grid;
+  grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  height: var(--send-fit-h, calc(100dvh - 32px));
+  min-height: 380px;
+  overflow: hidden;
+  border-radius: var(--ys-r-panel);
+  background: var(--ys-surface);
+  box-shadow: var(--ys-card);
+  color: var(--ys-ink);
+}
+
+.left {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-right: 1px solid var(--ys-hairline);
+  background: var(--ys-sidebar);
+}
+
+.leftHead {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: none;
+  padding: 16px 16px 12px;
+  border-bottom: 1px solid var(--ys-hairline);
+}
+
+.titleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: -0.02em;
+  color: var(--ys-ink);
+}
+
+.markAllBtn {
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--ys-r-pill);
+  background: var(--ys-raised);
+  box-shadow: var(--ys-ring);
+  color: var(--ys-ink-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--ys-dur) var(--ys-ease),
+    color var(--ys-dur) var(--ys-ease);
+}
+
+.markAllBtn:hover:not(:disabled) {
+  background: var(--ys-hover);
+  color: var(--ys-ink);
+}
+
+.markAllBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.markAllBtn:focus-visible {
+  outline: 2px solid var(--ys-focus);
+  outline-offset: 2px;
+}
+
+.tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tabBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--ys-r-pill);
+  background: transparent;
+  box-shadow: var(--ys-ring);
+  color: var(--ys-ink-secondary);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background-color var(--ys-dur) var(--ys-ease),
+    color var(--ys-dur) var(--ys-ease);
+}
+
+.tabBtn:hover {
+  background: var(--ys-hover);
+  color: var(--ys-ink);
+}
+
+.tabBtn[aria-pressed='true'] {
+  background: var(--ys-active-bg);
+  box-shadow: none;
+  color: var(--ys-active-fg);
+  font-weight: 600;
+}
+
+.tabBtn:focus-visible {
+  outline: 2px solid var(--ys-focus);
+  outline-offset: 2px;
+}
+
+.tabCount {
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+:global(.bw-main) a.row.row,
+a.row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--ys-r-control);
+  background: transparent;
+  color: var(--ys-ink);
+  text-decoration: none;
+  transition:
+    background-color var(--ys-dur) var(--ys-ease),
+    box-shadow var(--ys-dur) var(--ys-ease);
+}
+
+:global(.bw-main) a.row.row:hover,
+a.row:hover {
+  background: var(--ys-hover);
+  color: var(--ys-ink-hover);
+}
+
+:global(.bw-main) a.row.row[data-active='true'],
+a.row[data-active='true'] {
+  background: var(--ys-panel);
+  box-shadow: var(--ys-card);
+}
+
+.row:focus-visible {
+  outline: 2px solid var(--ys-focus);
+  outline-offset: -2px;
+}
+
+.unreadDot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ys-ink);
+}
+
+.rowThumb {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 48px;
+  height: 36px;
+  overflow: hidden;
+  border-radius: var(--ys-r-sm);
+  background: var(--ys-card-media);
+  box-shadow: var(--ys-ring);
+  color: var(--ys-ink-secondary);
+}
+
+.rowThumbImg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.rowThumbIcon {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.rowBody {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.rowTop {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.rowHeadline {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.rowActor {
+  flex: none;
+  max-width: 55%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ys-ink);
+}
+
+.rowSep {
+  flex: none;
+  font-size: 11.5px;
+  color: var(--ys-ink-secondary);
+}
+
+.rowMention {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: var(--ys-r-pill);
+  background: var(--ys-raised);
+  box-shadow: var(--ys-ring);
+  color: var(--ys-ink);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.rowTime {
+  margin-left: auto;
+  flex: none;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ys-ink-secondary);
+}
+
+.rowProject {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  color: var(--ys-ink-secondary);
+}
+
+.rowBottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.rowLine {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--ys-ink-secondary);
+}
+
+.row[data-unread='true'] .rowLine {
+  color: var(--ys-ink);
+  font-weight: 500;
+}
+
+.listEmpty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex: 1 1 auto;
+  min-height: 180px;
+  padding: 24px 16px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--ys-ink-secondary);
+}
+
+.moreBtn,
+.retryBtn {
+  height: 32px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--ys-r-control);
+  background: var(--ys-raised);
+  box-shadow: var(--ys-ring);
+  color: var(--ys-ink);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color var(--ys-dur) var(--ys-ease);
+}
+
+.moreBtn {
+  width: 100%;
+  margin-top: 4px;
+  flex: none;
+}
+
+.moreBtn:hover:not(:disabled),
+.retryBtn:hover {
+  background: var(--ys-hover);
+}
+
+.moreBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.moreBtn:focus-visible,
+.retryBtn:focus-visible {
+  outline: 2px solid var(--ys-focus);
+  outline-offset: 2px;
+}
+
+.right {
+  --send-support-clear: calc(52px + 24px);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--ys-canvas);
+}
+
+/* Reserve right-edge room inside the inbox reply bar so the send button and hints clear .bw-support-launch (52px wide at right: 24px in app/(brand)/workspace.css) while keeping the input field box full width. */
+.right [data-send-composer] > div:has(> [data-send-input]) > div:has([data-send-submit]) {
+  padding-right: var(--send-support-clear);
+}
+
+.pickWrap {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.pickHead {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 16px 20px 0;
+  min-height: 36px;
+}
+
+.pickEmpty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1 1 auto;
+  padding: 24px;
+  text-align: center;
+  font-size: 13.5px;
+  color: var(--ys-ink-secondary);
+}
+
+@media (max-width: 860px) {
+  .shell {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .left {
+    border-right: 0;
+    border-bottom: 1px solid var(--ys-hairline);
+    max-height: 46vh;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .markAllBtn,
+  .tabBtn,
+  :global(.bw-main) a.row.row,
+  a.row,
+  .moreBtn,
+  .retryBtn {
+    transition: none;
+  }
+}

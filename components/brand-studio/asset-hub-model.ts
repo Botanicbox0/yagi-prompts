@@ -2,6 +2,8 @@
  * The assets page's pure half: what one tile is, how tiles are searched and related, what a tile is
  * called on screen and which actions it offers. No React here, so tests read these directly.
  */
+import { viewerItemToSendRef } from "@/components/brand-send/model";
+import type { SendFileRef } from "@/lib/brand-rooms/send-contracts";
 import type { StudioAssetKind, StudioAssetRole, StudioAssetView, StudioJobView, StudioOutputView } from "@/lib/brand-studio/contracts";
 import type { RefSource } from "./refs";
 import { imageCanvasHref, imageScreenRefHref, videoComposeClipHref, videoScreenHref } from "./studio-app";
@@ -246,6 +248,8 @@ export function hubActions(
     projectLabel?: ((entry: HubEntry) => string) | null;
     /** Spine move label (`프로젝트로 옮기기`) replacing `projectLabel` on runs & library uploads when `canMove` is true. */
     moveProjectLabel?: string | null;
+    /** When 보내기 is active in asset detail, renames existing share/review actions to 외부 링크 만들기 without adding new ones. */
+    externalLinkLabel?: string;
   },
 ): { main: HubAction | null; more: HubAction[] } {
   const { organizationId, canOpenStudio, canCreate, copy } = opts;
@@ -266,7 +270,7 @@ export function hubActions(
     }
   }
   if (canOpenStudio && canCreate && (entry.kind === "image" || entry.kind === "video")) {
-    more.push({ key: "share", label: copy.share, marker: "data-asset-hub-share-review" });
+    more.push({ key: "share", label: opts.externalLinkLabel ?? copy.share, marker: "data-asset-hub-share-review" });
   }
   more.push({ key: "similar", label: copy.similar, marker: "data-asset-hub-similar" });
   if (opts.moveProjectLabel && (entry.jobId || entry.asset)) {
@@ -504,4 +508,31 @@ export function resolveHubEntry(
 /** Whether a cached `detailEntry` / `similarEntry` belongs to a deleted library asset (Fix 2-5). */
 export function entryMatchesAsset(entry: HubEntry | null, assetId: string): boolean {
   return entry?.asset?.id === assetId;
+}
+
+/**
+ * Maps an assets-hub detail entry to its 보내기 contract `SendFileRef`, or `null` for entries without
+ * a valid asset reference, outputs whose run is not loaded, or unsendable jobs (`fill`, `compose-1080p`).
+ */
+export function hubEntryToSendRef(
+  entry: Pick<HubEntry, "asset" | "output"> | null | undefined,
+  job?: Pick<StudioJobView, "kind" | "model" | "purpose"> | null,
+): SendFileRef | null {
+  if (!entry) return null;
+  if (entry.asset) return viewerItemToSendRef({ type: "asset", asset: entry.asset });
+  if (entry.output && job) return viewerItemToSendRef({ type: "output", output: entry.output, job });
+  return null;
+}
+
+export function findHubEntryJob(
+  entry: Pick<HubEntry, "jobId"> | null | undefined,
+  ...jobLists: Array<readonly StudioJobView[] | undefined | null>
+): StudioJobView | null {
+  const jobId = entry?.jobId;
+  if (!jobId) return null;
+  for (const list of jobLists) {
+    const hit = list?.find((j) => j.id === jobId);
+    if (hit) return hit;
+  }
+  return null;
 }

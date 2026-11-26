@@ -91,6 +91,17 @@ export const RAIL_HREF: Readonly<Record<RailItemId, string>> = {
   messages: '/brand/rooms',
 };
 
+/** Where a rail row opens: in 직접 만들기 with 보내기 open, 알림함 goes to `/brand/inbox`; `RAIL_HREF` stays canonical for saved order. */
+export function railItemHref(
+  id: RailItemId,
+  options?: { makeInbox?: boolean; sendInbox?: boolean },
+): string {
+  if (options?.makeInbox && options?.sendInbox && id === 'messages') {
+    return '/brand/inbox';
+  }
+  return RAIL_HREF[id];
+}
+
 /** 18px stroke icons on a 20-unit grid. */
 export const RAIL_ICON: Readonly<Record<RailItemId | 'team' | 'billing' | 'settings' | 'more' | 'toggle' | 'commission', string>> = {
   messages: 'M3.5 4.5h10v7.5H8l-3 2.5v-2.5H3.5z M13.5 7.5h3v7H15v2l-2.6-2H9.5v-2.5',
@@ -179,6 +190,7 @@ export function railActive(href: string, path: string): boolean {
   // 메시지 only on the inbox itself.
   if (href === '/brand') return path === '/brand' || under(path, '/brand/projects') || /^\/brand\/rooms\/[^/]+/.test(path);
   if (href === '/brand/rooms') return path === '/brand/rooms' || path === '/brand/rooms/';
+  if (href === '/brand/inbox') return under(path, '/brand/inbox');
   if (href === '/brand/studio') {
     return (
       under(path, '/brand/studio') &&

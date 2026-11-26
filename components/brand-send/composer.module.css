@@ -1,0 +1,240 @@
+.wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.box {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--ys-r-panel);
+  background: var(--ys-input-bg);
+  box-shadow: var(--ys-ring);
+  transition: box-shadow var(--ys-dur) var(--ys-ease);
+}
+
+.box:focus-within {
+  box-shadow: 0 0 0 1px var(--ys-line-strong);
+}
+
+.box[data-compact='true'] {
+  padding: 8px 10px;
+}
+
+.textarea {
+  width: 100%;
+  min-height: 44px;
+  max-height: 168px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ys-ink);
+  font-family: var(--stack-body);
+  font-size: 13.5px;
+  line-height: 1.5;
+  letter-spacing: -0.01em;
+  resize: none;
+  outline: none;
+}
+
+.textarea::placeholder {
+  color: var(--ys-placeholder);
+}
+
+.textarea:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.hints {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.hint {
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--ys-ink-secondary);
+}
+
+.subNote {
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--ys-ink-secondary);
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  margin-left: auto;
+}
+
+.counter {
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ys-ink-secondary);
+}
+
+.counter[data-over='true'] {
+  color: var(--ys-danger);
+  font-weight: 600;
+}
+
+.sendBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--ys-r-control);
+  background: var(--ys-accent);
+  color: var(--ys-on-accent);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--ys-dur) var(--ys-ease),
+    opacity var(--ys-dur) var(--ys-ease);
+}
+
+.sendBtn:hover:not(:disabled) {
+  background: var(--ys-accent-hover);
+}
+
+.sendBtn:active:not(:disabled) {
+  background: var(--ys-accent-active);
+}
+
+.sendBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.sendBtn:focus-visible {
+  outline: 2px solid var(--ys-focus);
+  outline-offset: 2px;
+}
+
+.error {
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: var(--ys-r-sm);
+  background: var(--ys-danger-soft);
+  color: var(--ys-danger);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.picker {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 6px);
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 6px;
+  border-radius: var(--ys-r-panel);
+  background: var(--ys-glass);
+  backdrop-filter: blur(20px) saturate(160%);
+  box-shadow: var(--ys-float);
+}
+
+.pickerHeading {
+  padding: 4px 8px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ys-ink-secondary);
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: var(--ys-r-sm);
+  background: transparent;
+  color: var(--ys-ink);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--ys-dur) var(--ys-ease);
+}
+
+.option:hover,
+.option[aria-selected='true'] {
+  background: var(--ys-hover);
+}
+
+.option:focus-visible {
+  outline: 2px solid var(--ys-focus);
+  outline-offset: -2px;
+}
+
+.avatar {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--ys-raised);
+  box-shadow: var(--ys-ring);
+  color: var(--ys-ink);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.personName {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.personRole {
+  flex: none;
+  font-size: 11.5px;
+  color: var(--ys-ink-secondary);
+}
+
+.pickerEmpty {
+  padding: 12px 10px;
+  font-size: 12.5px;
+  color: var(--ys-ink-secondary);
+  text-align: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .box,
+  .sendBtn,
+  .option {
+    transition: none;
+  }
+}
