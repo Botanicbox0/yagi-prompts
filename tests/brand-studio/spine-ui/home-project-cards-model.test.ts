@@ -223,7 +223,7 @@ describe('cardSecondLine', () => {
   });
 
   it('returns cardEmpty when all counts on an own project are zero', () => {
-    expect(cardSecondLine(card({ counts: emptyCounts() }), copyOf('ko'))).toBe('파일이 없습니다');
+    expect(cardSecondLine(card({ counts: emptyCounts() }), copyOf('ko'))).toBe('파일이 없어요');
     expect(cardSecondLine(card({ counts: emptyCounts() }), copyOf('en'))).toBe('No files');
   });
 
@@ -264,11 +264,11 @@ describe('cardThirdLine', () => {
     const relEn = formatRelativeTime(at, 'en', NOW);
 
     const kinds = [
-      { kind: 'image' as const, koNamed: '김서아 님이 이미지를 추가했습니다', koAnon: '이미지가 추가됐습니다', enNamed: 'Kim added an image', enAnon: 'An image was added' },
-      { kind: 'video' as const, koNamed: '김서아 님이 영상을 추가했습니다', koAnon: '영상이 추가됐습니다', enNamed: 'Kim added a video', enAnon: 'A video was added' },
-      { kind: 'sound' as const, koNamed: '김서아 님이 사운드를 추가했습니다', koAnon: '사운드가 추가됐습니다', enNamed: 'Kim added sound', enAnon: 'Sound was added' },
-      { kind: 'upload' as const, koNamed: '김서아 님이 파일을 올렸습니다', koAnon: '파일이 올라왔습니다', enNamed: 'Kim uploaded a file', enAnon: 'A file was uploaded' },
-      { kind: 'film' as const, koNamed: '김서아 님이 편집본을 만들었습니다', koAnon: '편집본이 만들어졌습니다', enNamed: 'Kim created an edit', enAnon: 'An edit was created' },
+      { kind: 'image' as const, koNamed: '김서아 님이 이미지를 추가했어요', koAnon: '이미지가 추가됐어요', enNamed: 'Kim added an image', enAnon: 'An image was added' },
+      { kind: 'video' as const, koNamed: '김서아 님이 영상을 추가했어요', koAnon: '영상이 추가됐어요', enNamed: 'Kim added a video', enAnon: 'A video was added' },
+      { kind: 'sound' as const, koNamed: '김서아 님이 사운드를 추가했어요', koAnon: '사운드가 추가됐어요', enNamed: 'Kim added sound', enAnon: 'Sound was added' },
+      { kind: 'upload' as const, koNamed: '김서아 님이 파일을 올렸어요', koAnon: '파일이 올라왔어요', enNamed: 'Kim uploaded a file', enAnon: 'A file was uploaded' },
+      { kind: 'film' as const, koNamed: '김서아 님이 편집본을 만들었어요', koAnon: '편집본이 만들어졌어요', enNamed: 'Kim created an edit', enAnon: 'An edit was created' },
     ];
 
     for (const row of kinds) {

@@ -151,7 +151,7 @@ describe('/brand/home with brand project spine', () => {
     expect(html).toContain(`data-home-project="${selfId}"`);
     expect(html).toContain(`data-home-project="${fx.projectId}"`);
     expect(html).toContain('봄 향수 캠페인');
-    expect(html).toContain('김서아 님이 이미지를 추가했습니다');
+    expect(html).toContain('김서아 님이 이미지를 추가했어요');
     expect(html).toContain('data-home-project-unread="1"');
     expect(html).toContain('야기 팀과 · 지금 단계 · 의뢰 접수');
     expect(html).toContain('data-home-unfiled="1"');
