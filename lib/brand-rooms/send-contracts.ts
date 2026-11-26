@@ -31,6 +31,11 @@ export const SEND_OPERATIONS = [
   'send.read_all',
   /** Who may be named with `@`: the organization's active members. */
   'send.people',
+  /**
+   * 초대하고 보내기 (slice 4c): what a typed e-mail address becomes in the send field (a member to name, someone to
+   * invite, or not allowed here).
+   */
+  'send.lookup',
 ] as const;
 export type SendOperation = (typeof SEND_OPERATIONS)[number];
 
@@ -58,6 +63,16 @@ export const SEND_LIMITS = {
   unreadCountMax: 999,
   /** A thread line's excerpt (the bell and the inbox): characters, spaces folded. */
   lineChars: 120,
+  /**
+   * 초대하고 보내기 (slice 4c): e-mail addresses one line may invite (`invites`). New invitations also count against the
+   * organization's daily invitation cap, shared with the members page (`BRAND_INVITES_PER_DAY`,
+   * lib/brands/workspace/service.ts; `invite_limit`).
+   */
+  invitesPerMessage: 3,
+  /** Lines that may wait for one invitation; one more line naming that address is refused (`invite_limit`). */
+  linesPerInvitation: 20,
+  /** `send.lookup` calls one person may make per minute in one organization (`rate_limited`). */
+  lookupsPerMinute: 30,
 } as const;
 
 /* ---------------------------------------------------------------- channels */
@@ -143,8 +158,31 @@ export const SendReadSchema = z.object({ organizationId: Id, rootId: Id, at: At.
 export const SendReadAllSchema = z.object({ organizationId: Id }).strict();
 export const SendPeopleSchema = z.object({ organizationId: Id }).strict();
 
+/**
+ * 초대하고 보내기 (slice 4c): one e-mail address as the existing workspace invitation takes it (`z.email()`, at most 254
+ * characters), after trimming and lower-casing.
+ */
+export const SendInviteEmailSchema = z.string().max(320).trim().toLowerCase().pipe(z.email().max(254));
+/** At most `SEND_LIMITS.invitesPerMessage` addresses; an empty list is the same as none. Duplicates collapse on the server. */
+const Invites = z.array(SendInviteEmailSchema).max(SEND_LIMITS.invitesPerMessage).default([]);
+
+/**
+ * While 초대하고 보내기 is open for the organization, `send.post` and `send.reply` take these instead: the same fields plus
+ * `invites`. Strict as the rest: a `role` (or any other field) is refused as `invalid`; the role given is always viewer.
+ * While it is closed, the schemas above apply and an input carrying `invites` is `invalid`, as on origin/main.
+ */
+export const SendPostInviteSchema = z
+  .object({ organizationId: Id, requestId: Id, file: SendFileRefSchema, body: Body, mentions: Mentions, invites: Invites })
+  .strict();
+export const SendReplyInviteSchema = z.object({ organizationId: Id, requestId: Id, rootId: Id, body: Body, mentions: Mentions, invites: Invites }).strict();
+/** `send.lookup`: one typed address (any text; a malformed address is `invalid`). */
+export const SendLookupSchema = z.object({ organizationId: Id, email: SendInviteEmailSchema }).strict();
+
 export type SendPostInput = z.input<typeof SendPostSchema>;
 export type SendReplyInput = z.input<typeof SendReplySchema>;
+export type SendPostInviteInput = z.input<typeof SendPostInviteSchema>;
+export type SendReplyInviteInput = z.input<typeof SendReplyInviteSchema>;
+export type SendLookupInput = z.input<typeof SendLookupSchema>;
 export type SendThreadInput = z.input<typeof SendThreadSchema>;
 export type SendFileInput = z.input<typeof SendFileSchema>;
 export type SendInboxInput = z.input<typeof SendInboxSchema>;
@@ -198,6 +236,58 @@ export interface SendMessage {
   body: string;
   mentions: SendMention[];
   createdAt: string;
+  /**
+   * 초대하고 보내기 (slice 4c): the invitations this line waits for, oldest first. Present (possibly empty) on every line of
+   * every answer while 초대하고 보내기 is open for the organization; ABSENT while it is closed (the answer is then exactly
+   * what it was before slice 4c). A line stops listing one when its invitation is accepted and the line reached them.
+   */
+  invites?: SendInviteChip[];
+}
+
+/** One invitation a line waits for (`SendMessage.invites`). */
+export interface SendInviteChip {
+  /**
+   * `pending`: the invitation can still be accepted. `expired`: past its 7 days, or withdrawn (an owner cancelled it, or
+   * invited the address again from the members page, which replaces it). `accepted`: the person joined, but the line
+   * did not reach them (they accepted while 초대하고 보내기 was closed, or delivering failed); rare.
+   */
+  state: 'pending' | 'expired' | 'accepted';
+  /** The invited address: only for the line's writer and the organization's owners. Null for everyone else. */
+  email: string | null;
+}
+
+/** What one address of a send's `invites` became (`SendPosted.invited`), for the writer only. */
+export interface SendInviteOutcome {
+  /** The address as the server normalised it (trimmed, lower-case). */
+  email: string;
+  /**
+   * `member`: an active member of this organization, named like any mention (`memberId`; no invitation).
+   * `invited`: a new workspace invitation (role viewer, 7 days) was issued and this line waits for it.
+   * `reused`: a live invitation to this organization already existed; this line waits for it too (nothing new is sent).
+   */
+  result: 'member' | 'invited' | 'reused';
+  memberId: string | null;
+  /**
+   * `invited` only, in the first answer only: the invitation's link token, as the members page's `invitation.create`
+   * answers it (`/brand/invite#token=<token>`). Shown once and never stored recoverably: a retried request answers null.
+   */
+  token: string | null;
+  /** `invited` only: the invitation mail's outcome while `BRAND_ORG_INVITE_EMAIL=on` (as `invitation.create`); null while it is off (copy the link). */
+  mailState: 'sent' | 'failed' | 'skipped' | null;
+}
+
+/** `send.lookup`: what a typed address becomes. Says nothing about accounts outside this organization. */
+export interface SendLookup {
+  ok: true;
+  /** The address as the server normalised it. */
+  email: string;
+  /**
+   * `member`: an active member of this organization (name them: `member` is filled). `invitable`: the caller may invite
+   * it (owner or editor, 초대하고 보내기 open). `not_allowed`: the caller may not invite here (a viewer, or the switch is
+   * closed).
+   */
+  status: 'member' | 'invitable' | 'not_allowed';
+  member: { id: string; name: string } | null;
 }
 
 /** The newest line of a thread, as a list row shows it. */
@@ -233,6 +323,11 @@ export interface SendPosted {
   ok: true;
   thread: SendThreadSummary;
   message: SendMessage;
+  /**
+   * 초대하고 보내기 (slice 4c): present only when the request carried a non-empty `invites` and wrote the line (a retried
+   * request answers the line without it); one entry per distinct address, in the order sent.
+   */
+  invited?: SendInviteOutcome[];
 }
 
 export interface SendThreadPage {
@@ -290,4 +385,4 @@ export interface SendPeople {
   people: SendPerson[];
 }
 
-export type SendResult = SendPosted | SendThreadPage | SendFileThreads | SendInboxPage | SendReadDone | SendReadAllDone | SendPeople;
+export type SendResult = SendPosted | SendThreadPage | SendFileThreads | SendInboxPage | SendReadDone | SendReadAllDone | SendPeople | SendLookup;

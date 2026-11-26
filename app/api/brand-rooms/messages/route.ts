@@ -10,6 +10,7 @@ import { createStudioMediaStore } from '@/lib/brand-studio/media-store';
 import { loadRoomMessages, runRoomOperation, type RoomMessageDeps, type RoomNotice } from '@/lib/brand-rooms/messages';
 import { roomErrorStatus } from '@/lib/brand-rooms/message-contracts';
 import { purgeStagingObject } from '@/lib/brand-rooms/staging-cleanup';
+import { getMailer } from '@/lib/notify/service';
 
 /**
  * Project room conversations (docs/BRAND-ROOMS.md §4). Checks, in order: the flag (`rooms_closed`, 404),
@@ -84,7 +85,10 @@ export async function POST(request: NextRequest) {
   if (!sql) return studioJson({ ok: false, code: 'provider_unavailable' }, 503);
   try {
     const uploads = body.operation === 'attachment.reserve' || body.operation === 'attachment.complete';
-    const { result, notice } = await runRoomOperation(await depsOf(sql, uploads), viewer, body.operation, body.input);
+    // 초대하고 보내기 (slice 4c): a line that invites someone sends the existing invitation mail after its commit.
+    const inviting = (body.operation === 'send.post' || body.operation === 'send.reply') && Array.isArray((body.input as { invites?: unknown }).invites);
+    const deps = await depsOf(sql, uploads);
+    const { result, notice } = await runRoomOperation(inviting ? { ...deps, mailer: getMailer() } : deps, viewer, body.operation, body.input);
     if (!result.ok) return studioJson(result, roomErrorStatus(result.code));
     tellTheTeam(sql, notice);
     return studioJson(result, notice ? 201 : 200);

@@ -17,6 +17,7 @@
 import { randomBytes } from 'node:crypto';
 import type { Viewer } from '@/lib/auth/identity';
 import type { SqlRunner } from '@/lib/db/sql-runner';
+import type { Mailer } from '@/lib/notify/mailer';
 import { interpolate } from '@/lib/i18n/format';
 import type { UploadLimitReason } from '@/lib/brands/upload-limits-format';
 import {
@@ -98,6 +99,11 @@ export interface RoomMessageDeps {
   staging?: Pick<StorageDriver, 'read' | 'putStaging' | 'signedUploadUrl' | 'servesSignedUrls' | 'releaseStaging'>;
   /** Optional best-effort cleanup of staging objects once copied to `media`. */
   purgeStagingKey?: (key: string) => Promise<void>;
+  /**
+   * 초대하고 보내기 (slice 4c; `send.post`/`send.reply` with `invites`): the mailer for the existing invitation mail, sent
+   * after the commit while `BRAND_ORG_INVITE_EMAIL=on` (`getMailer()`; null when none is configured: nothing is sent).
+   */
+  mailer?: Mailer | null;
 }
 
 /** What the team is told after a brand member writes. Internal only. */
@@ -1171,7 +1177,7 @@ export interface RoomOperationOutcome {
  */
 export async function runRoomOperation(deps: RoomMessageDeps, viewer: Viewer, operation: unknown, input: unknown): Promise<RoomOperationOutcome> {
   const quiet = (result: RoomOperationResult | SendResult): RoomOperationOutcome => ({ result, notice: null });
-  if (isSendOperation(operation)) return quiet(await runSendOperation({ sql: deps.sql, media: deps.media }, viewer, operation, input));
+  if (isSendOperation(operation)) return quiet(await runSendOperation({ sql: deps.sql, media: deps.media, mailer: deps.mailer ?? null }, viewer, operation, input));
   if (!isRoomOperation(operation)) return quiet(failure('invalid'));
   // The gate before any input detail is judged: a closed organization gets the same 404 whatever it sent.
   const organizationId = (input as { organizationId?: unknown } | null)?.organizationId;

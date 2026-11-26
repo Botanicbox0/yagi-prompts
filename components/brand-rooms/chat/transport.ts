@@ -317,3 +317,48 @@ export async function loadSendBell(organizationId: string, view: SendInboxView =
     return { ok: false, code: "offline" };
   }
 }
+
+/* ------------------------------------------------------------------ 초대하고 보내기 (slice 4c) */
+
+type SendLookup = import("@/lib/brand-rooms/send-contracts").SendLookup;
+type SendPostInviteInput = import("@/lib/brand-rooms/send-contracts").SendPostInviteInput;
+type SendReplyInviteInput = import("@/lib/brand-rooms/send-contracts").SendReplyInviteInput;
+
+/**
+ * 초대하고 보내기's client (docs/BRAND-PROJECT-SPINE.md §8.5; lib/brand-rooms/send-contracts.ts): a line that also invites
+ * people who are not members yet, and what a typed address becomes. Same transport and answers as `sendTransport`;
+ * `post`/`reply` without `invites` are exactly `sendTransport`'s. While 초대하고 보내기 is closed, a line carrying
+ * `invites` answers `invalid`, and `lookup` answers `status: 'not_allowed'` (or `invalid` while 보내기 itself is closed).
+ */
+export interface SendInviteTransport {
+  organizationId: string;
+  /** A new thread about one file that may also invite (`invites`, at most `SEND_LIMITS.invitesPerMessage`). */
+  post(input: Omit<SendPostInviteInput, "organizationId">): Promise<SendPosted | Fail>;
+  /** A reply that may also invite. */
+  reply(input: Omit<SendReplyInviteInput, "organizationId">): Promise<SendPosted | Fail>;
+  /** What a typed e-mail address becomes: a member to name, someone the caller may invite, or not allowed here. */
+  lookup(email: string): Promise<SendLookup | Fail>;
+}
+
+export function sendInviteTransport(organizationId: string, fetcher: typeof fetch = (...args) => fetch(...args)): SendInviteTransport {
+  const call = async <T,>(operation: string, input: Record<string, unknown>): Promise<T | Fail> => {
+    try {
+      const response = await fetcher("/api/brand-rooms/messages", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json", accept: "application/json" },
+        body: JSON.stringify({ operation, input: { organizationId, ...input } }),
+      });
+      const body = (await response.json().catch(() => null)) as Record<string, unknown> | null;
+      return body && body.ok === true ? (body as unknown as T) : failOf(body ?? { code: response.status === 401 ? "sign_in_required" : response.status === 404 ? "not_found" : "failed" });
+    } catch {
+      return { ok: false, code: "offline" };
+    }
+  };
+  return {
+    organizationId,
+    post: (input) => call<SendPosted>("send.post", { ...input }),
+    reply: (input) => call<SendPosted>("send.reply", { ...input }),
+    lookup: (email) => call<SendLookup>("send.lookup", { email }),
+  };
+}

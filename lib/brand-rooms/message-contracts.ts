@@ -56,6 +56,12 @@ export const ROOM_ERROR_CODES = [
   'unsupported_file',
   'provider_unavailable',
   'failed',
+  /**
+   * 초대하고 보내기 (slice 4c; `send.post`/`send.reply` with `invites` only): the organization's daily invitation cap
+   * (`BRAND_INVITES_PER_DAY`, shared with the members page) or one invitation's waiting lines
+   * (`SEND_LIMITS.linesPerInvitation`) would be passed. Nothing was written or sent.
+   */
+  'invite_limit',
 ] as const;
 export type RoomErrorCode = (typeof ROOM_ERROR_CODES)[number];
 
@@ -506,6 +512,7 @@ export function roomErrorStatus(code: RoomErrorCode): number {
     case 'unsupported_file':
       return 415;
     case 'rate_limited':
+    case 'invite_limit':
       return 429;
     case 'provider_unavailable':
       return 503;
