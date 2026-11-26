@@ -60,6 +60,7 @@ import {
   type StudioReviseMarkRead,
   type StudioRevisePlan,
   type StudioReviseTalk,
+  type StudioShieldedReuse,
   type StudioState,
 } from "@/lib/brand-studio/contracts";
 import { isUnapprovedUploadReason, type UploadLimitReason } from "@/lib/brands/upload-limits-format";
@@ -69,7 +70,7 @@ export const STUDIO_ENDPOINT = "/api/brand-studio";
 
 /** Operation name -> [request input, success answer]. */
 export interface StudioOps {
-  "job.create": [z.input<typeof StudioJobCreateSchema> & BrandProjectFilingInput, StudioJobCreated];
+  "job.create": [z.input<typeof StudioJobCreateSchema> & BrandProjectFilingInput & StudioShieldedReuse, StudioJobCreated];
   "job.create_group": [z.input<typeof ImageJobGroupSchema> & BrandProjectFilingInput, StudioJobGroupCreated];
   "job.cancel": [z.input<typeof JobRefSchema>, StudioDone];
   "prompt.enhance": [z.input<typeof PromptPreviewSchema>, StudioPromptPreview];

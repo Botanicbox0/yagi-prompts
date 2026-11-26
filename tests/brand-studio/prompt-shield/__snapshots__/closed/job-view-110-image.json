@@ -1,0 +1,41 @@
+{
+  "id": "00000000-0000-4000-8000-000000000110",
+  "kind": "image",
+  "status": "succeeded",
+  "model": "seedream-5.5",
+  "prompt": "영상용 시트",
+  "finalPrompt": null,
+  "preset": "video-character-sheet",
+  "expected": 1,
+  "aspect": "1:1",
+  "resolution": "2K",
+  "seconds": null,
+  "audio": null,
+  "references": [],
+  "parentOutputId": null,
+  "parentAssetId": null,
+  "box": null,
+  "method": null,
+  "keep": [],
+  "change": null,
+  "outputs": [
+    {
+      "id": "00000000-0000-4000-8000-000000000211",
+      "jobId": "00000000-0000-4000-8000-000000000110",
+      "kind": "image",
+      "url": "/api/brand-studio/media/st/0000000000000000000000000000000000000000000000000000000000000011.png",
+      "thumbUrl": null,
+      "width": 720,
+      "height": 1280,
+      "seconds": null,
+      "draft": false,
+      "savedAssetId": null,
+      "createdAt": "2026-11-20T10:19:00.000Z"
+    }
+  ],
+  "estimateKrw": 700,
+  "countedOutputs": 1,
+  "errorCode": null,
+  "createdAt": "2026-11-20T10:18:00.000Z",
+  "finishedAt": "2026-11-20T10:19:00.000Z"
+}

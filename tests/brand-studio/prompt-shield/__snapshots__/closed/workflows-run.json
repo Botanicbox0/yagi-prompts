@@ -1,0 +1,76 @@
+{
+  "ok": true,
+  "workflowId": "starter:reference-video-ad-pack",
+  "workflowSlug": "reference-video-ad-pack",
+  "jobs": [
+    {
+      "id": "<id1>",
+      "kind": "video_remix",
+      "status": "succeeded",
+      "model": "seedance-2.5",
+      "prompt": "Reference authority: Follow the opening camera rhythm while featuring 글로우 세럼 (@image1). 0.0s–2.2s dynamic push-in from off-axis three-quarter angle establishing spatial depth and crisp lighting; 2.2s–5.0s hard cut to tactile hero reveal. Natural foley and room ambience only, strict no BGM. 유리 보틀 반사광",
+      "finalPrompt": "ENHANCED(seedance): Reference authority: Follow the opening camera rhythm while featuring 글로우 세럼 (@image1). 0.0s–2.2s dynamic push-in from off-axis three-quarter angle establishing spatial depth and crisp lighting; 2.2s–5.0s hard cut to tactile hero reveal. Natural foley and room ambience only, strict no BGM. 유리 보틀 반사광",
+      "expected": 1,
+      "aspect": "9:16",
+      "resolution": "720p",
+      "seconds": 5,
+      "audio": "ambient",
+      "references": [
+        {
+          "assetId": "00000000-0000-4000-8000-000000000902"
+        },
+        {
+          "role": "product",
+          "assetId": "00000000-0000-4000-8000-000000000901"
+        }
+      ],
+      "parentOutputId": null,
+      "parentAssetId": null,
+      "box": null,
+      "method": "blueprint",
+      "keep": [
+        "camera",
+        "timing",
+        "composition",
+        "look"
+      ],
+      "change": "유리 보틀 반사광",
+      "outputs": [
+        {
+          "id": "<id2>",
+          "jobId": "<id1>",
+          "kind": "video",
+          "url": "/api/brand-studio/media/<key1>",
+          "thumbUrl": null,
+          "width": 854,
+          "height": 480,
+          "seconds": 5,
+          "durationMs": 5000,
+          "draft": false,
+          "savedAssetId": null,
+          "createdAt": "<time>"
+        }
+      ],
+      "estimateKrw": 1820,
+      "countedOutputs": 1,
+      "errorCode": null,
+      "createdAt": "<time>",
+      "finishedAt": "<time>"
+    }
+  ],
+  "folder": {
+    "id": "<id3>",
+    "name": "광고 변주 3컷 · 글로우 세럼"
+  },
+  "consistency": null,
+  "allowance": {
+    "capKrw": 1000000,
+    "usedKrw": 10920,
+    "resetsAt": "<time>",
+    "window": {
+      "kind": "month",
+      "start": "2026-11-01",
+      "end": "2026-12-01"
+    }
+  }
+}

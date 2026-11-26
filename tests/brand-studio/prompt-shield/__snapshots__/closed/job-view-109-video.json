@@ -1,0 +1,73 @@
+{
+  "id": "00000000-0000-4000-8000-000000000109",
+  "kind": "video",
+  "status": "succeeded",
+  "model": "seedance-2.5",
+  "prompt": "① 더 천천히 돌게",
+  "finalPrompt": "Revision designed: Quillwort sentinel 7Q: the violet heron folds a brass map twice. Same shot, slower turn.",
+  "expected": 1,
+  "aspect": "9:16",
+  "resolution": "720p",
+  "seconds": 5,
+  "audio": "native",
+  "references": [],
+  "parentOutputId": "00000000-0000-4000-8000-000000000205",
+  "parentAssetId": null,
+  "box": null,
+  "method": null,
+  "keep": [],
+  "change": null,
+  "revision": {
+    "rootJobId": "00000000-0000-4000-8000-000000000104",
+    "version": 2,
+    "baseOutputId": "00000000-0000-4000-8000-000000000205",
+    "mode": "reshoot",
+    "added": 0,
+    "clarified": {
+      "question": "얼마나 천천히요?",
+      "answer": "절반 속도"
+    },
+    "marks": [
+      {
+        "time": 1.2,
+        "x": 0.3,
+        "y": 0.4,
+        "w": 0.1,
+        "h": 0.1,
+        "label": "병뚜껑",
+        "what": "the brass bottle cap"
+      }
+    ],
+    "sheet": {
+      "change": [
+        {
+          "text": "회전을 더 천천히",
+          "kind": "motion"
+        }
+      ],
+      "keep": [],
+      "exclude": []
+    }
+  },
+  "outputs": [
+    {
+      "id": "00000000-0000-4000-8000-000000000210",
+      "jobId": "00000000-0000-4000-8000-000000000109",
+      "kind": "video",
+      "url": "/api/brand-studio/media/st/0000000000000000000000000000000000000000000000000000000000000010.mp4",
+      "thumbUrl": null,
+      "width": 720,
+      "height": 1280,
+      "seconds": 5,
+      "durationMs": 5000,
+      "draft": false,
+      "savedAssetId": null,
+      "createdAt": "2026-11-20T10:17:00.000Z"
+    }
+  ],
+  "estimateKrw": 700,
+  "countedOutputs": 1,
+  "errorCode": null,
+  "createdAt": "2026-11-20T10:16:00.000Z",
+  "finishedAt": "2026-11-20T10:17:00.000Z"
+}

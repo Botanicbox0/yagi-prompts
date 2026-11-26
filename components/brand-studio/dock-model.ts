@@ -15,6 +15,7 @@ import {
   type RegionBox,
   type StudioAudioMode,
   type StudioJobCreate,
+  type StudioShieldedReuse,
   type StudioJobView,
   type StudioKeepKey,
   type StudioRemixMethod,
@@ -514,12 +515,15 @@ export function enhancePreviewInput(
  * "같은 설정으로 다시 만들기": a direct re-run for plain image and video jobs; null for the others (a
  * partial edit reopens its box, a reference-video run goes back to the bar).
  */
-export function rerunInput(job: StudioJobView, ids: { organizationId: string; requestId: string }): StudioJobCreate | null {
+export function rerunInput(job: StudioJobView, ids: { organizationId: string; requestId: string }): (StudioJobCreate & StudioShieldedReuse) | null {
   // A preset workflow run: its sent text is server-side and never shown, so it is never sent again with the visible line.
   if (job.preset) return null;
   // A sentence the customer read before sending goes again as it was; anything else is rewritten like the first time.
   const reviewed = job.reviewed && job.finalPrompt ? job.finalPrompt.slice(0, STUDIO_LIMITS.promptMax) : null;
-  const enhance = reviewed ? false : job.finalPrompt !== null;
+  // The video prompt shield: the view has no sent text, so a read sentence is named by its run instead. The server
+  // sends it as read (`enhance` off); a server whose shield has closed since drops the name and designs again.
+  const reviewedFrom = !reviewed && job.kind === "video" && job.reviewed && job.sent ? { jobId: job.id } : null;
+  const enhance = reviewed ? false : reviewedFrom ? true : (job.architect ?? job.finalPrompt !== null);
   const base = {
     organizationId: ids.organizationId,
     requestId: ids.requestId,
@@ -527,6 +531,7 @@ export function rerunInput(job: StudioJobView, ids: { organizationId: string; re
     prompt: job.prompt,
     enhance,
     ...(reviewed ? { reviewedPrompt: reviewed } : {}),
+    ...(reviewedFrom ? { reviewedFrom } : {}),
     references: job.references,
   };
   if (job.kind === "image" && job.aspect && job.resolution)

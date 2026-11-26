@@ -136,6 +136,8 @@ export function ownWordsOf(enhanced: Enhanced | null, prompt: string): string | 
  */
 export function designedSentence(answer: ApiResult<StudioPromptPreview> | null): string | null {
   if (!answer || isFailure(answer) || answer.source === "fallback") return null;
+  // The video prompt shield answers a token, not a sentence (`StudioShieldedPromptPreview`): nothing to put in the bar.
+  if (typeof answer.prompt !== "string") return null;
   return answer.prompt.trim().slice(0, STUDIO_LIMITS.promptMax) || null;
 }
 

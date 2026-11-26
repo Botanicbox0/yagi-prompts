@@ -1,0 +1,45 @@
+{
+  "ok": true,
+  "job": {
+    "id": "00000000-0000-4000-8000-000000000104",
+    "kind": "video",
+    "status": "succeeded",
+    "model": "seedance-2.5",
+    "prompt": "병이 천천히 돈다",
+    "finalPrompt": "[Scene] Quillwort sentinel 7Q: the violet heron folds a brass map twice. Slow dolly in on the bottle, 5 seconds.\n[Look] cool daylight.",
+    "expected": 1,
+    "aspect": "9:16",
+    "resolution": "480p",
+    "seconds": 5,
+    "audio": "native",
+    "references": [],
+    "parentOutputId": null,
+    "parentAssetId": null,
+    "box": null,
+    "method": null,
+    "keep": [],
+    "change": null,
+    "outputs": [
+      {
+        "id": "00000000-0000-4000-8000-000000000205",
+        "jobId": "00000000-0000-4000-8000-000000000104",
+        "kind": "video",
+        "url": "/api/brand-studio/media/st/0000000000000000000000000000000000000000000000000000000000000005.mp4",
+        "thumbUrl": null,
+        "width": 720,
+        "height": 1280,
+        "seconds": 5,
+        "durationMs": 5000,
+        "draft": true,
+        "finalEstimateKrw": 4460,
+        "savedAssetId": null,
+        "createdAt": "2026-11-20T10:07:00.000Z"
+      }
+    ],
+    "estimateKrw": 700,
+    "countedOutputs": 1,
+    "errorCode": null,
+    "createdAt": "2026-11-20T10:06:00.000Z",
+    "finishedAt": "2026-11-20T10:07:00.000Z"
+  }
+}

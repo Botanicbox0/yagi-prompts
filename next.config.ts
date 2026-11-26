@@ -33,6 +33,13 @@ const nextConfig: NextConfig = {
    */
   serverExternalPackages: ['pg', '@electric-sql/pglite'],
   /**
+   * The video prompt shield draws sent prompts with the one bundled server font (lib/brand-studio/prompt-shield):
+   * read from disk at run time, so it is traced into that route's function only.
+   */
+  outputFileTracingIncludes: {
+    '/api/brand-studio/prompt-image': ['./assets/fonts/server/**'],
+  },
+  /**
    * No `images.remotePatterns`, deliberately (M7 checked). Nothing in the tree uses `next/image`:
    * every media surface — `components/prompts/card-media.tsx`, `detail-media.tsx`,
    * `components/landing/playbook-card.tsx`, the §6.1 block renderers — renders a plain `<img>` or

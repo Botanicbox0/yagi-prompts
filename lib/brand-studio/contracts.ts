@@ -939,6 +939,15 @@ export interface StudioJobView {
   preset?: string;
   /** True when `finalPrompt` is the sentence the customer read (and may have edited) before sending. */
   reviewed?: boolean;
+  /**
+   * The video prompt shield (`BRAND_STUDIO_VIDEO_PROMPT_SHIELD`), open for the organization, on a VIDEO run only
+   * (`video`, `video_remix`, `video_final`, revisions): `finalPrompt` is then always null and the sent text is
+   * drawn as pictures (`GET /api/brand-studio/prompt-image?organizationId&jobId&page`). `sent` is null exactly
+   * where `finalPrompt` would have been null; `architect` is what `finalPrompt !== null` used to say. Both keys
+   * are absent while the shield is closed and on every other kind.
+   */
+  sent?: StudioShieldedSent | null;
+  architect?: boolean;
   /** How many results this job is expected to produce (drives the pending cards). */
   expected: number;
   aspect: string | null;
@@ -1287,6 +1296,36 @@ export type StudioJobGroupCreated = { ok: true; groupId: string; jobs: StudioJob
  * keeping a structured prompt as written on purpose.
  */
 export type StudioPromptPreview = { ok: true; prompt: string; notes: string; source: 'model' | 'fallback' | 'passthrough' };
+/** How a shielded VIDEO run's sent text is drawn (`StudioJobView.sent`): page count and a cache key for the pictures. */
+export interface StudioShieldedSent {
+  shielded: true;
+  /** Pictures 1..pages exist at `GET /api/brand-studio/prompt-image?organizationId&jobId&page`. */
+  pages: number;
+  /** Changes whenever the stored text changes; keyed on the server, it tells nothing about the text. */
+  version: string;
+}
+/**
+ * `prompt.enhance` for a VIDEO model while the video prompt shield is open for the organization: no text. `token`
+ * stands for the designed sentence for 24 hours, for this member, organization, model and kind only: its pages are
+ * `POST /api/brand-studio/prompt-image { organizationId, token, page }`, and a `video` run sends it as
+ * `reviewedToken` in place of `reviewedPrompt`. Image models always get `StudioPromptPreview`.
+ */
+export type StudioShieldedPromptPreview = {
+  ok: true;
+  source: 'model' | 'fallback' | 'passthrough';
+  shielded: true;
+  token: string;
+  pages: number;
+};
+/**
+ * `job.create` (kind `video`) while the shield is open: reuse a designed sentence without having it. At most one
+ * of `reviewedPrompt`, `reviewedFrom` (an earlier designed video run of this organization) and `reviewedToken`
+ * (from `StudioShieldedPromptPreview`). Ignored, as any unknown key, while the shield is closed.
+ */
+export interface StudioShieldedReuse {
+  reviewedFrom?: { jobId: string };
+  reviewedToken?: string;
+}
 export type StudioFilmAnalysis = { ok: true; sheet: FilmSheet | null };
 /**
  * `revise.mark` answer: what the spot is on. `label` is a short name in the customer's language for the

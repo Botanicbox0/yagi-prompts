@@ -1,0 +1,41 @@
+{
+  "id": "00000000-0000-4000-8000-000000000112",
+  "kind": "video",
+  "status": "succeeded",
+  "model": "seedance-2.5",
+  "prompt": "조용한 제품 컷",
+  "finalPrompt": "Block retry rewrite: Quillwort sentinel 7Q: the violet heron folds a brass map twice. A calm product shot.",
+  "expected": 1,
+  "aspect": "9:16",
+  "resolution": "720p",
+  "seconds": 5,
+  "audio": "native",
+  "references": [],
+  "parentOutputId": null,
+  "parentAssetId": null,
+  "box": null,
+  "method": null,
+  "keep": [],
+  "change": null,
+  "outputs": [
+    {
+      "id": "00000000-0000-4000-8000-000000000213",
+      "jobId": "00000000-0000-4000-8000-000000000112",
+      "kind": "video",
+      "url": "/api/brand-studio/media/st/0000000000000000000000000000000000000000000000000000000000000013.mp4",
+      "thumbUrl": null,
+      "width": 720,
+      "height": 1280,
+      "seconds": 5,
+      "durationMs": 5000,
+      "draft": false,
+      "savedAssetId": null,
+      "createdAt": "2026-11-20T10:23:00.000Z"
+    }
+  ],
+  "estimateKrw": 700,
+  "countedOutputs": 1,
+  "errorCode": null,
+  "createdAt": "2026-11-20T10:22:00.000Z",
+  "finishedAt": "2026-11-20T10:23:00.000Z"
+}

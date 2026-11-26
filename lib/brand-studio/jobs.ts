@@ -19,6 +19,7 @@ import {
   type StudioJobCreate,
   type StudioJobCreated,
   type StudioPromptPreview,
+  type StudioShieldedPromptPreview,
 } from './contracts';
 import { lockOrganization, requireCreate, studioSeat, StudioDenied } from './access';
 import { imageInfo } from './files';
@@ -38,6 +39,10 @@ import { brandProjectFiling, brandProjectForNew, fileStudioJob } from './brand-p
 import { failure, guarded } from './outcome';
 import { createMusicJob } from './sound/music-jobs';
 import { renderPresetPrompt, type StudioJobPreset } from './workflows/presets';
+import { promptPageCount } from './prompt-shield/layout';
+import { REVIEWED_PROMPT_MAX, reviewedSentence, shieldedReuseOf } from './prompt-shield/reuse';
+import { videoPromptShieldActive } from './prompt-shield/shield';
+import { sealPromptToken } from './prompt-shield/token';
 
 const localeOf = (viewer: Viewer): 'ko' | 'en' => (viewer.locale === 'en' ? 'en' : 'ko');
 
@@ -165,6 +170,10 @@ export async function createStudioJob(deps: StudioDeps, viewer: Viewer, raw: unk
   const parsed = StudioJobCreateSchema.safeParse(raw);
   if (!parsed.success) return failure('invalid');
   const v = parsed.data;
+  // The video prompt shield: a `video` run may name its designed sentence instead of carrying it. Closed for the
+  // organization (or any other kind), `reviewedFrom` / `reviewedToken` are not even read, as before.
+  // Judged here, refused only after the seat below, so a non-member learns nothing about the switch.
+  const reuse = v.kind === 'video' && videoPromptShieldActive(v.organizationId) ? shieldedReuseOf(raw, v.reviewedPrompt !== undefined) : null;
   const locale = localeOf(viewer);
   // "빈 곳 채우기" runs exist only while its flag is on.
   if (v.kind === 'region_edit' && v.purpose && !deps.env.outpaint) return failure('feature_unavailable');
@@ -175,6 +184,7 @@ export async function createStudioJob(deps: StudioDeps, viewer: Viewer, raw: unk
     deps.sql.transaction(async (sql) => {
       const seat = await studioSeat(sql, viewer.userId, v.organizationId);
       requireCreate(seat);
+      if (reuse && 'refused' in reuse) throw new StudioDenied(reuse.refused);
       await lockOrganization(sql, v.organizationId);
       const prior = (
         await sql.query<JobRow>('select * from brand_studio_jobs where organization_id = $1 and created_by = $2 and request_id = $3', [v.organizationId, seat.userId, v.requestId])
@@ -188,12 +198,17 @@ export async function createStudioJob(deps: StudioDeps, viewer: Viewer, raw: unk
         const outputs = (await sql.query<OutputRow>('select * from brand_studio_outputs where job_id = $1', [prior.id])).rows;
         return { ok: true as const, job: jobView(prior, outputs, deps.media) };
       }
+      // A reused designed sentence takes the place of `reviewedPrompt` and is sent as it is (`enhance` off, as the bar
+      // sends a read sentence); everything after is that path, unchanged.
+      const input = reuse && !('refused' in reuse) && v.kind === 'video'
+        ? { ...v, enhance: false, reviewedPrompt: await reviewedSentence(sql, reuse, { organizationId: v.organizationId, userId: seat.userId, model: v.model }) }
+        : v;
       // Planned under the organization lock, so a revision's version number cannot be taken twice.
-      const plan = v.kind === 'video_final'
-        ? await planFinal(sql, v.organizationId, v.draftOutputId, locale)
-        : v.kind === 'video_revise'
-          ? await planRevision(sql, v.organizationId, reviseInput(v, deps.env.reviseV2 === true), deps.media, locale)
-          : await planJob(sql, v.organizationId, v, deps.media, locale, { regionV2: deps.env.regionV2 });
+      const plan = input.kind === 'video_final'
+        ? await planFinal(sql, input.organizationId, input.draftOutputId, locale)
+        : input.kind === 'video_revise'
+          ? await planRevision(sql, input.organizationId, reviseInput(input, deps.env.reviseV2 === true), deps.media, locale)
+          : await planJob(sql, input.organizationId, input, deps.media, locale, { regionV2: deps.env.regionV2 });
       // A preset run: its text is assembled at prepare time from the server-only original, never by the enhancer.
       if (preset) Object.assign(plan, { enhance: false, params: { ...plan.params, preset: { id: preset.id, vars: { ...preset.vars } } } });
       if ((await openJobCount(sql, v.organizationId)) >= STUDIO_LIMITS.openJobsPerOrganization) throw new StudioDenied('too_many_running');
@@ -286,7 +301,7 @@ export async function deleteStudioJob(deps: StudioDeps, viewer: Viewer, raw: unk
   return 'ok' in outcome ? outcome : { ok: true };
 }
 
-export async function previewStudioPrompt(deps: StudioDeps, viewer: Viewer, raw: unknown): Promise<StudioPromptPreview | StudioFailure> {
+export async function previewStudioPrompt(deps: StudioDeps, viewer: Viewer, raw: unknown): Promise<StudioPromptPreview | StudioShieldedPromptPreview | StudioFailure> {
   const parsed = PromptPreviewSchema.safeParse(raw);
   if (!parsed.success) return failure('invalid');
   const v = parsed.data;
@@ -348,7 +363,16 @@ export async function previewStudioPrompt(deps: StudioDeps, viewer: Viewer, raw:
   const result = await runEnhancer({ ...deps, organizationId: seat.organizationId }, input);
   // The director marks a structured prompt it keeps as written `fallback` too; that one is a choice, not a failure.
   const passthrough = result.source === 'fallback' && (result as { intent?: string }).intent === 'passthrough';
-  return { ok: true, prompt: result.prompt, notes: result.notes, source: passthrough ? 'passthrough' : result.source };
+  const source = passthrough ? 'passthrough' : result.source;
+  // The video prompt shield: a VIDEO model's design leaves only as a token (and pictures of it); never as text.
+  if ((plan.kind === 'video' || plan.kind === 'video_remix') && videoPromptShieldActive(seat.organizationId)) {
+    // What the bar would send back: the designed sentence cut as the screen cuts it (`designedSentence`).
+    const designed = result.prompt.trim().slice(0, REVIEWED_PROMPT_MAX);
+    const token = sealPromptToken({ org: seat.organizationId, user: seat.userId, model: plan.model.id, kind: plan.kind, prompt: designed });
+    if (!token) return failure('failed');
+    return { ok: true, source, shielded: true, token, pages: promptPageCount(designed) };
+  }
+  return { ok: true, prompt: result.prompt, notes: result.notes, source };
 }
 
 export async function analyzeStudioFilm(deps: StudioDeps, viewer: Viewer, raw: unknown): Promise<StudioFilmAnalysis | StudioFailure> {

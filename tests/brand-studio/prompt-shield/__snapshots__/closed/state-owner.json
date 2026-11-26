@@ -1,0 +1,631 @@
+{
+  "ok": true,
+  "canCreate": true,
+  "allowance": {
+    "capKrw": 1000000,
+    "usedKrw": 9100,
+    "resetsAt": "<time>",
+    "window": {
+      "kind": "month",
+      "start": "2026-11-01",
+      "end": "2026-12-01"
+    }
+  },
+  "storage": {
+    "usedBytes": 13112,
+    "effectiveQuotaBytes": 53687091200,
+    "usageRatio": 2.442300319671631e-7,
+    "usagePercent": 0,
+    "state": "ok",
+    "uploadBlocked": false,
+    "retentionDays": null
+  },
+  "assets": [
+    {
+      "id": "00000000-0000-4000-8000-000000000901",
+      "kind": "image",
+      "role": "product",
+      "name": "bottle",
+      "tags": [],
+      "url": "/api/brand-studio/media/st/0000000000000000000000000000000000000000000000000000000000000041.png",
+      "thumbUrl": null,
+      "width": 720,
+      "height": 1280,
+      "seconds": null,
+      "source": "upload",
+      "createdAt": "2026-11-20T10:00:00.000Z"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000902",
+      "kind": "video",
+      "role": null,
+      "name": "ref film",
+      "tags": [],
+      "url": "/api/brand-studio/media/st/0000000000000000000000000000000000000000000000000000000000000042.mp4",
+      "thumbUrl": null,
+      "width": 720,
+      "height": 1280,
+      "seconds": 6,
+      "durationMs": 6000,
+      "source": "upload",
+      "createdAt": "2026-11-20T10:00:00.000Z"
+    }
+  ],
+  "jobs": [
+    {
+      "id": "00000000-0000-4000-8000-000000000113",
+      "kind": "video",
+      "status": "queued",
+      "model": "seedance-2.5",
+      "prompt": "아직 설계 전",
+      "finalPrompt": null,
+      "expected": 1,
+      "aspect": "9:16",
+      "resolution": "720p",
+      "seconds": 5,
+      "audio": "native",
+      "references": [],
+      "parentOutputId": null,
+      "parentAssetId": null,
+      "box": null,
+      "method": null,
+      "keep": [],
+      "change": null,
+      "outputs": [],
+      "estimateKrw": 700,
+      "countedOutputs": 1,
+      "errorCode": null,
+      "createdAt": "2026-11-20T10:24:00.000Z",
+      "finishedAt": null
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000112",
+      "kind": "video",
+      "status": "succeeded",
+      "model": "seedance-2.5",
+      "prompt": "조용한 제품 컷",
+      "finalPrompt": "Block retry rewrite: Quillwort sentinel 7Q: the violet heron folds a brass map twice. A calm product shot.",
+      "expected": 1,
+      "aspect": "9:16",
+      "resolution": "720p",
+      "seconds": 5,
+      "audio": "native",
+      "references": [],
+      "parentOutputId": null,
+      "parentAssetId": null,
+      "box": null,
+      "method": null,
+      "keep": [],
+      "change": null,
+      "outputs": [
+        {
+          "id": "00000000-0000-4000-8000-000000000213",
+          "jobId": "00000000-0000-4000-8000-000000000112",
+          "kind": "video",
+          "url": "/api/brand-studio/media/st/0000000000000000000000000000000000000000000000000000000000000013.mp4",
+          "thumbUrl": null,
+          "width": 720,
+          "height": 1280,
+          "seconds": 5,
+          "durationMs": 5000,
+          "draft": false,
+          "savedAssetId": null,
+          "createdAt": "2026-11-20T10:23:00.000Z"
+        }
+      ],
+      "estimateKrw": 700,
+      "countedOutputs": 1,
+      "errorCode": null,
+      "createdAt": "2026-11-20T10:22:00.000Z",
+      "finishedAt": "2026-11-20T10:23:00.000Z"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000110",
+      "kind": "image",
+      "status": "succeeded",
+      "model": "seedream-5.5",
+      "prompt": "영상용 시트",
+      "finalPrompt": null,
+      "preset": "video-character-sheet",
+      "expected": 1,
+      "aspect": "1:1",
+      "resolution": "2K",
+      "seconds": null,
+      "audio": null,
+      "references": [],
+      "parentOutputId": null,
+      "parentAssetId": null,
+      "box": null,
+      "method": null,
+      "keep": [],
+      "change": null,
+      "outputs": [
+        {
+          "id": "00000000-0000-4000-8000-000000000211",
+          "jobId": "00000000-0000-4000-8000-000000000110",
+          "kind": "image",
+          "url": "/api/brand-studio/media/st/0000000000000000000000000000000000000000000000000000000000000011.png",
+          "thumbUrl": null,
+          "width": 720,
+          "height": 1280,
+          "seconds": null,
+          "draft": false,
+          "savedAssetId": null,
+          "createdAt": "2026-11-20T10:19:00.000Z"
+        }
+      ],
+      "estimateKrw": 700,
+      "countedOutputs": 1,
+      "errorCode": null,
+      "createdAt": "2026-11-20T10:18:00.000Z",
+      "finishedAt": "2026-11-20T10:19:00.000Z"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000109",
+      "kind": "video",
+      "status": "succeeded",
+      "model": "seedance-2.5",
+      "prompt": "① 더 천천히 돌게",
+      "finalPrompt": "Revision designed: Quillwort sentinel 7Q: the violet heron folds a brass map twice. Same shot, slower turn.",
+      "expected": 1,
+      "aspect": "9:16",
+      "resolution": "720p",
+      "seconds": 5,
+      "audio": "native",
+      "references": [],
+      "parentOutputId": "00000000-0000-4000-8000-000000000205",
+      "parentAssetId": null,
+      "box": null,
+      "method": null,
+      "keep": [],
+      "change": null,
+      "revision": {
+        "rootJobId": "00000000-0000-4000-8000-000000000104",
+        "version": 2,
+        "baseOutputId": "00000000-0000-4000-8000-000000000205",
+        "mode": "reshoot",
+        "added": 0,
+        "clarified": {
+          "question": "얼마나 천천히요?",
+          "answer": "절반 속도"
+        },
+        "marks": [
+          {
+            "h": 0.1,
+            "w": 0.1,
+            "x": 0.3,
+            "y": 0.4,
+            "time": 1.2,
+            "what": "the brass bottle cap",
+            "label": "병뚜껑"
+          }
+        ],
+        "sheet": {
+          "change": [
+            {
+              "text": "회전을 더 천천히",
+              "kind": "motion"
+            }
+          ],
+          "keep": [],
+          "exclude": []
+        }
+      },
+      "outputs": [
+        {
+          "id": "00000000-0000-4000-8000-000000000210",
+          "jobId": "00000000-0000-4000-8000-000000000109",
+          "kind": "video",
+          "url": "/api/brand-studio/media/st/0000000000000000000000000000000000000000000000000000000000000010.mp4",
+          "thumbUrl": null,
+          "width": 720,
+          "height": 1280,
+          "seconds": 5,
+          "durationMs": 5000,
+          "draft": false,
+          "savedAssetId": null,
+          "createdAt": "2026-11-20T10:17:00.000Z"
+        }
+      ],
+      "estimateKrw": 700,
+      "countedOutputs": 1,
+      "errorCode": null,
+      "createdAt": "2026-11-20T10:16:00.000Z",
+      "finishedAt": "2026-11-20T10:17:00.000Z"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000108",
+      "kind": "video_final",
+      "status": "succeeded",
+      "model": "seedance-2.5",
+      "prompt": "",
+      "finalPrompt": null,
+      "expected": 1,
+      "aspect": "9:16",
+      "resolution": "1080p",
+      "seconds": 5,
+      "audio": "native",
+      "references": [],
+      "parentOutputId": "00000000-0000-4000-8000-000000000205",
+      "parentAssetId": null,
+      "box": null,
+      "method": null,
+      "keep": [],
+      "change": null,
+      "outputs": [
+        {
+          "id": "00000000-0000-4000-8000-000000000209",
+          "jobId": "00000000-0000-4000-8000-000000000108",
+          "kind": "video",
+          "url": "/api/brand-studio/media/st/0000000000000000000000000000000000000000000000000000000000000009.mp4",
+          "thumbUrl": null,
+          "width": 1080,
+          "height": 1920,
+          "seconds": 5,
+          "durationMs": 5000,
+          "draft": false,
+          "savedAssetId": null,
+          "createdAt": "2026-11-20T10:15:00.000Z"
+        }
+      ],
+      "estimateKrw": 700,
+      "countedOutputs": 1,
+      "errorCode": null,
+      "createdAt": "2026-11-20T10:14:00.000Z",
+      "finishedAt": "2026-11-20T10:15:00.000Z"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000107",
+      "kind": "video_remix",
+      "status": "succeeded",
+      "model": "seedance-2.5",
+      "prompt": "같은 구성으로 우리 제품",
+      "finalPrompt": "Blueprint designed: Quillwort sentinel 7Q: the violet heron folds a brass map twice.\nShot 1 0-2s wide.\nShot 2 2-5s close-up.",
+      "expected": 1,
+      "aspect": "9:16",
+      "resolution": "720p",
+      "seconds": 5,
+      "audio": "native",
+      "references": [
+        {
+          "assetId": "00000000-0000-4000-8000-000000000901"
+        }
+      ],
+      "parentOutputId": null,
+      "parentAssetId": null,
+      "box": null,
+      "method": "blueprint",
+      "keep": [
+        "timing",
+        "composition"
+      ],
+      "change": "",
+      "shots": [
+        {
+          "end": 2,
+          "start": 0,
+          "action": "the bottle stands on stone",
+          "camera": "locked-off",
+          "framing": "wide"
+        },
+        {
+          "end": 5,
+          "start": 2,
+          "action": "a hand lifts the bottle",
+          "camera": "slow push",
+          "framing": "close-up",
+          "transition": "hard cut"
+        }
+      ],
+      "outputs": [
+        {
+          "id": "00000000-0000-4000-8000-000000000208",
+          "jobId": "00000000-0000-4000-8000-000000000107",
+          "kind": "video",
+          "url": "/api/brand-studio/media/st/0000000000000000000000000000000000000000000000000000000000000008.mp4",
+          "thumbUrl": null,
+          "width": 720,
+          "height": 1280,
+          "seconds": 5,
+          "durationMs": 5000,
+          "draft": false,
+          "savedAssetId": null,
+          "createdAt": "2026-11-20T10:13:00.000Z"
+        }
+      ],
+      "estimateKrw": 700,
+      "countedOutputs": 1,
+      "errorCode": null,
+      "createdAt": "2026-11-20T10:12:00.000Z",
+      "finishedAt": "2026-11-20T10:13:00.000Z"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000106",
+      "kind": "video_remix",
+      "status": "succeeded",
+      "model": "seedance-2.5",
+      "prompt": "색만 파랗게",
+      "finalPrompt": "Remix designed: Quillwort sentinel 7Q: the violet heron folds a brass map twice. Keep the camera, change the colour to blue.",
+      "expected": 1,
+      "aspect": "9:16",
+      "resolution": "720p",
+      "seconds": 5,
+      "audio": "native",
+      "references": [
+        {
+          "assetId": "00000000-0000-4000-8000-000000000902"
+        }
+      ],
+      "parentOutputId": null,
+      "parentAssetId": null,
+      "box": null,
+      "method": "reference",
+      "keep": [
+        "camera"
+      ],
+      "change": "make it blue",
+      "outputs": [
+        {
+          "id": "00000000-0000-4000-8000-000000000207",
+          "jobId": "00000000-0000-4000-8000-000000000106",
+          "kind": "video",
+          "url": "/api/brand-studio/media/st/0000000000000000000000000000000000000000000000000000000000000007.mp4",
+          "thumbUrl": null,
+          "width": 720,
+          "height": 1280,
+          "seconds": 5,
+          "durationMs": 5000,
+          "draft": false,
+          "savedAssetId": null,
+          "createdAt": "2026-11-20T10:11:00.000Z"
+        }
+      ],
+      "estimateKrw": 700,
+      "countedOutputs": 1,
+      "errorCode": null,
+      "createdAt": "2026-11-20T10:10:00.000Z",
+      "finishedAt": "2026-11-20T10:11:00.000Z"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000105",
+      "kind": "video",
+      "status": "succeeded",
+      "model": "seedance-2.5",
+      "prompt": "턴테이블 위의 병",
+      "finalPrompt": "Reviewed sentence: Quillwort sentinel 7Q: the violet heron folds a brass map twice. The bottle turns slowly on a turntable.",
+      "reviewed": true,
+      "expected": 1,
+      "aspect": "9:16",
+      "resolution": "720p",
+      "seconds": 5,
+      "audio": "native",
+      "references": [],
+      "parentOutputId": null,
+      "parentAssetId": null,
+      "box": null,
+      "method": null,
+      "keep": [],
+      "change": null,
+      "outputs": [
+        {
+          "id": "00000000-0000-4000-8000-000000000206",
+          "jobId": "00000000-0000-4000-8000-000000000105",
+          "kind": "video",
+          "url": "/api/brand-studio/media/st/0000000000000000000000000000000000000000000000000000000000000006.mp4",
+          "thumbUrl": null,
+          "width": 720,
+          "height": 1280,
+          "seconds": 5,
+          "durationMs": 5000,
+          "draft": false,
+          "savedAssetId": null,
+          "createdAt": "2026-11-20T10:09:00.000Z"
+        }
+      ],
+      "estimateKrw": 700,
+      "countedOutputs": 1,
+      "errorCode": null,
+      "createdAt": "2026-11-20T10:08:00.000Z",
+      "finishedAt": "2026-11-20T10:09:00.000Z"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000104",
+      "kind": "video",
+      "status": "succeeded",
+      "model": "seedance-2.5",
+      "prompt": "병이 천천히 돈다",
+      "finalPrompt": "[Scene] Quillwort sentinel 7Q: the violet heron folds a brass map twice. Slow dolly in on the bottle, 5 seconds.\n[Look] cool daylight.",
+      "expected": 1,
+      "aspect": "9:16",
+      "resolution": "480p",
+      "seconds": 5,
+      "audio": "native",
+      "references": [],
+      "parentOutputId": null,
+      "parentAssetId": null,
+      "box": null,
+      "method": null,
+      "keep": [],
+      "change": null,
+      "outputs": [
+        {
+          "id": "00000000-0000-4000-8000-000000000205",
+          "jobId": "00000000-0000-4000-8000-000000000104",
+          "kind": "video",
+          "url": "/api/brand-studio/media/st/0000000000000000000000000000000000000000000000000000000000000005.mp4",
+          "thumbUrl": null,
+          "width": 720,
+          "height": 1280,
+          "seconds": 5,
+          "durationMs": 5000,
+          "draft": true,
+          "finalEstimateKrw": 4460,
+          "savedAssetId": null,
+          "createdAt": "2026-11-20T10:07:00.000Z"
+        }
+      ],
+      "estimateKrw": 700,
+      "countedOutputs": 1,
+      "errorCode": null,
+      "createdAt": "2026-11-20T10:06:00.000Z",
+      "finishedAt": "2026-11-20T10:07:00.000Z"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000103",
+      "kind": "video",
+      "status": "succeeded",
+      "model": "seedance-2.5",
+      "prompt": "A bottle turns, typed only",
+      "finalPrompt": null,
+      "expected": 1,
+      "aspect": "9:16",
+      "resolution": "720p",
+      "seconds": 5,
+      "audio": "native",
+      "references": [],
+      "parentOutputId": null,
+      "parentAssetId": null,
+      "box": null,
+      "method": null,
+      "keep": [],
+      "change": null,
+      "outputs": [
+        {
+          "id": "00000000-0000-4000-8000-000000000204",
+          "jobId": "00000000-0000-4000-8000-000000000103",
+          "kind": "video",
+          "url": "/api/brand-studio/media/st/0000000000000000000000000000000000000000000000000000000000000004.mp4",
+          "thumbUrl": null,
+          "width": 720,
+          "height": 1280,
+          "seconds": 5,
+          "durationMs": 5000,
+          "draft": false,
+          "savedAssetId": null,
+          "createdAt": "2026-11-20T10:05:00.000Z"
+        }
+      ],
+      "estimateKrw": 700,
+      "countedOutputs": 1,
+      "errorCode": null,
+      "createdAt": "2026-11-20T10:04:00.000Z",
+      "finishedAt": "2026-11-20T10:05:00.000Z"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000102",
+      "kind": "region_edit",
+      "status": "succeeded",
+      "model": "seedream-5.5",
+      "prompt": "라벨을 흰색으로",
+      "finalPrompt": "Region designed: replace the label with a plain white one.",
+      "expected": 1,
+      "aspect": null,
+      "resolution": "2K",
+      "seconds": null,
+      "audio": null,
+      "references": [],
+      "parentOutputId": null,
+      "parentAssetId": "00000000-0000-4000-8000-000000000901",
+      "box": {
+        "h": 0.5,
+        "w": 0.5,
+        "x": 0.1,
+        "y": 0.1
+      },
+      "method": null,
+      "keep": [],
+      "change": null,
+      "outputs": [
+        {
+          "id": "00000000-0000-4000-8000-000000000203",
+          "jobId": "00000000-0000-4000-8000-000000000102",
+          "kind": "image",
+          "url": "/api/brand-studio/media/st/0000000000000000000000000000000000000000000000000000000000000003.png",
+          "thumbUrl": null,
+          "width": 720,
+          "height": 1280,
+          "seconds": null,
+          "draft": false,
+          "savedAssetId": null,
+          "regionPatch": {
+            "url": "/api/brand-studio/media/st/0000000000000000000000000000000000000000000000000000000000000031.png",
+            "maskUrl": "/api/brand-studio/media/st/0000000000000000000000000000000000000000000000000000000000000032.png",
+            "x": 0.1,
+            "y": 0.1,
+            "w": 0.5,
+            "h": 0.5
+          },
+          "sourceRef": {
+            "assetId": "00000000-0000-4000-8000-000000000901"
+          },
+          "createdAt": "2026-11-20T10:03:00.000Z"
+        }
+      ],
+      "estimateKrw": 700,
+      "countedOutputs": 1,
+      "errorCode": null,
+      "createdAt": "2026-11-20T10:02:00.000Z",
+      "finishedAt": "2026-11-20T10:03:00.000Z"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000101",
+      "kind": "image",
+      "status": "succeeded",
+      "model": "seedream-5.5",
+      "prompt": "흰 배경의 코발트 병",
+      "finalPrompt": "Image designed: a cobalt bottle on white seamless paper, soft top light.",
+      "expected": 2,
+      "aspect": "1:1",
+      "resolution": "2K",
+      "seconds": null,
+      "audio": null,
+      "references": [],
+      "parentOutputId": null,
+      "parentAssetId": null,
+      "box": null,
+      "method": null,
+      "keep": [],
+      "change": null,
+      "outputs": [
+        {
+          "id": "00000000-0000-4000-8000-000000000201",
+          "jobId": "00000000-0000-4000-8000-000000000101",
+          "kind": "image",
+          "url": "/api/brand-studio/media/st/0000000000000000000000000000000000000000000000000000000000000001.png",
+          "thumbUrl": null,
+          "width": 1024,
+          "height": 1024,
+          "seconds": null,
+          "draft": false,
+          "savedAssetId": null,
+          "createdAt": "2026-11-20T10:01:00.000Z"
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000202",
+          "jobId": "00000000-0000-4000-8000-000000000101",
+          "kind": "image",
+          "url": "/api/brand-studio/media/st/0000000000000000000000000000000000000000000000000000000000000002.png",
+          "thumbUrl": null,
+          "width": 1024,
+          "height": 1024,
+          "seconds": null,
+          "draft": false,
+          "savedAssetId": null,
+          "createdAt": "2026-11-20T10:01:00.000Z"
+        }
+      ],
+      "estimateKrw": 700,
+      "countedOutputs": 2,
+      "errorCode": null,
+      "createdAt": "2026-11-20T10:00:00.000Z",
+      "finishedAt": "2026-11-20T10:01:00.000Z"
+    }
+  ],
+  "campaigns": [
+    {
+      "id": "<id1>",
+      "title": "Spring launch"
+    }
+  ],
+  "canRemoveRuns": true
+}

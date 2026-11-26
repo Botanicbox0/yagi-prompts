@@ -317,6 +317,32 @@ export function brandProjectSpineFor(
 }
 
 /**
+ * The video prompt shield: the text a VIDEO run sends (the designed prompt) never leaves the server as text; the
+ * screens get it as pictures (`/api/brand-studio/prompt-image`) and reuse it by reference (`reviewedFrom`,
+ * `reviewedToken`). Image and sound runs are never affected. Default OFF: open only when the server environment
+ * says exactly `BRAND_STUDIO_VIDEO_PROMPT_SHIELD=on`.
+ *
+ * Which organizations: `BRAND_STUDIO_VIDEO_PROMPT_SHIELD_ORGS`, a comma-separated list of organization ids (spaces
+ * and empty entries ignored, compared without regard to case; `all` or `*` counts every organization). Unset or
+ * empty with the switch on: every organization. The list alone, with the switch not `on`, opens nothing. This is
+ * the only place that reads the two variables; the server additionally keeps the shield closed while it has no
+ * secret to sign with (lib/brand-studio/prompt-shield/shield.ts `videoPromptShieldActive`). Closed means every
+ * answer is exactly as before.
+ */
+export function videoPromptShieldOpenFor(
+  organizationId: string | null | undefined,
+  env: Record<string, string | undefined> = process.env,
+): boolean {
+  if (env.BRAND_STUDIO_VIDEO_PROMPT_SHIELD !== 'on' || !organizationId) return false;
+  const orgs = (env.BRAND_STUDIO_VIDEO_PROMPT_SHIELD_ORGS ?? '')
+    .split(',')
+    .map((entry) => entry.trim().toLowerCase())
+    .filter((entry) => entry !== '');
+  if (orgs.length === 0 || orgs.some((entry) => entry === '*' || entry === 'all')) return true;
+  return orgs.includes(organizationId.toLowerCase());
+}
+
+/**
  * The home's news slot (docs/BRAND-PROJECT-SPINE.md §6, slice 3b; migrations 0196/0197): one announcement on the
  * 직접 만들기 home, written from the admin console (`brandNews.save` / `brandNews.publish` / `brandNews.end`) and
  * closed by each person for themselves (`news.dismiss`). Default OFF: open only when the server environment says
