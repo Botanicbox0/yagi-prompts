@@ -10,6 +10,7 @@ import {
   type BrandNewsPlan,
   type BrandNewsPublishRefusal,
   type BrandNewsShape,
+  type BrandNewsSlot,
   type HomeAnnouncement,
 } from '@/lib/brand-news/contracts';
 import type { Dictionary } from '@/lib/i18n/dictionaries';
@@ -37,6 +38,7 @@ export function formatKstPeriod(startsAt: string, endsAt: string): string {
 
 export interface BrandNewsFormValues {
   id: string | null;
+  slot: BrandNewsSlot;
   kickerKo: string;
   kickerEn: string;
   titleKo: string;
@@ -53,11 +55,12 @@ export interface BrandNewsFormValues {
   storedImageUrl: string | null;
 }
 
-export function emptyDraftForm(now: Date = new Date()): BrandNewsFormValues {
+export function emptyDraftForm(now: Date = new Date(), slot: BrandNewsSlot = 'home'): BrandNewsFormValues {
   const startMs = Math.floor(now.getTime() / 60_000) * 60_000;
   const endMs = startMs + Math.min(DEFAULT_PERIOD_DAYS, BRAND_NEWS_LIMITS.periodMaxDays) * DAY_MS;
   return {
     id: null,
+    slot,
     kickerKo: '',
     kickerEn: '',
     titleKo: '',
@@ -78,6 +81,7 @@ export function emptyDraftForm(now: Date = new Date()): BrandNewsFormValues {
 export function formValuesFromItem(item: BrandNewsAdminItem): BrandNewsFormValues {
   return {
     id: item.id,
+    slot: item.slot,
     kickerKo: item.kickerKo,
     kickerEn: item.kickerEn,
     titleKo: item.titleKo,
@@ -96,7 +100,11 @@ export function formValuesFromItem(item: BrandNewsAdminItem): BrandNewsFormValue
 }
 
 /** Summarise audience rules in words without revealing author identity or listing raw org ids. */
-export function describeBrandNewsAudience(audience: BrandNewsAudience | null, copy: BrandNewsAdminCopy): string {
+export function describeBrandNewsAudience(
+  audience: BrandNewsAudience | null,
+  copy: BrandNewsAdminCopy,
+  slot?: BrandNewsSlot,
+): string {
   if (audience === null) return copy.audienceSummary.invalid;
   const parts: string[] = [];
   if (audience.modes?.length) {
@@ -116,10 +124,17 @@ export function describeBrandNewsAudience(audience: BrandNewsAudience | null, co
   if (audience.orgs?.length) {
     parts.push(interpolate(copy.audienceSummary.orgsCount, { count: String(audience.orgs.length) }));
   }
-  return parts.length > 0 ? parts.join(' · ') : copy.audienceSummary.defaultAll;
+  const fallback =
+    slot === 'team_home'
+      ? copy.audienceSummary.defaultTeamAll
+      : slot === 'home'
+        ? copy.audienceSummary.defaultMakeAll
+        : copy.audienceSummary.defaultAll;
+  return parts.length > 0 ? parts.join(' · ') : fallback;
 }
 
 export type BrandNewsOutcomeField =
+  | 'slot'
   | 'kickerKo'
   | 'kickerEn'
   | 'titleKo'
@@ -158,6 +173,7 @@ const PUBLISH_REASONS = new Set<BrandNewsPublishRefusal>([
   'period',
   'over',
   'audience',
+  'audienceModes',
 ]);
 
 function fieldResult(field: BrandNewsOutcomeField, message: string): ResolvedBrandNewsOutcome {
@@ -186,6 +202,8 @@ export function resolveBrandNewsOutcome(
         return bannerResult('ok', copy.outcomes.published);
       case 'unpublished':
         return bannerResult('ok', copy.outcomes.unpublished);
+      case 'deleted':
+        return bannerResult('ok', copy.outcomes.deleted);
       default:
         return bannerResult('ok', copy.outcomes.saved);
     }
@@ -197,6 +215,7 @@ export function resolveBrandNewsOutcome(
 
   if (code === 'forbidden') return bannerResult('err', copy.outcomes.forbidden);
   if (code === 'csrf') return bannerResult('err', copy.outcomes.csrf);
+  if (code === 'staleReview') return bannerResult('err', copy.outcomes.staleReview);
 
   if (code === 'disabled') {
     return bannerResult('err', detail.startsWith('brandNews:migration') ? copy.migrationMissing : copy.disabled);
@@ -230,6 +249,7 @@ export function resolveBrandNewsOutcome(
       else if (reason === 'period') fields.period = copy.publishReadiness.reasons.period;
       else if (reason === 'over') fields.endsAt = copy.publishReadiness.reasons.over;
       else if (reason === 'audience') fields.audience = copy.publishReadiness.reasons.audience;
+      else if (reason === 'audienceModes') fields.audience = copy.publishReadiness.reasons.audienceModes;
     }
     const reasonText = labels.length > 0 ? labels.join(', ') : detail || copy.outcomes.genericError;
     return bannerResult('err', interpolate(copy.outcomes.notPublishable, { reasons: reasonText }), fields);
@@ -237,6 +257,9 @@ export function resolveBrandNewsOutcome(
 
   if (code === 'invalid') {
     if (detail === 'brandNews:id') return bannerResult('err', copy.outcomes.invalidId);
+    if (detail === 'brandNews:slot') return fieldResult('slot', copy.outcomes.invalidSlot);
+    if (detail === 'brandNews:slot:immutable') return fieldResult('slot', copy.outcomes.slotImmutable);
+    if (detail === 'brandNews:expectedUpdatedAt') return bannerResult('err', copy.outcomes.invalidExpectedUpdatedAt);
     if (detail === 'brandNews:shape') return fieldResult('shape', copy.outcomes.invalidShape);
     if (detail === 'brandNews:startsAt') return fieldResult('startsAt', copy.outcomes.invalidStartsAt);
     if (detail === 'brandNews:endsAt') return fieldResult('endsAt', copy.outcomes.invalidEndsAt);
@@ -246,6 +269,7 @@ export function resolveBrandNewsOutcome(
     if (detail === 'brandNews:audience') {
       return fieldResult('audience', interpolate(copy.outcomes.invalidAudience, { max: String(BRAND_NEWS_LIMITS.audienceOrgsMax) }));
     }
+    if (detail === 'brandNews:audience:modes') return fieldResult('audience', copy.outcomes.invalidAudienceModes);
     if (detail === 'brandNews:audience:json') return fieldResult('audience', copy.outcomes.invalidAudienceJson);
     if (detail === 'brandNews:audience:twoWays') return fieldResult('audience', copy.outcomes.invalidAudienceTwoWays);
     if (detail === 'brandNews:audience:unknownKey') return fieldResult('audience', copy.outcomes.invalidAudienceUnknownKey);
@@ -304,7 +328,7 @@ export function resolveSelectedAnnouncementId(
 ): string | null {
   if (query.edit === 'new') return null;
   if (isUuid(query.edit)) return query.edit.toLowerCase();
-  if (query.ok && isUuid(query.detail)) return query.detail.toLowerCase();
+  if (query.ok && query.ok !== 'deleted' && isUuid(query.detail)) return query.detail.toLowerCase();
   return null;
 }
 
@@ -343,6 +367,7 @@ export function isDirty(
 ): boolean {
   if (options.hasPendingImage) return true;
   if (options.storedAudienceNull) return true;
+  if (values.slot !== initialValues.slot) return true;
   if (values.kickerKo.trim() !== initialValues.kickerKo.trim()) return true;
   if (values.kickerEn.trim() !== initialValues.kickerEn.trim()) return true;
   if (values.titleKo.trim() !== initialValues.titleKo.trim()) return true;
@@ -427,6 +452,8 @@ export function validateDraftClient(
 
   if (audienceNeedsExplicitChoice(options.storedAudienceNull, values, options.explicitAllSelected)) {
     errors.audience = copy.audienceSummary.invalid;
+  } else if (values.slot === 'home' && values.modes.some((mode) => mode !== 'make')) {
+    errors.audience = copy.outcomes.invalidAudienceModes;
   }
 
   return errors;
@@ -439,12 +466,25 @@ export function formatPublishConfirmation(params: {
   startsAtIso: string;
   nowMs: number;
   copy: BrandNewsAdminCopy;
+  slot?: BrandNewsSlot;
 }): string {
   const startsMs = Date.parse(params.startsAtIso);
   const isFuture = Number.isFinite(startsMs) && startsMs > params.nowMs;
   const startsAt = isoToKstLocalInput(params.startsAtIso).replace('T', ' ');
   const replacesLive = params.liveItem !== null && params.liveItem.id !== params.selectedId;
   const title = params.liveItem?.titleKo || params.liveItem?.titleEn || params.liveItem?.id || '';
+
+  if (params.slot) {
+    const slot = params.copy.slots[params.slot].short;
+    if (replacesLive) {
+      return isFuture
+        ? interpolate(params.copy.actions.confirmPublishReplaceFutureSlotLabel, { slot, title, startsAt })
+        : interpolate(params.copy.actions.confirmPublishReplaceSlotLabel, { slot, title });
+    }
+    return isFuture
+      ? interpolate(params.copy.actions.confirmPublishFutureSlotLabel, { slot, startsAt })
+      : interpolate(params.copy.actions.confirmPublishSlotLabel, { slot });
+  }
 
   if (replacesLive) {
     return isFuture

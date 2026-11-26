@@ -415,7 +415,10 @@ describe('AdminBrandNewsPage server rendering', () => {
     expect(html).toContain(`data-brand-news-publish-replaces="${liveId}"`);
     const decodedHtml = html.replaceAll('&quot;', '"');
     expect(decodedHtml).toContain(
-      interpolate(copy.actions.confirmPublishReplaceLabel, { title: '지금 켜진 대표 공지' }),
+      interpolate(copy.actions.confirmPublishReplaceSlotLabel, {
+        slot: copy.slots.home.short,
+        title: '지금 켜진 대표 공지',
+      }),
     );
     expect(html).toContain('data-brand-news-publish=""');
     expect(html).toMatch(/disabled=""[^>]*data-brand-news-publish=""|data-brand-news-publish=""[^>]*disabled=""/);
@@ -439,7 +442,7 @@ describe('AdminBrandNewsPage server rendering', () => {
     const futureHtml = await renderAsyncHtml(
       (await AdminBrandNewsPage({ searchParams: Promise.resolve({ edit: futureDraftId }) })) as ReactElement,
     );
-    expect(futureHtml).toContain('KST부터 홈에 노출됩니다');
+    expect(futureHtml).toContain('KST부터 직접 만들기 홈에 노출됩니다');
     expect(futureHtml).not.toContain('즉시');
   });
 

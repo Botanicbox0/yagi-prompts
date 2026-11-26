@@ -8,11 +8,13 @@ import {
   BRAND_NEWS_MODES,
   BRAND_NEWS_PLANS,
   BRAND_NEWS_SHAPES,
+  BRAND_NEWS_SLOTS,
   charCount,
   type BrandNewsAdminItem,
   type BrandNewsMode,
   type BrandNewsPlan,
   type BrandNewsShape,
+  type BrandNewsSlot,
 } from '@/lib/brand-news/contracts';
 import type { Dictionary } from '@/lib/i18n/dictionaries';
 import { interpolate } from '@/lib/i18n/format';
@@ -36,6 +38,8 @@ export interface BrandNewsEditorProps {
   nowMs?: number;
   reach: { ok: true; organizations: number } | null;
   studioV2Enabled: boolean;
+  slotsReady?: boolean;
+  roomsOpen?: boolean;
   outcome: ResolvedBrandNewsOutcome | null;
   copy: BrandNewsAdminCopy;
   homeCopyKo: Dictionary['brandNews'];
@@ -140,6 +144,8 @@ export function BrandNewsEditor({
   nowMs,
   reach,
   studioV2Enabled,
+  slotsReady = true,
+  roomsOpen = true,
   outcome,
   copy,
   homeCopyKo,
@@ -187,7 +193,11 @@ export function BrandNewsEditor({
       hasPendingImage: hasPendingFile,
       storedAudienceNull,
     });
-  const publishBlocked = !hydrated || dirty || storedAudienceNull;
+  const activeSlot: BrandNewsSlot = values.slot;
+  const activeSlotLabel = copy.slots[activeSlot].short;
+  const legacyTeamOnHome = slotsReady && activeSlot === 'home' && values.modes.includes('team');
+  const publishBlocked = !hydrated || dirty || storedAudienceNull || legacyTeamOnHome;
+  const deleteBlocked = !hydrated || dirty;
 
   const fieldError = (name: BrandNewsOutcomeField) => clientErrors[name] ?? outcome?.fieldMessages[name];
   const errorId = (name: BrandNewsOutcomeField) => `${baseId}-err-${name}`;
@@ -233,6 +243,7 @@ export function BrandNewsEditor({
         startsAtIso: selected.startsAt,
         nowMs: effectiveNowMs,
         copy,
+        slot: slotsReady ? selected.slot : undefined,
       })
     : copy.actions.confirmPublishLabel;
 
@@ -272,6 +283,52 @@ export function BrandNewsEditor({
   const saveFields = (
     <>
       {selected ? <input type="hidden" name="id" value={selected.id} /> : null}
+      {slotsReady ? (
+        selected === null ? (
+          <fieldset className={s.fieldsetBox} data-brand-news-field="slot">
+            <legend className={LABEL}>{copy.fields.slot}</legend>
+            <div className={s.radioRow}>
+              {BRAND_NEWS_SLOTS.map((slot) => (
+                <label key={slot} className={s.checkItem}>
+                  <input
+                    type="radio"
+                    name="slot"
+                    value={slot}
+                    data-brand-news-slot={slot}
+                    checked={values.slot === slot}
+                    onChange={() =>
+                      setValues((prev) => ({
+                        ...prev,
+                        slot,
+                        modes: slot === 'team_home' ? [] : prev.modes,
+                      }))
+                    }
+                  />
+                  <span>
+                    {copy.slots[slot].label}{' '}
+                    <span className="admin-field-hint">{copy.slots[slot].description}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+            <p className="admin-field-hint">{copy.fields.slotHint}</p>
+            <FieldError id={errorId('slot')} message={fieldError('slot')} />
+          </fieldset>
+        ) : (
+          <div className={s.fieldsetBox} data-brand-news-field="slot" data-brand-news-slot-locked={values.slot}>
+            {!isReadOnly ? <input type="hidden" name="slot" value={values.slot} /> : null}
+            <span className={LABEL}>{copy.fields.slot}</span>
+            <p className="text-[13.5px] font-medium">
+              {copy.slots[values.slot].label}{' '}
+              <span className="admin-field-hint">{copy.slots[values.slot].description}</span>
+            </p>
+            <p className="admin-field-hint">
+              {interpolate(copy.fields.slotLockedNote, { slot: copy.slots[values.slot].short })}
+            </p>
+            <FieldError id={errorId('slot')} message={fieldError('slot')} />
+          </div>
+        )
+      ) : null}
 
       <div className={s.twoCols}>
         {textField('kickerKo', copy.fields.kickerKo, L.kickerChars)}
@@ -450,34 +507,46 @@ export function BrandNewsEditor({
                   }
                 }}
               />
-              <span>{copy.fields.audienceAllChoice}</span>
+              <span>
+                {slotsReady && activeSlot === 'team_home'
+                  ? copy.fields.audienceAllTeamChoice
+                  : copy.fields.audienceAllChoice}
+              </span>
             </label>
             <p className="admin-field-hint mt-1">{copy.fields.audienceAllHint}</p>
           </div>
         ) : null}
 
-        <div>
-          <p className="admin-field-label">{copy.fields.audienceModesLabel}</p>
-          <div className={`${s.checkRow} mt-1.5`}>
-            {BRAND_NEWS_MODES.map((mode: BrandNewsMode) => (
-              <label key={mode} className={s.checkItem}>
-                <input
-                  type="checkbox"
-                  name="audienceModes"
-                  value={mode}
-                  data-brand-news-mode={mode}
-                  checked={values.modes.includes(mode)}
-                  disabled={isReadOnly}
-                  onChange={() => {
-                    setValues((prev) => ({ ...prev, modes: toggleIn(prev.modes, mode) }));
-                  }}
-                />
-                <span>{copy.modeNames[mode]}</span>
-              </label>
-            ))}
+        {slotsReady && activeSlot === 'team_home' ? (
+          <p className="admin-field-hint">{copy.fields.audienceModesTeamNote}</p>
+        ) : (
+          <div>
+            <p className="admin-field-label">{copy.fields.audienceModesLabel}</p>
+            <div className={`${s.checkRow} mt-1.5`}>
+              {(slotsReady && !values.modes.includes('team') ? (['make'] as const) : BRAND_NEWS_MODES).map(
+                (mode: BrandNewsMode) => (
+                  <label key={mode} className={s.checkItem}>
+                    <input
+                      type="checkbox"
+                      name="audienceModes"
+                      value={mode}
+                      data-brand-news-mode={mode}
+                      checked={values.modes.includes(mode)}
+                      disabled={isReadOnly}
+                      onChange={() => {
+                        setValues((prev) => ({ ...prev, modes: toggleIn(prev.modes, mode) }));
+                      }}
+                    />
+                    <span>{copy.modeNames[mode]}</span>
+                  </label>
+                ),
+              )}
+            </div>
+            <p className="admin-field-hint mt-1">
+              {slotsReady ? copy.fields.audienceModesHomeNote : copy.fields.audienceModesNote}
+            </p>
           </div>
-          <p className="admin-field-hint mt-1">{copy.fields.audienceModesNote}</p>
-        </div>
+        )}
 
         <div>
           <p className="admin-field-label">{copy.fields.audiencePlansLabel}</p>
@@ -566,13 +635,22 @@ export function BrandNewsEditor({
           ) : null}
 
           {selected?.status === 'draft' && reach?.ok ? (
-            <div className={s.reachCard} data-brand-news-reach={String(reach.organizations)}>
+            <div
+              className={s.reachCard}
+              data-brand-news-reach={String(reach.organizations)}
+              {...(slotsReady ? { 'data-brand-news-reach-slot': selected.slot } : {})}
+            >
               <span className="admin-field-label">{copy.reach.heading}</span>
               <p className={s.reachNumber}>
                 {interpolate(copy.reach.count, { count: reach.organizations.toLocaleString('ko-KR') })}
               </p>
-              <p className="admin-field-hint">{copy.reach.note}</p>
+              <p className="admin-field-hint">
+                {slotsReady && selected.slot === 'team_home' ? copy.reach.teamNote : copy.reach.note}
+              </p>
               {!studioV2Enabled ? <p className="admin-field-hint">{copy.reach.studioClosedNote}</p> : null}
+              {slotsReady && selected.slot === 'team_home' && !roomsOpen ? (
+                <p className="admin-field-hint">{copy.reach.roomsClosedNote}</p>
+              ) : null}
             </div>
           ) : null}
 
@@ -638,6 +716,7 @@ export function BrandNewsEditor({
                 renderBody={(submitting) => (
                   <>
                     <input type="hidden" name="id" value={selected.id} />
+                    {slotsReady ? <input type="hidden" name="expectedUpdatedAt" value={selected.updatedAt} /> : null}
                     <ConfirmCheckbox label={confirmPublishLabel} disabled={publishBlocked || submitting} />
                     <div className={s.rowActions}>
                       <button
@@ -647,6 +726,37 @@ export function BrandNewsEditor({
                         data-brand-news-publish=""
                       >
                         {copy.actions.publish}
+                      </button>
+                    </div>
+                  </>
+                )}
+              />
+            </div>
+          ) : null}
+
+          {slotsReady && selected?.status === 'draft' ? (
+            <div className={s.confirmBox} data-brand-news-delete-box="">
+              {dirty ? (
+                <p className={s.fieldError} role="status" data-brand-news-delete-dirty-notice="">
+                  {copy.actions.saveBeforeDelete}
+                </p>
+              ) : null}
+              <PostOpForm
+                op="brandNews.delete"
+                back="/admin/brand-news"
+                className={s.stack}
+                renderBody={(submitting) => (
+                  <>
+                    <input type="hidden" name="id" value={selected.id} />
+                    <ConfirmCheckbox label={copy.actions.confirmDeleteLabel} disabled={deleteBlocked || submitting} />
+                    <div className={s.rowActions}>
+                      <button
+                        type="submit"
+                        className={BUTTON}
+                        disabled={deleteBlocked || submitting}
+                        data-brand-news-delete=""
+                      >
+                        {copy.actions.delete}
                       </button>
                     </div>
                   </>
@@ -684,9 +794,15 @@ export function BrandNewsEditor({
       </EditorPanel>
 
       <EditorPanel title={copy.preview.heading}>
-        <div className={s.previewGroup} data-brand-news-preview-section="">
+        <div
+          className={s.previewGroup}
+          data-brand-news-preview-section=""
+          {...(slotsReady ? { 'data-brand-news-preview-slot': activeSlot } : {})}
+        >
           <div>
-            <p className={s.previewLangLabel}>{copy.preview.koLabel}</p>
+            <p className={s.previewLangLabel}>
+              {slotsReady ? interpolate(copy.preview.koSlotLabel, { slot: activeSlotLabel }) : copy.preview.koLabel}
+            </p>
             <div className={s.previewScroll} data-brand-news-preview="ko">
               <div className={`${s.previewCanvas} bw-main`} data-brand-workspace="" data-theme="dark" data-preview-width="1440">
                 {previewKo ? (
@@ -701,7 +817,9 @@ export function BrandNewsEditor({
           </div>
 
           <div>
-            <p className={s.previewLangLabel}>{copy.preview.enLabel}</p>
+            <p className={s.previewLangLabel}>
+              {slotsReady ? interpolate(copy.preview.enSlotLabel, { slot: activeSlotLabel }) : copy.preview.enLabel}
+            </p>
             <div className={s.previewScroll} data-brand-news-preview="en">
               <div className={`${s.previewCanvas} bw-main`} data-brand-workspace="" data-theme="dark" data-preview-width="1440">
                 {previewEn ? (

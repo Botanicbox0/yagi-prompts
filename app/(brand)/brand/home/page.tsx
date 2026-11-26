@@ -103,11 +103,13 @@ export default async function BrandWorkspaceHome({
   const notice = access.staff ? <StaffNotice b={b} manageHref={viewer.isAdmin ? adminOrganizationHref(choice.id, brandHost) : null} /> : null;
 
   if (mode === 'team') {
+    const teamLocale: 'ko' | 'en' = locale === 'en' ? 'en' : 'ko';
     // Every read is scoped to the brand the guard above resolved for this account. Nothing of the making
     // side is read: no credits, no runs.
-    const [summary, workspace] = await Promise.all([
+    const [summary, workspace, news] = await Promise.all([
       loadRoomSummary({ sql }, viewer, choice.id).catch(() => null),
       loadBrandWorkspace({ sql, verifiedEmail }, viewer, { organizationId: choice.id }).catch(() => ({ organizations: [], projects: [] })),
+      loadHomeAnnouncement({ sql }, viewer, { organizationId: choice.id, mode: 'team', locale: teamLocale }, 'team_home').catch(() => null),
     ]);
     const reviews: RoomAlertItem[] = summary && summary.ok ? (summary.alerts ?? []) : [];
     const visible = workspace.projects.filter((p) => p.clientVisible !== false);
@@ -143,12 +145,14 @@ export default async function BrandWorkspaceHome({
         canRequest={canRequest}
         viewerNote={viewerNote}
         notice={notice}
+        {...(news ? { news } : {})}
         copy={{
           home: dict.brandHome,
           nav: dict.roomsShell.nav,
           space: dict.roomsShell.space,
           overview: dict.roomsShell.overview,
           inbox: dict.roomsChat.inbox,
+          ...(news ? { brandNews: dict.brandNews } : {}),
         }}
       />
     );

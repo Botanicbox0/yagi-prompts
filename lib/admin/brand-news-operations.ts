@@ -3,7 +3,9 @@ import sharp from 'sharp';
 import {
   BRAND_NEWS_LIMITS,
   BRAND_NEWS_SHAPES,
+  BRAND_NEWS_SLOTS,
   charCount,
+  homeSlotModesValid,
   isUuid,
   judgeBrandNewsLink,
   parseBrandNewsAudience,
@@ -11,9 +13,10 @@ import {
   publishRefusals,
   type BrandNewsAudience,
   type BrandNewsShape,
+  type BrandNewsSlot,
   type BrandNewsStatus,
 } from '@/lib/brand-news/contracts';
-import { brandNewsReady } from '@/lib/brand-news/service';
+import { brandNewsReady, brandNewsSlotsReady, resetBrandNewsSlotsProbe } from '@/lib/brand-news/service';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import { brandNewsOpen } from '@/lib/flags';
 import type { AdminOperation } from './operations';
@@ -22,26 +25,33 @@ import { sha256Hex } from './assets';
 import * as f from './form';
 
 /**
- * The home's news slot, admin side (docs/BRAND-PROJECT-SPINE.md §6, slice 3b): `brandNews.save` (create or edit a
- * draft), `brandNews.publish` (draft → live, ending whatever was live in the slot) and `brandNews.end` (live →
- * ended). Admin-only through the one door like every operation (dispatcher + registry); each change writes a
- * `platform_audit` row in the same transaction.
+ * The home's news slot, admin side (docs/BRAND-PROJECT-SPINE.md §6, slice 3b + N2): `brandNews.save` (create or edit a
+ * draft), `brandNews.publish` (draft → live, ending whatever was live in the slot), `brandNews.end` (live → ended), and
+ * `brandNews.delete` (delete a draft permanently). Admin-only through the one door like every operation (dispatcher +
+ * registry); each change writes a `platform_audit` row in the same transaction.
  *
  * Refusals reuse the admin dictionary's codes; the detail says exactly what (`brandNews:<what>`):
- *   disabled        `BRAND_NEWS` is off (whatever the form holds), or migration 0196 has not reached this database
+ *   disabled        `BRAND_NEWS` is off (whatever the form holds), or migrations 0196/0204 have not reached this database
  *   invalid         a field the rules refuse (`brandNews:<field>[:<reason>]`)
  *   upload/storage  the banner picture (`brandNews:image:<reason>`)
  *   notFound        no such announcement
- *   notDraft        a live or ended announcement cannot be edited or published again (end it, write a new draft)
+ *   notDraft        a live or ended announcement cannot be edited, published again, or deleted
  *   notPublishable  `brandNews:<reason>,<reason>` (contracts.ts `publishRefusals`)
+ *   staleReview     publish fingerprint mismatch (`brandNews:stale`: saved since this screen opened it)
  *   badTransition   ending a draft (`brandNews:notLive`), or a publish that lost a race for the slot
  *                   (`brandNews:slotBusy`: the other one went live; nothing changed here)
  */
 
 type Env = Record<string, string | undefined>;
 
-const AUDIT_ACTIONS = { save: 'brandNews.save', publish: 'brandNews.publish', end: 'brandNews.end' } as const;
+const AUDIT_ACTIONS = {
+  save: 'brandNews.save',
+  publish: 'brandNews.publish',
+  end: 'brandNews.end',
+  delete: 'brandNews.delete',
+} as const;
 const LIVE_INDEX = 'brand_announcements_one_live';
+const SLOT_CHECK = 'brand_announcements_slot';
 const ACCEPTED_IMAGES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/avif']);
 const WEBP_QUALITY = 82;
 /** One line each: no control character (new lines included), no line or paragraph separator, no invisible or direction mark. */
@@ -81,6 +91,13 @@ export function parseBrandNewsInstant(raw: string): Date | null {
   const offset = zone === 'Z' ? 0 : (zone[0] === '-' ? -1 : 1) * (Number(zone.slice(1, 3)) * 60 + Number(zone.slice(4, 6)));
   if (Math.abs(offset) > 14 * 60) return null;
   return new Date(date.getTime() + offset * 60_000).toISOString().slice(0, 16) === match[1] ? date : null;
+}
+
+/** Publish fingerprint (`expectedUpdatedAt`): an explicit-zone ISO instant matching the stored `updated_at`. */
+export function parseExpectedUpdatedAt(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (!/(Z|[+-]\d{2}:\d{2})$/.test(trimmed)) return null;
+  return parseBrandNewsInstant(trimmed)?.toISOString() ?? null;
 }
 
 function words(form: FormData, name: string, max: number): { ok: true; value: string } | { ok: false; detail: string } {
@@ -129,6 +146,8 @@ function audienceFrom(form: FormData): { ok: true; value: BrandNewsAudience } | 
 
 export interface BrandNewsSaveInput {
   id: string | null;
+  slot: BrandNewsSlot;
+  slotSpecified: boolean;
   kickerKo: string;
   kickerEn: string;
   titleKo: string;
@@ -146,6 +165,11 @@ export interface BrandNewsSaveInput {
 function parseSave(form: FormData): { ok: true; value: BrandNewsSaveInput } | { ok: false; detail: string } {
   const rawId = f.str(form, 'id');
   if (rawId !== '' && !isUuid(rawId)) return refuse('id');
+  const rawSlot = f.str(form, 'slot');
+  const slotSpecified = rawSlot !== '';
+  const slotValue = slotSpecified ? rawSlot : 'home';
+  if (!(BRAND_NEWS_SLOTS as readonly string[]).includes(slotValue)) return refuse('slot');
+  const slot = slotValue as BrandNewsSlot;
   const L = BRAND_NEWS_LIMITS;
   const fields = {
     kickerKo: words(form, 'kickerKo', L.kickerChars),
@@ -178,6 +202,7 @@ function parseSave(form: FormData): { ok: true; value: BrandNewsSaveInput } | { 
 
   const audience = audienceFrom(form);
   if (!audience.ok) return audience;
+  if ((!rawId || slotSpecified) && !homeSlotModesValid(slot, audience.value)) return refuse('audience:modes');
 
   const image = f.file(form, 'image');
   if (image && shape !== 'banner') return refuse('image:notBanner');
@@ -186,6 +211,8 @@ function parseSave(form: FormData): { ok: true; value: BrandNewsSaveInput } | { 
     ok: true,
     value: {
       id: rawId === '' ? null : rawId.toLowerCase(),
+      slot,
+      slotSpecified,
       kickerKo: text('kickerKo'),
       kickerEn: text('kickerEn'),
       titleKo: text('titleKo'),
@@ -259,11 +286,17 @@ interface StoredRow {
   starts_at: Date | string;
   ends_at: Date | string;
   audience: unknown;
+  updated_at: Date | string;
   db_now: Date | string;
 }
 
 const ROW_FOR_UPDATE =
-  'select id::text as id, slot, status, shape, title_ko, title_en, cta_href, image_key, image_w, image_h, starts_at, ends_at, audience, now() as db_now from brand_announcements where id = $1 for update';
+  'select id::text as id, slot, status, shape, title_ko, title_en, cta_href, image_key, image_w, image_h, starts_at, ends_at, audience, updated_at, now() as db_now from brand_announcements where id = $1 for update';
+
+const isSlotConstraintError = (error: unknown): boolean => {
+  const e = error as { code?: string; constraint?: string; message?: string } | null;
+  return e?.code === '23514' && (e.constraint === SLOT_CHECK || String(e.message ?? '').includes(SLOT_CHECK));
+};
 
 export function brandNewsSave(env: Env = process.env): AdminOperation<BrandNewsSaveInput> {
   return {
@@ -271,11 +304,17 @@ export function brandNewsSave(env: Env = process.env): AdminOperation<BrandNewsS
     async run(ctx, input) {
       const shut = await closed(ctx.sql, env);
       if (shut) return shut;
+      if (input.slot === 'team_home' && !(await brandNewsSlotsReady(ctx.sql))) {
+        return fail('disabled', 'brandNews:migration 0204/0205 not applied');
+      }
       // An edit of something that is not a draft is refused before a picture is stored for it.
       if (input.id) {
-        const current = (await ctx.sql.query<{ status: string }>('select status from brand_announcements where id = $1', [input.id])).rows[0];
+        const current = (await ctx.sql.query<{ status: string; slot: string }>('select status, slot from brand_announcements where id = $1', [input.id])).rows[0];
         if (!current) return fail('notFound', 'brandNews:id');
         if (current.status !== 'draft') return fail('notDraft', `brandNews:${current.status}`);
+        if (input.slotSpecified && input.slot !== current.slot) return fail('invalid', 'brandNews:slot:immutable');
+        const currentSlot: BrandNewsSlot = current.slot === 'team_home' ? 'team_home' : 'home';
+        if (!homeSlotModesValid(currentSlot, input.audience)) return fail('invalid', 'brandNews:audience:modes');
       }
       let image: { key: string; width: number; height: number } | null = null;
       if (input.image) {
@@ -296,33 +335,45 @@ export function brandNewsSave(env: Env = process.env): AdminOperation<BrandNewsS
         input.endsAt.toISOString(),
         JSON.stringify(input.audience),
       ];
-      return ctx.sql.transaction(async (tx) => {
-        if (!input.id) {
-          const id = randomUUID();
+      try {
+        return await ctx.sql.transaction(async (tx) => {
+          if (!input.id) {
+            const id = randomUUID();
+            await tx.query(
+              `insert into brand_announcements (id, slot, kicker_ko, kicker_en, title_ko, title_en, cta_label_ko, cta_label_en, cta_href, shape, starts_at, ends_at, audience,
+                 image_key, image_w, image_h, created_by)
+               values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb, $14, $15, $16, (select id from profiles where id = $17::uuid))`,
+              [id, input.slot, ...values, image?.key ?? null, image?.width ?? null, image?.height ?? null, ctx.viewer.userId ?? null],
+            );
+            await audit(tx, ctx, id, AUDIT_ACTIONS.save, 'brand_news_draft_created', { slot: input.slot, created: true, shape: input.shape, image: image?.key ?? null });
+            return ok('created', { detail: id });
+          }
+          const row = (await tx.query<StoredRow>(ROW_FOR_UPDATE, [input.id])).rows[0];
+          if (!row) return fail('notFound', 'brandNews:id');
+          if (row.status !== 'draft') return fail('notDraft', `brandNews:${row.status}`);
+          if (input.slotSpecified && input.slot !== row.slot) return fail('invalid', 'brandNews:slot:immutable');
+          const rowSlot: BrandNewsSlot = row.slot === 'team_home' ? 'team_home' : 'home';
+          if (!homeSlotModesValid(rowSlot, input.audience)) return fail('invalid', 'brandNews:audience:modes');
+          // A line keeps no picture; a banner keeps its picture unless a new one was posted.
+          const kept = input.shape === 'banner' ? (image ?? (row.image_key ? { key: row.image_key, width: Number(row.image_w), height: Number(row.image_h) } : null)) : null;
           await tx.query(
-            `insert into brand_announcements (id, kicker_ko, kicker_en, title_ko, title_en, cta_label_ko, cta_label_en, cta_href, shape, starts_at, ends_at, audience,
-               image_key, image_w, image_h, created_by)
-             values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13, $14, $15, (select id from profiles where id = $16::uuid))`,
-            [id, ...values, image?.key ?? null, image?.width ?? null, image?.height ?? null, ctx.viewer.userId ?? null],
+            `update brand_announcements
+                set kicker_ko = $2, kicker_en = $3, title_ko = $4, title_en = $5, cta_label_ko = $6, cta_label_en = $7, cta_href = $8, shape = $9,
+                    starts_at = $10, ends_at = $11, audience = $12::jsonb, image_key = $13, image_w = $14, image_h = $15,
+                    updated_at = greatest(now(), updated_at + interval '1 millisecond')
+              where id = $1 and status = 'draft'`,
+            [input.id, ...values, kept?.key ?? null, kept?.width ?? null, kept?.height ?? null],
           );
-          await audit(tx, ctx, id, AUDIT_ACTIONS.save, 'brand_news_draft_created', { slot: 'home', created: true, shape: input.shape, image: image?.key ?? null });
-          return ok('created', { detail: id });
+          await audit(tx, ctx, input.id, AUDIT_ACTIONS.save, 'brand_news_draft_saved', { slot: row.slot, created: false, shape: input.shape, image: kept?.key ?? null });
+          return ok('saved', { detail: input.id });
+        });
+      } catch (error) {
+        if (isSlotConstraintError(error)) {
+          resetBrandNewsSlotsProbe();
+          return fail('disabled', 'brandNews:migration 0204/0205 not applied');
         }
-        const row = (await tx.query<StoredRow>(ROW_FOR_UPDATE, [input.id])).rows[0];
-        if (!row) return fail('notFound', 'brandNews:id');
-        if (row.status !== 'draft') return fail('notDraft', `brandNews:${row.status}`);
-        // A line keeps no picture; a banner keeps its picture unless a new one was posted.
-        const kept = input.shape === 'banner' ? (image ?? (row.image_key ? { key: row.image_key, width: Number(row.image_w), height: Number(row.image_h) } : null)) : null;
-        await tx.query(
-          `update brand_announcements
-              set kicker_ko = $2, kicker_en = $3, title_ko = $4, title_en = $5, cta_label_ko = $6, cta_label_en = $7, cta_href = $8, shape = $9,
-                  starts_at = $10, ends_at = $11, audience = $12::jsonb, image_key = $13, image_w = $14, image_h = $15, updated_at = now()
-            where id = $1 and status = 'draft'`,
-          [input.id, ...values, kept?.key ?? null, kept?.width ?? null, kept?.height ?? null],
-        );
-        await audit(tx, ctx, input.id, AUDIT_ACTIONS.save, 'brand_news_draft_saved', { slot: row.slot, created: false, shape: input.shape, image: kept?.key ?? null });
-        return ok('saved', { detail: input.id });
-      });
+        throw error;
+      }
     },
   };
 }
@@ -332,22 +383,38 @@ const isLiveSlotRace = (error: unknown): boolean => {
   return e?.code === '23505' && (e.constraint === LIVE_INDEX || String(e.message ?? '').includes(LIVE_INDEX));
 };
 
-export function brandNewsPublish(env: Env = process.env): AdminOperation<{ id: string }> {
+export function brandNewsPublish(env: Env = process.env): AdminOperation<{ id: string; expectedUpdatedAt: string | null }> {
   return {
     parse(form) {
       const id = f.str(form, 'id');
-      return isUuid(id) ? { ok: true, value: { id: id.toLowerCase() } } : refuse('id');
+      if (!isUuid(id)) return refuse('id');
+      const rawUpdatedAt = f.str(form, 'expectedUpdatedAt');
+      if (rawUpdatedAt === '') return { ok: true, value: { id: id.toLowerCase(), expectedUpdatedAt: null } };
+      const expectedUpdatedAt = parseExpectedUpdatedAt(rawUpdatedAt);
+      if (!expectedUpdatedAt) return refuse('expectedUpdatedAt');
+      return { ok: true, value: { id: id.toLowerCase(), expectedUpdatedAt } };
     },
     async run(ctx, input) {
       const shut = await closed(ctx.sql, env);
       if (shut) return shut;
+      const slotsReady = await brandNewsSlotsReady(ctx.sql);
+      if (slotsReady && input.expectedUpdatedAt === null) return fail('invalid', 'brandNews:expectedUpdatedAt');
       try {
         return await ctx.sql.transaction(async (tx) => {
           const row = (await tx.query<StoredRow>(ROW_FOR_UPDATE, [input.id])).rows[0];
           if (!row) return fail('notFound', 'brandNews:id');
           if (row.status !== 'draft') return fail('notDraft', `brandNews:${row.status}`);
+          if (input.expectedUpdatedAt !== null && input.expectedUpdatedAt !== new Date(row.updated_at).toISOString()) {
+            return fail('staleReview', 'brandNews:stale');
+          }
+          const slot: BrandNewsSlot = row.slot === 'team_home' ? 'team_home' : 'home';
+          const parsedAudience = parseBrandNewsAudience(row.audience);
+          if (parsedAudience && !homeSlotModesValid(slot, parsedAudience)) {
+            return fail('invalid', 'brandNews:audience:modes');
+          }
           const reasons = publishRefusals(
             {
+              slot,
               status: row.status,
               titleKo: row.title_ko,
               titleEn: row.title_en,
@@ -364,18 +431,28 @@ export function brandNewsPublish(env: Env = process.env): AdminOperation<{ id: s
           // The slot's live announcement ends in the same transaction; the unique index refuses a second live row.
           const ended = (
             await tx.query<{ id: string }>(
-              `update brand_announcements set status = 'ended', ended_at = now(), updated_at = now()
+              `update brand_announcements
+                  set status = 'ended', ended_at = now(), updated_at = greatest(now(), updated_at + interval '1 millisecond')
                 where slot = $1 and status = 'live' and id <> $2 returning id::text as id`,
               [row.slot, input.id],
             )
           ).rows.map((r) => String(r.id));
-          await tx.query(`update brand_announcements set status = 'live', published_at = now(), updated_at = now() where id = $1 and status = 'draft'`, [input.id]);
+          await tx.query(
+            `update brand_announcements
+                set status = 'live', published_at = now(), updated_at = greatest(now(), updated_at + interval '1 millisecond')
+              where id = $1 and status = 'draft'`,
+            [input.id],
+          );
           for (const id of ended) await audit(tx, ctx, id, AUDIT_ACTIONS.end, 'brand_news_ended_by_publish', { slot: row.slot, by: input.id });
           await audit(tx, ctx, input.id, AUDIT_ACTIONS.publish, 'brand_news_published', { slot: row.slot, ended });
           return ok('published', { detail: input.id });
         });
       } catch (error) {
         if (isLiveSlotRace(error)) return fail('badTransition', 'brandNews:slotBusy');
+        if (isSlotConstraintError(error)) {
+          resetBrandNewsSlotsProbe();
+          return fail('disabled', 'brandNews:migration 0204/0205 not applied');
+        }
         throw error;
       }
     },
@@ -396,10 +473,49 @@ export function brandNewsEnd(env: Env = process.env): AdminOperation<{ id: strin
         if (!row) return fail('notFound', 'brandNews:id');
         if (row.status === 'ended') return ok('unpublished', { detail: input.id });
         if (row.status !== 'live') return fail('badTransition', 'brandNews:notLive');
-        await tx.query(`update brand_announcements set status = 'ended', ended_at = now(), updated_at = now() where id = $1 and status = 'live'`, [input.id]);
+        await tx.query(
+          `update brand_announcements
+              set status = 'ended', ended_at = now(), updated_at = greatest(now(), updated_at + interval '1 millisecond')
+            where id = $1 and status = 'live'`,
+          [input.id],
+        );
         await audit(tx, ctx, input.id, AUDIT_ACTIONS.end, 'brand_news_ended', { slot: row.slot });
         return ok('unpublished', { detail: input.id });
       });
+    },
+  };
+}
+
+export function brandNewsDelete(env: Env = process.env): AdminOperation<{ id: string }> {
+  return {
+    parse(form) {
+      const id = f.str(form, 'id');
+      return isUuid(id) ? { ok: true, value: { id: id.toLowerCase() } } : refuse('id');
+    },
+    async run(ctx, input) {
+      const shut = await closed(ctx.sql, env);
+      if (shut) return shut;
+      if (!(await brandNewsSlotsReady(ctx.sql))) return fail('disabled', 'brandNews:migration 0204/0205 not applied');
+      try {
+        return await ctx.sql.transaction(async (tx) => {
+          const row = (await tx.query<StoredRow>(ROW_FOR_UPDATE, [input.id])).rows[0];
+          if (!row) return fail('notFound', 'brandNews:id');
+          if (row.status !== 'draft') return fail('notDraft', `brandNews:${row.status}`);
+          await tx.query("delete from brand_announcements where id = $1 and status = 'draft'", [input.id]);
+          await audit(tx, ctx, input.id, AUDIT_ACTIONS.delete, 'brand_news_draft_deleted', {
+            slot: row.slot,
+            shape: row.shape,
+            image: row.image_key ?? null,
+          });
+          return ok('deleted', { detail: input.id, to: '/admin/brand-news' });
+        });
+      } catch (error) {
+        if ((error as { code?: string } | null)?.code === '42501') {
+          resetBrandNewsSlotsProbe();
+          return fail('disabled', 'brandNews:migration 0204/0205 not applied');
+        }
+        throw error;
+      }
     },
   };
 }
@@ -420,4 +536,5 @@ export const BRAND_NEWS_OPERATIONS = {
   'brandNews.save': switched(brandNewsSave()),
   'brandNews.publish': switched(brandNewsPublish()),
   'brandNews.end': switched(brandNewsEnd()),
+  'brandNews.delete': switched(brandNewsDelete()),
 } as const;

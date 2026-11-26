@@ -62,6 +62,14 @@ async function created(fields: FormFields = {}): Promise<string> {
 }
 const rowOf = async (id: string) =>
   (await sql.query<Record<string, unknown>>('select * from brand_announcements where id = $1', [id])).rows[0]!;
+const publish = async (id: string, fields: FormFields = {}) => {
+  const row = (await sql.query<{ updated_at: Date | string }>('select updated_at from brand_announcements where id = $1', [id])).rows[0];
+  return h.run('brandNews.publish', {
+    id,
+    expectedUpdatedAt: row ? new Date(row.updated_at).toISOString() : new Date().toISOString(),
+    ...fields,
+  });
+};
 const statusOf = async (id: string) => (await rowOf(id)).status;
 const liveIds = async () => (await sql.query<{ id: string }>("select id from brand_announcements where status = 'live'")).rows.map((r) => r.id);
 const audits = async (entityId?: string) =>
@@ -87,10 +95,10 @@ async function banner(width = 1600, height = 400, noisy = false): Promise<File> 
 /* ---------------------------------------------------------------- registry */
 
 describe('the registry', () => {
-  it('adds the three operations under names no other module uses, so every other entry is untouched', () => {
+  it('adds the four operations under names no other module uses, so every other entry is untouched', () => {
     // At this commit the other 186 names equal origin/main's list, in order (checked once against fa208c6e; see the
     // slice report). What is pinned here stays true when later work adds operations of its own.
-    const names = ['brandNews.save', 'brandNews.publish', 'brandNews.end'] as const;
+    const names = ['brandNews.save', 'brandNews.publish', 'brandNews.end', 'brandNews.delete'] as const;
     expect(ADMIN_OPERATION_NAMES.filter((name) => name.startsWith('brandNews.'))).toEqual([...names]);
     for (const name of names) expect(ADMIN_OPERATIONS[name]).toBe(BRAND_NEWS_OPERATIONS[name]);
     const adminDir = join(process.cwd(), 'lib', 'admin');
@@ -100,7 +108,7 @@ describe('the registry', () => {
   });
 
   it('is admin-only: a member, a free viewer and nobody signed in are refused before anything is parsed', async () => {
-    for (const name of ['brandNews.save', 'brandNews.publish', 'brandNews.end']) {
+    for (const name of ['brandNews.save', 'brandNews.publish', 'brandNews.end', 'brandNews.delete']) {
       for (const tier of ['anon', 'free', 'pro'] as const) {
         expect(await h.run(name, { ...DRAFT, id: randomUUID() }, viewerOf(tier)), `${name} ${tier}`).toEqual({ ok: false, code: 'forbidden' });
       }
@@ -111,11 +119,11 @@ describe('the registry', () => {
   it('refuses with one clear code while the switch is off, and while the tables are missing', async () => {
     const id = await created();
     vi.stubEnv('BRAND_NEWS', 'off');
-    for (const [name, fields] of [['brandNews.save', DRAFT], ['brandNews.publish', { id }], ['brandNews.end', { id }]] as const) {
+    for (const [name, fields] of [['brandNews.save', DRAFT], ['brandNews.publish', { id }], ['brandNews.end', { id }], ['brandNews.delete', { id }]] as const) {
       expect(await h.run(name, fields), name).toEqual({ ok: false, code: 'disabled', detail: 'BRAND_NEWS' });
     }
     // Whatever the form holds: the same code, not `invalid`.
-    for (const [name, fields] of [['brandNews.save', { shape: 'card' }], ['brandNews.publish', { id: 'nope' }], ['brandNews.end', {}]] as const) {
+    for (const [name, fields] of [['brandNews.save', { shape: 'card' }], ['brandNews.publish', { id: 'nope' }], ['brandNews.end', {}], ['brandNews.delete', { id: 'nope' }]] as const) {
       expect(await h.run(name, fields), name).toEqual({ ok: false, code: 'disabled', detail: 'BRAND_NEWS' });
     }
     expect(await statusOf(id)).toBe('draft');
@@ -125,7 +133,7 @@ describe('the registry', () => {
     await sql.query('drop table brand_announcement_dismissals');
     await sql.query('drop table brand_announcements');
     resetBrandNewsProbe();
-    for (const [name, fields] of [['brandNews.save', DRAFT], ['brandNews.publish', { id }], ['brandNews.end', { id }]] as const) {
+    for (const [name, fields] of [['brandNews.save', DRAFT], ['brandNews.publish', { id }], ['brandNews.end', { id }], ['brandNews.delete', { id }]] as const) {
       refused(await h.run(name, fields), 'disabled', /0196/);
     }
     expect(await loadBrandNewsAdmin({ sql }, ADMIN_VIEWER)).toEqual({ ok: false, code: 'disabled' });
@@ -309,7 +317,7 @@ describe('brandNews.save', () => {
 
   it('edits drafts only: a live or ended announcement is refused, an unknown one is not found', async () => {
     const id = await created();
-    expect(await h.run('brandNews.publish', { id })).toMatchObject({ ok: true, code: 'published' });
+    expect(await publish(id)).toMatchObject({ ok: true, code: 'published' });
     refused(await save({ id, titleKo: '바꿔 보기' }), 'notDraft', 'brandNews:live');
     expect(await h.run('brandNews.end', { id })).toMatchObject({ ok: true });
     refused(await save({ id, titleKo: '바꿔 보기' }), 'notDraft', 'brandNews:ended');
@@ -347,7 +355,7 @@ describe('brandNews.save', () => {
 
   it('does not store a picture for an announcement it will refuse to edit', async () => {
     const id = await created();
-    await h.run('brandNews.publish', { id });
+    await publish(id);
     const file = await banner();
     const key = `${createHash('sha256').update(new Uint8Array(await (await sharp(Buffer.from(await file.arrayBuffer())).rotate().webp({ quality: 82, effort: 5, alphaQuality: 90 }).toBuffer()))).digest('hex')}.webp`;
     refused(await save({ id, shape: 'banner', image: file }), 'notDraft');
@@ -364,27 +372,27 @@ describe('brandNews.save', () => {
 describe('brandNews.publish', () => {
   it('needs both titles, a link, a banner’s picture, a period not already over, and a draft', async () => {
     const missing = await created({ titleEn: '', ctaHref: '', shape: 'banner' });
-    refused(await h.run('brandNews.publish', { id: missing }), 'notPublishable', 'brandNews:titleEn,link,image');
+    refused(await publish(missing), 'notPublishable', 'brandNews:titleEn,link,image');
     const over = await created({ startsAt: minutes(-120), endsAt: minutes(-1) });
-    refused(await h.run('brandNews.publish', { id: over }), 'notPublishable', 'brandNews:over');
+    refused(await publish(over), 'notPublishable', 'brandNews:over');
     const noKo = await created({ titleKo: '' });
-    refused(await h.run('brandNews.publish', { id: noKo }), 'notPublishable', 'brandNews:titleKo');
-    refused(await h.run('brandNews.publish', { id: randomUUID() }), 'notFound');
+    refused(await publish(noKo), 'notPublishable', 'brandNews:titleKo');
+    refused(await publish(randomUUID()), 'notFound');
     expect(await h.run('brandNews.publish', { id: 'nope' })).toEqual({ ok: false, code: 'invalid', detail: 'brandNews:id' });
     expect(await liveIds()).toEqual([]);
 
     // A period that starts later may be published now: it waits, live, until it starts.
     const later = await created({ startsAt: minutes(60), endsAt: minutes(120) });
-    expect(await h.run('brandNews.publish', { id: later })).toEqual({ ok: true, code: 'published', detail: later });
-    refused(await h.run('brandNews.publish', { id: later }), 'notDraft', 'brandNews:live');
+    expect(await publish(later)).toEqual({ ok: true, code: 'published', detail: later });
+    refused(await publish(later), 'notDraft', 'brandNews:live');
   });
 
   it('ends whatever was live in the slot, in the same transaction, and audits both', async () => {
     const first = await created();
     const second = await created({ titleKo: '두 번째 소식' });
-    expect(await h.run('brandNews.publish', { id: first })).toEqual({ ok: true, code: 'published', detail: first });
+    expect(await publish(first)).toEqual({ ok: true, code: 'published', detail: first });
     expect(await liveIds()).toEqual([first]);
-    expect(await h.run('brandNews.publish', { id: second })).toEqual({ ok: true, code: 'published', detail: second });
+    expect(await publish(second)).toEqual({ ok: true, code: 'published', detail: second });
     expect(await liveIds()).toEqual([second]);
     const ended = await rowOf(first);
     expect(ended.status).toBe('ended');
@@ -406,7 +414,7 @@ describe('brandNews.publish', () => {
 
   it('a publish that loses the race for the slot is refused cleanly, and exactly one row stays live', async () => {
     const live = await created();
-    await h.run('brandNews.publish', { id: live });
+    await publish(live);
     const mine = await created({ titleKo: '내 소식' });
     const theirs = await created({ titleKo: '다른 관리자의 소식' });
     // What a rival publish leaves behind: another row of the slot already live when ours goes live. PGlite has one
@@ -424,7 +432,8 @@ describe('brandNews.publish', () => {
       },
       transaction: (fn) => inner.transaction((tx) => fn(racing(tx))),
     });
-    const outcome = await dispatchAdmin('brandNews.publish', formOf('brandNews.publish', { id: mine }), { ...h.ctx(), sql: racing(sql) });
+    const mineUpdated = new Date((await rowOf(mine)).updated_at as Date | string).toISOString();
+    const outcome = await dispatchAdmin('brandNews.publish', formOf('brandNews.publish', { id: mine, expectedUpdatedAt: mineUpdated }), { ...h.ctx(), sql: racing(sql) });
     expect(outcome).toEqual({ ok: false, code: 'badTransition', detail: 'brandNews:slotBusy' });
     // Nothing of the lost publish stayed (its whole transaction rolled back): one live row, the drafts untouched.
     expect(await liveIds()).toEqual([live]);
@@ -435,8 +444,8 @@ describe('brandNews.publish', () => {
   it('two publishes one right after the other: the later one is live, the earlier one ended', async () => {
     const a = await created();
     const b = await created();
-    expect(await h.run('brandNews.publish', { id: a })).toMatchObject({ ok: true });
-    expect(await h.run('brandNews.publish', { id: b })).toMatchObject({ ok: true });
+    expect(await publish(a)).toMatchObject({ ok: true });
+    expect(await publish(b)).toMatchObject({ ok: true });
     expect(await liveIds()).toEqual([b]);
     expect(await statusOf(a)).toBe('ended');
   });
@@ -448,14 +457,14 @@ describe('brandNews.end', () => {
   it('ends a live announcement once, answers the same for an ended one, and refuses a draft', async () => {
     const id = await created();
     refused(await h.run('brandNews.end', { id }), 'badTransition', 'brandNews:notLive');
-    await h.run('brandNews.publish', { id });
+    await publish(id);
     expect(await h.run('brandNews.end', { id })).toEqual({ ok: true, code: 'unpublished', detail: id });
     expect(await rowOf(id)).toMatchObject({ status: 'ended' });
     expect(await h.run('brandNews.end', { id })).toEqual({ ok: true, code: 'unpublished', detail: id });
     expect((await audits(id)).map((a) => a.reason)).toEqual(['brand_news_draft_created', 'brand_news_published', 'brand_news_ended']);
     refused(await h.run('brandNews.end', { id: randomUUID() }), 'notFound');
     // Ended is final: it cannot go live again.
-    refused(await h.run('brandNews.publish', { id }), 'notDraft', 'brandNews:ended');
+    refused(await publish(id), 'notDraft', 'brandNews:ended');
   });
 });
 
@@ -465,7 +474,7 @@ describe('the admin page’s reads', () => {
   it('list newest first with what the page shows, admins only', async () => {
     const old = await created({ titleEn: '' });
     const fresh = await created({ shape: 'banner', image: await banner(), audience: '{"orgs":["' + randomUUID() + '"]}' });
-    await h.run('brandNews.publish', { id: fresh });
+    await publish(fresh);
     const page = await loadBrandNewsAdmin({ sql, imageUrl: (key) => `https://media.example.test/${key}` }, ADMIN_VIEWER);
     if (!page.ok) throw new Error(page.code);
     expect(page.limit).toBe(BRAND_NEWS_LIMITS.adminList);
