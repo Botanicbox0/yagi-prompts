@@ -86,6 +86,8 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
       'brand_room_reads',
       'brand_room_share_visits',
       'brand_room_shares',
+      // docs/BRAND-PROJECT-SPINE.md §8.4 (0198) — 보내기: where each person stopped reading each members thread, server only.
+      'brand_room_thread_reads',
       'brand_shortlist_candidates',
       // 2026-11-11 — per-organization storage quotas and audit log (docs/BRAND-STORAGE-QUOTAS-F.md).
       'brand_storage_quota_events',

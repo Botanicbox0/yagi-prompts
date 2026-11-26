@@ -43,10 +43,12 @@ import { brandSiteUrl, siteUrl } from '@/lib/seo/site-url';
 import { roomAudience } from './access';
 import { TEAM_PROJECTS } from '@/lib/brands/project-origin';
 import type { RoomEventKind } from './events';
+import { brandSendOpenFor, MEMBERS_LINE, membersAudience, shownProjectTitles } from './members-channel';
+import { isMembersChannel, membersChannelOf, sendThreadHref } from './send-contracts';
 
 /* ------------------------------------------------------------------ rules (§2.1) */
 
-export const ROOM_NOTICE_KINDS = ['new_version', 'storyboard', 'team_message', 'team_reply', 'mention', 'intake_received'] as const;
+export const ROOM_NOTICE_KINDS = ['new_version', 'storyboard', 'team_message', 'team_reply', 'mention', 'intake_received', 'member_reply'] as const;
 export type RoomNoticeKind = (typeof ROOM_NOTICE_KINDS)[number];
 
 export interface RoomNoticeRule {
@@ -71,6 +73,12 @@ export const ROOM_NOTICE_RULES: Readonly<Record<RoomNoticeKind, RoomNoticeRule>>
   mention: { email: 'now', push: true, actor: 'any' },
   /** The receipt for a new request, to the person who sent it only. */
   intake_received: { email: 'now', push: false, actor: 'brand' },
+  /**
+   * A new reply in a members thread (보내기, docs/BRAND-PROJECT-SPINE.md §8.4), to the thread's other participants who
+   * are not named in it. In-app only: no existing mail or push sentence is true for it (each says the YAGI team wrote),
+   * so it is queued already skipped (`rule`) and never pushed, until the founder approves words of its own.
+   */
+  member_reply: { email: 'none', push: false, actor: 'brand' },
 };
 
 /** Which event lines notify. Approvals, change requests and the brand's own lines notify nobody (§2.1 last row). */
@@ -136,7 +144,24 @@ export type RoomNoticeSource =
       actorRole: 'brand' | 'studio';
       mentions: readonly string[];
     }
-  | { type: 'intake'; organizationId: string; projectId: string; actorId: string };
+  | { type: 'intake'; organizationId: string; projectId: string; actorId: string }
+  | {
+      /**
+       * A line on a members channel (보내기, ./send.ts): its root (`reply: false`) or a reply. Only the organization's
+       * active members hear about it (./members-channel.ts `membersAudience`), never a guest and never the team.
+       */
+      type: 'member';
+      organizationId: string;
+      /** The file's project, or null for an unfiled file (channel `members`). */
+      projectId: string | null;
+      /** `members:<projectId>` or `members`. */
+      channel: string;
+      messageId: string;
+      rootId: string;
+      actorId: string;
+      mentions: readonly string[];
+      reply: boolean;
+    };
 
 export interface EnqueueOptions {
   env?: NodeJS.ProcessEnv;
@@ -149,17 +174,66 @@ interface PlannedNotice {
   recipientId: string;
   kind: RoomNoticeKind;
   messageId: string | null;
+  /** A members-channel notice's own timing (the rule's otherwise). */
+  timing?: RoomNoticeRule['email'];
+  push?: boolean;
 }
 
-/** The place a notice is about: a project id, or null for the organization's general channel. */
+/** The place a notice is about: a project id, or null for the organization's general channel (or an unfiled file's members channel). */
 function placeOf(source: RoomNoticeSource): string | null | undefined {
-  if (source.type === 'message' && source.projectId === null) return null;
+  if ((source.type === 'message' || source.type === 'member') && source.projectId === null) return null;
   return source.projectId && UUID.test(source.projectId) ? source.projectId.toLowerCase() : undefined;
+}
+
+/**
+ * A members-channel line (docs/BRAND-PROJECT-SPINE.md §8.4). Only the organization's active members are ever planned.
+ *  - Everyone the line names (but the writer) gets `mention`. In a project's members channel that is today's mention
+ *    mail and push, whose words are all true there ("[project] … called you in the project conversation"); for an
+ *    unfiled file there is no project to name and no sentence that fits, so the row is in-app only (skipped `rule`,
+ *    no push).
+ *  - A reply: every other participant of the thread (the root's writer, everyone named in it, everyone who replied)
+ *    gets `member_reply`, in-app only, except the writer and those who got `mention` for this very line.
+ *  - Everyone else: nothing. Staff who are not members, guests and other organizations are never in the audience.
+ */
+async function planMemberNotices(sql: SqlRunner, source: Extract<RoomNoticeSource, { type: 'member' }>): Promise<PlannedNotice[]> {
+  if (!UUID.test(source.messageId ?? '') || !UUID.test(source.rootId ?? '') || !isMembersChannel(source.channel)) return [];
+  if (source.channel !== membersChannelOf(source.projectId)) return [];
+  const actor = UUID.test(source.actorId ?? '') ? source.actorId.toLowerCase() : null;
+  const audience = new Set(await membersAudience(sql, source.organizationId));
+  const messageId = source.messageId.toLowerCase();
+  const mentioned = new Set((source.mentions ?? []).map((id) => String(id).toLowerCase()).filter((id) => audience.has(id) && id !== actor));
+  const filed = source.projectId !== null;
+  const planned: PlannedNotice[] = [...mentioned].map((recipientId) => ({
+    recipientId,
+    kind: 'mention' as const,
+    messageId,
+    timing: filed ? ROOM_NOTICE_RULES.mention.email : ('none' as const),
+    push: filed && ROOM_NOTICE_RULES.mention.push,
+  }));
+  if (!source.reply) return planned;
+  const participants = (
+    await sql.query<{ user_id: string }>(
+      `select distinct u.user_id::text as user_id from (
+         select x.author_id as user_id from brand_room_messages x
+          where x.organization_id = $1 and (x.id = $2 or x.parent_id = $2) and x.deleted_at is null and ${MEMBERS_LINE('x')}
+         union all
+         select unnest(x.mentions) from brand_room_messages x
+          where x.organization_id = $1 and (x.id = $2 or x.parent_id = $2) and x.deleted_at is null and ${MEMBERS_LINE('x')}
+       ) u where u.user_id is not null`,
+      [source.organizationId, source.rootId],
+    )
+  ).rows.map((row) => String(row.user_id).toLowerCase());
+  for (const recipientId of new Set(participants)) {
+    if (recipientId === actor || mentioned.has(recipientId) || !audience.has(recipientId)) continue;
+    planned.push({ recipientId, kind: 'member_reply', messageId, timing: ROOM_NOTICE_RULES.member_reply.email, push: ROOM_NOTICE_RULES.member_reply.push });
+  }
+  return planned;
 }
 
 async function planNotices(sql: SqlRunner, source: RoomNoticeSource): Promise<PlannedNotice[]> {
   // `undefined` = no valid place. Only a chat line can be in the general channel (null).
   if (!source || !UUID.test(source.organizationId ?? '') || placeOf(source) === undefined) return [];
+  if (source.type === 'member') return planMemberNotices(sql, source);
   const actor = source.actorId && UUID.test(source.actorId) ? source.actorId.toLowerCase() : null;
   if (source.type === 'intake') {
     if (!actor || !actorFits(ROOM_NOTICE_RULES.intake_received, 'brand')) return [];
@@ -206,31 +280,47 @@ export async function enqueueNotices(sql: SqlRunner, source: RoomNoticeSource, o
     const planned = await planNotices(sql, source);
     const now = options.now ?? new Date();
     let queued = 0;
+    let outbound = 0;
     for (const notice of planned) {
       const rule = ROOM_NOTICE_RULES[notice.kind];
-      const dueAt = new Date(now.getTime() + (rule.email === 'bundle' ? ROOM_NOTICE_LIMITS.bundleDelayMinutes * MINUTE : 0));
-      const { rows } = await sql.query<{ id: string }>(
-        `insert into brand_room_notices (organization_id, project_id, recipient_id, kind, message_id, timing, due_at, state, skip_reason, push_state)
-           values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-         on conflict do nothing
-         returning id`,
-        [
-          source.organizationId.toLowerCase(),
-          placeOf(source) ?? null,
-          notice.recipientId,
-          notice.kind,
-          notice.messageId,
-          rule.email,
-          dueAt.toISOString(),
-          rule.email === 'none' ? 'skipped' : 'pending',
-          rule.email === 'none' ? 'rule' : null,
-          rule.push ? 'pending' : 'none',
-        ],
-      );
+      const timing = notice.timing ?? rule.email;
+      const push = notice.push ?? rule.push;
+      const dueAt = new Date(now.getTime() + (timing === 'bundle' ? ROOM_NOTICE_LIMITS.bundleDelayMinutes * MINUTE : 0));
+      const values = [
+        source.organizationId.toLowerCase(),
+        placeOf(source) ?? null,
+        notice.recipientId,
+        notice.kind,
+        notice.messageId,
+        timing,
+        dueAt.toISOString(),
+        timing === 'none' ? 'skipped' : 'pending',
+        timing === 'none' ? 'rule' : null,
+        push ? 'pending' : 'none',
+      ];
+      // A team-channel notice keeps exactly the statement it always had (it also runs before migration 0198); a
+      // members-channel notice carries its channel (0198's column), so the pass never reads it as a team channel's.
+      const { rows } =
+        source.type === 'member'
+          ? await sql.query<{ id: string }>(
+              `insert into brand_room_notices (organization_id, project_id, recipient_id, kind, message_id, timing, due_at, state, skip_reason, push_state, channel)
+                 values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+               on conflict do nothing
+               returning id`,
+              [...values, source.channel],
+            )
+          : await sql.query<{ id: string }>(
+              `insert into brand_room_notices (organization_id, project_id, recipient_id, kind, message_id, timing, due_at, state, skip_reason, push_state)
+                 values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+               on conflict do nothing
+               returning id`,
+              values,
+            );
       queued += rows.length;
+      if (rows.length && (timing !== 'none' || push)) outbound += 1;
     }
     if (savepoint) await sql.query('release savepoint brand_room_notice');
-    if (queued > 0 && options.kick !== false) kickRoomNoticePass(env);
+    if (outbound > 0 && options.kick !== false) kickRoomNoticePass(env);
     return queued;
   } catch (error) {
     if (savepoint) await sql.query('rollback to savepoint brand_room_notice').catch(() => undefined);
@@ -296,6 +386,11 @@ export interface RoomNoticeMailInput {
   /** One "now" notice, or every row of one bundled mail, oldest first. */
   lines: readonly RoomNoticeLine[];
   env?: NodeJS.ProcessEnv;
+  /**
+   * Where the button opens, as a same-origin path, when it is not the room (`roomNoticePath`): a members thread opens
+   * the 알림함 on that thread (`sendThreadHref`), never `/brand/rooms*`.
+   */
+  href?: string;
 }
 
 export interface RoomNoticeMail {
@@ -311,8 +406,11 @@ type Dict = ReturnType<typeof getDictionary>;
 /** The two kinds one bundled mail (and one counted push) carries. Every other kind is one notice, one mail. */
 const BUNDLED: ReadonlySet<RoomNoticeKind> = new Set<RoomNoticeKind>(['team_message', 'team_reply']);
 
-/** What a mail or push is about: the bundle (`replies`), or the one "now" notice it carries. */
+/** What a mail or push is about: the bundle (`replies`), or the one "now" notice it carries. `member_reply` has no mail. */
 export type RoomNoticeMailKind = 'replies' | 'new_version' | 'storyboard' | 'mention' | 'intake_received';
+
+/** Kinds that never become a mail or a push (in-app only); the pass skips them before anything is built. */
+const IN_APP_ONLY: ReadonlySet<RoomNoticeKind> = new Set<RoomNoticeKind>(['member_reply']);
 
 const KIND_COPY = {
   replies: 'replies',
@@ -323,8 +421,8 @@ const KIND_COPY = {
 } as const satisfies Record<RoomNoticeMailKind, keyof Dict['roomsNotices']['kinds']>;
 
 export function roomNoticeMailKind(lines: readonly RoomNoticeLine[]): RoomNoticeMailKind {
-  const single = lines.find((line) => !BUNDLED.has(line.kind));
-  return single ? (single.kind as Exclude<RoomNoticeKind, 'team_message' | 'team_reply'>) : 'replies';
+  const single = lines.find((line) => !BUNDLED.has(line.kind) && !IN_APP_ONLY.has(line.kind));
+  return single ? (single.kind as Exclude<RoomNoticeKind, 'team_message' | 'team_reply' | 'member_reply'>) : 'replies';
 }
 
 const flat = (value: string | null | undefined): string => (value ?? '').replace(/\s+/g, ' ').trim();
@@ -438,7 +536,7 @@ export function buildRoomNoticeEmail(input: RoomNoticeMailInput): RoomNoticeMail
   const kind = roomNoticeMailKind(input.lines);
   const vars = noticeVars(dict, kind, input.lines, placeName(dict, input.projectId, input.projectTitle));
   const strings = kindStrings(dict, kind, Number(vars.count));
-  const buttonUrl = `${brandSiteUrl(env)}${roomNoticePath(input.organizationId, input.projectId)}`;
+  const buttonUrl = `${brandSiteUrl(env)}${input.href ?? roomNoticePath(input.organizationId, input.projectId)}`;
   const unsubscribeUrl = `${siteUrl(env)}${unsubscribePath({ userId: input.recipientId, toggle: ROOM_EMAIL_SCOPE, organizationId: input.organizationId })}`;
   const args: SheetArgs = {
     title: interpolate(strings.heading, vars),
@@ -459,6 +557,9 @@ export interface RoomNoticePushInput {
   projectTitle: string;
   /** One "now" notice, or the team's lines of one recipient × place pushed together in one pass. */
   lines: readonly RoomNoticeLine[];
+  /** A members thread: where the push opens (`sendThreadHref`) and its tag (the thread), instead of the room's. */
+  href?: string;
+  tag?: string;
 }
 
 /**
@@ -476,11 +577,11 @@ export function buildRoomNoticePush(input: RoomNoticePushInput): PushMessage | n
   if (!strings.pushTitle || !strings.pushBody) return null;
   const organizationId = input.organizationId.toLowerCase();
   const projectId = input.projectId ? input.projectId.toLowerCase() : null;
-  const tag = projectId ?? organizationId;
+  const tag = input.tag?.toLowerCase() ?? projectId ?? organizationId;
   return {
     title: interpolate(strings.pushTitle, vars),
     body: interpolate(strings.pushBody, vars),
-    url: roomNoticePath(organizationId, projectId),
+    url: input.href ?? roomNoticePath(organizationId, projectId),
     tag,
     topic: tag.replace(/-/g, ''),
     lang: input.locale,
@@ -515,7 +616,7 @@ export interface RoomNoticePassReport {
   pushes: number;
 }
 
-type SkipReason = 'read' | 'muted' | 'no_mailer' | 'no_access' | 'no_email' | 'deleted';
+type SkipReason = 'read' | 'muted' | 'no_mailer' | 'no_access' | 'no_email' | 'deleted' | 'rule';
 
 interface NoticeRow {
   id: string;
@@ -532,7 +633,10 @@ interface NoticeRow {
 
 interface MessageFacts {
   id: string;
+  /** The line's channel now (a members thread moves with its file, and its notices with it). */
   channel: string;
+  /** A reply's thread; null for a root or a team-channel line without one. */
+  parentId: string | null;
   body: string;
   detail: Record<string, unknown> | null;
   deleted: boolean;
@@ -553,12 +657,26 @@ interface Facts {
   messages: Map<string, MessageFacts>;
   recipients: Map<string, RecipientFacts>;
   projects: Map<string, string>;
+  /** Members threads (보내기): `<organization>:<project>` -> the title members are shown, only while the project can take work. */
+  memberProjects: Map<string, string>;
 }
 
 const toDate = (v: Date | string): Date => (v instanceof Date ? v : new Date(String(v)));
 const GENERAL = 'general';
 /** A row's channel, as `brand_room_reads` names it: its project id, or 'general'. */
 const channelOf = (projectId: string | null): string => (projectId ? projectId.toLowerCase() : GENERAL);
+
+/** The members thread a notice row is about (its line is on a members channel now), or null for a team-channel notice. */
+function memberThreadOf(row: NoticeRow, facts: Facts): { message: MessageFacts; rootId: string } | null {
+  const message = row.message_id ? facts.messages.get(row.message_id.toLowerCase()) : undefined;
+  if (!message || !isMembersChannel(message.channel)) return null;
+  return { message, rootId: (message.parentId ?? message.id).toLowerCase() };
+}
+
+/** A row's channel for grouping and read marks: a members line's own channel, else the team channel of its project. */
+function rowChannel(row: NoticeRow, facts: Facts): string {
+  return memberThreadOf(row, facts)?.message.channel ?? channelOf(row.project_id);
+}
 /** Recipient × place. 'general' exists once per organization, so the organization is part of the place. */
 const placeKey = (recipientId: string, organizationId: string, channel: string): string =>
   `${recipientId.toLowerCase()}:${organizationId.toLowerCase()}:${channel}`;
@@ -578,6 +696,7 @@ async function loadFacts(sql: SqlRunner, rows: readonly NoticeRow[]): Promise<Fa
       await sql.query<{
         id: string;
         channel: string;
+        parent_id: string | null;
         kind: string;
         body: string | null;
         detail: Record<string, unknown> | null;
@@ -591,7 +710,7 @@ async function loadFacts(sql: SqlRunner, rows: readonly NoticeRow[]): Promise<Fa
         // A team reply's text comes from the draft note itself; a note the team keeps to itself never does.
         // The note id is compared as a uuid (the primary key's index), and only after the text is checked
         // to be one: a malformed `ref` yields no text instead of a failed cast.
-        `select m.id::text as id, m.channel, m.kind, m.body, m.detail, m.deleted_at, m.created_at, m.author_role,
+        `select m.id::text as id, m.channel, m.parent_id::text as parent_id, m.kind, m.body, m.detail, m.deleted_at, m.created_at, m.author_role,
                 p.display_name, p.email,
                 (select c.body from brand_studio_review_comments c
                   where m.event = 'review_commented'
@@ -609,6 +728,7 @@ async function loadFacts(sql: SqlRunner, rows: readonly NoticeRow[]): Promise<Fa
       messages.set(String(m.id).toLowerCase(), {
         id: String(m.id).toLowerCase(),
         channel: String(m.channel),
+        parentId: m.parent_id ? String(m.parent_id).toLowerCase() : null,
         body: m.body ?? '',
         detail: m.detail,
         deleted: m.deleted_at != null,
@@ -634,7 +754,33 @@ async function loadFacts(sql: SqlRunner, rows: readonly NoticeRow[]): Promise<Fa
       projects.set(String(p.id).toLowerCase(), String(p.title));
     }
   }
-  return { messages, recipients, projects };
+  // Members threads: the project members are shown, by the spine's rule (./members-channel.ts), one statement per
+  // organization that has one; a hidden, finished or archived project has no title here (its mail is then skipped).
+  const memberProjects = new Map<string, string>();
+  const byOrganization = new Map<string, Set<string>>();
+  for (const row of rows) {
+    const message = row.message_id ? messages.get(row.message_id.toLowerCase()) : undefined;
+    if (!message || !isMembersChannel(message.channel) || !row.project_id) continue;
+    const organizationId = row.organization_id.toLowerCase();
+    byOrganization.set(organizationId, (byOrganization.get(organizationId) ?? new Set()).add(row.project_id.toLowerCase()));
+  }
+  for (const [organizationId, ids] of byOrganization) {
+    for (const [id, title] of await shownProjectTitles(sql, organizationId, [...ids])) memberProjects.set(`${organizationId}:${id}`, title);
+  }
+  return { messages, recipients, projects, memberProjects };
+}
+
+/**
+ * What a mail or a push about a members thread may say, or why it may not go out: a kind that is in-app only, or a
+ * thread whose file is unfiled or in a project members are not shown (no true `{project}` for the mention words).
+ */
+function memberDelivery(row: NoticeRow, facts: Facts): { ok: true; projectId: string; projectTitle: string; href: string; tag: string } | { ok: false } {
+  const thread = memberThreadOf(row, facts);
+  if (!thread || IN_APP_ONLY.has(row.kind) || row.kind !== 'mention' || !row.project_id) return { ok: false };
+  if (thread.message.channel !== membersChannelOf(row.project_id)) return { ok: false };
+  const projectTitle = facts.memberProjects.get(`${row.organization_id.toLowerCase()}:${row.project_id.toLowerCase()}`);
+  if (!projectTitle) return { ok: false };
+  return { ok: true, projectId: row.project_id.toLowerCase(), projectTitle, href: sendThreadHref(row.organization_id, thread.rootId), tag: thread.rootId };
 }
 
 /** The project's title; the general channel is named by the mail itself (`roomsChat.inbox.general`). */
@@ -680,14 +826,20 @@ function lineOf(row: NoticeRow, facts: Facts, locale: Locale): RoomNoticeLine {
   return { kind: row.kind, title, version, name };
 }
 
-/** Per pass: who may still open which room (an organization closed or a member removed since the line). */
-function audienceCache(sql: SqlRunner) {
+/**
+ * Per pass: who may still open which room (an organization closed or a member removed since the line). A members
+ * thread (`members: true`) belongs to the organization's active members while 보내기 is open for it; the project does
+ * not change who that is.
+ */
+function audienceCache(sql: SqlRunner, env: NodeJS.ProcessEnv) {
   const cache = new Map<string, Promise<Set<string>>>();
-  return (organizationId: string, projectId: string | null, userId: string): Promise<boolean> => {
-    const key = `${organizationId.toLowerCase()}:${channelOf(projectId)}`;
+  return (organizationId: string, projectId: string | null, userId: string, members = false): Promise<boolean> => {
+    const key = members ? `${organizationId.toLowerCase()}:members` : `${organizationId.toLowerCase()}:${channelOf(projectId)}`;
     let entry = cache.get(key);
     if (!entry) {
-      entry = roomAudience(sql, organizationId, projectId).then((people) => new Set(people.map((p) => p.userId)));
+      entry = members
+        ? brandSendOpenFor(sql, organizationId, env).then(async (open) => new Set(open ? await membersAudience(sql, organizationId) : []))
+        : roomAudience(sql, organizationId, projectId).then((people) => new Set(people.map((p) => p.userId)));
       cache.set(key, entry);
     }
     return entry.then((people) => people.has(userId.toLowerCase()));
@@ -714,12 +866,12 @@ export async function runRoomNoticePass(deps: RoomNoticePassDeps, options: { lim
       where state = 'sending' and lease_until < $1`,
     [now.toISOString(), ROOM_NOTICE_LIMITS.maxAttempts],
   );
-  await pushPhase(deps, now, limit, report);
+  await pushPhase(deps, now, limit, report, env);
   await mailPhase(deps, now, limit, report, env);
   return report;
 }
 
-async function pushPhase(deps: RoomNoticePassDeps, now: Date, limit: number, report: RoomNoticePassReport): Promise<void> {
+async function pushPhase(deps: RoomNoticePassDeps, now: Date, limit: number, report: RoomNoticePassReport, env: NodeJS.ProcessEnv): Promise<void> {
   const rows = await deps.sql.transaction(async (tx) => {
     const picked = (await tx.query<NoticeRow>(`${NOTICE_SELECT} where push_state = 'pending' order by created_at, id limit $1 for update skip locked`, [limit])).rows;
     // At most once: marked before anything is sent, corrected after.
@@ -730,13 +882,13 @@ async function pushPhase(deps: RoomNoticePassDeps, now: Date, limit: number, rep
   });
   if (rows.length === 0 || !deps.push) return;
   const facts = await loadFacts(deps.sql, rows);
-  const seated = audienceCache(deps.sql);
+  const seated = audienceCache(deps.sql, env);
   // One push per "now" notice; the team's lines of one recipient × place are one push that counts them.
   const groups = new Map<string, NoticeRow[]>();
   for (const row of rows) {
     const message = row.message_id ? facts.messages.get(row.message_id.toLowerCase()) : undefined;
     if (row.message_id && (!message || message.deleted)) continue;
-    const place = placeKey(row.recipient_id, row.organization_id, channelOf(row.project_id));
+    const place = placeKey(row.recipient_id, row.organization_id, rowChannel(row, facts));
     const key = BUNDLED.has(row.kind) ? `${place}:replies` : `${place}:${row.id}`;
     groups.set(key, [...(groups.get(key) ?? []), row]);
   }
@@ -745,14 +897,18 @@ async function pushPhase(deps: RoomNoticePassDeps, now: Date, limit: number, rep
   for (const group of [...groups.values()].sort((a, b) => newest(a) - newest(b))) {
     const first = group[0]!;
     try {
-      if (!(await seated(first.organization_id, first.project_id, first.recipient_id))) continue;
+      // A members thread (보내기): its own audience and its own address; nothing goes out when no true words fit.
+      const member = memberThreadOf(first, facts) ? memberDelivery(first, facts) : null;
+      if (member && !member.ok) continue;
+      if (!(await seated(first.organization_id, first.project_id, first.recipient_id, member !== null))) continue;
       const locale = facts.recipients.get(first.recipient_id.toLowerCase())?.locale ?? DEFAULT_LOCALE;
       const message = buildRoomNoticePush({
         locale,
         organizationId: first.organization_id,
         projectId: first.project_id,
-        projectTitle: projectTitleOf(facts, first.project_id),
+        projectTitle: member?.ok ? member.projectTitle : projectTitleOf(facts, first.project_id),
         lines: group.map((row) => lineOf(row, facts, locale)),
+        ...(member?.ok ? { href: member.href, tag: member.tag } : {}),
       });
       if (!message) continue;
       const fanout = await sendPushToUser({ sql: deps.sql, sender: deps.push, now }, first.recipient_id, message);
@@ -772,6 +928,9 @@ interface Batch {
   organizationId: string;
   /** Null: the organization's general channel. */
   projectId: string | null;
+  /** A members thread: the title members are shown and the 알림함 address (./send-contracts.ts `sendThreadHref`). */
+  projectTitle?: string;
+  href?: string;
 }
 
 async function mailPhase(deps: RoomNoticePassDeps, now: Date, limit: number, report: RoomNoticePassReport, env: NodeJS.ProcessEnv): Promise<void> {
@@ -803,7 +962,7 @@ async function mailPhase(deps: RoomNoticePassDeps, now: Date, limit: number, rep
       await tx.query<{ user_id: string; organization_id: string; channel: string; last_read_at: Date | string }>(
         `select user_id::text as user_id, organization_id::text as organization_id, channel, last_read_at
            from brand_room_reads where user_id = any($1::uuid[]) and organization_id = any($2::uuid[]) and channel = any($3::text[])`,
-        [recipientIds, organizationIds, [...new Set(rows.map((r) => channelOf(r.project_id)))]],
+        [recipientIds, organizationIds, [...new Set(rows.map((r) => rowChannel(r, facts)))]],
       )
     ).rows) {
       reads.set(placeKey(String(r.user_id), String(r.organization_id), String(r.channel)), toDate(r.last_read_at));
@@ -822,7 +981,7 @@ async function mailPhase(deps: RoomNoticePassDeps, now: Date, limit: number, rep
     ).rows) {
       if (r.last) lastBundle.set(placeKey(String(r.recipient_id), String(r.organization_id), channelOf(r.project_id)), toDate(r.last));
     }
-    const seated = audienceCache(tx);
+    const seated = audienceCache(tx, env);
     // One mail is one kind (§10.1). A retried batch keeps its id (the provider's idempotency key); a new
     // "now" row is a batch of its own; new bundled rows group by recipient × place.
     const groups = new Map<string, NoticeRow[]>();
@@ -830,7 +989,7 @@ async function mailPhase(deps: RoomNoticePassDeps, now: Date, limit: number, rep
       const key = row.batch_id
         ? `b:${row.batch_id}`
         : row.timing === 'bundle'
-          ? `g:${placeKey(row.recipient_id, row.organization_id, channelOf(row.project_id))}`
+          ? `g:${placeKey(row.recipient_id, row.organization_id, rowChannel(row, facts))}`
           : `n:${row.id}`;
       groups.set(key, [...(groups.get(key) ?? []), row]);
     }
@@ -841,9 +1000,16 @@ async function mailPhase(deps: RoomNoticePassDeps, now: Date, limit: number, rep
       const recipientId = first.recipient_id.toLowerCase();
       const projectId = first.project_id ? first.project_id.toLowerCase() : null;
       const organizationId = first.organization_id.toLowerCase();
-      const place = placeKey(recipientId, organizationId, channelOf(projectId));
+      const place = placeKey(recipientId, organizationId, rowChannel(first, facts));
       const retry = first.batch_id !== null;
-      if (!(await seated(organizationId, projectId, recipientId))) {
+      // A members thread (보내기): in-app only unless today's mention words are all true for it (a project members are
+      // shown); then its own audience, and the button opens the 알림함 on the thread.
+      const member = memberThreadOf(first, facts) ? memberDelivery(first, facts) : null;
+      if (member && !member.ok) {
+        skip('rule', group.map((r) => r.id));
+        continue;
+      }
+      if (!(await seated(organizationId, projectId, recipientId, member !== null))) {
         skip('no_access', group.map((r) => r.id));
         continue;
       }
@@ -872,7 +1038,14 @@ async function mailPhase(deps: RoomNoticePassDeps, now: Date, limit: number, rep
           continue;
         }
       }
-      batches.push({ batchId: first.batch_id ?? randomUUID(), rows: remaining, recipientId, organizationId, projectId });
+      batches.push({
+        batchId: first.batch_id ?? randomUUID(),
+        rows: remaining,
+        recipientId,
+        organizationId,
+        projectId,
+        ...(member?.ok ? { projectTitle: member.projectTitle, href: member.href } : {}),
+      });
     }
     await applySkips(tx, skips, report);
     for (const [dueAt, ids] of deferred) {
@@ -897,9 +1070,10 @@ async function mailPhase(deps: RoomNoticePassDeps, now: Date, limit: number, rep
       recipientId: batch.recipientId,
       organizationId: batch.organizationId,
       projectId: batch.projectId,
-      projectTitle: projectTitleOf(claimed.facts, batch.projectId),
+      projectTitle: batch.projectTitle ?? projectTitleOf(claimed.facts, batch.projectId),
       lines: [...batch.rows].sort((a, b) => toDate(a.created_at).getTime() - toDate(b.created_at).getTime()).map((row) => lineOf(row, claimed.facts!, recipient.locale)),
       env,
+      ...(batch.href ? { href: batch.href } : {}),
     });
     let outcome: SendOutcome;
     try {
