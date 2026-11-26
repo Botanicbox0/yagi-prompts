@@ -1523,6 +1523,7 @@ async function sweepMakers(): Promise<void> {
   expectAbsent('…and never the rest of the prompt', recipePage.body, LOCAL_RECIPE_CANARY);
   expectAbsent('…nor a step tip', recipePage.body, 'TEST tip:');
   expectAbsent('…nor the closing line', recipePage.body, '태그해 주세요');
+  expectAbsent('…and no clip section without guide', recipePage.body, 'data-recipe-clips');
   const anonRecipe = await get(`/api/renders/access?template=${LOCAL_RECIPE_SLUG}&locale=en`);
   expectEqual('the access answer renders 200', anonRecipe.status, 200);
   expectPresent('…with no recipe for a visitor', anonRecipe.body, '"recipe":null');

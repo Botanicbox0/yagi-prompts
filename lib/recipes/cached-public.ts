@@ -24,7 +24,8 @@ const cached = unstable_cache(
   // v7 (2026-11-25): a Seedance 2.5 step may run to 15,000 characters (lib/engines/prompt-limits.ts); a v6 entry
   // holds `null` for such a recipe, like v2 did for 8,000.
   // v8 (2026-11-25): optional clip-by-clip production guide cards on public studio recipes.
-  ['public-recipe-v8', resolveRuntimeMode()],
+  // v9 (2026-11-26): logged-out clip outline and full-width clip section on template pages.
+  ['public-recipe-v9', resolveRuntimeMode()],
   { tags: ['prompts'], revalidate: 3600 },
 );
 

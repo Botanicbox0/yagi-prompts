@@ -48,6 +48,8 @@ import { recipeTeaser } from '@/lib/recipes/public';
 import { publicRecipeText } from '@/lib/template-director/public-text';
 import { HowItWasMade } from '@/components/recipes/how-it-was-made';
 import { RecipeActions } from '@/components/recipes/recipe-actions';
+import { RecipeAccessProvider } from '@/components/recipes/recipe-access-context';
+import { RecipeClipsSection } from '@/components/recipes/recipe-clips-section';
 import { MakeLauncher } from '@/components/templates/make-launcher';
 import { MakeSheet } from '@/components/templates/make-sheet';
 import { templateCredits } from '@/lib/twings/credits';
@@ -185,17 +187,34 @@ export default async function TemplatePage({ params }: RouteParams) {
   // Story-first (founder, 2026-10-29): the result, then how it was made, then "one selfie and it's
   // you" with the make box — the recipe sits in the column under the title, ahead of any cost.
   const recipeFirst = visibleRecipe?.presentation === 'story-first' && Boolean(visibleRecipe.steps);
+  const accessEndpoint = `/api/renders/access?template=${encodeURIComponent(card.slug)}&locale=${locale}`;
+  const hasGuide = (visibleRecipe?.guide?.length ?? visibleRecipe?.guideOutline?.length ?? 0) > 0;
   const howItWasMade = visibleRecipe ? (
     <HowItWasMade
       recipe={visibleRecipe}
       copy={mr}
       compact={recipeFirst}
+      {...(hasGuide ? { clipsHref: '#clips' } : {})}
       {...(openToAll
         ? {}
         : {
             gate: {
-              accessEndpoint: `/api/renders/access?template=${encodeURIComponent(card.slug)}&locale=${locale}`,
+              accessEndpoint,
               signinHref: signInHref(`${templateHref(locale, slug)}#how`, locale),
+            },
+          })}
+    />
+  ) : null;
+  const clipsSection = visibleRecipe && hasGuide ? (
+    <RecipeClipsSection
+      recipe={visibleRecipe}
+      copy={mr}
+      {...(openToAll
+        ? {}
+        : {
+            gate: {
+              accessEndpoint,
+              signinHref: signInHref(`${templateHref(locale, slug)}#clips`, locale),
             },
           })}
     />
@@ -291,6 +310,10 @@ export default async function TemplatePage({ params }: RouteParams) {
 
       <SubscriptionAvailabilityProvider initialAvailability={availability}>
       <main id="main" data-template={card.slug} data-medium={card.medium} data-section data-theme="light" className="section pb-24">
+        <RecipeAccessProvider
+          accessEndpoint={visibleRecipe && !openToAll ? accessEndpoint : null}
+          initialUnlocked={openToAll ? recipe : null}
+        >
         {/* The page's own centred shell. `.band` keeps a 300px ad rail free at 1440+, which this
             page never has — that empty rail is what pushed everything left (founder, 2026-10-28). */}
         <div data-template-shell className="mx-auto w-full max-w-[calc(var(--container-audience)+2*var(--spacing-gutter))] px-[var(--spacing-gutter)] pt-24">
@@ -573,6 +596,8 @@ export default async function TemplatePage({ params }: RouteParams) {
               </div>
             </header>
 
+            {recipeFirst && clipsSection}
+
             {/* The recipe follows the result, never ahead of it (founder, 2026-10-28). A maker's
                 'story-first' sits in the column above (2026-10-29); 'make-first' after the campaigns.
                 "만드는 법" draws its own rule and spacing; the wrapper only anchors `#recipe`. */}
@@ -602,6 +627,7 @@ export default async function TemplatePage({ params }: RouteParams) {
               </section>
             )}
             {recipe?.presentation === 'make-first' && <div id="recipe" data-template-recipe="make-first" className="scroll-mt-24">{howItWasMade}</div>}
+            {!recipeFirst && clipsSection}
 
             {maker && moreFromMaker.length > 0 && (
               <div data-template-more-from={maker.handle}>
@@ -624,6 +650,7 @@ export default async function TemplatePage({ params }: RouteParams) {
               signinHref={signInHref(templateHref(locale, slug), locale)}
             />
           </div>
+        </RecipeAccessProvider>
       </main>
       <FaqSection dict={dict} locale={locale} placement="template" path={`/${locale}/t/${slug}`} availability={availability} />
       </SubscriptionAvailabilityProvider>

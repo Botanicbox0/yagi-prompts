@@ -60,12 +60,15 @@ describe('the make launcher', () => {
 describe('how it was made, in the column', () => {
   const long = { presentation: 'story-first' as const, intro: null, outro: null, steps: [{ n: 1, kind: 'video' as const, engine: 'SEEDANCE 2.5', inputs: [], prompt: `[My photo] ${'Shot detail. '.repeat(80)}`, note: null }], files: null };
 
-  it("keeps the creative's intro, the step tip under its prompt and the closing line, at the column's size", () => {
+  // 2026-11-26: the tip is a labelled box above the prompt, so it stays in view while the prompt is folded.
+  it("keeps the creative's intro, the labelled step tip above its prompt and the closing line, at the column's size", () => {
     const html = renderToStaticMarkup(<HowItWasMade recipe={{ ...long, intro: 'INTRO_LINE', outro: 'OUTRO_LINE', steps: [{ ...long.steps[0]!, note: 'TIP_LINE' }] }} copy={ko.makerRecipe} compact />);
     expect(/<p[^>]*data-recipe-intro[^>]*>/.exec(html)![0]).toContain('text-sm');
     expect(html.indexOf('INTRO_LINE')).toBeLessThan(html.indexOf('data-recipe-prompt'));
-    expect(html.indexOf('data-recipe-expand')).toBeLessThan(html.indexOf('TIP_LINE'));
-    expect(html.indexOf('TIP_LINE')).toBeLessThan(html.indexOf('OUTRO_LINE'));
+    expect(html).toContain(ko.makerRecipe.how.tipHeading);
+    expect(html.indexOf('TIP_LINE')).toBeLessThan(html.indexOf('data-recipe-prompt'));
+    expect(html.indexOf('TIP_LINE')).toBeLessThan(html.indexOf('data-recipe-expand'));
+    expect(html.indexOf('data-recipe-expand')).toBeLessThan(html.indexOf('OUTRO_LINE'));
     expect(html).not.toContain(ko.makerRecipe.how.lede);
   });
 
@@ -77,10 +80,14 @@ describe('how it was made, in the column', () => {
     expect(html).toContain(ko.makerRecipe.how.copy);
   });
 
-  it('leaves the full-width section unfolded', () => {
+  // 2026-11-26: a long prompt folds in the full-width section too; a short one never shows the toggle.
+  it('folds a long prompt in the full-width section as well, and leaves a short one alone', () => {
     const html = renderToStaticMarkup(<HowItWasMade recipe={long} copy={ko.makerRecipe} />);
-    expect(html).not.toContain('data-recipe-prompt="folded"');
-    expect(html).not.toContain('data-recipe-expand');
+    expect(html).toContain('data-recipe-prompt="folded"');
+    expect(html).toContain('data-recipe-expand');
+    const short = renderToStaticMarkup(<HowItWasMade recipe={{ ...long, steps: [{ ...long.steps[0]!, prompt: '[My photo] One short line.' }] }} copy={ko.makerRecipe} />);
+    expect(short).not.toContain('data-recipe-prompt="folded"');
+    expect(short).not.toContain('data-recipe-expand');
   });
 });
 

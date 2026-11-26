@@ -47,7 +47,7 @@ export default async function RecipeEditorPage({ params, searchParams }: { param
   const open = !!sql && creatorsOpen && await recipeSchemaReady(sql) && await approvedCreator(sql, viewer.userId);
   const shell = (state: string, children: React.ReactNode) => <div data-section data-theme="light" className="section min-h-screen">
     <AppHeader locale={locale} dict={dict} rest={path} />
-    <main id="main" data-recipe-editor-page data-recipe-editor-state={state} className="band py-10 lg:py-14">
+    <main id="main" data-recipe-editor-page data-recipe-editor-state={state} className="mx-auto w-full max-w-[calc(var(--container-audience)+2*var(--spacing-gutter))] px-[var(--spacing-gutter)] py-10 lg:py-14">
       <a href={CREATOR_WORKSPACE_PATH} className="inline-flex min-h-11 items-center text-sm opacity-70">← {t.back}</a>
       <h1 className="mt-4 max-w-3xl text-3xl font-semibold tracking-tight sm:text-4xl">{id === 'new' ? t.metaTitle : t.editTitle}</h1>
       <p className="mt-4 max-w-3xl text-base leading-relaxed opacity-65">{t.lede}</p>
