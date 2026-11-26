@@ -21,7 +21,7 @@ import { charGrams, foldText, hangulStream, latinStream, STOPWORDS, wordGrams, w
 
 /* ------------------------------------------------------------------ thresholds
  * Chosen by measurement (docs/PROMPT-GUARD.md "How the thresholds were chosen"): zero refusals on every
- * stored answer the repository's tests give the two reference sites, and on 4,094 Korean product strings
+ * stored answer the repository's tests give the two reference sites, and on 4,090 Korean product strings
  * against two Korean internal texts.
  */
 
@@ -48,17 +48,21 @@ export const SHARE_MIN_WINDOWS = 12;
  */
 export const GAPPED_MIN_WORDS = 12;
 export const GAPPED_MAX_GAP = 3;
-export const GAPPED_ANSWER_SKIP = 2;
+export const GAPPED_ANSWER_SKIP = 3;
 export const GAPPED_MIN_CONTENT_WORDS = 6;
 /** A piece of the canary this long anywhere in the answer refuses. */
 export const CANARY_FRAGMENT = 10;
 /** This many canary characters in order, at most `CANARY_SPREAD_GAP` other characters between neighbours, refuse. */
 export const CANARY_SPREAD = 14;
 export const CANARY_SPREAD_GAP = 4;
+/** Pieces of the canary, each `CANARY_PIECE` characters or longer, in order at any distance, that add up to `CANARY_SPREAD` characters refuse. */
+export const CANARY_PIECE = 4;
 /** A base64-looking run this long (with upper case, lower case and digits; product codes are far shorter) is not prose. */
 export const UNREADABLE_BASE64 = 64;
-/** This many byte-like tokens in a row (hex pairs with a letter, 0x.., binary octets, Morse) are not prose. */
+/** This many byte-like tokens in a row (hex pairs, 0x.., binary octets, Morse) are not prose. */
 export const UNREADABLE_TOKENS = 8;
+/** More letters than this of scripts other than Latin, Hangul, Han and Kana than the customer wrote are not prose. */
+export const UNREADABLE_OTHER_SCRIPT = 80;
 /** Output windows that also occur in `exempt` or `allow` are masked (character runs and chains stop there). */
 const MASK_WORDS = 4;
 
@@ -318,10 +322,29 @@ const LOOK_ALIKE_SCRIPT =
   /[\p{Script=Lisu}\p{Script=Cherokee}\p{Script=Canadian_Aboriginal}\p{Script=Coptic}\p{Script=Tifinagh}\p{Script=Vai}\p{Script=Bamum}\p{Script=Old_Italic}\p{Script=Glagolitic}\p{Script=Runic}]/u;
 /** A word with Latin letters and letters of another alphabet (Cyrillic, Greek, Armenian …): a look-alike swap. */
 const OTHER_ALPHABET = /[\p{Script=Cyrillic}\p{Script=Greek}\p{Script=Armenian}\p{Script=Georgian}\p{Script=Hebrew}\p{Script=Arabic}]/u;
-const BASE64_RUN = new RegExp(`[A-Za-z0-9+/]{${UNREADABLE_BASE64},}={0,2}`, 'g');
-/** Hex pairs with a letter (`4f`, not `10`), `0x..`, `\x..`, 8-bit binary. Plain numbers are prose (a countdown). */
-const BYTE_TOKEN = /^(?:0x[0-9a-f]{1,2}|\\x[0-9a-f]{2}|(?=[0-9a-f]*[a-f])[0-9a-f]{2}|[01]{8})$/i;
+/** No `/` or `+`: a URL path is not base64 (real base64 of text is caught by the base64 reading anyway). */
+const BASE64_RUN = new RegExp(`[A-Za-z0-9]{${UNREADABLE_BASE64},}={0,2}`, 'g');
+/**
+ * Byte-like: `0x..`, `\x..`, 8-bit binary, or a hex pair that starts with a digit (`4f`, `6c`: ASCII text in hex).
+ * A streak counts only with three tokens that carry a hex letter or a prefix, so `10 20 30 …` (a countdown) and
+ * grid labels (`A1 B2 C3`) are prose.
+ */
+const BYTE_TOKEN = /^(?:0x[0-9a-f]{1,2}|\\x[0-9a-f]{2}|[0-9][0-9a-f]|[01]{8})$/i;
+const BYTE_MARKED = /^(?:0x|\\x)|[a-f]/i;
 const MORSE_TOKEN = /^[.·•\-—–_]{1,7}$/;
+const ALLOWED_SCRIPT = /[\p{Script=Latin}\p{Script=Hangul}\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u;
+
+function otherScriptLetters(text: string): number {
+  let n = 0;
+  for (const ch of text) if (/\p{L}/u.test(ch) && !ALLOWED_SCRIPT.test(ch)) n += 1;
+  return n;
+}
+
+/** "ΛURORA": a word in capitals whose only non-Latin letters are one or two Greek capitals is a styled name. */
+function styledCapitals(word: string): boolean {
+  const others = [...word].filter((ch) => /\p{L}/u.test(ch) && !/\p{Script=Latin}/u.test(ch));
+  return others.length <= 2 && others.every((ch) => /\p{Script=Greek}/u.test(ch) && ch !== ch.toLowerCase()) && word === word.toUpperCase();
+}
 
 /**
  * Not prose: a letter of a look-alike script; a word mixing Latin letters with another alphabet; a
@@ -332,20 +355,30 @@ const MORSE_TOKEN = /^[.·•\-—–_]{1,7}$/;
  */
 export function unreadable(text: string, exemptText: string): boolean {
   if (LOOK_ALIKE_SCRIPT.test(text)) return true;
+  // Whole text swapped into another alphabet: real signage is short; the customer's own long foreign text is fine.
+  const other = otherScriptLetters(text);
+  if (other > UNREADABLE_OTHER_SCRIPT && other > otherScriptLetters(exemptText)) return true;
   // Greek letters used as unit signs ("50 μm", "10 kΩ") are not a swap.
   for (const word of text.replace(/[µμΩΔ]/g, ' ').match(/[\p{L}\p{M}]+/gu) ?? []) {
-    if (/\p{Script=Latin}/u.test(word) && OTHER_ALPHABET.test(word) && !exemptText.includes(word)) return true;
+    if (/\p{Script=Latin}/u.test(word) && OTHER_ALPHABET.test(word) && !styledCapitals(word) && !exemptText.includes(word)) return true;
   }
   for (const m of text.matchAll(BASE64_RUN)) {
     const run = m[0];
     if (/[A-Z]/.test(run) && /[a-z]/.test(run) && /\d/.test(run) && !exemptText.includes(run)) return true;
   }
   let bytes = 0;
+  let marked = 0;
   let morse = 0;
   let dotted = 0;
   for (const token of text.split(/[\s,;/|]+/)) {
     if (!token) continue;
-    bytes = BYTE_TOKEN.test(token) ? bytes + 1 : 0;
+    if (BYTE_TOKEN.test(token)) {
+      bytes += 1;
+      if (BYTE_MARKED.test(token)) marked += 1;
+    } else {
+      bytes = 0;
+      marked = 0;
+    }
     if (MORSE_TOKEN.test(token)) {
       morse += 1;
       if (/[.·•]/.test(token)) dotted += 1;
@@ -353,7 +386,7 @@ export function unreadable(text: string, exemptText: string): boolean {
       morse = 0;
       dotted = 0;
     }
-    if (bytes >= UNREADABLE_TOKENS || (morse >= UNREADABLE_TOKENS && dotted >= 3)) return true;
+    if ((bytes >= UNREADABLE_TOKENS && marked >= 3) || (morse >= UNREADABLE_TOKENS && dotted >= 3)) return true;
   }
   return false;
 }
@@ -371,9 +404,23 @@ function printableShare(text: string): number {
   return ok / all;
 }
 
+/** The bytes as text: UTF-8, or UTF-16 (little or big endian) when every other byte is mostly zero. */
 function utf8IfText(bytes: Buffer): string | null {
-  const decoded = bytes.toString('utf8');
-  return decoded.length >= 6 && printableShare(decoded) >= 0.85 ? decoded : null;
+  const readable = (t: string) => (t.length >= 6 && printableShare(t) >= 0.85 ? t : null);
+  const utf8 = readable(bytes.toString('utf8'));
+  if (utf8) return utf8;
+  if (bytes.length < 12) return null;
+  let oddZero = 0;
+  let evenZero = 0;
+  for (let i = 0; i + 1 < bytes.length; i += 2) {
+    if (bytes[i + 1] === 0) oddZero += 1;
+    if (bytes[i] === 0) evenZero += 1;
+  }
+  const pairs = Math.floor(bytes.length / 2);
+  const even = bytes.subarray(0, pairs * 2);
+  if (oddZero / pairs >= 0.6) return readable(even.toString('utf16le'));
+  if (evenZero / pairs >= 0.6) return readable(Buffer.from(even).swap16().toString('utf16le'));
+  return null;
 }
 
 function decodeBase64(run: string): string[] {
@@ -462,6 +509,11 @@ function byteReadings(text: string): Array<{ detector: string; text: string }> {
     const decoded = decodeBase32(m[0]);
     if (decoded) out.push({ detector: 'base32', text: decoded });
   }
+  // Grouped or wrapped base32: single-case base32 tokens joined across spaces and line breaks.
+  for (const m of text.matchAll(/(?:[A-Z2-7]{2,}=*[ \t\r\n]+){3,}[A-Z2-7]{2,}=*|(?:[a-z2-7]{2,}=*[ \t\r\n]+){3,}[a-z2-7]{2,}=*/g)) {
+    const decoded = decodeBase32(m[0].replace(/\s+/g, ''));
+    if (decoded) out.push({ detector: 'base32', text: decoded });
+  }
   if ((text.match(/=[0-9A-F]{2}/g) ?? []).length >= 3) {
     out.push({ detector: 'quoted_printable', text: text.replace(/=\r?\n/g, '').replace(/=([0-9A-F]{2})/g, (_m, h: string) => String.fromCharCode(parseInt(h, 16))) });
   }
@@ -472,13 +524,13 @@ function byteReadings(text: string): Array<{ detector: string; text: string }> {
   for (const m of text.matchAll(/(?:[A-Za-z0-9+/_-]{2,}={0,2}[ \t\r\n]+){3,}[A-Za-z0-9+/_-]{2,}={0,2}/g)) {
     if (/\d|[+/]/.test(m[0])) for (const d of decodeBase64(m[0])) out.push({ detector: 'base64', text: d });
   }
-  for (const m of text.matchAll(/(?:(?:0x|\\x)?[0-9a-fA-F]{2}[\s:,;]*){8,}/g)) {
-    const hex = m[0].replace(/0x|\\x/gi, '').replace(/[\s:,;]/g, '');
+  for (const m of text.matchAll(/(?:(?:0x|\\x)?[0-9a-fA-F]{2}[\s:,;.\-]*){8,}/g)) {
+    const hex = m[0].replace(/0x|\\x/gi, '').replace(/[\s:,;.\-]/g, '');
     const decoded = utf8IfText(Buffer.from(hex.slice(0, hex.length - (hex.length % 2)), 'hex'));
     if (decoded) out.push({ detector: 'hex', text: decoded });
   }
-  for (const m of text.matchAll(/(?:\b\d{1,3}\b[\s,;]+){7,}\b\d{1,3}\b/g)) {
-    const bytes = m[0].split(/[\s,;]+/).map(Number);
+  for (const m of text.matchAll(/(?:\b\d{1,3}\b[\s,;.\-]+){7,}\b\d{1,3}\b/g)) {
+    const bytes = m[0].split(/[\s,;.\-]+/).map(Number);
     if (bytes.every((b) => b <= 255)) {
       const decoded = utf8IfText(Buffer.from(bytes));
       if (decoded) out.push({ detector: 'decimal', text: decoded });
@@ -520,6 +572,7 @@ function letterReadings(text: string): Array<{ detector: string; text: string }>
   out.push({ detector: 'reversed', text: [...text].reverse().join('') });
   out.push({ detector: 'reversed_words', text: text.split(/\s+/).reverse().join(' ') });
   out.push({ detector: 'reversed_each', text: text.replace(/[\p{L}\p{N}]+/gu, (w) => [...w].reverse().join('')) });
+  if (/\p{L}\d+\p{L}/u.test(text)) out.push({ detector: 'digit_spaced', text: text.replace(/(?<=\p{L})\d+(?=\p{L})/gu, ' ') });
   if (/[a-z][013457@$8]|[013457@$8][a-z]/i.test(text)) {
     out.push({ detector: 'leet', text: text.replace(/[\p{L}\p{N}@$]+/gu, (w) => (/[a-z]/i.test(w) ? w.replace(/[013457@$8]/g, (c) => LEET[c] ?? c) : w)) });
   }
@@ -561,6 +614,22 @@ export function carriesCanary(text: string, canary: string | null, spread = true
   if (stream.includes(c)) return true;
   for (let i = 0; i + CANARY_FRAGMENT <= c.length; i += 1) if (stream.includes(c.slice(i, i + CANARY_FRAGMENT))) return true;
   if (!spread) return false;
+  // Pieces of `CANARY_PIECE`+ characters in the canary's order, at any distance, adding up to `CANARY_SPREAD`.
+  let matched = 0;
+  let from = 0;
+  for (let i = 0; i + CANARY_PIECE <= c.length; ) {
+    const at = stream.indexOf(c.slice(i, i + CANARY_PIECE), from);
+    if (at === -1) {
+      i += 1;
+      continue;
+    }
+    let length = CANARY_PIECE;
+    while (i + length < c.length && stream[at + length] === c[i + length]) length += 1;
+    matched += length;
+    if (matched >= CANARY_SPREAD) return true;
+    from = at + length;
+    i += length;
+  }
   for (let start = 0; start + CANARY_SPREAD <= c.length; start += 1) {
     for (let at = stream.indexOf(c[start]!); at !== -1; at = stream.indexOf(c[start]!, at + 1)) {
       let k = start + 1;
@@ -658,6 +727,23 @@ function overlapRefusal(text: string, p: PreparedCheck, full = true): { reason: 
   return null;
 }
 
+/** The letter transform whose words the internal text has most often (a Caesar shift that undoes a cipher). */
+function bestLetterReading(readings: readonly Reading[], internal: Corpus): string | null {
+  const vocabulary = internal.positions();
+  let best: string | null = null;
+  let bestHits = 0;
+  for (const r of readings) {
+    if (r.kind !== 'letters' || r.detector === 'reversed_words') continue;
+    let hits = 0;
+    for (const w of wordUnits(foldText(r.text))) if (!STOPWORDS.has(w) && vocabulary.has(w)) hits += 1;
+    if (hits > bestHits) {
+      bestHits = hits;
+      best = r.detector;
+    }
+  }
+  return best;
+}
+
 /** Canary, then shape and prose, then overlap, in the text and in every decoded reading of it. */
 function textRefusal(text: string, canary: string | null, shape: FieldShape | undefined, p: PreparedCheck): { reason: GuardReason; detector: string } | null {
   if (carriesCanary(text, canary)) return { reason: 'canary', detector: 'canary' };
@@ -667,8 +753,12 @@ function textRefusal(text: string, canary: string | null, shape: FieldShape | un
   if (shaped) return { reason: shaped as GuardReason, detector: 'shape' };
   const overlap = overlapRefusal(text, p);
   if (overlap) return overlap;
-  // Decodings are read fully; the ~30 letter transforms of every answer get the word run only (cost).
-  for (const r of readings) if (overlapRefusal(r.text, p, r.kind === 'bytes')) return { reason: 'encoded', detector: r.detector };
+  // Decodings, the reversed word order and the letter transform that reads most like the internal text are read
+  // fully; the other ~30 letter transforms of every answer get the word run only (cost).
+  const full = new Set(readings.filter((r) => r.kind === 'bytes' || r.detector === 'reversed_words').map((r) => r.detector));
+  const best = bestLetterReading(readings, p.internal);
+  if (best) full.add(best);
+  for (const r of readings) if (overlapRefusal(r.text, p, full.has(r.detector))) return { reason: 'encoded', detector: r.detector };
   // Last: an encoding none of the readings above knows (base32, a bespoke cipher …) is still not prose.
   if (unreadable(text, p.exemptText)) return { reason: 'encoded', detector: 'unreadable' };
   return null;

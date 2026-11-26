@@ -23,16 +23,17 @@ It does not protect against these:
 - **Small pieces over many calls.** Fewer than 8 words in a row per call (or every fourth word, or 7 words
   in the `notes` field) passes. Many calls can add up to the whole text. The preview path is free and only
   rate-limited, so this needs rate or abuse limits, not overlap.
-- **Bespoke or stacked transforms.** The check reads the common encodings and ciphers (section 4) and refuses
-  some text that does not read as prose. The independent review still got these through: pig latin, a
-  different Caesar shift per word, a keyboard shift, a Caesar shift of words reversed letter by letter,
-  dropped vowels, reversed chunks of 3–4 words, 4 copied words then 2 fillers repeated with reordering, a
-  copy split with its first half in `notes` and its second half at the end of `prompt`, and the canary in
-  9-character pieces with 5 or more other characters between them. Each new decoder only moves this further.
+- **Bespoke or stacked transforms, and sparse copies.** The check reads the common encodings and ciphers
+  (section 4) and refuses some text that does not read as prose. After three review rounds these still got
+  through: pig latin, a different Caesar shift per word, a keyboard shift, a Caesar shift of words reversed
+  letter by letter, dropped vowels, every fourth word, reversed chunks of 3–4 words, up to about nine 7-word
+  pieces in order with fillers between them in one answer, and a copy split with its first half in `notes`
+  and its second half at the end of `prompt`. Each new decoder only moves this further.
 - **Look-alike letters outside the fold list.** Common Cyrillic, Greek, Armenian, small-capital and stroke
-  look-alikes are folded to Latin, words mixing Latin with another alphabet are refused, and letters of
-  look-alike-only scripts (Lisu, Cherokee …) are refused. Look-alikes no list covers, used for whole words,
-  still pass. (A full Unicode confusables table would close more of this; none is in the dependencies.)
+  look-alikes (capitals too) are folded to Latin, words mixing Latin with another alphabet are refused, letters
+  of look-alike-only scripts (Lisu, Cherokee …) are refused, and more than 80 letters of other scripts than the
+  customer wrote are refused. A short look-alike swap no list covers can still pass. (A full Unicode
+  confusables table would close more of this; none is in the dependencies.)
 - **What the customer already gave us.** Text in the customer's own input never counts as a leak. A member who
   knows a passage (from the public repository) can paste it and get it back. That confirms a guess but adds
   nothing they did not have.
@@ -113,8 +114,9 @@ and mode-free.
 For every field, then for all fields joined (both orders, for a copy split across fields):
 
 1. **Canary.** Refused when the folded letters and digits hold the canary or any 10-character piece of it (in
-   the text and every reading), or 14 of its characters in order with at most four others between neighbours
-   (in the text and its byte decodings).
+   the text and every reading); or, in the text and its byte decodings, 14 of its characters in order with at
+   most four others between neighbours, or pieces of 4+ characters in the canary's order, at any distance,
+   adding up to 14.
 2. **Shape** (per field, from `shapes`): longer than `maxChars`, more lines than `maxLines` (one line for
    `oneSentence`), code fences, headings or tag-like markup (`noMarkup`), and lists or a leading `{`/`[` where
    one sentence is expected.
@@ -124,26 +126,31 @@ For every field, then for all fields joined (both orders, for a copy split acros
    - a run of **12 Hangul syllables** with spacing ignored (Korean copies, also re-spaced);
    - more than **35 %** of the answer's 5-word windows, or **30** of them whatever its length (padding);
    - more than **40 %** of its 4-syllable windows (Korean with particles or endings changed);
-   - **12 words in the internal text's order** with up to two internal words skipped and up to two answer
+   - **12 words in the internal text's order** with up to two internal words skipped and up to three answer
      words inserted between neighbours ("every other word", "every third word", fillers every few words,
      swapped pairs), at least 6 of them content words.
-4. **Readings.** Byte decodings, read with all of 3: base64 (also wrapped or spaced), base32, hex (with `0x`,
-   `\x`, spaces, colons or commas), decimal byte lists, percent-encoding, quoted-printable (`=20`), `\u`,
-   `\u{}`, `U+`, `\x` and HTML numeric escapes, Morse (dots and dashes, `·`/`—`, dit/dah); each is read once
-   more (base64 of rot13, and so on). Letter transforms, read for 8-word runs and canary pieces: every Caesar
-   shift (rot13 included), ROT47, atbash, reversed text, reversed word order, each word reversed, leetspeak,
-   spelled-out letters (NATO alphabet, number words).
+4. **Readings.** Byte decodings, read with all of 3: base64 (also wrapped or spaced, and of UTF-16 text),
+   base32 (also grouped or wrapped), hex (with `0x`, `\x`, spaces, colons, commas, dots or dashes), decimal byte
+   lists, percent-encoding, quoted-printable (`=20`), `\u`, `\u{}`, `U+`, `\x` and HTML numeric escapes, Morse
+   (dots and dashes, `·`/`—`, dit/dah); each is read once more (base64 of rot13, and so on). Letter transforms:
+   every Caesar shift (rot13 included), ROT47, atbash, reversed text, reversed word order, each word reversed,
+   leetspeak, digits between letters read as spaces, spelled-out letters (NATO alphabet, number words). The
+   reversed word order and the one letter transform whose words the internal text has most often are read with
+   all of 3; the others for 8-word runs and canary pieces only (cost).
 5. **Not prose** (last, for what no reading knows): a letter of a look-alike-only script (Lisu, Cherokee,
    Canadian syllabics, Coptic, Tifinagh, Vai, Bamum, Old Italic, Glagolitic, Runic), even when the request
-   carries it; a word mixing Latin letters with Cyrillic, Greek, Armenian, Georgian, Hebrew or Arabic ones,
-   unless the customer wrote that word (Greek unit signs such as μ and Ω do not count); a base64-looking run
-   of 64+ characters with upper case, lower case and digits; or 8 byte-like tokens in a row (hex pairs with a
-   letter, `0x..`, `\x..`, binary octets) or 8 Morse tokens with dots. Numbers (a countdown), whole words in
-   another script (a Thai or Russian sign the customer asked for), units and product codes are prose.
+   carries it; more than 80 letters of scripts other than Latin, Hangul, Han and Kana, beyond what the customer
+   wrote (a whole text swapped into another alphabet); a word mixing Latin letters with Cyrillic, Greek,
+   Armenian, Georgian, Hebrew or Arabic ones, unless the customer wrote that word (Greek unit signs such as μ
+   and Ω, and a styled capital such as "ΛURORA", do not count); an unbroken run of 64+ letters and digits with
+   upper case, lower case and digits; 8 byte-like tokens in a row with at least 3 carrying a hex letter or a
+   prefix (`4f`, `0x..`, `\x..`, binary octets); or 8 Morse tokens with dots. Numbers (a countdown), grid labels
+   (`A1 B2`), whole words in another script (a Thai or Russian sign the customer asked for), units, URL paths,
+   hashtags and product codes are prose.
 
 Before comparing, both sides are folded (`text.ts`): NFKC and case, accents and combining marks removed,
 zero-width and other invisible characters removed, common Cyrillic, Greek, Armenian, small-capital and
-stroke-letter look-alikes mapped to Latin letters. Korean is read two ways: as words (with their particles) and as a stream of syllables with
+stroke-letter look-alikes (lower and upper case) mapped to Latin letters. Korean is read two ways: as words (with their particles) and as a stream of syllables with
 spacing ignored, because word n-grams are too coarse for Korean (a changed particle breaks every window).
 
 A window that also occurs in `exempt` (the customer's own input) or `allow` (our fixed lines meant to appear)
@@ -273,7 +280,7 @@ The 8-word run is the coordinator's decision. Every other threshold was set by m
   edit answer repeating its rules' dictated keep-list "exact object scale, outer silhouette, contours, light
   direction". These stored answers are written by people and rarely echo the rules; see the false-positive
   limit in section 1.
-- **Korean.** `korean.test.ts` checks 4,093 Korean strings (every Korean literal of `messages/ko.ts`, the
+- **Korean.** `korean.test.ts` checks 4,090 Korean strings (every Korean literal of `messages/ko.ts`, the
   personal director's customer-facing Korean in `lib/template-director/schema.ts`, and the template-director
   and brand-studio test fixtures) against two Korean internal texts: `docs/wording/ai-tell-quick-rules.md` (a
   real Korean system prompt) and Korean rules on the personal director's own topic. Syllable runs: 8 → 2

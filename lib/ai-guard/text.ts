@@ -35,6 +35,13 @@ const LOOK_ALIKES: Readonly<Record<string, string>> = {
 };
 const LOOK_ALIKE_RE = new RegExp(`[${Object.keys(LOOK_ALIKES).join('')}]`, 'gu');
 
+/** Greek and Cyrillic capitals that read as Latin capitals, mapped before lower-casing (capital Η is H, not η). */
+const CAPITAL_LOOK_ALIKES: Readonly<Record<string, string>> = {
+  Α: 'A', Β: 'B', Ε: 'E', Ζ: 'Z', Η: 'H', Ι: 'I', Κ: 'K', Μ: 'M', Ν: 'N', Ο: 'O', Ρ: 'P', Τ: 'T', Υ: 'Y', Χ: 'X',
+  А: 'A', В: 'B', Е: 'E', К: 'K', М: 'M', Н: 'H', О: 'O', Р: 'P', С: 'C', Т: 'T', Х: 'X', Ѕ: 'S', І: 'I', Ј: 'J',
+};
+const CAPITAL_LOOK_ALIKE_RE = new RegExp(`[${Object.keys(CAPITAL_LOOK_ALIKES).join('')}]`, 'gu');
+
 /** The comparison form of `text` (see the file comment). Idempotent. */
 export function foldText(text: string): string {
   return text
@@ -42,6 +49,7 @@ export function foldText(text: string): string {
     .replace(INVISIBLE, '')
     .replace(COMBINING, '')
     .normalize('NFKC')
+    .replace(CAPITAL_LOOK_ALIKE_RE, (ch) => CAPITAL_LOOK_ALIKES[ch] ?? ch)
     .toLowerCase()
     .replace(LOOK_ALIKE_RE, (ch) => LOOK_ALIKES[ch] ?? ch);
 }

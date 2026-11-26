@@ -14,6 +14,7 @@ import {
   type GuardLogLine,
 } from '@/lib/ai-guard';
 import { foldText } from '@/lib/ai-guard/text';
+import { buildSeedanceDirectorSystemInstruction } from '@/lib/brand-studio/director/compiler';
 import { promptGuardMode } from '@/lib/flags';
 
 const INTERNAL = [
@@ -407,5 +408,72 @@ describe('review round 2: product text that must pass, and the leaks it showed',
     const started = performance.now();
     expect(check(long)).toEqual([]);
     expect(performance.now() - started).toBeLessThan(1500);
+  });
+});
+
+describe('review round 3: product text that must pass, and the leaks it reopened or found', () => {
+  const canary = 'pgc7hq2mxk9rvt4bwz8ny3';
+  const check = (text: string, exempt: string[] = []) =>
+    checkOutgoing({ fields: { prompt: text }, internal: INTERNAL, canary, exempt }).refusals.map((r) => `${r.reason}:${r.detector}`);
+
+  it('passes grid labels, a long URL path, a styled Greek capital, hashtags and Korean prompts', () => {
+    for (const text of [
+      'A shelf grid labelled A1 A2 A3 B1 B2 B3 C1 C2, one bottle per cell.',
+      'The poster shows the link path /Collections/SpringEdition2026/SerumNightRepairLimitedEditionBoxSetWithGiftCard on its footer.',
+      'A gold logo that reads ΛURORA on the cap, in thin capitals.',
+      'Caption tags: #summer #serum #glowup #skincare #2026 #ad #cafe #seoul #morningroutine',
+      '창가 테이블 위에 놓인 세럼 병, 아침 햇살이 옆에서 비치고 카메라가 천천히 다가간다. 배경은 흐린 거실, 병 라벨은 그대로.',
+    ]) {
+      expect(check(text), text).toEqual([]);
+    }
+  });
+
+  it('refuses reversed 5-word chunks, a Caesar shift with a filler every 7 words, and digits between words', () => {
+    // The director's real rules (about 450 words): a long leak in reversed 5-word chunks.
+    const director = buildSeedanceDirectorSystemInstruction({ intent: 'expand', seconds: 8, blueprint: false, audioMode: 'on', explicitMusic: false, hasImageRefs: true, hasVideoRef: false });
+    const dw = director.split(/\s+/).slice(0, 200);
+    const reversedChunks: string[] = [];
+    for (let i = 0; i < dw.length; i += 5) reversedChunks.push(dw.slice(i, i + 5).reverse().join(' '));
+    expect(checkOutgoing({ fields: { prompt: reversedChunks.join(' ') }, internal: director, canary }).ok).toBe(false);
+    const w = INTERNAL.split(/\s+/).slice(15, 75);
+    const withFiller: string[] = [];
+    w.forEach((x, i) => {
+      withFiller.push(x);
+      if (i % 7 === 6) withFiller.push('indeed');
+    });
+    const caesar3 = withFiller.join(' ').replace(/[a-z]/gi, (c) => {
+      const base = c <= 'Z' ? 65 : 97;
+      return String.fromCharCode(((c.charCodeAt(0) - base + 3) % 26) + base);
+    });
+    expect(check(caesar3)).not.toEqual([]);
+    expect(check(w.join(' ').toLowerCase().replace(/ /g, () => String(Math.floor(Math.random() * 9) + 1)))).not.toEqual([]);
+  });
+
+  it('refuses base64 of UTF-16 wrapped at 60, base32 in groups, hex with dashes and decimal with dots', () => {
+    const run = words(INTERNAL, 60, 12);
+    const utf16 = Buffer.from(run, 'utf16le').toString('base64').match(/.{1,60}/g)!.join('\n');
+    expect(check(`${BENIGN}\n${utf16}`)).toEqual(['encoded:base64']);
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+    let bits = '';
+    for (const byte of Buffer.from(run)) bits += byte.toString(2).padStart(8, '0');
+    let b32 = '';
+    for (let i = 0; i < bits.length; i += 5) b32 += alphabet[parseInt(bits.slice(i, i + 5).padEnd(5, '0'), 2)];
+    expect(check(`${BENIGN}\n${b32.match(/.{1,8}/g)!.join(' ')}`)).toEqual(['encoded:base32']);
+    expect(check(`${BENIGN} ${Buffer.from(run).toString('hex').match(/../g)!.join('-')}`)).toEqual(['encoded:hex']);
+    expect(check(`${BENIGN} ${[...Buffer.from(run)].join('.')}`)).toEqual(['encoded:decimal']);
+  });
+
+  it('refuses a whole text swapped into another alphabet, unless the customer wrote that much of it', () => {
+    const georgian = words(INTERNAL, 10, 40).replace(/[a-z]/g, (c) => String.fromCharCode(0x10d0 + c.charCodeAt(0) - 97));
+    expect(check(georgian)).toEqual(['encoded:unreadable']);
+    expect(check(georgian, [georgian])).toEqual([]);
+  });
+
+  it('refuses the canary in 9-character pieces with long separators, and 4 words then 3 fillers', () => {
+    expect(check(`${BENIGN} ${canary.slice(0, 9)}lllll${canary.slice(9, 18)}lllll${canary.slice(18)}`)).toEqual(['canary:canary']);
+    const w = INTERNAL.split(/\s+/).slice(20, 68);
+    const padded: string[] = [];
+    for (let i = 0; i < w.length; i += 4) padded.push(...w.slice(i, i + 4), 'really', 'truly', 'quite');
+    expect(check(padded.join(' '))).not.toEqual([]);
   });
 });
