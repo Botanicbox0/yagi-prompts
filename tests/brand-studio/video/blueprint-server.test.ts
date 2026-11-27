@@ -3,14 +3,19 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { StudioJobView } from '@/lib/brand-studio/contracts';
 import { advanceStudioJobsWith } from '@/lib/brand-studio/engine';
 import { analyzeStudioFilm, createStudioJob, previewStudioPrompt } from '@/lib/brand-studio/jobs';
+import { laneClaim } from '@/lib/brand-studio/lane-api';
+import { recordLaneHeartbeat } from '@/lib/brand-studio/lanes';
 import { estimateVideoUsd, studioModel, type StudioVideoModel } from '@/lib/brand-studio/models';
+import { prepareJob } from '@/lib/brand-studio/prepare';
 import { buildStudioRequest, StudioRequestError } from '@/lib/brand-studio/provider/requests';
 import type { StudioProviderRequest } from '@/lib/brand-studio/provider/types';
 import { remakeSeconds } from '@/lib/brand-studio/reference-video';
 import { pollStudioJobs } from '@/lib/brand-studio/service';
-import type { EnhanceInput } from '@/lib/brand-studio/types';
+import type { EnhanceInput, JobRow } from '@/lib/brand-studio/types';
+import { loadAllowance } from '@/lib/brand-studio/usage';
 import { remixRunUsd, usageKrw, videoRunUsd } from '@/lib/brand-studio/usage-rate';
 import { requestId, seedImageAsset, seedVideoAsset, studioDeps, studioFixture, viewerOf, type StudioFixture } from '../server/helpers';
+import { seedRun } from '../server/revision-helpers';
 
 /**
  * docs/BRAND-STUDIO-V3.md §6 — the `blueprint` remix on the server: it is priced as the text/image run it
@@ -185,6 +190,157 @@ describe('running a blueprint', () => {
         videos: [{ url: 'https://media.example/clip.mp4' }],
       }),
     ).toThrow(StudioRequestError);
+  });
+});
+
+/**
+ * A blueprint is made from its reading alone (the video never reaches the provider). When the reading fails
+ * and nothing else gives the direction (no table of the customer's, no earlier prompt to remake), the run is
+ * not made and settles at nothing, like every other failed run.
+ */
+describe('a blueprint whose reference cannot be read', () => {
+  const view = async (id: string): Promise<StudioJobView> => {
+    const poll = await pollStudioJobs(deps, owner(), f.orgId, [id]);
+    if (!poll.ok) throw new Error(poll.code);
+    return poll.jobs[0]!;
+  };
+  const used = async () => (await loadAllowance(f.sql, f.orgId, deps.env)).usedKrw;
+  const unreadable = (reader: () => Promise<null>) => {
+    deps.intel.readFilm = async (input) => {
+      readDepths.push(input.depth);
+      return reader();
+    };
+  };
+  const jobRow = async (id: string) =>
+    (
+      await f.sql.query<{ status: string; error_code: string | null; error_detail: string | null; usage_krw: number | null; finished_at: unknown; lane: string | null }>(
+        'select status, error_code, error_detail, usage_krw, finished_at, lane from brand_studio_jobs where id = $1',
+        [id],
+      )
+    ).rows[0]!;
+
+  it.each([
+    ['the reader gives nothing back', async () => null],
+    ['the reader throws', async (): Promise<null> => { throw new Error('reader timed out'); }],
+  ])('%s and no table was sent: fails before the prompt writer and the provider, and costs nothing', async (_, reader) => {
+    unreadable(reader);
+    const film = await seedVideoAsset(deps, f.orgId, f.ids.owner, 6);
+    const job = await create(remix(film));
+    expect(job.estimateKrw).toBeGreaterThan(0);
+    // Reserved while it is open.
+    expect(await used()).toBe(job.estimateKrw);
+    await advanceStudioJobsWith(deps, { jobIds: [job.id] });
+    expect(await view(job.id)).toMatchObject({ status: 'failed', errorCode: 'reference_unreadable', outputs: [], estimateKrw: 0 });
+    expect(readDepths).toEqual(['blueprint']);
+    expect(enhanced).toEqual([]);
+    expect(sent).toEqual([]);
+    // Stored as a plain failure (the column's codes are fixed, migration 0076): the view names the reason.
+    const row = await jobRow(job.id);
+    expect(row).toMatchObject({ status: 'failed', error_code: 'failed', usage_krw: 0 });
+    expect(row.finished_at).not.toBeNull();
+    expect(row.error_detail).toContain('could not be read');
+    expect((await f.sql.query('select status from brand_studio_outputs where job_id = $1', [job.id])).rows).toEqual([{ status: 'failed' }]);
+    // The reservation is released.
+    expect(await used()).toBe(0);
+  });
+
+  it("with the customer's own table it still runs: the table is the direction, settled at its quote", async () => {
+    unreadable(async () => null);
+    const film = await seedVideoAsset(deps, f.orgId, f.ids.owner, 6);
+    const job = await create(remix(film, { shots: SHOTS }));
+    await advanceStudioJobsWith(deps, { jobIds: [job.id] });
+    expect(await view(job.id)).toMatchObject({ status: 'succeeded', errorCode: null });
+    expect(readDepths).toEqual(['blueprint']);
+    expect(sent).toHaveLength(1);
+    expect(enhanced[0]!.video?.sheet).toMatchObject({ shots: SHOTS, summary: '' });
+    expect((await jobRow(job.id)).usage_krw).toBe(job.estimateKrw);
+    expect(await used()).toBe(job.estimateKrw);
+  });
+
+  it('judges each clip of a plan on its own: a failed reading is not kept, so every clip tries again', async () => {
+    unreadable(async () => null);
+    const film = await seedVideoAsset(deps, f.orgId, f.ids.owner, 6);
+    const a = await create(remix(film));
+    const b = await create(remix(film));
+    await advanceStudioJobsWith(deps, { jobIds: [a.id] });
+    await advanceStudioJobsWith(deps, { jobIds: [b.id] });
+    for (const id of [a.id, b.id]) expect(await view(id)).toMatchObject({ status: 'failed', errorCode: 'reference_unreadable', estimateKrw: 0 });
+    expect(readDepths).toEqual(['blueprint', 'blueprint']);
+    expect(sent).toEqual([]);
+    expect(await used()).toBe(0);
+  });
+
+  it('a clip whose reading comes back runs and keeps it for the next; only the clip without one fails', async () => {
+    const film = await seedVideoAsset(deps, f.orgId, f.ids.owner, 6);
+    const read = deps.intel.readFilm;
+    let calls = 0;
+    deps.intel.readFilm = async (input, intelDeps) => {
+      calls += 1;
+      if (calls > 1) return read(input, intelDeps);
+      readDepths.push(input.depth);
+      return null;
+    };
+    const a = await create(remix(film));
+    const b = await create(remix(film));
+    const c = await create(remix(film));
+    for (const job of [a, b, c]) await advanceStudioJobsWith(deps, { jobIds: [job.id] });
+    expect(await view(a.id)).toMatchObject({ status: 'failed', errorCode: 'reference_unreadable', estimateKrw: 0 });
+    expect(await view(b.id)).toMatchObject({ status: 'succeeded' });
+    expect(await view(c.id)).toMatchObject({ status: 'succeeded' });
+    // a failed, b read again (and kept it), c used the kept reading.
+    expect(readDepths).toEqual(['blueprint', 'blueprint']);
+    expect(sent).toHaveLength(2);
+    expect(await used()).toBe(b.estimateKrw + c.estimateKrw);
+  });
+
+  it('on the account lane too: it fails before the worker is handed anything', async () => {
+    unreadable(async () => null);
+    await f.sql.query("update brand_studio_allowances set preferred_lane = 'sunra_mcp' where organization_id = $1", [f.orgId]);
+    await recordLaneHeartbeat(f.sql, 'sunra_mcp', {});
+    const film = await seedVideoAsset(deps, f.orgId, f.ids.owner, 6);
+    const job = await create(remix(film));
+    await advanceStudioJobsWith(deps, { jobIds: [job.id] });
+    expect(await jobRow(job.id)).toMatchObject({ status: 'failed', error_code: 'failed', usage_krw: 0, lane: 'sunra_mcp' });
+    expect(await laneClaim(deps, { limit: 4 })).toEqual({ ok: true, jobs: [] });
+    expect(await view(job.id)).toMatchObject({ status: 'failed', errorCode: 'reference_unreadable', estimateKrw: 0 });
+    expect(await used()).toBe(0);
+  });
+
+  describe('a reshoot of a blueprint clip', () => {
+    const MADE_WITH = '0.0–6.0s: a hand lifts our bottle in a close-up, slow push in.';
+    async function reshoot(): Promise<StudioJobView> {
+      const film = await seedVideoAsset(deps, f.orgId, f.ids.owner, 6);
+      const root = await seedRun(deps, f.orgId, f.ids.owner, {
+        kind: 'video_remix',
+        finalPrompt: MADE_WITH,
+        refs: [{ assetId: film }],
+        params: { method: 'blueprint', keep: ['camera', 'timing'], change: '제품: 우리 병' },
+      });
+      const made = await createStudioJob(deps, owner(), {
+        kind: 'video_revise', organizationId: f.orgId, requestId: requestId(), outputId: root.outputId, mode: 'reshoot', prompt: '병을 파란색으로', references: [],
+      });
+      if (!made.ok) throw new Error(`reshoot failed: ${made.code}`);
+      return made.job;
+    }
+
+    it('remakes its earlier prompt, so it still runs when the reading fails (unchanged)', async () => {
+      unreadable(async () => null);
+      const job = await reshoot();
+      await advanceStudioJobsWith(deps, { jobIds: [job.id] });
+      expect(await view(job.id)).toMatchObject({ status: 'succeeded' });
+      expect(readDepths).toEqual(['blueprint']);
+      expect(enhanced[0]!.video).toMatchObject({ method: 'blueprint', sheet: null });
+      expect(enhanced[0]!.revision).toMatchObject({ mode: 'reshoot', madeWith: MADE_WITH });
+    });
+
+    it('fails like a first run when its earlier prompt is gone too', async () => {
+      unreadable(async () => null);
+      const job = await reshoot();
+      await f.sql.query('update brand_studio_jobs set params = jsonb_set(params, $2, to_jsonb($3::text)) where id = $1', [job.id, '{revision,baseJobId}', '00000000-0000-4000-8000-000000000000']);
+      const row = (await f.sql.query<JobRow>('select * from brand_studio_jobs where id = $1', [job.id])).rows[0]!;
+      await expect(prepareJob(deps, row)).rejects.toMatchObject({ name: 'PrepareFailure', code: 'reference_unreadable' });
+      expect(enhanced).toEqual([]);
+    });
   });
 });
 

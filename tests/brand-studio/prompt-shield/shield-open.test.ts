@@ -156,6 +156,9 @@ describe('sentinel walk: no entry point that answers a run carries a video run s
       kind: 'video_remix', organizationId: ORG, model: 'seedance-2.5', prompt: '색만 파랗게', aspect: '9:16', resolution: '720p', method: 'reference',
       references: [{ assetId: WORLD.videoAsset }],
     });
+    // The reference video's file is in storage, so its blueprint step can be read (a blueprint that cannot be read is not made).
+    const film = (await f.sql.query<{ storage_key: string }>('select storage_key from brand_studio_assets where id = $1', [WORLD.videoAsset])).rows[0]!;
+    deps.media.objects.set(film.storage_key, { bytes: new Uint8Array([0, 0, 0, 24, 102, 116, 121, 112]), mime: 'video/mp4' });
     answers['workflows:run'] = await runWorkflowOperation(deps, viewerOf(f.ids.owner, 'ko'), 'run', {
       organizationId: ORG, requestId: 'req_walk_workflow_run', workflowId: 'reference-video-ad-pack',
       inputs: { video1Ref: { assetId: WORLD.videoAsset }, image1Ref: { assetId: WORLD.imageAsset }, subject: '글로우 세럼', prompt: '유리 보틀 반사광', packs: ['cut_hook'] },

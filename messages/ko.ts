@@ -2615,6 +2615,8 @@ export const ko: Dictionary = {
       unsupported_file: '올릴 수 없는 파일 형식이에요.',
       file_too_large: `파일 크기 제한을 넘었어요. 이미지는 ${formatLimitMb(STUDIO_LIMITS.imageBytesMax)} MB, 영상은 ${formatLimitMb(STUDIO_LIMITS.videoBytesMax)} MB, 오디오는 ${formatLimitMb(STUDIO_LIMITS.audioBytesMax)} MB까지 올릴 수 있어요.`,
       reference_missing: '참조 중 하나를 찾을 수 없어요. 다시 넣어 주세요.',
+      // 레퍼런스 연출 재현에서 참고 영상을 읽지 못해 만들지 않은 실행(크레딧 0)
+      reference_unreadable: '참고 영상을 읽지 못해 만들지 못했어요. 크레딧은 차감되지 않았으니 다시 시도해 주세요.',
       provider_rejected: '이 내용은 만들 수 없었어요. 문장이나 참조를 바꿔 다시 해 주세요.',
       provider_unavailable: '지금은 잠시 만들 수 없어요. 조금 뒤에 다시 해 주세요.',
       region_misaligned: '영역이 정확히 일치하지 않아요. 수정할 부위만 조금 더 작게 선택해 주세요.',
