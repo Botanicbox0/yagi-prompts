@@ -77,6 +77,7 @@ import {
   type SendPeople,
   type SendPerson,
   type SendPosted,
+  type SendProject,
   type SendReadAllDone,
   type SendReadDone,
   type SendResult,
@@ -228,19 +229,19 @@ const chipReaderOf = (ctx: Pick<Ctx, 'invitesOpen' | 'me' | 'seat'>): ChipReader
 /* ------------------------------------------------------------------ files */
 
 interface FileRow extends MemberFileRow {
-  /** Filled after the statement: the project members are shown the file in (`shownProjectOfFile`), its title. */
-  shown_project_title?: string | null;
+  /** Filled after the statement: the project members are shown the file in (`shownProjectOfFile`). */
+  shown_project?: SendProject | null;
 }
 
 /**
- * The files of this organization named by `refs` (`memberFileRows`, one statement), each with the title of the project
- * members are shown it in (`shownProjectOfFile`, the same decision the notices use; one more statement, for the files a
- * member can open).
+ * The files of this organization named by `refs` (`memberFileRows`, one statement), each with the project members are
+ * shown it in (`shownProjectOfFile`, the same decision the notices use; one more statement, for the files a member can
+ * open).
  */
 async function fileRows(sql: SqlRunner, organizationId: string, refs: readonly SendFileRef[]): Promise<Map<string, FileRow>> {
   const rows = await memberFileRows(sql, organizationId, refs);
   const projects = await shownProjects(sql, organizationId, rows.flatMap((row) => (row.visible && row.stored_project_id ? [String(row.stored_project_id)] : [])));
-  return new Map(rows.map((row) => [`${row.type}:${String(row.id).toLowerCase()}`, { ...row, shown_project_title: shownProjectOfFile(row, projects)?.title ?? null }]));
+  return new Map(rows.map((row) => [`${row.type}:${String(row.id).toLowerCase()}`, { ...row, shown_project: shownProjectOfFile(row, projects) }]));
 }
 
 /**
@@ -291,7 +292,7 @@ function cardOf(ref: SendFileRef, row: FileRow | undefined, media: StudioMediaSt
     thumbUrl: mediaUrl(media, row.thumb_key),
     width: Number.isInteger(row.width) ? Number(row.width) : null,
     height: Number.isInteger(row.height) ? Number(row.height) : null,
-    project: row.stored_project_id && typeof row.shown_project_title === 'string' ? { id: String(row.stored_project_id).toLowerCase(), title: row.shown_project_title } : null,
+    project: row.shown_project ?? null,
   };
 }
 

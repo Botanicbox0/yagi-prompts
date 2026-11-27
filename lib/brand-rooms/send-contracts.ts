@@ -191,10 +191,12 @@ export type SendInboxView = 'all' | 'mentions';
 
 /* ---------------------------------------------------------------- views */
 
-/** A project as a members thread shows it: only while the project can take new work (else the file reads as 미분류). */
+/** A project as a members thread shows it (spine rules R-A: finished visible projects too). */
 export interface SendProject {
   id: string;
   title: string;
+  /** Whether the project can take new work (`SELECTABLE_PROJECTS`); absent on legacy payloads. */
+  selectable?: boolean;
 }
 
 /**

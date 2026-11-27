@@ -612,7 +612,8 @@ describe('B. finished projects keep their files; a hidden team project leaks now
     if (!bell.ok || !bell.bell) throw new Error(JSON.stringify(bell));
     for (const p of world) {
       for (const [kind, ref] of [['image', { kind: 'output', outputId: p.files.image.job!.outputId }], ['role upload', { kind: 'asset', assetId: p.files['role upload'].ref.split(':')[1]! }]] as const) {
-        const expected = p.files[kind].place === 'project' ? { id: p.id, title: p.title } : null;
+        // The card's project also says whether it can take new work (the sent card's 파일 열기 names an active project).
+        const expected = p.files[kind].place === 'project' ? { id: p.id, title: p.title, selectable: p.selectable } : null;
         const answer = (await sendFile(ref)) as SendFileThreads;
         expect(answer.file.project, `${p.label} ${kind}`).toEqual(expected);
         const rootId = answer.threads[0]!.rootId;
@@ -807,7 +808,7 @@ describe('D. a notice and the file card name the same project (follow-up 2)', ()
     const onRole = await post(role);
     const onPlain = await post(plain);
     expect(onRole.thread.file.project).toBeNull();
-    expect(onPlain.thread.file.project).toEqual({ id: F, title: 'Winter teaser' });
+    expect(onPlain.thread.file.project).toEqual({ id: F, title: 'Winter teaser', selectable: false });
     const report = await runRoomNoticePass({ sql: f.sql, mailer, push: null, now: minutesFromNow(0) });
     expect(report).toMatchObject({ mails: 1, sent: 1 });
     expect(mailer.sent.map((m) => m.subject)).toEqual([expect.stringContaining('Winter teaser')]);

@@ -349,4 +349,30 @@ describe('reads: a thread, a file’s threads, the members list', () => {
     expect(people.people.find((p) => p.id === w.f.ids.owner)!.name).toBe('Owner Kim');
     expect(JSON.stringify(people)).not.toMatch(new RegExp(`${w.f.ids.guest}|${w.f.ids.admin}|@`));
   });
+
+  it('reports project.selectable on file cards: true while active, false once finished, and null for a finished project brand-material upload', async () => {
+    const projectId = await selfProject(w, 'Autumn lookbook');
+    const { outputId } = await imageResult(w, projectId);
+    const plainAssetId = await libraryPicture(w, projectId);
+    const logoAssetId = await libraryPicture(w, projectId);
+    await w.f.sql.query("update brand_studio_assets set role = 'logo' where id = $1", [logoAssetId]);
+
+    // Active project: output, plain upload, and brand-material upload all show the project with selectable: true.
+    const sentOut = await send(owner(), output(outputId), 'Active output');
+    const sentPlain = await send(owner(), { kind: 'asset', assetId: plainAssetId }, 'Active plain asset');
+    const sentLogo = await send(owner(), { kind: 'asset', assetId: logoAssetId }, 'Active logo asset');
+    expect(sentOut.thread.file.project).toEqual({ id: projectId, title: 'Autumn lookbook', selectable: true });
+    expect(sentPlain.thread.file.project).toEqual({ id: projectId, title: 'Autumn lookbook', selectable: true });
+    expect(sentLogo.thread.file.project).toEqual({ id: projectId, title: 'Autumn lookbook', selectable: true });
+
+    // Finish the visible own project: studio output & plain upload keep the project with selectable: false;
+    // brand-material upload drops project to null (unchanged R-A rule).
+    await w.f.sql.query("update brand_projects set status = 'completed' where id = $1", [projectId]);
+    const outPage = await ok<SendThreadPage>(w, owner(), 'send.thread', { rootId: sentOut.thread.rootId });
+    const plainPage = await ok<SendThreadPage>(w, owner(), 'send.thread', { rootId: sentPlain.thread.rootId });
+    const logoPage = await ok<SendThreadPage>(w, owner(), 'send.thread', { rootId: sentLogo.thread.rootId });
+    expect(outPage.thread.file.project).toEqual({ id: projectId, title: 'Autumn lookbook', selectable: false });
+    expect(plainPage.thread.file.project).toEqual({ id: projectId, title: 'Autumn lookbook', selectable: false });
+    expect(logoPage.thread.file.project).toBeNull();
+  });
 });

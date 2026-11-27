@@ -64,7 +64,7 @@ describe('a thread follows its file', () => {
     expect(await where(later.message.id)).toEqual([[w.f.projectId, `members:${w.f.projectId}`]]);
     const page = await ok<SendThreadPage>(w, editor(), 'send.thread', { rootId: sent.thread.rootId });
     expect(page.replies.map((r) => r.body)).toEqual(['On it', 'Back here']);
-    expect(page.thread.file.project).toEqual({ id: w.f.projectId, title: 'Spring launch' });
+    expect(page.thread.file.project).toEqual({ id: w.f.projectId, title: 'Spring launch', selectable: true });
     expect((await ok<SendInboxPage>(w, editor(), 'send.inbox', {})).threads.map((t) => [t.rootId, t.unread])).toEqual([[sent.thread.rootId, false]]);
   });
 

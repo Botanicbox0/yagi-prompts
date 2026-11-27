@@ -1222,4 +1222,79 @@ describe('Fix round 5 pure model rules', () => {
       { key: 'pending:req-tab1', id: myPostedMsg.id },
     ]);
   });
+
+  it('includes ?project= on fileOpenHref only when file.project.selectable === true across every file kind', () => {
+    const viewParam = encodeURIComponent(`o:${OUT_1}`);
+    const projectParam = encodeURIComponent(PROJ);
+    const activeProject = { id: PROJ, title: '봄 향수 론칭', selectable: true };
+    const finishedProject = { id: PROJ, title: '봄 향수 론칭', selectable: false };
+    const legacyProject = { id: PROJ, title: '봄 향수 론칭' };
+
+    const cases: Array<{
+      label: string;
+      patch: Partial<SendFileCard>;
+      baseHref: string;
+      activeHref: string;
+    }> = [
+      {
+        label: 'studio image output',
+        patch: { ref: { kind: 'output', outputId: OUT_1 }, kind: 'image' },
+        baseHref: `/brand/studio?organizationId=${ORG}&view=${viewParam}`,
+        activeHref: `/brand/studio?organizationId=${ORG}&project=${projectParam}&view=${viewParam}`,
+      },
+      {
+        label: 'studio null-kind output (image fallback)',
+        patch: { ref: { kind: 'output', outputId: OUT_1 }, kind: null },
+        baseHref: `/brand/studio?organizationId=${ORG}&view=${viewParam}`,
+        activeHref: `/brand/studio?organizationId=${ORG}&project=${projectParam}&view=${viewParam}`,
+      },
+      {
+        label: 'studio video output',
+        patch: { ref: { kind: 'output', outputId: OUT_1 }, kind: 'video' },
+        baseHref: `/brand/studio/video?organizationId=${ORG}&view=${viewParam}`,
+        activeHref: `/brand/studio/video?organizationId=${ORG}&project=${projectParam}&view=${viewParam}`,
+      },
+      {
+        label: 'studio sound output',
+        patch: { ref: { kind: 'output', outputId: OUT_1 }, kind: 'audio' },
+        baseHref: `/brand/studio/sound?organizationId=${ORG}`,
+        activeHref: `/brand/studio/sound?organizationId=${ORG}&project=${projectParam}`,
+      },
+      {
+        label: 'uploaded image asset',
+        patch: { ref: { kind: 'asset', assetId: ASSET_1 }, kind: 'image', name: '제품컷' },
+        baseHref: `/brand/library?organizationId=${ORG}`,
+        activeHref: `/brand/library?organizationId=${ORG}&project=${projectParam}`,
+      },
+      {
+        label: 'uploaded video asset',
+        patch: { ref: { kind: 'asset', assetId: ASSET_1 }, kind: 'video', name: '런웨이 클립' },
+        baseHref: `/brand/library?organizationId=${ORG}`,
+        activeHref: `/brand/library?organizationId=${ORG}&project=${projectParam}`,
+      },
+      {
+        label: 'uploaded audio asset',
+        patch: { ref: { kind: 'asset', assetId: ASSET_1 }, kind: 'audio', name: '배경음' },
+        baseHref: `/brand/library?organizationId=${ORG}`,
+        activeHref: `/brand/library?organizationId=${ORG}&project=${projectParam}`,
+      },
+    ];
+
+    for (const c of cases) {
+      const noProject = fileCardInfo(makeFile({ ...c.patch, project: null }), ORG, KO).openHref;
+      const legacy = fileCardInfo(makeFile({ ...c.patch, project: legacyProject }), ORG, KO).openHref;
+      const active = fileCardInfo(makeFile({ ...c.patch, project: activeProject }), ORG, KO).openHref;
+      const finished = fileCardInfo(makeFile({ ...c.patch, project: finishedProject }), ORG, KO).openHref;
+
+      expect(noProject, `${c.label} / no project`).toBe(c.baseHref);
+      expect(legacy, `${c.label} / legacy project without selectable`).toBe(c.baseHref);
+      expect(finished, `${c.label} / finished project (selectable: false)`).toBe(c.baseHref);
+      expect(active, `${c.label} / active project (selectable: true)`).toBe(c.activeHref);
+    }
+
+    // Deleted file always returns openHref: null even if project is active
+    expect(
+      fileCardInfo(makeFile({ available: false, kind: null, project: activeProject }), ORG, KO).openHref,
+    ).toBeNull();
+  });
 });

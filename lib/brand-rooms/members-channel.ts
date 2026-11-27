@@ -190,7 +190,7 @@ export function shownProjectOfFile(row: Pick<MemberFileRow, 'type' | 'stored_pro
   const project = id ? projects.get(id) : undefined;
   if (!id || !project) return null;
   if (row.type === 'asset' && !project.selectable && isBrandMaterial(row.role)) return null;
-  return { id, title: project.title };
+  return { id, title: project.title, selectable: project.selectable };
 }
 
 /**
