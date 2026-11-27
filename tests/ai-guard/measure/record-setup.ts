@@ -17,8 +17,8 @@ vi.mock('@/lib/flags', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/lib/flags')>();
   return {
     ...original,
-    promptGuardMode: (env: Record<string, string | undefined> = process.env, site?: string) =>
-      original.promptGuardMode(env.PROMPT_GUARD?.trim() ? env : { ...env, PROMPT_GUARD: 'observe' }, site),
+    promptGuardMode: (env: Record<string, string | undefined> = process.env, site?: string, organizationId?: string | null) =>
+      original.promptGuardMode(env.PROMPT_GUARD?.trim() ? env : { ...env, PROMPT_GUARD: 'observe' }, site, organizationId),
   };
 });
 

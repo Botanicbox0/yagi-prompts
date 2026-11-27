@@ -354,10 +354,11 @@ export async function enhancePrompt(input: EnhanceInput, deps: EnhanceDeps): Pro
     const guard = guardRequest({
       site: 'brand-studio.enhancer',
       env: deps.env,
+      organizationId: deps.organizationId,
       internal: buildSystemInstruction(effectiveInput, binding, seconds, shots, {
         skinVariant,
         env: deps.env,
-        ...(promptGuardMode(deps.env) === 'off' ? {} : { shotsInUserTurn: true }),
+        ...(promptGuardMode(deps.env, 'brand-studio.enhancer', deps.organizationId) === 'off' ? {} : { shotsInUserTurn: true }),
       }),
     });
     const visualParts = thumbParts(effectiveInput, binding, guard);

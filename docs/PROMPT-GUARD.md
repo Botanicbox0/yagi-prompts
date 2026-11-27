@@ -65,20 +65,30 @@ nothing until someone sets the variable.
 Any other non-empty value (a typo such as `enforced`) is read as `enforce`: once set, the switch fails closed.
 `PROMPT_GUARD_ENFORCE` lists site ids (comma-separated, for example `brand-studio.enhancer`) that run in
 `enforce` while `PROMPT_GUARD=observe`; with the guard off it changes nothing.
-`promptGuardMode(env, site)` reads the server environment the call site was given, so a test sets it per call.
+`PROMPT_GUARD_ORGS` is an optional comma-separated list of organization ids (spaces and empty entries ignored,
+compared case-insensitively). Unset or empty: the mode applies to every call. Set: `PROMPT_GUARD` (and
+`PROMPT_GUARD_ENFORCE`) apply only to calls made for a listed organization; for every other organization, and
+for any call whose organization is unknown, the guard behaves as `off` (requests and answers are byte for byte
+as with `PROMPT_GUARD` unset, and no log line is written).
+`promptGuardMode(env, site, organizationId)` reads the server environment the call site was given, so a test
+sets it per call.
 
 **Order to switch it on:**
 
 1. A pass with the local model (the coordinator's real-model pass): measure leaks and false positives per site.
-2. `PROMPT_GUARD=observe` in production. The requests change (canary line, shared rule, data blocks); answers
-   change only for a canary hit. Read the `[prompt-guard]` log lines for false positives per site, and add
-   the phrases models echo to that site's allow-list.
-3. Per site, `PROMPT_GUARD_ENFORCE=<site id>` once its log lines show no false positives. `PROMPT_GUARD=enforce`
+2. Start with the test organization only: set `PROMPT_GUARD_ORGS=<test organization id>` alongside
+   `PROMPT_GUARD=observe` (and `PROMPT_GUARD_ENFORCE=<site id>` once ready to test enforcement), verify on real
+   screens and read the `[prompt-guard]` log lines for false positives, adding echoed phrases to that site's
+   allow-list.
+3. Widen to everyone by removing `PROMPT_GUARD_ORGS` (unset or empty): run `PROMPT_GUARD=observe` in production
+   (the requests change with the canary line, shared rule and data blocks; answers change only for a canary hit)
+   and check the `[prompt-guard]` log lines per site.
+4. Per site, `PROMPT_GUARD_ENFORCE=<site id>` once its log lines show no false positives. `PROMPT_GUARD=enforce`
    only when every adopted site is ready.
 
 ## 3. The request side
 
-`guardRequest({ site, env, internal })` is called once per model call, before the request is built:
+`guardRequest({ site, env, organizationId, internal })` is called once per model call, before the request is built (`organizationId` is optional; pass it whenever the site knows the organization so `PROMPT_GUARD_ORGS` can scope rollout):
 
 - `system`: what to send as the system (or developer) part. Guarded, it is one line with a random per-call
   canary (`pgc` + 20 characters), then the internal text unchanged, then ONE shared rule
@@ -169,7 +179,7 @@ The plain reference is `enhancePrompt` in `lib/brand-studio/enhancer/index.ts`:
 
 ```ts
 // 1. Build the request through the guard: internal text in, guarded system part out.
-const guard = guardRequest({ site: 'brand-studio.enhancer', env: deps.env, internal: buildSystemInstruction(/* … */) });
+const guard = guardRequest({ site: 'brand-studio.enhancer', env: deps.env, organizationId: deps.organizationId, internal: buildSystemInstruction(/* … */) });
 
 // 2. Every customer string and customer-derived reading goes through data()/json(); parts() finishes the user turn.
 const raw = await callGeminiJson(config, deps.fetch, {
