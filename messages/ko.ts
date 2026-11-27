@@ -4302,7 +4302,7 @@ export const ko: Dictionary = {
     },
     /**
      * docs/PERSONAL-STUDIO.md §3.4.4 (T1a) — the row under the example video: the parts this template fixes. Part names
-     * come from `editSheet.locks` / `editSheet.slots`. PROVISIONAL: a wording pass replaces these before release.
+     * come from `editSheet.locks` / `editSheet.slots`. Wording confirmed by the founder (2026-11-27).
      */
     fixed: {
       heading: '이 템플릿에서 정해진 것',
@@ -4314,7 +4314,7 @@ export const ko: Dictionary = {
     },
     notForSale: "준비 중",
     notForSaleBody: "이 템플릿은 아직 생성할 수 없습니다. 예시 결과물을 먼저 살펴보세요.",
-    // Founder 2026-11-25 — a template whose text leaves no room for edits. Provisional: founder confirms the wording.
+    // Founder 2026-11-25 — a template whose text leaves no room for edits. Wording confirmed by the founder (2026-11-27).
     editsClosed: '이 템플릿은 길이가 꽉 차 있어 수정 요청을 받지 않아요.',
     closedBrowseVideoCta: "다른 영상 템플릿 보기",
     closedBrowseImageCta: "다른 이미지 템플릿 보기",
@@ -4419,7 +4419,7 @@ export const ko: Dictionary = {
       needPet: '반려동물 사진을 골라 주세요.',
       needPartner: '상대방 사진을 골라 주세요.',
       needConsent: '동의 여부를 확인해 주세요.',
-      // docs/PERSONAL-STUDIO.md §6.1 — shown only while the Sunra face switch is on. Provisional: founder confirms the wording.
+      // docs/PERSONAL-STUDIO.md §6.1 — shown only while the Sunra face switch is on. Wording confirmed by the founder (2026-11-27).
       birthYearLabel: '출생 연도',
       birthYearPlaceholder: '연도를 골라 주세요',
       adultAttest: '만 19세 이상이에요.',
@@ -4610,14 +4610,14 @@ export const ko: Dictionary = {
         rate_limited: '오늘 만들 수 있는 횟수를 모두 썼습니다.',
         identity_required: '본인 인증 후 만들 수 있습니다.',
         selfie_required: '먼저 내 사진을 저장해 주세요.',
-        // Provisional: founder confirms the wording. The saved photo's row is live but its file is gone.
+        // Wording confirmed by the founder (2026-11-27). The saved photo's row is live but its file is gone.
         selfie_file_missing: '저장한 사진을 불러오지 못했어요. 사진을 다시 골라 주세요.',
         slot_missing: '사진이 빠졌어요. 다시 골라 주세요.',
         bad_slot_photo: '사용할 수 없는 사진이에요. 256px 이상의 JPG, PNG, WebP 파일을 선택해 주세요.',
         partner_consent_required: '상대방의 동의를 확인해 주세요.',
         not_a_pet: '반려동물 사진만 올릴 수 있어요. 사람이 함께 나오지 않은 사진으로 골라 주세요.',
         pet_check_unavailable: '지금은 사진을 확인하지 못했어요. 잠시 후 다시 시도해 주세요.',
-        // docs/PERSONAL-STUDIO.md §6.1–6.2 — only while the Sunra face switch is on. Provisional: founder confirms the wording.
+        // docs/PERSONAL-STUDIO.md §6.1–6.2 — only while the Sunra face switch is on. Wording confirmed by the founder (2026-11-27).
         adult_confirmation_required: '출생 연도를 고르고 만 19세 이상인지 확인해 주세요.',
         adult_only: '함께 나오는 영상과 이미지는 만 19세 이상만 만들 수 있어요.',
         partner_not_one_person: '함께 나올 한 분만 나온 사진을 올려 주세요.',
@@ -6524,7 +6524,7 @@ export const ko: Dictionary = {
 
   /**
    * docs/PERSONAL-STUDIO.md §2.3, §3.1 — 템플릿 페이지의 지시서 카드(플래그 `TWINGS_PERSONAL_EDIT_SHEET`).
-   * PROVISIONAL: not final, a wording pass replaces these strings. What each key must convey is noted next to the
+   * Wording confirmed by the founder (2026-11-27). What each key must convey is noted next to the
    * same key in messages/en.ts. Never name models, providers, prompts or internal terms here.
    */
   editSheet: {
@@ -6570,11 +6570,11 @@ export const ko: Dictionary = {
       sound: '소리',
     },
     refusedLocked: '고정된 부분이라 바꿀 수 없어요.',
-    // Founder 2026-11-25 — an edit that would not fit the clip (Seedance 2.5: 15,000 characters). Provisional wording.
+    // Founder 2026-11-25 — an edit that would not fit the clip (Seedance 2.5: 15,000 characters). Wording confirmed by the founder (2026-11-27).
     tooLong: '요청이 길어 이 템플릿에 다 담을 수 없어요. 고칠 내용을 줄여 주세요.',
     updatedLocked: '바꿀 수 있는 것만 고칠 내용에 담았어요. 고정된 부분은 그대로 둬요.',
     lockedPlaceholder: '예: 마지막에 카메라를 보며 살짝 웃게 해 주세요',
-    // docs/PERSONAL-STUDIO.md §3.4.9 (S2) — the make card's styled hair and makeup choice. Provisional wording.
+    // docs/PERSONAL-STUDIO.md §3.4.9 (S2) — the make card's styled hair and makeup choice. Wording confirmed by the founder (2026-11-27).
     styleChoiceLabel: '{part} 스타일',
     styleTemplate: '템플릿 스타일',
     styleMine: '내 사진 그대로',
@@ -6587,7 +6587,7 @@ export const ko: Dictionary = {
     styleOutfitPhotoCta: '옷 사진 올리기',
     styleOutfitAttached: '올린 옷 사진으로 만들어요.',
   },
-  // docs/PERSONAL-STUDIO.md §3.4.10 — 템플릿 스타일(TWINGS_TEMPLATE_LOOK). 대표 확정 전 임시 문구. 성별이 아니라 스타일로 부르고,
+  // docs/PERSONAL-STUDIO.md §3.4.10 — 템플릿 스타일(TWINGS_TEMPLATE_LOOK). 문구는 2026-11-27 대표 확정. 성별이 아니라 스타일로 부르고,
   // 여성 스타일을 언제나 먼저 둔다.
   templateLook: {
     female: '여성 스타일',
