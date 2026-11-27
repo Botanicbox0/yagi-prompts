@@ -500,6 +500,7 @@ export function SendInboxPage({
             markSeedRead={Boolean(matchingInitialThread)}
             initialPeople={initialPeople}
             closed={state.closed}
+            stage
             headEnd={bellSlot}
             onThreadLoaded={handleThreadLoaded}
             onReplyPosted={handleReplyPosted}

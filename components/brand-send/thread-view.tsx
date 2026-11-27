@@ -11,6 +11,8 @@ import { ROOM_ACTIVITY } from '@/components/brand-rooms/seams';
 import type { SendMessage, SendPerson, SendPosted, SendThreadPage, SendThreadSummary } from '@/lib/brand-rooms/send-contracts';
 import { SendComposer, type SendComposerSubmit } from './composer';
 import { SendFileCardView } from './file-card';
+import { SendFileStage } from './file-stage';
+import { fileStageModel } from './file-stage-model';
 import { SendInviteChips } from './invite-chips';
 import { extractCopyableInviteTokens } from './invite-model';
 import {
@@ -48,6 +50,7 @@ export interface SendThreadViewProps {
   markSeedRead?: boolean;
   initialPeople?: readonly SendPerson[];
   closed?: boolean;
+  stage?: boolean;
   headEnd?: ReactNode;
   onThreadLoaded?: (thread: SendThreadSummary, marked: boolean) => void;
   onReplyPosted?: (posted: SendPosted) => void;
@@ -160,6 +163,7 @@ export function SendThreadView({
   markSeedRead = false,
   initialPeople,
   closed = false,
+  stage = false,
   headEnd,
   onThreadLoaded,
   onReplyPosted,
@@ -521,6 +525,8 @@ export function SendThreadView({
   const thread = state.thread;
   const headCard = fileCardInfo(thread.file, organizationId, copy);
   const headProject = thread.file.available ? (thread.file.project?.title ?? copy.unfiled) : copy.fileGone;
+  const composerInvite = invite && thread.file.kind !== 'image';
+  const threadMatchesRoot = thread.rootId.toLowerCase() === rootId.toLowerCase();
   let lastDay = '';
 
   const pollError =
@@ -528,90 +534,120 @@ export function SendThreadView({
       ? (refusalMessageText(sendRefusalOutcome(state.error, 'thread'), copy) ?? copy.failedLoad)
       : null;
 
+  const headEl = (
+    <header className={styles.head}>
+      <div className={styles.headTop}>
+        <div className={styles.headMain}>
+          <span className={styles.headThumb}>
+            {headCard.available && headCard.thumbUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={headCard.thumbUrl}
+                alt=""
+                width={36}
+                height={27}
+                loading="lazy"
+                className={styles.headThumbImg}
+              />
+            ) : (
+              <HeadThumbGlyph available={headCard.available} />
+            )}
+          </span>
+          <div className={styles.headCopy}>
+            <span className={styles.headProject}>{headProject}</span>
+            <p className={styles.lead}>{threadHeadLead(thread.root.authorName, copy)}</p>
+          </div>
+        </div>
+        <div className={styles.headRight}>
+          {headCard.openHref ? (
+            <a href={headCard.openHref} className={styles.headOpen} data-send-head-open>
+              {copy.openFile}
+            </a>
+          ) : null}
+          {headEnd ? <div className={styles.headEnd}>{headEnd}</div> : null}
+        </div>
+      </div>
+    </header>
+  );
+
+  const streamEl = (
+    <div ref={streamRef} className={styles.stream} onScroll={handleStreamScroll} data-send-thread-stream>
+      {(items ?? []).map((item) => {
+        const day = formatThreadDay(item.message.createdAt, locale, copy);
+        const showDay = day !== '' && day !== lastDay;
+        if (day) lastDay = day;
+        return (
+          <div key={item.key}>
+            {showDay ? <div className={styles.dayDivider}>{day}</div> : null}
+            <MessageRow
+              message={item.message}
+              isRoot={item.isRoot}
+              pending={item.pending}
+              fileCard={
+                item.isRoot && !stage ? <SendFileCardView file={thread.file} organizationId={organizationId} copy={copy} /> : undefined
+              }
+              invite={invite}
+              inviteTokens={invite ? inviteTokensByMsg[item.message.id] : undefined}
+              locale={locale}
+              copy={copy}
+            />
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  const composerEl = !state.closed ? (
+    <div className={styles.composerDock}>
+      {pollError ? (
+        <p className={styles.inlineError} role="status">
+          {pollError}
+        </p>
+      ) : null}
+      <SendComposer
+        key={thread.rootId}
+        copy={copy}
+        placeholder={copy.replyPlaceholder}
+        hint={copy.composerHint}
+        refusalContext="compose_reply"
+        invite={composerInvite}
+        lookupAddress={composerInvite ? handleLookup : undefined}
+        initialPeople={initialPeople}
+        loadPeople={handleLoadPeople}
+        onSend={handleReplySend}
+        onClosed={handleComposerClosed}
+        ariaLabel={copy.replyPlaceholder}
+      />
+    </div>
+  ) : null;
+
+  if (stage) {
+    const stageVariant = threadMatchesRoot ? fileStageModel(thread.file, copy).variant : 'switching';
+    return (
+      <section className={styles.wrap} data-send-thread={thread.rootId} data-send-stage="true">
+        {headEl}
+        <div className={styles.stageShell}>
+          <div className={styles.stageBody} data-send-thread-split="true">
+            <div className={styles.stagePane} data-stage-variant={stageVariant}>
+              {threadMatchesRoot ? (
+                <SendFileStage rootId={thread.rootId} file={thread.file} copy={copy} />
+              ) : null}
+            </div>
+            <div className={styles.convoPane}>
+              {streamEl}
+              {composerEl}
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className={styles.wrap} data-send-thread={thread.rootId}>
-      <header className={styles.head}>
-        <div className={styles.headTop}>
-          <div className={styles.headMain}>
-            <span className={styles.headThumb}>
-              {headCard.available && headCard.thumbUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={headCard.thumbUrl}
-                  alt=""
-                  width={36}
-                  height={27}
-                  loading="lazy"
-                  className={styles.headThumbImg}
-                />
-              ) : (
-                <HeadThumbGlyph available={headCard.available} />
-              )}
-            </span>
-            <div className={styles.headCopy}>
-              <span className={styles.headProject}>{headProject}</span>
-              <p className={styles.lead}>{threadHeadLead(thread.root.authorName, copy)}</p>
-            </div>
-          </div>
-          <div className={styles.headRight}>
-            {headCard.openHref ? (
-              <a href={headCard.openHref} className={styles.headOpen} data-send-head-open>
-                {copy.openFile}
-              </a>
-            ) : null}
-            {headEnd ? <div className={styles.headEnd}>{headEnd}</div> : null}
-          </div>
-        </div>
-      </header>
-
-      <div ref={streamRef} className={styles.stream} onScroll={handleStreamScroll} data-send-thread-stream>
-        {(items ?? []).map((item) => {
-          const day = formatThreadDay(item.message.createdAt, locale, copy);
-          const showDay = day !== '' && day !== lastDay;
-          if (day) lastDay = day;
-          return (
-            <div key={item.key}>
-              {showDay ? <div className={styles.dayDivider}>{day}</div> : null}
-              <MessageRow
-                message={item.message}
-                isRoot={item.isRoot}
-                pending={item.pending}
-                fileCard={
-                  item.isRoot ? <SendFileCardView file={thread.file} organizationId={organizationId} copy={copy} /> : undefined
-                }
-                invite={invite}
-                inviteTokens={invite ? inviteTokensByMsg[item.message.id] : undefined}
-                locale={locale}
-                copy={copy}
-              />
-            </div>
-          );
-        })}
-      </div>
-
-      {!state.closed ? (
-        <div className={styles.composerDock}>
-          {pollError ? (
-            <p className={styles.inlineError} role="status">
-              {pollError}
-            </p>
-          ) : null}
-          <SendComposer
-            key={thread.rootId}
-            copy={copy}
-            placeholder={copy.replyPlaceholder}
-            hint={copy.composerHint}
-            refusalContext="compose_reply"
-            invite={invite}
-            lookupAddress={invite ? handleLookup : undefined}
-            initialPeople={initialPeople}
-            loadPeople={handleLoadPeople}
-            onSend={handleReplySend}
-            onClosed={handleComposerClosed}
-            ariaLabel={copy.replyPlaceholder}
-          />
-        </div>
-      ) : null}
+      {headEl}
+      {streamEl}
+      {composerEl}
     </section>
   );
 }
