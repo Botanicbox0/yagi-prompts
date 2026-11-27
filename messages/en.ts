@@ -6321,6 +6321,30 @@ export const en = {
         input: 'The form could not be read. Reload the page and try again.',
       },
     },
+    /** Admin setting of `platform_formats.example_url` for the studio's own formats (`format.setOriginalPost`). */
+    originalPost: {
+      heading: 'Original post URL',
+      current: 'Currently saved URL',
+      currentEmpty: 'No URL saved.',
+      statusLabel: 'Display status',
+      status: {
+        visible: 'Shown on the template page',
+        not_post: 'Profile URL — not shown on the template page',
+        empty: 'None',
+      },
+      fieldLabel: 'Instagram post or reel URL',
+      fieldHint: 'Only Instagram post (/p/) or reel (/reel/) URLs are accepted. Save with an empty field to clear it.',
+      placeholder: 'Instagram post or reel URL (https://www.instagram.com/reel/...)',
+      save: 'Save URL',
+      refusals: {
+        not_found: 'No format was found for this template.',
+        not_accepted: 'Only an accepted format can be updated.',
+        not_company: "The studio cannot edit a creative's format.",
+        not_post: 'Only Instagram post (/p/) or reel (/reel/) URLs are allowed. Profile URLs and other sites are refused.',
+        unchanged: 'The URL is unchanged.',
+        input: 'The form could not be read. Reload the page and try again.',
+      },
+    },
     /** docs/PERSONAL-STUDIO.md §3.4.4 (T1a): the marks editor on a template with a lock block (`prompt.marks`). */
     templateMarks: {
       heading: 'Fixed parts: descriptions and ranges',

@@ -40,6 +40,8 @@ import { recipeSchemaReady } from '@/lib/recipes/repo';
 import { TemplateStylingPanel } from '@/components/admin/template-styling-panel';
 import { FormatRevisionPanel } from '@/components/admin/format-revision-panel';
 import { loadFormatRevisionView } from '@/lib/creator-platform/format-revision';
+import { OriginalPostPanel } from '@/components/admin/original-post-panel';
+import { loadOriginalPostView } from '@/lib/creator-platform/original-post';
 import { PromptLengthRefusalNote, PromptLengthStatus } from '@/components/admin/prompt-length-status';
 import { templateClipLengths, templateEditHeadroom } from '@/lib/prompts/prompt-length';
 
@@ -254,6 +256,7 @@ export default async function AdminPromptItemPage({
   // docs/CREATOR-PLATFORM.md (2026-11-25): the audited recipe text revision — only for an accepted format the studio's
   // own company-payout account owns (null for every other template, a creative's format included).
   const revisionView = sql === null || row.audience === 'brand' ? null : await loadFormatRevisionView(sql, row.id);
+  const originalPostView = sql === null || row.audience === 'brand' ? null : await loadOriginalPostView(sql, row.id);
   // Founder 2026-11-25: the same prompts, each against its clip's limit (Seedance 2.5: 15,000 characters per clip).
   const lengthSource = { promptText: row.promptText, ...stylingSource, medium: row.medium, engine: row.engine, runtimeSeconds: row.runtimeSeconds };
   const clips = templateClipLengths(lengthSource);
@@ -401,6 +404,16 @@ export default async function AdminPromptItemPage({
           view={revisionView}
           dict={dict}
           locale={locale}
+          back={back}
+          detail={one(query, 'err') ? one(query, 'detail') : null}
+        />
+      )}
+      {originalPostView && (
+        <OriginalPostPanel
+          op="format.setOriginalPost"
+          templateId={row.id}
+          view={originalPostView}
+          dict={dict}
           back={back}
           detail={one(query, 'err') ? one(query, 'detail') : null}
         />

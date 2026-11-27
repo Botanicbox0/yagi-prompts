@@ -21,6 +21,7 @@ import { BRAND_ROOMS_REVIEW_OPERATIONS } from './brand-rooms-review-operations';
 import { BRAND_PRODUCTION_OPERATIONS } from './brand-production-operations';
 import { PLATFORM_OPERATIONS } from './platform-operations';
 import { FORMAT_REVISION_OPERATIONS } from './format-revision-operations';
+import { ORIGINAL_POST_OPERATIONS } from './original-post-operations';
 import { CAMPAIGN_RISK_OPERATIONS } from './campaign-risk-operations';
 import { CAMPAIGN_COLLABORATION_OPERATIONS } from './campaign-collaboration-operations';
 import { CAMPAIGN_FUNDING_OPERATIONS } from './campaign-funding-operations';
@@ -94,6 +95,8 @@ export const ADMIN_OPERATIONS = {
   ...PLATFORM_OPERATIONS,
   // docs/CREATOR-PLATFORM.md (2026-11-25) — the audited recipe text revision of the studio's own company-payout formats.
   ...FORMAT_REVISION_OPERATIONS,
+  // Admin setting of platform_formats.example_url for the studio's own company-payout formats.
+  ...ORIGINAL_POST_OPERATIONS,
   ...CAMPAIGN_RISK_OPERATIONS,
   ...CAMPAIGN_COLLABORATION_OPERATIONS,
   ...CAMPAIGN_FUNDING_OPERATIONS,

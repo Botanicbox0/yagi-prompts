@@ -6286,6 +6286,30 @@ export const ko: Dictionary = {
         input: '보낸 내용을 읽지 못했어요. 페이지를 새로 열어 다시 시도해 주세요.',
       },
     },
+    /** Admin setting of `platform_formats.example_url` for the studio's own formats (`format.setOriginalPost`). */
+    originalPost: {
+      heading: '원본 게시물 주소',
+      current: '현재 저장된 주소',
+      currentEmpty: '저장된 주소가 없습니다.',
+      statusLabel: '표시 상태',
+      status: {
+        visible: '템플릿 페이지에 보임',
+        not_post: '프로필 주소라 템플릿 페이지에 보이지 않음',
+        empty: '없음',
+      },
+      fieldLabel: '인스타그램 게시물·릴스 주소',
+      fieldHint: '인스타그램 게시물(/p/)이나 릴스(/reel/) 주소만 저장됩니다. 빈 값으로 저장하면 지워집니다.',
+      placeholder: '인스타그램 게시물 또는 릴스 주소 (https://www.instagram.com/reel/...)',
+      save: '주소 저장',
+      refusals: {
+        not_found: '이 템플릿의 포맷을 찾지 못했습니다.',
+        not_accepted: '승인된 포맷만 주소를 바꿀 수 있습니다.',
+        not_company: '크리에이티브의 포맷은 스튜디오가 바꿀 수 없습니다.',
+        not_post: '인스타그램 게시물(/p/)이나 릴스(/reel/) 주소만 넣을 수 있습니다. 프로필 주소나 다른 사이트 주소는 저장되지 않습니다.',
+        unchanged: '지금 저장된 주소와 같습니다.',
+        input: '보낸 내용을 읽지 못했습니다. 페이지를 새로 열어 다시 시도해 주세요.',
+      },
+    },
     /** docs/PERSONAL-STUDIO.md §3.4.4 (T1a): the marks editor on a template with a lock block (`prompt.marks`). */
     templateMarks: {
       heading: '고정 항목 설명과 구간',
