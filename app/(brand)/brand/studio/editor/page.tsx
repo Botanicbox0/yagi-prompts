@@ -1,3 +1,4 @@
+import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { EditorV2 } from '@/components/brand-studio/editor-v2/editor-v2';
 import { ProjectSpineProvider } from '@/components/brand-studio/project-chip';
@@ -11,6 +12,7 @@ import { loadStudioSpine } from '@/lib/brand-studio/open-project-server';
 import { assetView, assetsOf, jobsOf, viewsOf } from '@/lib/brand-studio/repo';
 import { scopedHref } from '@/lib/brands/workspace/selection';
 import { brandStudioEditorV2DefaultFor, brandStudioEditorV2Open, brandWorkspacePrototypeLayerOpen } from '@/lib/flags';
+import { NONCE_HEADER } from '@/lib/security/workspace-csp';
 
 /**
  * `/brand/studio/editor` — the editing studio v2 (docs/BRAND-EDITING-STUDIO-V2.md §10, §11 V1).
@@ -61,8 +63,14 @@ export default async function StudioEditorV2Page({
   // off (the default), a listed organization's `?sample=1` opens its own film, and the film's locked
   // workspaces offer no sample film.
   const sampleFilm = brandWorkspacePrototypeLayerOpen();
+  let nonce: string | undefined;
+  try {
+    nonce = (await headers()).get(NONCE_HEADER)?.trim() || undefined;
+  } catch {
+    nonce = undefined;
+  }
   if (!ownFilm || (sampleFilm && first(params.sample) === '1')) {
-    return <EditorV2 copy={dict.studioEditor} currentEditorHref={currentEditorHref} initialWorkspace={initialWorkspace} exportPath={exportPath} autoDownload={autoDownload} real={null} />;
+    return <EditorV2 copy={dict.studioEditor} currentEditorHref={currentEditorHref} initialWorkspace={initialWorkspace} exportPath={exportPath} autoDownload={autoDownload} real={null} nonce={nonce} />;
   }
 
   const { deps } = ctx;
@@ -118,6 +126,7 @@ export default async function StudioEditorV2Page({
         gradeNames: { presets: dict.studioCompose.colorGrade.presets, reference: dict.studioCompose.colorGrade.activeRef },
       }}
       keep={keep}
+      nonce={nonce}
       {...(spine ? { spine } : {})}
     />
   );

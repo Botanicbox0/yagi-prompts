@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type RefObject } from 'react';
 import { fill } from '@/components/brand-studio/copy';
-import { FIXTURE_SPEECH } from '@/lib/brand-studio/editor-v2/fixture';
+import { COMPOSE_DIMENSIONS } from '@/lib/brand-studio/compose/timeline';
+import { FIXTURE_SPEECH, materialBySrc } from '@/lib/brand-studio/editor-v2/fixture';
 import {
   FRAME_STRIP_PX,
   MAX_PX_PER_FRAME,
@@ -21,8 +22,25 @@ import { duckEnvelope, envelopeGainAt, waveform } from '@/lib/brand-studio/edito
 import { formatBinding } from '@/lib/brand-studio/editor-v2/shortcuts';
 import { FrameThumbs, type ThumbRequest } from './frame-thumbs';
 import { EditorIcon } from './icons';
+import {
+  DRAG_THRESHOLD_PX,
+  LANE_KINDS,
+  LANE_MAX_HEIGHT,
+  LANE_MIN_HEIGHT,
+  clampLaneHeight,
+  effectiveLaneHeight,
+  filmstripSampleStep,
+  filmstripTileWidth,
+  isLayoutSized,
+  stepLaneByKey,
+  thumbDecodeHeight,
+  visibleLanes,
+  type LaneKind,
+} from './layout-model';
 import type { EditorApi } from './use-editor';
 import styles from './editor-v2.module.css';
+
+const useIsoLayoutEffect = typeof document !== 'undefined' ? useLayoutEffect : useEffect;
 
 type Drag =
   | { kind: 'trim'; index: number; edge: 'start' | 'end'; delta: number }
@@ -30,27 +48,193 @@ type Drag =
 
 const SNAP_PX = 7;
 const BAR_PX = 4;
-const TILE_PX = 96;
 /** From this frame width on, the filmstrip decodes real frames; below it the poster stands in. */
 const REAL_FRAMES_PX = 6;
 /** What "frame level" zooms to. */
 const FRAME_LEVEL_PX = 64;
 const PAD_PX = 40;
 
+interface LaneResizeHandleProps {
+  kind: LaneKind;
+  label: string;
+  height: number;
+  timelineRef: RefObject<HTMLElement | null>;
+  onDragEnd?: (moved: boolean) => void;
+  onCommit: (kind: LaneKind, height: number | null) => void;
+}
+
+function LaneResizeHandle({ kind, label, height, timelineRef, onDragEnd, onCommit }: LaneResizeHandleProps) {
+  const dragRef = useRef<{
+    pointerId: number;
+    target: HTMLSpanElement;
+    startY: number;
+    startHeight: number;
+    lastHeight: number;
+    moved: boolean;
+    wasSized: boolean;
+    rootEl: HTMLElement | null;
+    cleanup: () => void;
+  } | null>(null);
+  const latest = useRef({ height, onDragEnd, onCommit, kind });
+  latest.current = { height, onDragEnd, onCommit, kind };
+
+  const applyLive = (el: HTMLSpanElement, next: number, rootEl: HTMLElement | null, firstMove: boolean) => {
+    const tl = timelineRef.current;
+    if (tl) {
+      if (firstMove) {
+        if (!tl.hasAttribute('data-sized')) tl.setAttribute('data-sized', '');
+        tl.setAttribute('data-lane-dragging', '');
+        if (rootEl && !rootEl.hasAttribute('data-sized')) rootEl.setAttribute('data-sized', '');
+      }
+      tl.style.setProperty(`--ev-h-${kind}`, `${next}px`);
+    }
+    el.setAttribute('aria-valuenow', String(next));
+    el.setAttribute('aria-valuetext', `${next}px`);
+  };
+
+  const finishDrag = (commit: boolean, pointerId?: number) => {
+    const active = dragRef.current;
+    if (!active) return;
+    if (pointerId !== undefined && active.pointerId !== pointerId) return;
+    dragRef.current = null;
+    active.cleanup();
+    try {
+      if (active.target.hasPointerCapture?.(active.pointerId)) active.target.releasePointerCapture?.(active.pointerId);
+    } catch {
+      // Ignore capture release errors on detached elements.
+    }
+    active.target.removeAttribute('data-dragging');
+    const tl = timelineRef.current;
+    tl?.removeAttribute('data-lane-dragging');
+    if (commit && active.moved) {
+      latest.current.onDragEnd?.(true);
+      latest.current.onCommit(latest.current.kind, active.lastHeight);
+    } else if (!commit && active.moved && tl) {
+      tl.style.removeProperty(`--ev-h-${latest.current.kind}`);
+      if (!active.wasSized) {
+        tl.removeAttribute('data-sized');
+        active.rootEl?.removeAttribute('data-sized');
+      }
+      latest.current.onDragEnd?.(false);
+    }
+  };
+
+  useEffect(() => () => finishDrag(false), []);
+
+  const startDrag = (event: ReactPointerEvent<HTMLSpanElement>) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    finishDrag(true);
+    const target = event.currentTarget;
+    try {
+      target.setPointerCapture?.(event.pointerId);
+    } catch {
+      // Ignore capture errors in synthetic test environments.
+    }
+    const startHeight = latest.current.height;
+    const tl = timelineRef.current;
+    const rootEl = (tl?.closest?.('[data-studio-editor-v2]') as HTMLElement | null | undefined) ?? null;
+    target.setAttribute('data-dragging', '');
+    const onStop = () => finishDrag(true);
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') finishDrag(true);
+    };
+    window.addEventListener('blur', onStop);
+    document.addEventListener('mouseleave', onStop);
+    document.addEventListener('visibilitychange', onVisibility);
+    dragRef.current = {
+      pointerId: event.pointerId,
+      target,
+      startY: event.clientY,
+      startHeight,
+      lastHeight: startHeight,
+      moved: false,
+      wasSized: Boolean(tl?.hasAttribute('data-sized')),
+      rootEl,
+      cleanup: () => {
+        window.removeEventListener('blur', onStop);
+        document.removeEventListener('mouseleave', onStop);
+        document.removeEventListener('visibilitychange', onVisibility);
+      },
+    };
+  };
+
+  const moveDrag = (event: ReactPointerEvent<HTMLSpanElement>) => {
+    const active = dragRef.current;
+    if (!active || active.pointerId !== event.pointerId) return;
+    const deltaY = event.clientY - active.startY;
+    if (!active.moved && Math.abs(deltaY) < DRAG_THRESHOLD_PX) return;
+    const next = clampLaneHeight(active.startHeight + deltaY);
+    if (active.moved && next === active.lastHeight) return;
+    const firstMove = !active.moved;
+    active.moved = true;
+    active.lastHeight = next;
+    applyLive(active.target, next, active.rootEl, firstMove);
+  };
+
+  const onKeyDown = (event: ReactKeyboardEvent<HTMLSpanElement>) => {
+    if (event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return;
+    const result = stepLaneByKey(event.key || event.code, latest.current.height, event);
+    if (!result.handled) return;
+    event.preventDefault();
+    event.stopPropagation();
+    latest.current.onCommit(latest.current.kind, result.next);
+  };
+
+  return (
+    <span
+      role="separator"
+      aria-orientation="horizontal"
+      aria-label={label}
+      aria-valuemin={LANE_MIN_HEIGHT}
+      aria-valuemax={LANE_MAX_HEIGHT}
+      aria-valuenow={height}
+      aria-valuetext={`${height}px`}
+      tabIndex={0}
+      className={styles.laneResize}
+      data-editor-lane-resize={kind}
+      onPointerDown={startDrag}
+      onPointerMove={moveDrag}
+      onPointerUp={(event) => finishDrag(true, event.pointerId)}
+      onPointerCancel={(event) => finishDrag(true, event.pointerId)}
+      onLostPointerCapture={(event) => finishDrag(true, event.pointerId)}
+      onDoubleClick={() => onCommit(kind, null)}
+      onKeyDown={onKeyDown}
+    />
+  );
+}
+
 export function Timeline({ api }: { api: EditorApi }) {
   const { copy, doc, sequence, spans, total, fps, workspace, playhead } = api;
+  const timelineRef = useRef<HTMLElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const namesRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
   const [width, setWidth] = useState(960);
+  const widthRef = useRef(width);
+  widthRef.current = width;
   const [scrollLeft, setScrollLeft] = useState(0);
   const [zoomPpf, setZoomPpf] = useState<number | null>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
   const pendingScroll = useRef<number | null>(null);
+  const suppressedWantRef = useRef(false);
+  const latestWantedRef = useRef<ThumbRequest[]>([]);
+  const playheadRef = useRef<HTMLSpanElement | null>(null);
   const thumbs = useRef<FrameThumbs | null>(null);
   const [, repaint] = useReducer((n: number) => n + 1, 0);
+  const apiRef = useRef(api);
+  apiRef.current = api;
+  const isSized = isLayoutSized(api.layout);
+  const isSizedRef = useRef(isSized);
+  isSizedRef.current = isSized;
+  const wasSizedRef = useRef(isSized);
+  const sizedNow = () => Boolean(isSizedRef.current || timelineRef.current?.hasAttribute('data-sized'));
+  const syncScrollMetricsRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     const store = new FrameThumbs();
+    store.setTrackRatios(apiRef.current.layout.lanes.video !== undefined);
     thumbs.current = store;
     const off = store.subscribe(repaint);
     return () => {
@@ -62,12 +246,31 @@ export function Timeline({ api }: { api: EditorApi }) {
 
   useEffect(() => {
     const element = scrollRef.current;
+    const names = namesRef.current;
     if (!element) return;
-    const observer = new ResizeObserver(() => setWidth(element.clientWidth));
+    const syncVertical = () => {
+      if (!sizedNow() || timelineRef.current?.hasAttribute('data-lane-dragging')) return;
+      if (names && names.scrollTop !== element.scrollTop) names.scrollTop = element.scrollTop;
+      playheadRef.current?.style.setProperty('--ev-scroll-y', `${element.scrollTop}px`);
+    };
+    const syncScrollMetrics = () => {
+      const nextWidth = element.clientWidth;
+      if (nextWidth !== widthRef.current) setWidth(nextWidth);
+      if (!sizedNow() || timelineRef.current?.hasAttribute('data-lane-dragging')) return;
+      if (names) {
+        const hBar = Math.max(0, (element.offsetHeight ?? 0) - (element.clientHeight ?? 0));
+        const nextPad = hBar > 0 ? `${hBar}px` : '';
+        if (names.style.paddingBottom !== nextPad) names.style.paddingBottom = nextPad;
+      }
+      syncVertical();
+    };
+    syncScrollMetricsRef.current = syncScrollMetrics;
+    const observer = new ResizeObserver(syncScrollMetrics);
     observer.observe(element);
-    setWidth(element.clientWidth);
+    syncScrollMetrics();
     let queued = false;
     const onScroll = () => {
+      if (sizedNow()) syncScrollMetrics();
       if (queued) return;
       queued = true;
       requestAnimationFrame(() => {
@@ -75,10 +278,21 @@ export function Timeline({ api }: { api: EditorApi }) {
         setScrollLeft(element.scrollLeft);
       });
     };
+    const onNamesWheel = (event: WheelEvent) => {
+      if (event.ctrlKey || event.metaKey || !sizedNow()) return;
+      if (element.scrollHeight > element.clientHeight && Math.abs(event.deltaY) >= Math.abs(event.deltaX)) {
+        event.preventDefault();
+        element.scrollTop += event.deltaY;
+        syncScrollMetrics();
+      }
+    };
     element.addEventListener('scroll', onScroll, { passive: true });
+    names?.addEventListener('wheel', onNamesWheel, { passive: false });
     return () => {
+      syncScrollMetricsRef.current = null;
       observer.disconnect();
       element.removeEventListener('scroll', onScroll);
+      names?.removeEventListener('wheel', onNamesWheel);
     };
   }, []);
 
@@ -122,8 +336,12 @@ export function Timeline({ api }: { api: EditorApi }) {
     if (!element) return;
     const onWheel = (event: WheelEvent) => {
       if (!event.ctrlKey && !event.metaKey) {
-        // A plain wheel moves along the film when there is somewhere to go.
-        if (Math.abs(event.deltaY) > Math.abs(event.deltaX) && element.scrollWidth > element.clientWidth) {
+        // A plain wheel moves along the film when lanes do not scroll vertically (when sized) and there is horizontal room.
+        if (
+          Math.abs(event.deltaY) > Math.abs(event.deltaX) &&
+          (!sizedNow() || element.scrollHeight <= element.clientHeight) &&
+          element.scrollWidth > element.clientWidth
+        ) {
           event.preventDefault();
           element.scrollLeft += event.deltaY;
         }
@@ -235,20 +453,37 @@ export function Timeline({ api }: { api: EditorApi }) {
   const viewTo = Math.min(total, Math.ceil((scrollLeft + width + 200) / ppf));
   const ticks = rulerTicks(ppf, fps, viewFrom, viewTo);
 
+  const frameRatio = (() => {
+    const dims = COMPOSE_DIMENSIONS[sequence.aspect];
+    return dims ? dims.width / dims.height : 16 / 9;
+  })();
+  const committedCustomVideoHeight = api.layout.lanes.video;
+  useEffect(() => {
+    thumbs.current?.setTrackRatios(committedCustomVideoHeight !== undefined);
+  }, [committedCustomVideoHeight]);
+  const decodeHeight = thumbDecodeHeight(committedCustomVideoHeight);
   const perFrame = ppf >= FRAME_STRIP_PX;
   const realFrames = ppf >= REAL_FRAMES_PX;
-  const tilePx = perFrame ? ppf : TILE_PX;
+  const tileWidthFor = (src: string) => {
+    if (perFrame) return ppf;
+    const ratio = thumbs.current?.ratioOf(src) ?? materialBySrc(src)?.ratio ?? frameRatio;
+    return filmstripTileWidth(committedCustomVideoHeight, ratio);
+  };
   const wanted: ThumbRequest[] = [];
   const tilesOf = (span: (typeof spans)[number]) => {
+    const tilePx = tileWidthFor(span.clip.srcUrl);
+    const sampleStepPx = perFrame ? tilePx : filmstripSampleStep(tilePx);
     const tiles: Array<{ left: number; width: number; url: string | undefined; frame: number }> = [];
     const clipPx = span.frames * ppf;
     const first = Math.max(0, Math.floor(((viewFrom - span.start) * ppf) / tilePx));
     const last = Math.min(Math.ceil(clipPx / tilePx) - 1, Math.floor(((viewTo - span.start) * ppf) / tilePx));
     for (let i = first; i <= last; i += 1) {
-      const offset = Math.min(span.frames - 1, Math.floor((i * tilePx) / ppf + 1e-6));
+      const sampleX = perFrame ? i * tilePx : Math.floor((i * tilePx) / sampleStepPx) * sampleStepPx;
+      const offset = Math.min(span.frames - 1, Math.floor(sampleX / ppf + 1e-6));
       const picture = clipFrameAt(span.clip, offset, fps);
-      const url = thumbs.current?.get(span.clip.srcUrl, picture.sourceFrame);
-      if (!url) wanted.push({ src: span.clip.srcUrl, sourceFrame: picture.sourceFrame, seekSec: picture.seekSec });
+      const exactUrl = thumbs.current?.get(span.clip.srcUrl, picture.sourceFrame, decodeHeight);
+      const url = exactUrl ?? thumbs.current?.fallback(span.clip.srcUrl, picture.sourceFrame, decodeHeight);
+      if (!exactUrl) wanted.push({ src: span.clip.srcUrl, sourceFrame: picture.sourceFrame, seekSec: picture.seekSec, height: decodeHeight });
       tiles.push({ left: i * tilePx, width: Math.min(tilePx, clipPx - i * tilePx), url, frame: span.start + offset });
     }
     return tiles;
@@ -259,8 +494,14 @@ export function Timeline({ api }: { api: EditorApi }) {
     if (realFrames) return visible ? tilesOf(span) : [];
     return !span.clip.thumbUrl && visible ? tilesOf(span) : null;
   });
-  const wantedKey = wanted.map((request) => `${request.src}#${request.sourceFrame}`).join('|');
+  latestWantedRef.current = wanted;
+  const wantedKey = wanted.map((request) => `${request.src}#${request.sourceFrame}@${request.height ?? 72}`).join('|');
   useEffect(() => {
+    if (timelineRef.current?.hasAttribute('data-lane-dragging')) {
+      suppressedWantRef.current = true;
+      return;
+    }
+    suppressedWantRef.current = false;
     thumbs.current?.want(wanted);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wantedKey]);
@@ -300,10 +541,78 @@ export function Timeline({ api }: { api: EditorApi }) {
     if (event.target === event.currentTarget) api.clearSelection();
   };
 
+  const commitLaneHeight = (kind: LaneKind, height: number | null) => apiRef.current.setLaneHeight(kind, height, true);
+
+  useIsoLayoutEffect(() => {
+    const tl = timelineRef.current;
+    if (!tl) return;
+    const wasSized = wasSizedRef.current || tl.hasAttribute('data-sized');
+    const isActivelySizedDrag =
+      tl.hasAttribute('data-sized') &&
+      LANE_KINDS.some((k) => Boolean(tl.querySelector?.(`[data-editor-lane-resize="${k}"]`)?.hasAttribute?.('data-dragging')));
+    const nextSized = isSized || isActivelySizedDrag;
+
+    if (nextSized) {
+      if (!tl.hasAttribute('data-sized')) tl.setAttribute('data-sized', '');
+      for (const kind of LANE_KINDS) {
+        const handleEl = tl.querySelector?.(`[data-editor-lane-resize="${kind}"]`) as HTMLElement | null | undefined;
+        if (handleEl?.hasAttribute('data-dragging') && tl.hasAttribute('data-sized')) continue;
+        if (api.layout.lanes[kind] !== undefined) {
+          tl.style.setProperty(`--ev-h-${kind}`, `${effectiveLaneHeight(api.layout, kind, workspace, api.real)}px`);
+        } else {
+          tl.style.removeProperty(`--ev-h-${kind}`);
+        }
+      }
+      if (!wasSized) syncScrollMetricsRef.current?.();
+    } else if (wasSized) {
+      tl.removeAttribute('data-sized');
+      if (scrollRef.current && scrollRef.current.scrollTop !== 0) scrollRef.current.scrollTop = 0;
+      if (namesRef.current) {
+        if (namesRef.current.scrollTop !== 0) namesRef.current.scrollTop = 0;
+        if (namesRef.current.style.paddingBottom) namesRef.current.style.paddingBottom = '';
+      }
+      playheadRef.current?.style.removeProperty('--ev-scroll-y');
+      for (const kind of LANE_KINDS) {
+        tl.style.removeProperty(`--ev-h-${kind}`);
+      }
+    }
+    wasSizedRef.current = nextSized;
+  }, [isSized, api.layout, workspace, api.real]);
+
+  const handleLaneDragEnd = () => {
+    if (suppressedWantRef.current) {
+      suppressedWantRef.current = false;
+      thumbs.current?.want(latestWantedRef.current);
+    }
+    syncScrollMetricsRef.current?.();
+  };
+
+  const renderLaneHandle = (kind: LaneKind) => {
+    const height = effectiveLaneHeight(api.layout, kind, workspace, api.real);
+    return (
+      <LaneResizeHandle
+        key={kind}
+        kind={kind}
+        label={fill(copy.timeline.resizeLane, { lane: lanes[kind] })}
+        height={height}
+        timelineRef={timelineRef}
+        onDragEnd={handleLaneDragEnd}
+        onCommit={commitLaneHeight}
+      />
+    );
+  };
+
+  const laneStyle = Object.fromEntries(
+    visibleLanes(api.real).map((kind) => [`--h-${kind}`, `${effectiveLaneHeight(api.layout, kind, workspace, api.real)}px`]),
+  ) as CSSProperties;
+
   return (
     <section
+      ref={timelineRef}
       className={styles.timeline}
+      style={laneStyle}
       data-ws={workspace}
+      data-sized={isSized ? '' : undefined}
       aria-label={lanes.video}
       data-editor-timeline
       data-real={api.real ? '' : undefined}
@@ -349,13 +658,13 @@ export function Timeline({ api }: { api: EditorApi }) {
           {copy.timeline.zoomFrames}
         </button>
       </div>
-      <div className={styles.laneNames}>
+      <div className={styles.laneNames} ref={namesRef}>
         <span className={styles.rulerName}>{formatTimecode(playhead, fps)}</span>
-        {!api.real && <span data-lane="titles">{lanes.titles}</span>}
-        <span data-lane="video">{lanes.video}</span>
-        <span data-lane="captions">{lanes.captions}</span>
-        {!api.real && <span data-lane="voice">{lanes.voice}</span>}
-        {!api.real && <span data-lane="music">{lanes.music}</span>}
+        {!api.real && <span data-lane="titles">{lanes.titles}{renderLaneHandle('titles')}</span>}
+        <span data-lane="video">{lanes.video}{renderLaneHandle('video')}</span>
+        <span data-lane="captions">{lanes.captions}{renderLaneHandle('captions')}</span>
+        {!api.real && <span data-lane="voice">{lanes.voice}{renderLaneHandle('voice')}</span>}
+        {!api.real && <span data-lane="music">{lanes.music}{renderLaneHandle('music')}</span>}
       </div>
       <div className={styles.laneScroll} ref={scrollRef}>
         <div className={styles.laneContent} ref={contentRef} style={{ width: contentWidth }} onPointerDown={blank}>
@@ -532,6 +841,7 @@ export function Timeline({ api }: { api: EditorApi }) {
           )}
 
           <span
+            ref={playheadRef}
             className={styles.playhead}
             style={{ transform: `translateX(${playhead * ppf}px)`, width: ppf >= 12 ? ppf : undefined }}
             data-wide={ppf >= 12 ? '' : undefined}
