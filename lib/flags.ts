@@ -590,5 +590,7 @@ export function brandCampaignOpsOpenFor(
   organizationId: string | null | undefined,
   env: Record<string, string | undefined> = process.env,
 ): boolean {
+  // A blank organization id never opens it (the shared helper only rejects a missing one).
+  if (!organizationId?.trim()) return false;
   return orgListSwitchOpen(env.BRAND_CAMPAIGN_OPS, env.BRAND_CAMPAIGN_OPS_ORGS, organizationId);
 }
