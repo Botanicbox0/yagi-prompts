@@ -6,6 +6,12 @@ import { makerRest } from '@/lib/makers/links';
  * Mirrors `lib/makers/links.ts` so pages, components, sitemap, and tests share one path format.
  */
 
+export const BLOG_FEED_REST = '/blog';
+
+export function blogFeedHref(locale: Locale): string {
+  return `/${locale}${BLOG_FEED_REST}`;
+}
+
 export function makerBlogListRest(handle: string): string {
   return `${makerRest(handle)}/blog`;
 }

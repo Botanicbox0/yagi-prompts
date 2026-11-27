@@ -70,6 +70,12 @@ export interface PublicPost extends PublicPostSummary {
   works: Record<string, PublicPostMedia>;
 }
 
+export const FEED_POSTS_MAX = 60;
+
+export interface PublicFeedPost extends PublicPostSummary {
+  author: PublicPostAuthor;
+}
+
 export interface TemplateStoryCard {
   handle: string;
   authorName: string | null;
@@ -451,4 +457,83 @@ export async function loadTemplateOriginalInstagram(
   );
   const url = formatRows[0]?.example_url;
   return url ? parseInstagramPost(url) : null;
+}
+
+export async function listPublicBlogFeed(sql: SqlRunner, limit = FEED_POSTS_MAX): Promise<PublicFeedPost[]> {
+  if (!makerBlogOpen() || !(await postsReady(sql))) return [];
+  const safeLimit = Math.max(1, Math.min(limit, FEED_POSTS_MAX));
+
+  const { rows } = await sql.query<
+    SummaryQueryRow & {
+      handle: string;
+      display_name: string | null;
+      headline: string | null;
+      avatar_key: string | null;
+    }
+  >(
+    `select cp.slug, cp.title, cp.summary, cp.blocks, cp.published_at, cp.updated_at,
+            pc.handle, to_jsonb(pc.*)->>'display_name' as display_name,
+            to_jsonb(pc.*)->>'headline' as headline,
+            to_jsonb(pc.*)->>'avatar_key' as avatar_key,
+            mw.id as cover_id, mw.kind as cover_kind, mw.mime as cover_mime,
+            mw.width as cover_width, mw.height as cover_height
+       from creator_posts cp
+       join platform_creators pc on pc.user_id = cp.user_id
+       left join maker_works mw on mw.id = cp.cover_work_id and mw.user_id = cp.user_id
+      where ${PUBLIC_POST_SQL_FILTER}
+      order by cp.published_at desc nulls last, cp.updated_at desc
+      limit $1`,
+    [safeLimit],
+  );
+
+  return rows.map((row) => {
+    const parsed = parsePostBlocks(row.blocks);
+    const publicBlocks = parsed.ok ? toPublicBlocks(parsed.blocks) : [];
+    const avatarVersion = avatarVersionOf(row.avatar_key);
+    return {
+      slug: row.slug,
+      title: row.title,
+      summary: row.summary,
+      publishedAt: nullableIso(row.published_at),
+      updatedAt: iso(row.updated_at),
+      readingMinutes: estimateReadingMinutes(row.title, row.summary, publicBlocks),
+      cover: workFromColumns({
+        id: row.cover_id,
+        kind: row.cover_kind,
+        mime: row.cover_mime,
+        width: row.cover_width,
+        height: row.cover_height,
+      }),
+      author: {
+        handle: row.handle,
+        displayName: row.display_name ?? null,
+        headline: row.headline ?? null,
+        avatar: avatarVersion ? makerAvatarSrc(row.handle, avatarVersion) : null,
+      },
+    };
+  });
+}
+
+export async function countPublicPostsByAllHandles(sql: SqlRunner): Promise<Record<string, number>> {
+  if (!makerBlogOpen() || !(await postsReady(sql))) return {};
+  const { rows } = await sql.query<{ handle: string; n: number }>(
+    `select pc.handle, count(*)::int as n
+       from creator_posts cp
+       join platform_creators pc on pc.user_id = cp.user_id
+      where ${PUBLIC_POST_SQL_FILTER}
+      group by pc.handle`,
+  );
+  return Object.fromEntries(rows.map((row) => [row.handle, row.n]));
+}
+
+export function splitFeaturedFeedPost(posts: readonly PublicFeedPost[]): {
+  featured: PublicFeedPost | null;
+  grid: PublicFeedPost[];
+} {
+  const index = posts.findIndex((post) => post.cover !== null);
+  if (index === -1) return { featured: null, grid: [...posts] };
+  return {
+    featured: posts[index]!,
+    grid: posts.filter((_, i) => i !== index),
+  };
 }

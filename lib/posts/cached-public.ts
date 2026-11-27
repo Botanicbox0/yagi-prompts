@@ -6,12 +6,15 @@ import { readPublicProjection } from '@/lib/db/read-policy';
 import { resolveRuntimeMode } from '@/lib/runtime-mode';
 import { makerBlogOpen } from './flag';
 import {
+  countPublicPostsByAllHandles,
   countPublicPostsByHandle,
+  listPublicBlogFeed,
   listPublicPostsByHandle,
   listPublicPostsForSitemap,
   listTemplateStories,
   loadPublicPostByHandleAndSlug,
   loadTemplateOriginalInstagram,
+  type PublicFeedPost,
   type PublicPost,
   type PublicPostSummary,
   type SitemapPostEntry,
@@ -63,6 +66,20 @@ const cachedOriginalInstagram = unstable_cache(
   { tags: [POSTS_TAG, PROMPTS_TAG], revalidate: CATALOG_TTL_SECONDS },
 );
 
+const cachedFeed = unstable_cache(
+  async (): Promise<PublicFeedPost[]> =>
+    readPublicProjection(await getSqlRunner(), [], (sql) => listPublicBlogFeed(sql)),
+  ['maker-blog-feed-v1', resolveRuntimeMode(), flagKey()],
+  { tags: [POSTS_TAG, PROMPTS_TAG], revalidate: CATALOG_TTL_SECONDS },
+);
+
+const cachedCountsByHandle = unstable_cache(
+  async (): Promise<Record<string, number>> =>
+    readPublicProjection(await getSqlRunner(), {}, (sql) => countPublicPostsByAllHandles(sql)),
+  ['maker-posts-counts-v1', resolveRuntimeMode(), flagKey()],
+  { tags: [POSTS_TAG, PROMPTS_TAG], revalidate: CATALOG_TTL_SECONDS },
+);
+
 export async function cachedPublicPostsByHandle(handle: string): Promise<PublicPostSummary[]> {
   if (!makerBlogOpen()) return [];
   return cachedList(handle);
@@ -91,4 +108,14 @@ export async function cachedSitemapMakerPosts(): Promise<SitemapPostEntry[]> {
 export async function cachedTemplateOriginalInstagram(templateId: string): Promise<ParsedInstagramPost | null> {
   if (!makerBlogOpen()) return null;
   return cachedOriginalInstagram(templateId);
+}
+
+export async function cachedPublicBlogFeed(): Promise<PublicFeedPost[]> {
+  if (!makerBlogOpen()) return [];
+  return cachedFeed();
+}
+
+export async function cachedPublicPostCountsByHandle(): Promise<Record<string, number>> {
+  if (!makerBlogOpen()) return {};
+  return cachedCountsByHandle();
 }

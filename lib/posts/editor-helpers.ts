@@ -137,3 +137,32 @@ export function sanitizeDraftBlocks(blocks: readonly PostBlock[]): PostBlock[] {
     }
   });
 }
+
+export type PublishChecklistItemId = 'publicProfile' | 'handle' | 'cover';
+
+export interface PublishChecklistItem {
+  id: PublishChecklistItemId;
+  href: string;
+}
+
+export function publishChecklistItems(input: {
+  publicProfile: boolean;
+  handle: string | null | undefined;
+  coverWorkId: string;
+  hasWorks: boolean;
+  profileHref: string;
+  worksHref: string;
+}): PublishChecklistItem[] {
+  const items: PublishChecklistItem[] = [];
+  if (!input.publicProfile) {
+    items.push({ id: 'publicProfile', href: input.profileHref });
+  }
+  if (!input.handle || !input.handle.trim()) {
+    items.push({ id: 'handle', href: input.profileHref });
+  }
+  if (!input.coverWorkId.trim()) {
+    items.push({ id: 'cover', href: input.worksHref });
+  }
+  return items;
+}
+

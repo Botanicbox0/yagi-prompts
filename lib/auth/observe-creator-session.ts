@@ -1,9 +1,15 @@
 import { isTemplateLook, type TemplateLook } from '@/lib/template-look/look';
+import { makerHandleOf } from '@/lib/makers/profile';
+
+export type CreatorSessionMaker = {
+  active: true;
+  handle: string | null;
+};
 
 export type CreatorSession =
   | { signedIn: false }
-  /** `look` (docs/PERSONAL-STUDIO.md §3.4.10) is present only when the endpoint sent it: the switch on and 0190 applied. */
-  | { signedIn: true; displayName: string | null; look?: TemplateLook | null };
+  /** `look` and `maker` are present only when the endpoint sent them. */
+  | { signedIn: true; displayName: string | null; look?: TemplateLook | null; maker?: CreatorSessionMaker };
 export const ANONYMOUS_SESSION: CreatorSession = { signedIn: false };
 
 /** A narrow display projection, never usable as authorization for a private page or mutation. */
@@ -11,9 +17,15 @@ export function parseCreatorSession(value: unknown): CreatorSession {
   if (!value || typeof value !== 'object' || !('signedIn' in value) || value.signedIn !== true) return ANONYMOUS_SESSION;
   const name = 'displayName' in value && typeof value.displayName === 'string' ? value.displayName.trim() : '';
   const displayName = name && name.length <= 80 && !/[\u0000-\u001f\u007f]/.test(name) ? name : null;
-  if (!('look' in value)) return { signedIn: true, displayName };
+  const makerRaw = 'maker' in value ? value.maker : undefined;
+  const maker: CreatorSessionMaker | undefined =
+    makerRaw && typeof makerRaw === 'object' && 'active' in makerRaw && makerRaw.active === true
+      ? { active: true, handle: 'handle' in makerRaw ? makerHandleOf(makerRaw.handle) : null }
+      : undefined;
+  if (!('look' in value)) return maker ? { signedIn: true, displayName, maker } : { signedIn: true, displayName };
   // A closed vocabulary: anything but the two styles reads as "not chosen".
-  return { signedIn: true, displayName, look: isTemplateLook(value.look) ? value.look : null };
+  const look = isTemplateLook(value.look) ? value.look : null;
+  return maker ? { signedIn: true, displayName, look, maker } : { signedIn: true, displayName, look };
 }
 
 interface SessionEnvironment {

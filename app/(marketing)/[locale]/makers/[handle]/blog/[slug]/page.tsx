@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { DEFAULT_LOCALE, isLocale, type Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
-import { formatDate, interpolate } from '@/lib/i18n/format';
+import { formatPostDate, interpolate } from '@/lib/i18n/format';
 import { signInHref } from '@/lib/billing/links';
 import { MarketingFooter, MarketingNav } from '@/components/marketing/chrome';
 import { PersonalIdentity } from '@/components/audience/personal-identity';
@@ -116,7 +116,7 @@ export default async function MakerBlogPostPage({ params }: RouteParams) {
     .filter((card) => card.makerProfile && card.authorHandle === post.author.handle)
     .slice(0, 4);
   const otherPosts = authorPosts.filter((item) => item.slug !== post.slug).slice(0, 4);
-  const dateText = formatDate(post.publishedAt ?? post.updatedAt, locale);
+  const dateText = formatPostDate(post.publishedAt ?? post.updatedAt, locale);
   const authorName = post.author.displayName ?? `@${post.author.handle}`;
   const description = post.summary ?? interpolate(t.listDescription, { handle: post.author.handle });
 
@@ -257,7 +257,7 @@ export default async function MakerBlogPostPage({ params }: RouteParams) {
                 </h2>
                 <ul className="mt-6 grid gap-4 sm:grid-cols-2">
                   {otherPosts.map((other) => {
-                    const otherDate = formatDate(other.publishedAt ?? other.updatedAt, locale);
+                    const otherDate = formatPostDate(other.publishedAt ?? other.updatedAt, locale);
                     return (
                       <li key={other.slug}>
                         <a

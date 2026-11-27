@@ -36,7 +36,11 @@ export function formatCost(value: number, locale: string): string {
 }
 
 /** "Updated 12 Aug 2026" / "2026년 8월 12일". Invalid or absent input returns null, never "Invalid Date". */
-export function formatDate(iso: string | null | undefined, locale: string): string | null {
+export function formatDate(
+  iso: string | null | undefined,
+  locale: string,
+  timeZone: string = 'UTC',
+): string | null {
   if (!iso) return null;
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return null;
@@ -44,8 +48,13 @@ export function formatDate(iso: string | null | undefined, locale: string): stri
     year: 'numeric',
     month: 'short',
     day: 'numeric',
-    timeZone: 'UTC',
+    timeZone,
   }).format(date);
+}
+
+/** Post dates render in Asia/Seoul for both locales so day boundaries match KST publishing times. */
+export function formatPostDate(iso: string | null | undefined, locale: string): string | null {
+  return formatDate(iso, locale, 'Asia/Seoul');
 }
 
 /** Pick one side of a `{en, ko}` content field (§6.1 `Localized`). */
