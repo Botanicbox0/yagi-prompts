@@ -19,7 +19,8 @@ import { getDictionary } from '@/lib/i18n/dictionaries';
  * (`export-film.ts`; what it may request is pinned in export-film-network.test.ts), the footage reader,
  * the export record (`export-record.ts`, the current editor's 0-credit `render.reserve`; pinned in
  * export-record.test.tsx) and the finished export's save and share (`export-keep.tsx`, the library upload and
- * the review share window; pinned in export-keep.test.tsx), browser storage only in the shortcut store and the film store (always inside
+ * the review share window; pinned in export-keep.test.tsx), browser storage only in the shortcut store,
+ * the film store and the layout store (always inside
  * try/catch), and nothing anywhere keeps session storage, a database or a cache.
  */
 const ROOT = process.cwd();
@@ -34,6 +35,11 @@ const mocks = vi.hoisted(() => ({
   assetsOf: vi.fn(),
   jobsOf: vi.fn(),
   viewsOf: vi.fn(),
+  headers: vi.fn(),
+}));
+
+vi.mock('next/headers', () => ({
+  headers: mocks.headers,
 }));
 
 vi.mock('next/navigation', () => ({
@@ -94,7 +100,14 @@ interface RealProps {
   sources: Array<{ key: string; kind: string; srcUrl: string; thumbUrl: string | null; label: string }>;
   sampleBase: string | null;
 }
-type Element = ReactElement<{ copy: unknown; currentEditorHref: string; initialWorkspace: string; real: RealProps | null; keep?: { copy: Record<string, unknown>; locale: string } | null }>;
+type Element = ReactElement<{
+  copy: unknown;
+  currentEditorHref: string;
+  initialWorkspace: string;
+  real: RealProps | null;
+  keep?: { copy: Record<string, unknown>; locale: string } | null;
+  nonce?: string;
+}>;
 
 describe('/brand/studio/editor page gate', () => {
   const dict = getDictionary('ko');
@@ -107,6 +120,8 @@ describe('/brand/studio/editor page gate', () => {
 
   beforeEach(() => {
     mocks.flagCalls = 0;
+    mocks.headers.mockReset();
+    mocks.headers.mockResolvedValue(new Headers());
     mocks.studioRouteContext.mockReset();
     mocks.studioRouteContext.mockResolvedValue(context('owner'));
     mocks.assetsOf.mockReset();
@@ -290,6 +305,24 @@ describe('/brand/studio/editor page gate', () => {
     const odd = (await Page({ searchParams: Promise.resolve({ organizationId: ORG, sample: '1', ws: 'titles' }) })) as Element;
     expect(odd.props.initialWorkspace).toBe('cut');
   });
+
+  it('passes per-request x-nonce header to EditorV2 in both sample and real modes and omits it when absent', async () => {
+    vi.stubEnv('BRAND_STUDIO_EDITOR_V2', 'on');
+    vi.stubEnv('BRAND_STUDIO_EDITOR_V2_ORGS', ORG);
+    const Page = await loadPage();
+
+    mocks.headers.mockResolvedValueOnce(new Headers({ 'x-nonce': 'csp-nonce-sample' }));
+    const sampleEl = (await Page({ searchParams: Promise.resolve({}) })) as Element;
+    expect(sampleEl.props.nonce).toBe('csp-nonce-sample');
+
+    mocks.headers.mockResolvedValueOnce(new Headers({ 'x-nonce': 'csp-nonce-real' }));
+    const realEl = (await Page({ searchParams: Promise.resolve({ organizationId: ORG }) })) as Element;
+    expect(realEl.props.nonce).toBe('csp-nonce-real');
+
+    mocks.headers.mockResolvedValueOnce(new Headers());
+    const noNonceEl = (await Page({ searchParams: Promise.resolve({}) })) as Element;
+    expect(noNonceEl.props.nonce).toBeUndefined();
+  });
 });
 
 describe('the page source', () => {
@@ -326,7 +359,7 @@ describe('the page source', () => {
 describe('where the editor keeps anything', () => {
   const dir = join(ROOT, 'components/brand-studio/editor-v2');
   const files = readdirSync(dir).filter((name) => /\.(tsx?|ts)$/.test(name));
-  const STORES = ['shortcut-store.ts', 'film-store.ts'];
+  const STORES = ['shortcut-store.ts', 'film-store.ts', 'layout-store.ts'];
   /**
    * The files that may make a request, and the one way each may make it. The export and the footage reader
    * read the film's own media: the export to decode its sound; footage-facts a clip's timing boxes with
@@ -383,7 +416,7 @@ describe('where the editor keeps anything', () => {
     }
   });
 
-  it('only the shortcut store and the film store touch browser storage', () => {
+  it('only the shortcut store, the film store and the layout store touch browser storage', () => {
     for (const store of STORES) expect(files).toContain(store);
     for (const name of files) {
       if (STORES.includes(name)) continue;

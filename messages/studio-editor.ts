@@ -275,6 +275,8 @@ export const studioEditorEn = {
     zoomFrames: 'Frame by frame',
     zoomFrame: 'One frame is {px} px',
     zoomFar: 'Whole film',
+    resizeTimeline: 'Timeline height',
+    resizeLane: '{lane} lane height',
     /** On a cut whose footage file is confirmed missing (audit A4); the panel says what to do. */
     missing: 'File missing',
   },
@@ -770,6 +772,8 @@ export const studioEditorKo: typeof studioEditorEn = {
     zoomFrames: '프레임 단위 보기',
     zoomFrame: '한 프레임 {px}px',
     zoomFar: '영상 전체',
+    resizeTimeline: '타임라인 높이',
+    resizeLane: '{lane} 레인 높이',
     // 대표 확인 대기 (Gemma 2패스, 2026-11-24)
     missing: '원본 없음',
   },

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { fill } from '@/components/brand-studio/copy';
 import {
   COMPOSE_DIMENSIONS,
@@ -112,6 +112,18 @@ import { readFilmText, watchFilmText, writeFilmText } from './film-store';
 import { footageNotFound, readFootage } from './footage-facts';
 import { measureSource } from './measure-fps';
 import { loadShortcutPrefs, saveShortcutPrefs } from './shortcut-store';
+import {
+  DEFAULT_EDITOR_LAYOUT,
+  withAssistDock,
+  withLaneHeight,
+  withTimelineHeight,
+  type AssistDock,
+  type EditorLayout,
+  type LaneKind,
+} from './layout-model';
+import { loadEditorLayout, saveEditorLayout } from './layout-store';
+
+const useIsoLayoutEffect = typeof document !== 'undefined' ? useLayoutEffect : useEffect;
 
 /** The line when the film already holds as many cuts as it may (audit A3): the number comes from the limit itself. */
 export function cutLimitLine(copy: StudioEditorCopy): string {
@@ -282,7 +294,10 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
   const [compare, setCompare] = useState(false);
   const [magnet, setMagnet] = useState(true);
   const [zoomCommand, setZoomCommand] = useState<ZoomCommand>({ kind: 'fit', n: 0 });
-  const [assistDock, setAssistDock] = useState<'bar' | 'side'>('bar');
+  const [layout, setLayout] = useState<EditorLayout>(DEFAULT_EDITOR_LAYOUT);
+  const layoutRef = useRef<EditorLayout>(layout);
+  layoutRef.current = layout;
+  const assistDock = layout.assistDock;
   const [exportOpen, setExportOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [shortcutPrefs, setShortcutPrefsState] = useState<ShortcutPrefs>(DEFAULT_SHORTCUT_PREFS);
@@ -360,10 +375,37 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
     };
   }, []);
 
+  // Layout preferences are loaded in layout effect before paint to minimize visual jump after SSR.
+  useIsoLayoutEffect(() => {
+    const loadedLayout = loadEditorLayout();
+    layoutRef.current = loadedLayout;
+    setLayout(loadedLayout);
+  }, []);
   // A person's keys and their keyboard's modifier, read after mount so the first paint matches the server.
   useEffect(() => {
     setShortcutPrefsState(loadShortcutPrefs());
     setMac(/Mac|iPhone|iPad/i.test(navigator.platform || navigator.userAgent));
+  }, []);
+  const setAssistDock = useCallback((dock: AssistDock) => {
+    const next = withAssistDock(layoutRef.current, dock);
+    if (next === layoutRef.current) return;
+    layoutRef.current = next;
+    setLayout(next);
+    saveEditorLayout(next);
+  }, []);
+  const setTimelineHeight = useCallback((height: number | null, commit = false) => {
+    const next = withTimelineHeight(layoutRef.current, height);
+    if (next === layoutRef.current) return;
+    layoutRef.current = next;
+    setLayout(next);
+    if (commit) saveEditorLayout(next);
+  }, []);
+  const setLaneHeight = useCallback((kind: LaneKind, height: number | null, commit = false) => {
+    const next = withLaneHeight(layoutRef.current, kind, height);
+    if (next === layoutRef.current) return;
+    layoutRef.current = next;
+    setLayout(next);
+    if (commit) saveEditorLayout(next);
   }, []);
   const setShortcutPrefs = useCallback((next: ShortcutPrefs) => {
     setShortcutPrefsState(next);
@@ -1257,6 +1299,9 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
     targetIds,
     compare,
     setCompare,
+    layout,
+    setTimelineHeight,
+    setLaneHeight,
     assistDock,
     setAssistDock,
     exportOpen,

@@ -749,7 +749,86 @@
 .chipBtn[aria-pressed='true']:hover:not(:disabled) { background: var(--ys-active-bg); color: var(--ys-active-fg); }
 
 /* ── Bottom: words, then the timeline ── */
-.bottom { grid-column: 1 / -1; display: grid; gap: var(--ev-gap); min-width: 0; }
+.bottom { grid-column: 1 / -1; display: grid; gap: var(--ev-gap); min-width: 0; position: relative; }
+
+/* ── Resize handles (slice E-L) ── */
+.timelineResize {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -7px;
+  height: 6px;
+  cursor: ns-resize;
+  touch-action: none;
+  z-index: 4;
+}
+.timelineResize::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 28px;
+  height: 3px;
+  border-radius: var(--ys-r-pill);
+  background: var(--ys-line-strong);
+  transform: translate(-50%, -50%);
+  transition: background-color var(--ys-dur) var(--ys-ease);
+}
+.timelineResize::after {
+  content: '';
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  top: 2px;
+  height: 1px;
+  border-radius: 1px;
+  background: var(--ys-line);
+  transition: background-color var(--ys-dur) var(--ys-ease);
+}
+.root .timelineResize:hover::before,
+.root .timelineResize[data-dragging]::before { background: var(--ys-ink); }
+.root .timelineResize:hover::after,
+.root .timelineResize[data-dragging]::after { background: var(--ys-ink-secondary); }
+.root .timelineResize:focus-visible { outline: none; }
+.root .timelineResize:focus-visible::before {
+  background: var(--ys-accent);
+  transition: none;
+}
+.root .timelineResize:focus-visible::after {
+  left: 0;
+  right: 0;
+  top: 2px;
+  height: 2px;
+  background: var(--ys-accent);
+  transition: none;
+}
+
+.laneResize {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 4px;
+  cursor: ns-resize;
+  touch-action: none;
+  z-index: 2;
+}
+.laneResize::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 4px;
+  bottom: 0;
+  height: 1px;
+  background: transparent;
+  transition: background-color var(--ys-dur) var(--ys-ease);
+}
+.laneNames > span:hover .laneResize::after { background: var(--ys-line-strong); }
+.laneResize:hover::after,
+.laneResize[data-dragging]::after { height: 2px; background: var(--ys-ink-secondary); }
+.laneResize:focus-visible { outline: none; }
+.laneResize:focus-visible::after { height: 2px; background: var(--ys-accent); }
+/* ── End resize handles ── */
 
 .assistBar {
   position: relative;
@@ -840,7 +919,7 @@
 .timeline[data-real] { --h-video: 64px; --h-captions: 24px; }
 .timeline[data-real] .laneNames,
 .timeline[data-real] .laneContent { grid-template-rows: var(--h-ruler) var(--h-video) var(--h-captions); }
-.laneNames > span { display: flex; align-items: center; font-size: 11px; font-weight: 600; color: var(--ys-ink-secondary); transition: color var(--ys-dur) var(--ys-ease); }
+.laneNames > span { position: relative; display: flex; align-items: center; font-size: 11px; font-weight: 600; color: var(--ys-ink-secondary); transition: color var(--ys-dur) var(--ys-ease); }
 .timeline[data-ws='cut'] .laneNames [data-lane='video'],
 .timeline[data-ws='color'] .laneNames [data-lane='video'],
 .timeline[data-ws='sound'] .laneNames [data-lane='voice'],
@@ -933,6 +1012,70 @@
 /* At frame level the playhead is the frame it is on: a box one frame wide, not a hairline. */
 .playhead[data-wide] { background: rgba(255, 255, 255, 0.14); box-shadow: inset 1.5px 0 0 0 #fff, inset -1px 0 0 0 rgba(255, 255, 255, 0.5); }
 .playhead[data-wide]::before { left: 0; width: 100%; height: 4px; border-radius: 0; }
+
+/* ── Customer-sized timeline layout (slice E-L) ── */
+.root[data-sized] .timeline,
+.timeline[data-sized] {
+  grid-template-rows: auto minmax(0, 1fr);
+  height: var(--ev-timeline-h, auto);
+  max-height: var(--ev-timeline-max, none);
+  min-height: 0;
+  overflow: hidden;
+}
+.root[data-sized] .rulerName,
+.timeline[data-sized] .rulerName {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--ys-surface);
+}
+.root[data-sized] .laneNames,
+.timeline[data-sized] .laneNames {
+  grid-template-rows: var(--h-ruler) var(--ev-h-titles, var(--h-titles)) var(--ev-h-video, var(--h-video)) var(--ev-h-captions, var(--h-captions)) var(--ev-h-voice, var(--h-voice)) var(--ev-h-music, var(--h-music));
+  align-content: start;
+  min-height: 0;
+  overflow: hidden;
+}
+.root[data-sized] .laneScroll,
+.timeline[data-sized] .laneScroll {
+  min-height: 0;
+  overflow-y: auto;
+}
+.root[data-sized] .laneContent,
+.timeline[data-sized] .laneContent {
+  grid-template-rows: var(--h-ruler) var(--ev-h-titles, var(--h-titles)) var(--ev-h-video, var(--h-video)) var(--ev-h-captions, var(--h-captions)) var(--ev-h-voice, var(--h-voice)) var(--ev-h-music, var(--h-music));
+  align-content: start;
+  min-height: 100%;
+}
+.root[data-sized] .timeline[data-real] .laneNames,
+.timeline[data-sized][data-real] .laneNames,
+.root[data-sized] .timeline[data-real] .laneContent,
+.timeline[data-sized][data-real] .laneContent {
+  grid-template-rows: var(--h-ruler) var(--ev-h-video, var(--h-video)) var(--ev-h-captions, var(--h-captions));
+}
+.root[data-sized] .ruler,
+.timeline[data-sized] .ruler {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--ys-surface);
+}
+.root[data-sized] .lane,
+.timeline[data-sized] .lane {
+  min-height: 0;
+}
+.root .timeline[data-lane-dragging] .lane {
+  transition: none;
+}
+.root[data-sized] .playhead,
+.timeline[data-sized] .playhead {
+  z-index: 6;
+}
+.root[data-sized] .playhead::before,
+.timeline[data-sized] .playhead::before {
+  top: var(--ev-scroll-y, 0px);
+}
+/* ── End customer-sized timeline layout ── */
 
 /* ── Floating ── */
 .exportSheet {
