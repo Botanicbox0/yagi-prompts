@@ -86,6 +86,9 @@ describe('video prompt shield closed: answers are origin/main byte for byte', ()
 
   it('workflows run', async () => {
     await seedWorld(f.sql, ORG, f.ids.owner);
+    // The reference video's file is in storage, so its blueprint step can be read (a blueprint that cannot be read is not made).
+    const film = (await f.sql.query<{ storage_key: string }>('select storage_key from brand_studio_assets where id = $1', [WORLD.videoAsset])).rows[0]!;
+    deps.media.objects.set(film.storage_key, { bytes: new Uint8Array([0, 0, 0, 24, 102, 116, 121, 112]), mime: 'video/mp4' });
     const run = await runWorkflowOperation(deps, viewerOf(f.ids.owner, 'ko'), 'run', {
       organizationId: ORG,
       requestId: 'req_world_workflow_run',

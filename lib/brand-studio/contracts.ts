@@ -114,6 +114,11 @@ export const STUDIO_ERROR_CODES = [
   'unsupported_file',
   'file_too_large',
   'reference_missing',
+  /**
+   * A blueprint remix whose reference video could not be read, with no shot table of the customer's: it is not
+   * made and costs nothing (./prepare.ts). Stored as `failed` + `work.referenceUnreadable`, as `region_misaligned`.
+   */
+  'reference_unreadable',
   'provider_rejected',
   'provider_unavailable',
   'region_misaligned',

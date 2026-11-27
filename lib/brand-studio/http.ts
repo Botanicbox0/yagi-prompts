@@ -41,6 +41,7 @@ export function studioStatus(code: StudioErrorCode): number {
     case 'unsupported_file':
       return 415;
     case 'reference_missing':
+    case 'reference_unreadable':
     case 'provider_rejected':
     case 'region_misaligned':
       return 422;

@@ -274,6 +274,8 @@ export interface StudioJobWork {
   /** Resolved input addresses as sent (also what the account-lane worker receives); a video keeps its stored type. */
   inputs?: Array<{ kind: StudioAssetKind; url: string; frame?: 'start' | 'end'; mime?: string }>;
   sheet?: FilmSheet | null;
+  /** Failed as `reference_unreadable` (a blueprint with nothing to make it from); the column keeps `failed`. */
+  referenceUnreadable?: boolean;
   enhanceNotes?: string;
   /** Which rules wrote the sent prompt (lib/brand-studio/enhancer `EnhanceMeta`). Internal; never shown. */
   /** How the prompt was designed: the image/video Architect's record, or the music Architect's (sound/architect.ts). */

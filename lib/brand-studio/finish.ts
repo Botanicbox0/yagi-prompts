@@ -296,11 +296,15 @@ function noteEngineRefusal(deps: StudioDeps, job: JobRow, code: StudioErrorCode,
 
 export async function failJob(deps: StudioDeps, job: JobRow, token: string, code: StudioErrorCode, detail: string): Promise<JobRow | null> {
   const isMisaligned = code === 'region_misaligned';
-  const dbCode: StudioErrorCode = isMisaligned ? 'failed' : code;
+  // Neither code is among the column's (migration 0076): stored as `failed`, the reason kept in `work` (repo.ts reads it back).
+  const isUnreadable = code === 'reference_unreadable';
+  const dbCode: StudioErrorCode = isMisaligned || isUnreadable ? 'failed' : code;
   const work =
     isMisaligned && job.work.region
       ? { ...job.work, region: { ...job.work.region, misaligned: true } }
-      : undefined;
+      : isUnreadable
+        ? { ...job.work, referenceUnreadable: true }
+        : undefined;
   const saved = await saveJob(deps.sql, job, token, {
     status: 'failed',
     error_code: dbCode,

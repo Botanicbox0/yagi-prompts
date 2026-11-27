@@ -213,6 +213,14 @@ describe("V-D4: the generic failure sentence names no medium; a failed run's car
     expect(switcher).toContain(ko.board.failedImage);
   });
 
+  it("says a blueprint whose reference could not be read was not made and cost nothing", () => {
+    expect(runFailedLine(ko, "video_remix", "reference_unreadable")).toBe("참고 영상을 읽지 못해 만들지 못했어요. 크레딧은 차감되지 않았으니 다시 시도해 주세요.");
+    expect(runFailedLine(en, "video_remix", "reference_unreadable")).toBe(en.errors.reference_unreadable);
+    const card = wall({ mode: "video", jobs: [job(5, { kind: "video_remix", method: "blueprint", status: "failed", errorCode: "reference_unreadable", model: "seedance-2.5", aspect: "9:16", resolution: "480p", seconds: 6 })] });
+    expect(card).toContain(ko.errors.reference_unreadable);
+    expect(card).not.toContain(ko.board.failedVideo);
+  });
+
   it("says the load failed in one sentence when there is no more to say", () => {
     expect(loadFailedLine(ko, "failed")).toBe(ko.state.loadFailed);
     expect(loadFailedLine(ko, "made_up_code")).toBe(ko.state.loadFailed);

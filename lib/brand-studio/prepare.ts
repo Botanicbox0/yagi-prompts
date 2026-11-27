@@ -543,6 +543,12 @@ export async function prepareJob(deps: StudioDeps, job: JobRow): Promise<{ final
   }
   const organization = (await deps.sql.query<{ name: string }>('select name from brand_organizations where id = $1', [job.organization_id])).rows[0];
   const history = await revisionInput(deps, job, resolved);
+  // A blueprint never sends its video: the reading, the customer's table or (a reshoot) the earlier prompt it
+  // remakes is all that carries the reference. With none of them the run would ignore the reference, so it is
+  // not made; a failed run settles at nothing (finish.ts `failJob`).
+  if (job.kind === 'video_remix' && job.params?.method === 'blueprint' && !sheet && !history) {
+    throw new PrepareFailure('reference_unreadable', 'the reference video could not be read');
+  }
   const materials = history ? await materialNotes(deps, job, history.revision.madeWith) : [];
   const revised = history && materials.length ? { ...history, revision: { ...history.revision, materials } } : history;
   // Without the clip's history the marks and the answer cannot travel as context: their words go into the request.

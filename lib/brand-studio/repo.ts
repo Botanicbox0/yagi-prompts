@@ -228,7 +228,9 @@ export function jobView(row: JobRow, outputs: OutputRow[], media: StudioMediaSto
       row.status === 'failed'
         ? row.work?.region?.misaligned
           ? 'region_misaligned'
-          : (row.error_code ?? 'failed')
+          : row.work?.referenceUnreadable
+            ? 'reference_unreadable'
+            : (row.error_code ?? 'failed')
         : null,
     createdAt: iso(row.created_at)!,
     finishedAt: iso(row.finished_at),

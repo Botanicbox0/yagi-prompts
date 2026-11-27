@@ -2601,6 +2601,7 @@ export const en = {
       unsupported_file: 'This file type cannot be uploaded.',
       file_too_large: `This file exceeds the size limit. You can upload up to ${formatLimitMb(STUDIO_LIMITS.imageBytesMax)} MB for images, ${formatLimitMb(STUDIO_LIMITS.videoBytesMax)} MB for video, and ${formatLimitMb(STUDIO_LIMITS.audioBytesMax)} MB for audio.`,
       reference_missing: 'A reference is missing or was deleted. Add it again.',
+      reference_unreadable: 'We could not read the reference video, so nothing was made. No credits were used. Please try again.',
       provider_rejected: 'This could not be made. Change the words or references and try again.',
       provider_unavailable: 'We cannot make this right now. Please try again shortly.',
       region_misaligned: 'We could not align this area cleanly. Select a slightly smaller box around just the part to change and try again.',
