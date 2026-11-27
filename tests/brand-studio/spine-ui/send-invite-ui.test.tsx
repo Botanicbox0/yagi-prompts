@@ -847,7 +847,10 @@ describe('Slice 4c UI: lookup, chips, refusals, clipboard, and keyboard', () => 
       value: { clipboard: { writeText } },
     });
 
-    const baseThread = makeThread({ root: makeMsg({ invites: [] }) });
+    const baseThread = makeThread({
+      file: makeFile({ kind: 'video', url: '/api/brand-studio/media/st/clip.mp4' }),
+      root: makeMsg({ invites: [] }),
+    });
     const reply1 = makeMsg({
       id: '99999999-9999-4999-8999-999999999911',
       parentId: ROOT_1,

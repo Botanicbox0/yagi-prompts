@@ -293,6 +293,69 @@
   outline-offset: 2px;
 }
 
+.stageShell {
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.stageBody {
+  display: grid;
+  grid-template-columns: minmax(480px, 3fr) clamp(340px, 40%, 560px);
+  grid-template-rows: minmax(0, 1fr);
+  flex: 1 1 0%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.stagePane {
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-right: 1px solid var(--ys-hairline);
+}
+
+.convoPane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.convoPane .composerDock {
+  padding: 12px 16px 16px;
+}
+
+@container (max-width: 819px) {
+  .stageBody {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .stagePane {
+    height: auto;
+    max-height: 44vh;
+    border-right: 0;
+    border-bottom: 1px solid var(--ys-hairline);
+  }
+
+  .stagePane[data-stage-variant='image'],
+  .stagePane[data-stage-variant='video'] {
+    height: 44vh;
+  }
+}
+
 @media (max-width: 720px) {
   .head {
     padding: 12px 14px;

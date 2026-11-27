@@ -402,7 +402,8 @@ describe('brand-send Batch A SSR markup states', () => {
         }}
       />,
     );
-    expect(mediaHtml).not.toContain('full.mp4');
+    expect(mediaHtml).not.toMatch(/<img\b[^>]*full\.mp4/);
+    expect(mediaHtml).toMatch(/<video\b[^>]*src="\/api\/brand-studio\/media\/st\/full\.mp4"/);
     expect(mediaHtml).toContain('/api/brand-studio/media/st/raw.png');
 
     const pickHtml = renderToStaticMarkup(
@@ -1713,7 +1714,9 @@ describe('brand-send Batch A source & CSS invariants (§6)', () => {
     for (const file of files) {
       const src = readFileSync(file, 'utf8');
       const base = path.basename(file);
-      expect(src, base).not.toMatch(/<video\b/);
+      if (base !== 'file-stage.tsx') {
+        expect(src, base).not.toMatch(/<video\b/);
+      }
       expect(src, base).not.toMatch(/type=["']file["']|brc-attach|message\.edit|message\.delete|reaction\.toggle/);
       if (
         base !== 'inbox-page.tsx' &&
