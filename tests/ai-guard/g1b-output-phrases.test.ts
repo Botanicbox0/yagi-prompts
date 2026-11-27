@@ -1916,5 +1916,6 @@ describe('G1b output-phrase class test, <=> equivalence, fixed locators, and tig
       if (unseen.length > 0) unseenByFamily[family] = unseen;
     }
     expect(unseenByFamily, 'every reviewed sentence locator per family must occur across MATRIX + programmatic configs').toEqual({});
-  }, 90_000);
+    // 1,206 configurations: about 2 minutes on a CI runner (122 s measured on 2026-11-27, where 90 s timed out).
+  }, 360_000);
 });
