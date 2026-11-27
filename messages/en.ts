@@ -1817,6 +1817,7 @@ export const en = {
     viewActive: 'Active',
     viewAll: 'All',
     finishedMark: 'Finished',
+    archiveLink: '{n} more projects · View all projects',
     requestTeam: 'Request the YAGI team',
     guideNoProject: 'Group work into a project to see its files in one place.',
     unfiledLine: '{n} files created without a project',

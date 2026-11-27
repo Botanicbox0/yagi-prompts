@@ -163,6 +163,23 @@ export function resolveOpenProject(input: ResolveOpenProjectInput): {
   return { open: { kind: 'unfiled' }, notice: null, noticeSource: null };
 }
 
+/**
+ * The single project UUID the address (`?project=`) or remembered cookie asks to open, or null (`unfiled`,
+ * malformed, or absent). Used by `loadStudioSpine` to look up a selectable project beyond `listMax` (100).
+ */
+export function openProjectCandidateId(input: { queryProject?: string | null; remembered?: OpenProject | null }): string | null {
+  const query = input.queryProject?.trim();
+  if (query) {
+    if (query.toLowerCase() === 'unfiled') return null;
+    return UUID.test(query) ? query.toLowerCase() : null;
+  }
+  if (input.remembered?.kind === 'project') {
+    const id = input.remembered.id.trim().toLowerCase();
+    return UUID.test(id) ? id : null;
+  }
+  return null;
+}
+
 export type VideoStudioAddressDecision =
   | { kind: 'project'; id: string }
   | { kind: 'redirect_film'; href: string; filmId: string }

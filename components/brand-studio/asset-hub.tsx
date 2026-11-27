@@ -24,6 +24,7 @@ import {
   type StudioAssetKind,
   type StudioAssetRole,
   type StudioAssetView,
+  type StudioBrandProjectArchive,
   type StudioState,
 } from "@/lib/brand-studio/contracts";
 import type { Dictionary } from "@/lib/i18n/dictionaries";
@@ -94,6 +95,8 @@ const COVERS = 6;
 export interface BrandAssetHubSpineInitial extends SpineScopeSeed {
   tab?: SpineHubTab;
   openedScope?: BrandProjectFilesScope | null;
+  archive?: boolean;
+  archiveSeed?: StudioBrandProjectArchive | null;
   query?: string;
   scopeQuery?: string;
   menuKey?: string;
@@ -847,6 +850,7 @@ export function BrandAssetHub({
           onNotice={setNotice}
           deliverables={deliverables ?? []}
           canOpenStudio={canOpenStudio}
+          canCreate={canCreate}
           api={studioApi}
           likedKeys={library.liked}
           spine={spine}
@@ -874,6 +878,8 @@ export function BrandAssetHub({
           onCloseSingleMove={() => setSingleMove(null)}
           initialTab={initialSpine?.tab}
           initialOpenedScope={initialSpine?.openedScope}
+          initialArchiveOpen={initialSpine?.archive}
+          initialArchive={initialSpine?.archiveSeed}
           initialQuery={initialSpine?.query}
           initialScopeQuery={initialSpine?.scopeQuery}
           initialScopeSeed={initialSpine}

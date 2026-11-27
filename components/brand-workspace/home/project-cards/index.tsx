@@ -2,10 +2,12 @@
  * The 직접 만들기 home's project cards block, 미분류 row, and no-project guide line (docs/BRAND-PROJECT-SPINE.md §5).
  * Plain server markup except `NewProjectTrigger` (which opens slice 1b's `NewProjectForm` in a modal dialog).
  */
+import Link from 'next/link';
 import { LazyVideoCover } from '@/components/brand-studio/asset-hub-spine/lazy-video-cover';
 import { scopedHref } from '@/lib/brands/workspace/selection';
 import { interpolate } from '@/lib/i18n/format';
 import {
+  brandArchiveHref,
   cardCoverLayout,
   cardHref,
   cardSecondLine,
@@ -18,6 +20,7 @@ import {
   projectCardsSlice,
   unfiledCoverSlots,
   unfiledTotal,
+  unlistedProjectCount,
   type CoverSlot,
   type ProjectCardsCopy,
   type SpineHomeProps,
@@ -179,6 +182,7 @@ export function HomeProjectCards({
 
   const renderNow = new Date();
   const { shown, hasMore } = projectCardsSlice(cards.projects);
+  const archiveCount = unlistedProjectCount(cards, activeFilter);
   const moreHref =
     activeFilter === 'all' ? `${assetsHref}${assetsHref.includes('?') ? '&' : '?'}projects=all` : assetsHref;
 
@@ -252,11 +256,22 @@ export function HomeProjectCards({
             );
           })}
         </ul>
-        {hasMore ? (
+        {hasMore || archiveCount > 0 ? (
           <div className={pc.moreRow}>
-            <a href={moreHref} className={pc.textAction} data-home-projects-more="">
-              {copy.libraryHub.projects.seeAll}
-            </a>
+            {hasMore ? (
+              <a href={moreHref} className={pc.textAction} data-home-projects-more="">
+                {copy.libraryHub.projects.seeAll}
+              </a>
+            ) : null}
+            {archiveCount > 0 ? (
+              <Link
+                href={brandArchiveHref(organizationId)}
+                className={pc.textAction}
+                data-home-projects-archive={archiveCount}
+              >
+                {interpolate(copy.projectHome.archiveLink, { n: archiveCount })}
+              </Link>
+            ) : null}
           </div>
         ) : null}
       </section>

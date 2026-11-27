@@ -69,6 +69,8 @@ const pageStub = vi.hoisted(() => ({
   studioStateValue: null as ReturnType<typeof studioState> | null,
   loadVideoProjectsCalls: 0,
   loadStudioStateCalls: 0,
+  beyondCutProjectsById: {} as Record<string, { id: string; title: string; origin: "self" | "team"; lastActivityAt: string }>,
+  includeFilmProjectCalls: 0,
 }));
 
 vi.mock("next/navigation", () => ({
@@ -125,6 +127,14 @@ vi.mock("@/lib/brand-studio/open-project-server", async () => {
       if (pageStub.spine === null) return actual.loadStudioSpine(input);
       if (input.seat.staff === true || input.seat.role === "guest") return null;
       return pageStub.spine;
+    }),
+    includeSelectableProjectForFilm: vi.fn(async (input: Parameters<typeof actual.includeSelectableProjectForFilm>[0]) => {
+      pageStub.includeFilmProjectCalls += 1;
+      if (input.spine.projects.length < 100) return input.spine;
+      const pid = input.projectId?.trim().toLowerCase();
+      if (!pid || input.spine.projects.some((p) => p.id.toLowerCase() === pid)) return input.spine;
+      const extra = pageStub.beyondCutProjectsById[pid] ?? null;
+      return extra ? { ...input.spine, projects: [extra, ...input.spine.projects] } : input.spine;
     }),
   };
 });
@@ -210,6 +220,8 @@ beforeEach(() => {
   pageStub.studioStateValue = null;
   pageStub.loadVideoProjectsCalls = 0;
   pageStub.loadStudioStateCalls = 0;
+  pageStub.beyondCutProjectsById = {};
+  pageStub.includeFilmProjectCalls = 0;
 });
 
 afterEach(() => {
@@ -632,5 +644,39 @@ describe("/brand/studio/video server page (§4.5)", () => {
     await expect(renderVideoPage({ project: OLD_FILM, tab: "edit" })).rejects.toThrow(
       `NEXT_REDIRECT:/brand/studio/video?organizationId=${ORG}&film=${OLD_FILM}&tab=edit`,
     );
+  });
+
+  it("opens a film's selectable beyond-100 project cleanly via ?film= (without ?project= or with non-matching ?project=)", async () => {
+    const P105 = id(0x95);
+    const P_DONE = id(0x96);
+    const top100 = Array.from({ length: 100 }, (_, i) => sampleProject(id(0x100 + i), `Top ${i}`));
+    pageStub.spine = {
+      projects: top100,
+      open: { kind: "project", id: top100[0]!.id },
+      canCreate: true,
+      notice: null,
+      noticeSource: null,
+    };
+    pageStub.beyondCutProjectsById = { [P105]: sampleProject(P105, "Beyond Cut Campaign") };
+    pageStub.films = [sampleFilm(FILM1, "Beyond Cut Film", P105)];
+    pageStub.filmDetail = sampleFilmDetail(FILM1, "Beyond Cut Film", P105);
+    pageStub.studioStateValue = studioState();
+
+    const html = await renderVideoPage({ film: FILM1 });
+    expect(pageStub.includeFilmProjectCalls).toBe(1);
+    expect(pageStub.loadedScope).toEqual({ kind: "project", brandProjectId: P105 });
+    expect(html).toContain(`data-project-open="${P105}"`);
+    expect(html).toContain("Beyond Cut Campaign");
+
+    // Non-matching ?project=<top0> alongside ?film= still opens the film's beyond-100 project
+    const mismatchHtml = await renderVideoPage({ project: top100[0]!.id, film: FILM1 });
+    expect(pageStub.loadedScope).toEqual({ kind: "project", brandProjectId: P105 });
+    expect(mismatchHtml).toContain(`data-project-open="${P105}"`);
+
+    // Finished beyond-100 project (not returned by beyondCutProjectsById / SELECTABLE_PROJECTS) stays unfiled
+    pageStub.filmDetail = sampleFilmDetail(FILM2, "Archived Film", P_DONE);
+    const archivedHtml = await renderVideoPage({ film: FILM2 });
+    expect(pageStub.loadedScope).toEqual({ kind: "unfiled" });
+    expect(archivedHtml).toContain('data-project-open="unfiled"');
   });
 });

@@ -16,10 +16,13 @@ import {
   type StudioBrandProjectFiles,
   type StudioBrandProjectGroup,
   type StudioBrandProjectOverview,
+  type StudioBrandProjectSummary,
+  type StudioBrandProjectTotals,
   type StudioJobView,
   type StudioOutputView,
 } from "@/lib/brand-studio/contracts";
 import type { VideoProjectSummary } from "@/lib/brand-studio/video-projects/contracts";
+import { scopedHref } from "@/lib/brands/workspace/selection";
 import { buildHubEntries, filterHubEntries, type HubDeliverable, type HubEntry, type HubSection } from "../asset-hub-model";
 import { errorLine, type StudioCopy } from "../copy";
 import type { MoveDialogScope } from "../project-chip/model";
@@ -337,6 +340,7 @@ export interface ScopePageState {
   assets: StudioAssetView[];
   films: VideoProjectSummary[];
   next: string | null;
+  projectSummary?: StudioBrandProjectSummary | null;
 }
 
 export type ScopePageAction =
@@ -371,6 +375,7 @@ function applyLoadedPage(state: ScopePageState, mode: "replace" | "append", page
   const baseJobs = mode === "append" ? state.jobs : [];
   const baseAssets = mode === "append" ? state.assets : [];
   const baseFilms = mode === "append" ? state.films : [];
+  const projectSummary = mode === "append" ? (state.projectSummary ?? null) : (page.project ?? null);
   return {
     phase: "ready",
     items: appendUnique(baseItems, page.items, (item) => `${item.type}:${item.id}`),
@@ -378,6 +383,7 @@ function applyLoadedPage(state: ScopePageState, mode: "replace" | "append", page
     assets: appendUnique(baseAssets, page.assets, (a) => a.id),
     films: appendUnique(baseFilms, page.films, (f) => f.id),
     next: page.next,
+    ...(projectSummary ? { projectSummary } : {}),
   };
 }
 
@@ -1028,4 +1034,48 @@ export function planResultDelete(
 /** Customer-facing error sentence for a failed result delete (`conflict` maps to the existing busy message). */
 export function resultDeleteErrorMessage(code: string | null | undefined, studioCopy: StudioCopy): string {
   return code === "conflict" ? studioCopy.viewer.deleteBusy : errorLine(studioCopy, code);
+}
+
+/**
+ * Number of projects beyond the server's listed 100 (`totals[filter] - listed[filter]`, clamped >= 0; 0 when
+ * `totals` or `listed` is absent). Shared by both the home project cards and the assets by-project view (R-B).
+ */
+export function unlistedProjectCount(
+  data: { totals?: StudioBrandProjectTotals; listed?: StudioBrandProjectTotals } | null | undefined,
+  filter: BrandProjectViewFilter,
+): number {
+  if (!data?.totals || !data?.listed) return 0;
+  const total = filter === "all" ? data.totals.all : data.totals.active;
+  const listed = filter === "all" ? data.listed.all : data.listed.active;
+  return Number.isFinite(total) && Number.isFinite(listed) ? Math.max(0, Math.floor(total - listed)) : 0;
+}
+
+/** Address opening `/brand/library` in the by-project view (without `view=archive`). */
+export function libraryByProjectHref(organizationId: string): string {
+  return scopedHref("/brand/library", organizationId ? { id: organizationId } : null);
+}
+
+/** Address opening `/brand/library` directly in the full-project archive view (`?view=archive`). */
+export function brandArchiveHref(organizationId: string): string {
+  const base = scopedHref("/brand/library", organizationId ? { id: organizationId } : null);
+  return `${base}${base.includes("?") ? "&" : "?"}view=archive`;
+}
+
+/** Converts a page-1 `project.files` `project` summary into a group header shape without a second overview call (R-B). */
+export function projectGroupFromSummary(
+  summary: StudioBrandProjectSummary,
+  lastActivityAt = "",
+): StudioBrandProjectGroup {
+  return {
+    project: {
+      id: summary.id,
+      title: summary.title,
+      origin: summary.origin,
+      lastActivityAt,
+    },
+    counts: summary.counts,
+    covers: [],
+    status: summary.status,
+    selectable: summary.selectable,
+  };
 }

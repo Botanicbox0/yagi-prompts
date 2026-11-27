@@ -16,7 +16,7 @@ import {
   type StudioSpineProps,
   type VideoStudioFilmLookup,
 } from "@/lib/brand-studio/open-project";
-import { loadStudioSpine } from "@/lib/brand-studio/open-project-server";
+import { includeSelectableProjectForFilm, loadStudioSpine } from "@/lib/brand-studio/open-project-server";
 import { studioRuntimeDeps } from "@/lib/brand-studio/runtime";
 import { loadStudioState } from "@/lib/brand-studio/service";
 import { loadVideoProjects, type VideoProjectDetail, type VideoProjectSummary } from "@/lib/brand-studio/video-projects";
@@ -186,8 +186,20 @@ export default async function StudioVideoPage({
       return null;
     }
 
+    const spineWithFilm =
+      openedFilm?.brandProjectId
+        ? await includeSelectableProjectForFilm({
+            sql: ctx.deps.sql,
+            viewer: ctx.viewer,
+            organizationId: choice.id,
+            seat: { staff: access.staff, role: choice.role },
+            spine,
+            projectId: openedFilm.brandProjectId,
+          }).catch(() => spine)
+        : spine;
+
     effectiveSpine = resolveVideoPageSpine({
-      spine,
+      spine: spineWithFilm,
       decision,
       openedFilm,
       hadQueryProject: Boolean(trimmedProject),

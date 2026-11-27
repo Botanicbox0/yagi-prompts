@@ -691,11 +691,24 @@ export const BRAND_PROJECT_LIMITS = {
   filesPage: 40,
   /** `project.files`: the longest cursor accepted. */
   cursorMax: 200,
+  /** `project.archive`: projects per page by default. */
+  archivePage: 24,
+  /** `project.archive`: largest page size accepted (`limit` 1–48). */
+  archivePageMax: 48,
+  /** `project.archive` and `project.list`: longest trimmed title search query accepted. */
+  queryMax: 80,
 } as const;
 
-/** `project.list`: the projects new work can be filed in, most recent activity first. */
+/** Optional title search query shared by `project.list` and `project.archive` (judged after the seat; NFC-normalized and trimmed before checking length). */
+const ProjectQueryField = z
+  .string()
+  .transform((s) => s.normalize('NFC').trim())
+  .pipe(z.string().max(BRAND_PROJECT_LIMITS.queryMax))
+  .optional();
+/** `project.list`: the projects new work can be filed in, most recent activity first (top 100; optional `query` judged after the seat). */
 export const BrandProjectListSchema = z.object({ organizationId: Id });
-export type BrandProjectListInput = z.input<typeof BrandProjectListSchema>;
+export const BrandProjectQuerySchema = z.object({ query: ProjectQueryField });
+export type BrandProjectListInput = z.input<typeof BrandProjectListSchema> & { query?: string };
 
 /** `project.create`: a project of one's own, by name only. Idempotent on `requestId` (same member, same key = same project). */
 export const BrandProjectCreateSchema = z.object({
@@ -751,7 +764,7 @@ export type StudioStateScope = { kind: 'project'; brandProjectId: string } | { k
  * can take work, then 미분류). Members of the workspace only, through the same gate as `project.list`; while the spine is
  * closed for the organization each answers exactly like an unknown operation (`{ ok: false, code: 'invalid' }`, HTTP 400).
  */
-export const BRAND_PROJECT_READS = ['project.overview', 'project.files', 'project.cards'] as const;
+export const BRAND_PROJECT_READS = ['project.overview', 'project.files', 'project.cards', 'project.archive'] as const;
 export type BrandProjectRead = (typeof BRAND_PROJECT_READS)[number];
 
 /**
@@ -812,6 +825,19 @@ export type BrandProjectFilesInput = z.input<typeof BrandProjectFilesSchema>;
 export const BrandProjectCardsSchema = z.object({ organizationId: Id });
 /** `project.cards`' input. Without `filter`: today's answer shape. With it: the R-A fields (see the answer). */
 export type BrandProjectCardsInput = z.input<typeof BrandProjectCardsSchema> & { filter?: BrandProjectViewFilter };
+
+/**
+ * `project.archive` (spine rules R-B): every project a member may see, most recent activity first, continued past
+ * `listMax` by a keyset cursor, with optional title search (`query`) and page size (`limit`, 1–48, default 24).
+ * Everything except `organizationId` is judged after the seat.
+ */
+export const BrandProjectArchiveSchema = z.object({
+  organizationId: Id,
+  cursor: z.string().min(1).max(BRAND_PROJECT_LIMITS.cursorMax).optional(),
+  query: ProjectQueryField,
+  limit: z.number().int().min(1).max(BRAND_PROJECT_LIMITS.archivePageMax).optional(),
+});
+export type BrandProjectArchiveInput = z.input<typeof BrandProjectArchiveSchema>;
 
 /**
  * What the 전체 view marks a project by (spine rules R-A): `open` = it can take new work (an own project while active, a
@@ -1248,12 +1274,27 @@ export interface StudioBrandProjectOverview {
   finished?: { counts: StudioBrandProjectCounts };
   /** Spine rules R-A, only when the request named a `filter`: the sizes of the two views (the switch's numbers). */
   totals?: StudioBrandProjectTotals;
+  /**
+   * Spine rules R-B, only when the request named a `filter`: how many projects each view lists (capped at `listMax`,
+   * so `totals[filter] - listed[filter]` is how many projects are not listed in that view).
+   */
+  listed?: StudioBrandProjectTotals;
 }
 
 /** One item of a `project.files` page: which list holds its view. */
 export interface BrandProjectFileItem {
   type: 'job' | 'asset' | 'film';
   id: string;
+}
+
+/** Summary of an opened project carried on page 1 of `project.files` (spine rules R-B). */
+export interface StudioBrandProjectSummary {
+  id: string;
+  title: string;
+  origin: 'team' | 'self';
+  status: StudioBrandProjectStatus;
+  selectable: boolean;
+  counts: StudioBrandProjectCounts;
 }
 
 /**
@@ -1272,6 +1313,8 @@ export interface StudioBrandProjectFiles {
   /** The page's films, in page order, as the films' list builds them. */
   films: VideoProjectSummary[];
   next: string | null;
+  /** Spine rules R-B: summary of the opened project on page 1 (`cursor` absent) when `scope.kind === 'project'`. */
+  project?: StudioBrandProjectSummary;
 }
 
 /**
@@ -1347,6 +1390,22 @@ export interface StudioBrandProjectCards {
   unfiled: { counts: StudioBrandProjectCounts; covers: StudioBrandProjectCover[] };
   /** Spine rules R-A, only when the request named a `filter`: the sizes of the two views (the switch's numbers). */
   totals?: StudioBrandProjectTotals;
+  /** Spine rules R-B, only when the request named a `filter`: how many projects each view lists (capped at `listMax`). */
+  listed?: StudioBrandProjectTotals;
+}
+
+/** One row of `project.archive` (spine rules R-B): the card shape of `project.cards` `filter: 'all'`, always marked. */
+export interface StudioBrandProjectArchiveCard extends StudioBrandProjectCard {
+  status: StudioBrandProjectStatus;
+  selectable: boolean;
+}
+
+/** `project.archive` (spine rules R-B): one page of visible projects, most recent activity first, with uncut matching `total`. */
+export interface StudioBrandProjectArchive {
+  ok: true;
+  projects: StudioBrandProjectArchiveCard[];
+  next: string | null;
+  total: number;
 }
 
 /** `job.assign_project`: every run that moved (the run and its family) and where they are now. */
