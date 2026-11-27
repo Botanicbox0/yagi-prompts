@@ -9,6 +9,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import type {
   BrandProjectFilesScope,
   BrandProjectViewFilter,
+  StudioBrandProjectArchive,
   StudioBrandProjectFiles,
   StudioBrandProjectGroup,
   StudioBrandProjectOverview,
@@ -20,6 +21,7 @@ import type { HubDeliverable, HubEntry, HubSection } from "../asset-hub-model";
 import s from "../asset-hub.module.css";
 import type { StudioCopy, StudioLocale } from "../copy";
 import { MoveToProjectDialog } from "../project-chip";
+import { ArchiveView } from "./archive-view";
 import sp from "./asset-hub-spine.module.css";
 import { ByProjectView } from "./by-project-view";
 import {
@@ -90,6 +92,7 @@ export interface AssetHubSpineViewProps {
   onNotice(message: string | null): void;
   deliverables: readonly HubDeliverable[];
   canOpenStudio: boolean;
+  canCreate?: boolean;
   api: StudioApi;
   likedKeys: ReadonlySet<string>;
   spine: AssetHubSpineProps;
@@ -111,6 +114,8 @@ export interface AssetHubSpineViewProps {
   /** Optional initial state overrides for deterministic SSR tests (§6). */
   initialTab?: SpineHubTab;
   initialOpenedScope?: BrandProjectFilesScope | null;
+  initialArchiveOpen?: boolean;
+  initialArchive?: StudioBrandProjectArchive | null;
   initialQuery?: string;
   initialScopeQuery?: string;
   initialScopeSeed?: SpineScopeSeed;
@@ -128,6 +133,7 @@ export function AssetHubSpine({
   onNotice,
   deliverables,
   canOpenStudio,
+  canCreate,
   api,
   likedKeys,
   spine,
@@ -148,6 +154,8 @@ export function AssetHubSpine({
   onCloseSingleMove,
   initialTab,
   initialOpenedScope = null,
+  initialArchiveOpen = false,
+  initialArchive = null,
   initialQuery = "",
   initialScopeQuery = "",
   initialScopeSeed,
@@ -168,6 +176,8 @@ export function AssetHubSpine({
   const hasOrgLogo = Boolean(orgLogo);
 
   const [overview, setOverview] = useState(initialOverview);
+  const overviewRef = useRef(overview);
+  overviewRef.current = overview;
   useEffect(() => {
     setOverview(initialOverview);
   }, [initialOverview]);
@@ -176,6 +186,33 @@ export function AssetHubSpine({
     () => initialTab ?? initialSpineTab(initialOverview, hasOrgLogo),
   );
   const [openedScope, setOpenedScope] = useState<BrandProjectFilesScope | null>(initialOpenedScope);
+  const initialScopeKind = initialOpenedScope?.kind ?? null;
+  const initialScopeProjectId = initialOpenedScope?.kind === "project" ? initialOpenedScope.brandProjectId : null;
+  const addressScopeId = initialOpenedScope ? scopeMarker(initialOpenedScope) : null;
+  const addressKey = `${initialTab ?? ""}|${addressScopeId ?? ""}|${initialArchiveOpen ? "1" : "0"}`;
+  const prevAddressKeyRef = useRef(addressKey);
+  useEffect(() => {
+    if (prevAddressKeyRef.current === addressKey) return;
+    prevAddressKeyRef.current = addressKey;
+    setSeedConsumed(false);
+    setScopeQuery(initialScopeQuery);
+    setUnfiledSelecting(false);
+    if (initialScopeKind === "project" && initialScopeProjectId !== null) {
+      setActiveTab("by_project");
+      setOpenedScope({ kind: "project", brandProjectId: initialScopeProjectId });
+    } else if (initialScopeKind === "unfiled" || initialScopeKind === "brand_materials") {
+      setActiveTab("by_project");
+      setOpenedScope({ kind: initialScopeKind });
+    } else if (initialArchiveOpen) {
+      setOpenedScope(null);
+      setActiveTab("by_project");
+    } else {
+      setOpenedScope(null);
+      setActiveTab(initialTab ?? initialSpineTab(overviewRef.current, hasOrgLogo));
+    }
+  }, [addressKey, hasOrgLogo, initialArchiveOpen, initialScopeKind, initialScopeProjectId, initialScopeQuery, initialTab]);
+
+  const showArchive = Boolean(initialArchiveOpen && activeTab === "by_project" && !openedScope);
   const [seedScopeId] = useState<string | null>(() => {
     if (initialOpenedScope) return scopeMarker(initialOpenedScope);
     if (initialTab === "brand_materials" || initialTab === "unfiled") return initialTab;
@@ -399,7 +436,7 @@ export function AssetHubSpine({
           ))}
         </div>
 
-        {activeTab === "by_project" && !openedScope ? (
+        {activeTab === "by_project" && !openedScope && !showArchive ? (
           <div className={s.filters}>
             {projectsSwitch && (
               <div className={sp.switchTrack} role="group" aria-label={spineCopy.tabByProject} data-asset-hub-projects-switch="">
@@ -497,6 +534,20 @@ export function AssetHubSpine({
             initialRole={projectSeed?.role}
             initialSelecting={projectSeed?.selecting}
             initialSelectedKeys={projectSeed?.selectedKeys}
+          />
+        ) : showArchive ? (
+          <ArchiveView
+            organizationId={organizationId}
+            locale={viewLocale}
+            libraryCopy={libraryCopy}
+            projectSpineCopy={projectSpineCopy}
+            canOpenStudio={canOpenStudio}
+            canCreate={canCreate ?? canMove}
+            deliverables={deliverables}
+            api={api}
+            refreshNonce={scopeRefreshNonce}
+            initialArchive={initialArchive}
+            initialQuery={initialQuery}
           />
         ) : (
           <ByProjectView

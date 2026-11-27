@@ -4,6 +4,7 @@
  */
 import { roomHref } from '@/components/brand-rooms/room/visibility';
 import { clampRatio, tileSources } from '@/components/brand-studio/asset-hub-model';
+import { brandArchiveHref, unlistedProjectCount } from '@/components/brand-studio/asset-hub-spine/model';
 import { formatRelativeTime } from '@/components/brand-studio/project-chip/model';
 import {
   BRAND_PROJECT_CARD_LIMITS,
@@ -18,6 +19,8 @@ import {
 import { scopedHref } from '@/lib/brands/workspace/selection';
 import type { Dictionary } from '@/lib/i18n/dictionaries';
 import { interpolate } from '@/lib/i18n/format';
+
+export { brandArchiveHref, unlistedProjectCount };
 
 export interface SpineHomeProps {
   cards: StudioBrandProjectCards;

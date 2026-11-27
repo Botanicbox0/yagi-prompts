@@ -38,6 +38,7 @@ import {
   initialScopePageState,
   isFinishedProjectGroup,
   mergeScopeTiles,
+  projectGroupFromSummary,
   projectGroupStatusMark,
   resolveScopeDialogScope,
   scopeEmptyMessage,
@@ -360,7 +361,10 @@ export function ScopeView({
 
   const normalizedScopeId = scopeBrandProjectId.toLowerCase();
   const projectGroup = isProject
-    ? overview.projects.find((g) => g.project.id.toLowerCase() === normalizedScopeId) ??
+    ? (pageState.projectSummary?.id.toLowerCase() === normalizedScopeId
+        ? projectGroupFromSummary(pageState.projectSummary)
+        : null) ??
+      overview.projects.find((g) => g.project.id.toLowerCase() === normalizedScopeId) ??
       (fallbackProjectGroup?.project.id.toLowerCase() === normalizedScopeId ? fallbackProjectGroup : null)
     : null;
   const isFinished = isProject && isFinishedProjectGroup(projectGroup);

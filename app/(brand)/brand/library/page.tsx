@@ -1,7 +1,11 @@
 import type { Metadata } from "next";
 import { pickSendCopy, type ViewerSendProp } from "@/components/brand-send/model";
 import { BrandAssetHub } from "@/components/brand-studio/asset-hub";
-import { parseLibraryProjectsFilter } from "@/components/brand-studio/asset-hub-spine/model";
+import { parseLibraryView } from "@/components/brand-studio/asset-hub-spine/archive-model";
+import {
+  parseLibraryProjectsFilter,
+  projectGroupFromSummary,
+} from "@/components/brand-studio/asset-hub-spine/model";
 import { brandContext } from "@/components/brand-workspace/context";
 import { loadBrandWorkspace } from "@/lib/brands/workspace/service";
 import { WorkspacePreview } from "@/components/brand-workspace/preview";
@@ -42,9 +46,14 @@ function parseProjectParam(raw: string | string[] | undefined): string | null {
 export default async function ContentLibrary({
   searchParams,
 }: {
-  searchParams: Promise<{ organizationId?: string | string[]; projects?: string | string[]; project?: string | string[] }>;
+  searchParams: Promise<{
+    organizationId?: string | string[];
+    projects?: string | string[];
+    project?: string | string[];
+    view?: string | string[];
+  }>;
 }) {
-  const [{ organizationId, projects, project }, { sql, viewer, verifiedEmail, b, dict, locale }] = await Promise.all([
+  const [{ organizationId, projects, project, view }, { sql, viewer, verifiedEmail, b, dict, locale }] = await Promise.all([
     searchParams,
     brandContext(),
   ]);
@@ -83,6 +92,7 @@ export default async function ContentLibrary({
     const canTransact = typeof (sql as { transaction?: unknown }).transaction === "function";
     const projectsFilter = parseLibraryProjectsFilter(projects);
     const requestedProjectId = spineOpen ? parseProjectParam(project) : null;
+    const viewArchive = spineOpen && !requestedProjectId && parseLibraryView(view) === "archive";
     // The studio state, project links and (when spine is open) project overview are read side by side;
     // all pass the same seat check (membership, the sandbox hardline, the feature policy).
     const deps = canTransact ? await studioRuntimeDeps(sql) : null;
@@ -116,19 +126,11 @@ export default async function ContentLibrary({
       "films" in projectFilesResult
         ? projectFilesResult
         : null;
-    let initialProjectGroup =
+    const initialProjectGroup =
       initialProjectPage && requestedProjectId && overview
-        ? overview.projects.find((g) => g.project.id.toLowerCase() === requestedProjectId) ?? null
+        ? overview.projects.find((g) => g.project.id.toLowerCase() === requestedProjectId) ??
+          (initialProjectPage.project ? projectGroupFromSummary(initialProjectPage.project) : null)
         : null;
-    if (initialProjectPage && requestedProjectId && !initialProjectGroup && projectsFilter !== "all") {
-      const allOverviewRes = await runStudioOperation(deps!, viewer, "project.overview", {
-        organizationId: choice.id,
-        filter: "all",
-      }).catch(() => null);
-      if (allOverviewRes && allOverviewRes.ok && "brandMaterials" in allOverviewRes) {
-        initialProjectGroup = allOverviewRes.projects.find((g) => g.project.id.toLowerCase() === requestedProjectId) ?? null;
-      }
-    }
     const orgLogo = choice.logoUrl
       ? {
           url: choice.logoUrl,
@@ -153,7 +155,12 @@ export default async function ContentLibrary({
             openedScope: { kind: "project" as const, brandProjectId: requestedProjectId },
             page: initialProjectPage,
           }
-        : undefined;
+        : spine && viewArchive
+          ? {
+              tab: "by_project" as const,
+              archive: true,
+            }
+          : undefined;
     const deliverables = contents.map(({ p, c }) => ({
       id: c.id,
       projectId: p.id,
@@ -184,6 +191,7 @@ export default async function ContentLibrary({
       <>
         {choice.role === "studio" && <StaffNotice b={b} />}
         <BrandAssetHub
+          key={`${choice.id}:${projectsFilter}:${requestedProjectId ?? ""}:${viewArchive ? "archive" : ""}`}
           organizationId={choice.id}
           studioCopy={dict.brandStudio}
           libraryCopy={dict.studioLibrary}

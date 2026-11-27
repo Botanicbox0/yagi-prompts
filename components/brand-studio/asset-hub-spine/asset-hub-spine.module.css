@@ -653,6 +653,126 @@
   cursor: not-allowed;
 }
 
+/* ------------------------------------------------------------------ archive view */
+
+.archiveView {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+}
+
+.archiveHeader {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.archiveTitleRow {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+.archiveHint {
+  margin: 0;
+  color: var(--ys-ink-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.archiveSearchForm {
+  display: flex;
+  align-items: center;
+  max-width: 340px;
+}
+
+.archiveList {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--ys-hairline);
+}
+
+.archiveRow {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--ys-hairline);
+  min-width: 0;
+}
+
+.archiveThumb {
+  flex: none;
+  width: 48px;
+  height: 60px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--ys-card-media);
+}
+
+.archiveThumb img,
+.archiveThumbBlank video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 18%;
+}
+
+.archiveThumbBlank {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--ys-card-media);
+}
+
+.archiveRowBody {
+  display: grid;
+  gap: 4px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.archiveRowTop {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.archiveRowTitle {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ys-ink);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.archiveRow[data-finished] .archiveRowTitle {
+  color: var(--ys-ink-secondary);
+}
+
+.archiveRowMeta {
+  color: var(--ys-ink-muted);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.4;
+}
+
+.archiveRowActions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 16px;
+}
+
 @media (hover: hover) {
   .coverBtn:hover img,
   .materialTile:hover img,

@@ -17,8 +17,10 @@ import {
   type AssetRefSchema,
   type AssetReserveSchema,
   type AssetUpdateSchema,
+  type BrandProjectArchiveInput,
   type BrandProjectFilesInput,
   type BrandProjectFilingInput,
+  type BrandProjectListInput,
   type BrandProjectMoveInput,
   type BrandProjectViewFilter,
   type OutputDeleteInput,
@@ -41,6 +43,7 @@ import {
   type StudioAssetReserved,
   type StudioAssetRole,
   type StudioAssetSaved,
+  type StudioBrandProjectArchive,
   type StudioBrandProjectCards,
   type StudioBrandProjectCreated,
   type StudioBrandProjectFiles,
@@ -264,11 +267,14 @@ export function createStudioApi({ organizationId, fetch: fetcher = (...args) => 
         headers: { Accept: "application/json" },
       }),
     call,
-    listBrandProjects: () =>
+    listBrandProjects: (options?: Omit<BrandProjectListInput, "organizationId">) =>
       send<StudioBrandProjectList>(STUDIO_ENDPOINT, {
         method: "POST",
         headers: json,
-        body: JSON.stringify({ operation: "project.list", input: { organizationId } }),
+        body: JSON.stringify({
+          operation: "project.list",
+          input: { organizationId, ...(options?.query !== undefined ? { query: options.query } : {}) },
+        }),
       }),
     createBrandProject: (input: { requestId: string; title: string }) =>
       send<StudioBrandProjectCreated>(STUDIO_ENDPOINT, {
@@ -302,6 +308,24 @@ export function createStudioApi({ organizationId, fetch: fetcher = (...args) => 
         method: "POST",
         headers: json,
         body: JSON.stringify({ operation: "project.cards", input: { organizationId, ...(options?.filter ? { filter: options.filter } : {}) } }),
+      }),
+    /**
+     * All projects a member may see (open and finished), most recent activity first, keyset-paged past `listMax`
+     * with optional title substring search (`query`) and page size (`limit`, 1–48, default 24).
+     */
+    loadBrandProjectArchive: (options?: Omit<BrandProjectArchiveInput, "organizationId">) =>
+      send<StudioBrandProjectArchive>(STUDIO_ENDPOINT, {
+        method: "POST",
+        headers: json,
+        body: JSON.stringify({
+          operation: "project.archive",
+          input: {
+            organizationId,
+            ...(options?.cursor !== undefined ? { cursor: options.cursor } : {}),
+            ...(options?.query !== undefined ? { query: options.query } : {}),
+            ...(options?.limit !== undefined ? { limit: options.limit } : {}),
+          },
+        }),
       }),
     /**
      * Delete a result from the assets page's single tile (spine rules R-A): the result and, in the same transaction, the

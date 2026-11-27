@@ -222,7 +222,8 @@ describe('project.create', () => {
     const again = await op(owner(), 'project.create', { organizationId: f.orgId, requestId: key, title: 'Spring' });
     expect(again).toEqual(first);
     const editors = await op(viewerOf(f.ids.editor), 'project.create', { organizationId: f.orgId, requestId: key, title: 'Spring' });
-    expect(editors.ok && 'project' in editors && editors.project.id).not.toBe((first as { project: StudioBrandProject }).project.id);
+    expect(editors).toMatchObject({ ok: true, project: { id: expect.any(String) } });
+    expect((editors as { project: StudioBrandProject }).project.id).not.toBe((first as { project: StudioBrandProject }).project.id);
     expect((await f.sql.query("select count(*)::int as n from brand_projects where origin = 'self'")).rows[0]).toEqual({ n: 2 });
   });
 

@@ -3,6 +3,7 @@
  * The 프로젝트별 view of the regrouped assets page (§5.3).
  * Order: 브랜드 자료 line -> overview projects -> 미분류 group.
  */
+import Link from "next/link";
 import { useMemo, type ReactNode } from "react";
 import type {
   BrandProjectViewFilter,
@@ -20,6 +21,7 @@ import sp from "./asset-hub-spine.module.css";
 import { LazyVideoCover } from "./lazy-video-cover";
 import {
   BRAND_MATERIALS_LINE_LIMIT,
+  brandArchiveHref,
   brandMaterialsCountsWithLogo,
   classifyLibraryEntry,
   deliverableCountsByProject,
@@ -32,6 +34,7 @@ import {
   orderOverviewProjects,
   projectGroupStatusMark,
   sumProjectCounts,
+  unlistedProjectCount,
   type GroupCountLabels,
   type SpineOrgLogo,
 } from "./model";
@@ -201,13 +204,17 @@ export function ByProjectView({
     () => (organizationId ? finishedFilesSummary(overview, filter, organizationId) : null),
     [filter, organizationId, overview],
   );
+  const archiveCount = useMemo(
+    () => (organizationId ? unlistedProjectCount(overview, filter) : 0),
+    [filter, organizationId, overview],
+  );
 
   const showMaterials = materialsCounts.count > 0;
   const unfiledTotal = sumProjectCounts(overview.unfiled.counts);
   const showUnfiled = unfiledTotal > 0;
   const hasQuery = Boolean(query.trim());
 
-  if (!showMaterials && overview.projects.length === 0 && !showUnfiled && !finishedSummary) {
+  if (!showMaterials && overview.projects.length === 0 && !showUnfiled && !finishedSummary && archiveCount === 0) {
     return (
       <section className={s.empty} data-asset-hub-empty="by_project">
         <p>{hasQuery ? libraryCopy.uploads.noMatch : h.emptyAll}</p>
@@ -451,6 +458,14 @@ export function ByProjectView({
           <a className={sp.finishedLink} href={finishedSummary.href} data-asset-hub-finished-link="">
             {fill(spineCopy.finishedFiles, { n: finishedSummary.count })}
           </a>
+        </div>
+      )}
+
+      {archiveCount > 0 && organizationId && (
+        <div className={sp.finishedFooter} data-asset-hub-archive-count={archiveCount}>
+          <Link className={sp.finishedLink} href={brandArchiveHref(organizationId)} data-asset-hub-archive-link="">
+            {fill(spineCopy.archiveLink, { n: archiveCount })}
+          </Link>
         </div>
       )}
     </div>

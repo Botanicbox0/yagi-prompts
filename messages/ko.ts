@@ -1828,6 +1828,7 @@ export const ko: Dictionary = {
     viewActive: '진행 중',
     viewAll: '전체',
     finishedMark: '끝난 프로젝트',
+    archiveLink: '프로젝트가 {n}개 더 있어요 · 전체 프로젝트 보기',
     requestTeam: '야기 팀에 의뢰하기',
     guideNoProject: '프로젝트로 묶으면 파일을 한곳에서 볼 수 있어요.',
     unfiledLine: '프로젝트 없이 만든 파일 {n}개',

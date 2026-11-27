@@ -36,6 +36,7 @@ import {
   BrandProjectCreateSchema,
   BrandProjectListSchema,
   BrandProjectMoveSchema,
+  BrandProjectQuerySchema,
   type BrandMaterialRole,
   type BrandProjectOperation,
   type StudioBrandProject,
@@ -102,20 +103,39 @@ export async function isSelectableProject(sql: SqlRunner, organizationId: string
  */
 export const VISIBLE_PROJECTS = (alias: string): string => `(${alias}.origin = 'self' or (${alias}.origin = 'team' and ${alias}.client_visible))`;
 
+export interface VisibleBrandProjectInfo {
+  id: string;
+  title: string;
+  origin: 'team' | 'self';
+  status: StudioBrandProjectStatus;
+  selectable: boolean;
+}
+
 /**
  * A project a member may open on the assets page (`project.files`): visible, of this organization. Null when not (hidden,
- * another organization's, made up, malformed); otherwise whether it can still take new work, which decides where its
- * role-tagged uploads show (`SHOWN_ASSET_PROJECT_JOIN`). One statement on the primary key.
+ * another organization's, made up, malformed); otherwise its metadata and whether it can still take new work, which
+ * decides where its role-tagged uploads show (`SHOWN_ASSET_PROJECT_JOIN`). One statement on the primary key.
  */
-export async function visibleProjectOf(sql: SqlRunner, organizationId: string, projectId: string): Promise<{ selectable: boolean } | null> {
+export async function visibleProjectOf(sql: SqlRunner, organizationId: string, projectId: string): Promise<VisibleBrandProjectInfo | null> {
   if (!UUID.test(projectId)) return null;
   const row = (
-    await sql.query<{ selectable: boolean }>(
-      `select ${SELECTABLE_PROJECTS('p')} as selectable from brand_projects p where p.id = $1 and p.organization_id = $2 and ${VISIBLE_PROJECTS('p')}`,
+    await sql.query<{ id: string; title: string; origin: string; status: string; selectable: boolean }>(
+      `select p.id::text as id, p.title, p.origin, p.status, ${SELECTABLE_PROJECTS('p')} as selectable
+         from brand_projects p
+        where p.id = $1 and p.organization_id = $2 and ${VISIBLE_PROJECTS('p')}`,
       [projectId, organizationId],
     )
   ).rows[0];
-  return row ? { selectable: row.selectable === true } : null;
+  if (!row) return null;
+  const selectable = row.selectable === true;
+  const origin = row.origin === 'self' ? 'self' : 'team';
+  return {
+    id: String(row.id),
+    title: String(row.title),
+    origin,
+    status: brandProjectStatusOf(origin, String(row.status), selectable),
+    selectable,
+  };
 }
 
 const ROLE_LIST = BRAND_MATERIAL_ROLES.map((role) => `'${role}'`).join(', ');
@@ -458,28 +478,40 @@ interface ProjectRow {
 
 const iso = (v: Date | string): string => (v instanceof Date ? v : new Date(String(v))).toISOString();
 
+/** Latest activity timestamp for a `brand_projects` row alias paired with `LAST_ACTIVITY_LATERAL`. */
+const LAST_ACTIVITY_EXPR = (projectAlias: string, lateralAlias: string) =>
+  `greatest(${projectAlias}.updated_at, coalesce(${lateralAlias}.newest, ${projectAlias}.updated_at))`;
+
+/** Lateral join finding the newest non-fill studio run timestamp for a `brand_projects` row alias. */
+const LAST_ACTIVITY_LATERAL = (projectAlias: string, lateralAlias: string) =>
+  `left join lateral (
+              select max(j.created_at) as newest from brand_studio_jobs j
+               where j.organization_id = ${projectAlias}.organization_id and j.brand_project_id = ${projectAlias}.id and ${NOT_FILL_RUN('j')}
+            ) ${lateralAlias} on true`;
+
+/** Lateral join finding the newest ready image or video result filed in a project row alias. */
+const RESULT_COVER_LATERAL = (projectAlias: string, lateralAlias: string, orgExpr = `${projectAlias}.organization_id`) =>
+  `left join lateral (
+              select o.kind, o.storage_key, o.thumb_key
+                from brand_studio_jobs j
+                join brand_studio_outputs o on o.job_id = j.id and o.organization_id = j.organization_id
+               where j.organization_id = ${orgExpr} and j.brand_project_id = ${projectAlias}.id and ${NOT_FILL_RUN('j')}
+                 and o.status = 'ready' and o.deleted_at is null and o.storage_key is not null and o.kind in ('image', 'video')
+               order by o.created_at desc, o.id desc
+               limit 1
+            ) ${lateralAlias} on true`;
+
 /**
  * Projects with their latest activity (the later of the row's own `updated_at` and its newest run that is not a
  * fill strip) and, in one lateral join, the newest ready image or video result filed in each.
  */
 function projectsQuery(where: string, extra = ''): string {
   return `select p.id, p.title, p.origin,${extra}
-                 greatest(p.updated_at, coalesce(r.newest, p.updated_at)) as last_activity_at,
+                 ${LAST_ACTIVITY_EXPR('p', 'r')} as last_activity_at,
                  c.kind as cover_kind, c.storage_key as cover_key, c.thumb_key as cover_thumb_key
             from brand_projects p
-            left join lateral (
-              select max(j.created_at) as newest from brand_studio_jobs j
-               where j.organization_id = p.organization_id and j.brand_project_id = p.id and ${NOT_FILL_RUN('j')}
-            ) r on true
-            left join lateral (
-              select o.kind, o.storage_key, o.thumb_key
-                from brand_studio_jobs j
-                join brand_studio_outputs o on o.job_id = j.id and o.organization_id = j.organization_id
-               where j.organization_id = p.organization_id and j.brand_project_id = p.id and ${NOT_FILL_RUN('j')}
-                 and o.status = 'ready' and o.deleted_at is null and o.storage_key is not null and o.kind in ('image', 'video')
-               order by o.created_at desc, o.id desc
-               limit 1
-            ) c on true
+            ${LAST_ACTIVITY_LATERAL('p', 'r')}
+            ${RESULT_COVER_LATERAL('p', 'c')}
            where ${where}`;
 }
 
@@ -547,13 +579,44 @@ export async function runBrandProjectOperation(deps: StudioDeps, viewer: Viewer,
   }
 }
 
+/** Escape `%`, `_` and `\` so PostgreSQL `ilike ... escape '\'` matches them literally. */
+export function escapeLikePattern(value: string): string {
+  return value.replace(/[\\%_]/g, '\\$&');
+}
+
+/**
+ * Parse and normalize the optional title search `query` (judged after the seat on `project.list` and `project.archive`):
+ * NFC-normalized and trimmed; absent, empty or whitespace-only -> null; 1–80 NFC characters -> normalized string; else -> `invalid`.
+ */
+export function normalizeProjectQuery(raw: unknown): string | null {
+  const parsed = BrandProjectQuerySchema.safeParse(raw);
+  if (!parsed.success) throw new StudioDenied('invalid');
+  const normalized = parsed.data.query ?? '';
+  return normalized.length > 0 ? normalized : null;
+}
+
 /**
  * The projects new work can be filed in, most recent activity first, at most `listMax`: what `project.list` answers
- * (the assets page's overview lists the very same, ./brand-project-files.ts). It takes the member's seat from
- * `spineSeat`, not an organization id, so it cannot be called for an organization nobody seated; its importers are
- * pinned to the spine files (tests/brand-studio/spine/assets-page.test.ts).
+ * (the assets page's overview lists the very same, ./brand-project-files.ts). With `query` (spine rules R-B), narrows
+ * by case-insensitive substring on `title` so older selectable projects past `listMax` can still be found. It takes
+ * the member's seat from `spineSeat`, not an organization id, so it cannot be called for an organization nobody seated;
+ * its importers are pinned to the spine files (tests/brand-studio/spine/assets-page.test.ts).
  */
-export async function selectableProjects(sql: SqlRunner, media: StudioMediaStore, seat: StudioSeat): Promise<StudioBrandProject[]> {
+export async function selectableProjects(
+  sql: SqlRunner,
+  media: StudioMediaStore,
+  seat: StudioSeat,
+  query: string | null = null,
+): Promise<StudioBrandProject[]> {
+  if (query) {
+    const rows = (
+      await sql.query<ProjectRow>(
+        `${projectsQuery(`p.organization_id = $1 and ${SELECTABLE_PROJECTS('p')} and p.title ilike $3 escape '\\'`)} order by last_activity_at desc, p.id desc limit $2`,
+        [seat.organizationId, BRAND_PROJECT_LIMITS.listMax, `%${escapeLikePattern(query)}%`],
+      )
+    ).rows;
+    return rows.map((row) => projectView(row, media));
+  }
   const rows = (
     await sql.query<ProjectRow>(`${projectsQuery(`p.organization_id = $1 and ${SELECTABLE_PROJECTS('p')}`)} order by last_activity_at desc, p.id desc limit $2`, [
       seat.organizationId,
@@ -568,6 +631,11 @@ export interface ListedBrandProject {
   project: StudioBrandProject;
   status: StudioBrandProjectStatus;
   selectable: boolean;
+}
+
+/** One row returned by `archiveBrandProjectsPage` with its microsecond cursor key (spine rules R-B). */
+export interface ArchiveProjectRow extends ListedBrandProject {
+  k: string;
 }
 
 /**
@@ -601,6 +669,75 @@ export async function visibleBrandProjects(sql: SqlRunner, media: StudioMediaSto
 }
 
 /**
+ * Uncut count of projects a member may see (`VISIBLE_PROJECTS`), optionally filtered by title substring (`query`).
+ * Uses the exact same visibility predicate as `project.cards` `filter: 'all'`.
+ */
+export async function countVisibleBrandProjects(sql: SqlRunner, seat: StudioSeat, query: string | null): Promise<number> {
+  const params: unknown[] = [seat.organizationId];
+  const search = query ? (params.push(`%${escapeLikePattern(query)}%`), ` and p.title ilike $${params.length} escape '\\'`) : '';
+  const row = (
+    await sql.query<{ n: number }>(
+      `select count(*)::int as n from brand_projects p where p.organization_id = $1 and ${VISIBLE_PROJECTS('p')}${search}`,
+      params,
+    )
+  ).rows[0];
+  return Number(row?.n ?? 0);
+}
+
+/**
+ * One keyset-paged slice of every project a member may see (`VISIBLE_PROJECTS`), in the exact `(last_activity_at desc,
+ * id desc)` order of `visibleBrandProjects` / `project.cards` `filter: 'all'`. Evaluates the result cover lateral ONLY
+ * for the returned page rows (≤ `limit`).
+ */
+export async function archiveBrandProjectsPage(
+  sql: SqlRunner,
+  media: StudioMediaStore,
+  seat: StudioSeat,
+  options: { limit: number; query: string | null; after: { k: string; i: string } | null },
+): Promise<ArchiveProjectRow[]> {
+  const params: unknown[] = [seat.organizationId, options.limit];
+  const param = (value: unknown): string => {
+    params.push(value);
+    return `$${params.length}`;
+  };
+  const search = options.query ? ` and p.title ilike ${param(`%${escapeLikePattern(options.query)}%`)} escape '\\'` : '';
+  const cursorWhere = options.after
+    ? `where (r.last_activity_at, r.id) < ((${param(options.after.k)})::timestamp at time zone 'UTC', (${param(options.after.i)})::uuid)`
+    : '';
+  const rows = (
+    await sql.query<ProjectRow & { k: string }>(
+      `with ranked as (
+         select p.id, p.title, p.origin, p.status, ${SELECTABLE_PROJECTS('p')} as selectable,
+                ${LAST_ACTIVITY_EXPR('p', 'r')} as last_activity_at
+           from brand_projects p
+           ${LAST_ACTIVITY_LATERAL('p', 'r')}
+          where p.organization_id = $1 and ${VISIBLE_PROJECTS('p')}${search}
+       ),
+       page as (
+         select r.id, r.title, r.origin, r.status, r.selectable, r.last_activity_at,
+                to_char(r.last_activity_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US') as k
+           from ranked r
+          ${cursorWhere}
+          order by r.last_activity_at desc, r.id desc
+          limit $2
+       )
+       select pg.id, pg.title, pg.origin, pg.status, pg.selectable, pg.last_activity_at, pg.k,
+              c.kind as cover_kind, c.storage_key as cover_key, c.thumb_key as cover_thumb_key
+         from page pg
+         ${RESULT_COVER_LATERAL('pg', 'c', '$1')}
+        order by pg.last_activity_at desc, pg.id desc`,
+      params,
+    )
+  ).rows;
+  return rows.map((row) => ({
+    project: projectView(row, media),
+    status: brandProjectStatusOf(String(row.origin), String(row.status ?? ''), row.selectable === true),
+    selectable: row.selectable === true,
+    k: String(row.k),
+  }));
+}
+
+/**
  * How many projects the two views hold, uncut (the 진행 중 / 전체 switch draws these): `active` = can take new work,
  * `all` = visible. One statement (idx_brand_projects_origin).
  */
@@ -616,7 +753,7 @@ export async function brandProjectTotals(sql: SqlRunner, seat: StudioSeat): Prom
   return { active: Number(row?.active ?? 0), all: Number(row?.visible ?? 0) };
 }
 
-/** `project.list`: the projects new work can be filed in, most recent activity first, at most 100. */
+/** `project.list`: the projects new work can be filed in, most recent activity first, at most 100 (optional `query` search). */
 export async function listBrandProjects(deps: StudioDeps, viewer: Viewer, raw: unknown): Promise<StudioBrandProjectList | StudioFailure> {
   const parsed = BrandProjectListSchema.safeParse(raw);
   if (!parsed.success) return failure('invalid');
@@ -624,7 +761,73 @@ export async function listBrandProjects(deps: StudioDeps, viewer: Viewer, raw: u
   return guarded(() =>
     deps.sql.transaction(async (sql) => {
       const seat = await spineSeat(sql, viewer, v.organizationId, false);
-      return { ok: true as const, projects: await selectableProjects(sql, deps.media, seat) };
+      const query = normalizeProjectQuery(raw);
+      return { ok: true as const, projects: await selectableProjects(sql, deps.media, seat, query) };
+    }),
+  );
+}
+
+async function findSelectableProjectInTx(
+  sql: SqlRunner,
+  media: StudioMediaStore,
+  organizationId: string,
+  projectId: string,
+): Promise<StudioBrandProject | null> {
+  if (!UUID.test(projectId)) return null;
+  const row = (
+    await sql.query<ProjectRow>(
+      projectsQuery(`p.id = $1 and p.organization_id = $2 and ${SELECTABLE_PROJECTS('p')}`),
+      [projectId.toLowerCase(), organizationId],
+    )
+  ).rows[0];
+  return row ? projectView(row, media) : null;
+}
+
+/**
+ * Seated single-project lookup (`SELECTABLE_PROJECTS` rule) for `loadStudioSpine` when a custom `listProjects`
+ * test hook hits `listMax` and needs a beyond-the-cut selectable project.
+ */
+export async function selectableProjectById(
+  deps: StudioDeps,
+  viewer: Viewer,
+  input: { organizationId: string; projectId: string },
+): Promise<StudioBrandProject | null> {
+  if (!UUID.test(input.organizationId) || !UUID.test(input.projectId)) return null;
+  const res = await guarded(() =>
+    deps.sql.transaction(async (sql) => {
+      const seat = await spineSeat(sql, viewer, input.organizationId, false);
+      return { ok: true as const, project: await findSelectableProjectInTx(sql, deps.media, seat.organizationId, input.projectId) };
+    }),
+  );
+  return res.ok ? res.project : null;
+}
+
+/**
+ * The studio's selectable project list (top 100) plus, ONLY when the list reaches `listMax` and `candidateId` is a
+ * UUID absent from those 100, one single-id lookup gated by `SELECTABLE_PROJECTS`, prepended so the chip knows it and
+ * `resolveOpenProject` opens it cleanly without changing behavior for non-selectable projects.
+ */
+export async function listSelectableProjectsForStudio(
+  deps: StudioDeps,
+  viewer: Viewer,
+  input: { organizationId: string; candidateId?: string | null },
+): Promise<StudioBrandProjectList | StudioFailure> {
+  const parsed = BrandProjectListSchema.safeParse({ organizationId: input.organizationId });
+  if (!parsed.success) return failure('invalid');
+  const candidate = typeof input.candidateId === 'string' && UUID.test(input.candidateId) ? input.candidateId.toLowerCase() : null;
+  return guarded(() =>
+    deps.sql.transaction(async (sql) => {
+      const seat = await spineSeat(sql, viewer, parsed.data.organizationId, false);
+      const projects = await selectableProjects(sql, deps.media, seat);
+      if (
+        candidate &&
+        projects.length >= BRAND_PROJECT_LIMITS.listMax &&
+        !projects.some((p) => p.id.toLowerCase() === candidate)
+      ) {
+        const extra = await findSelectableProjectInTx(sql, deps.media, seat.organizationId, candidate);
+        if (extra) return { ok: true as const, projects: [extra, ...projects] };
+      }
+      return { ok: true as const, projects };
     }),
   );
 }
