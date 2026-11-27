@@ -114,6 +114,7 @@ import { measureSource } from './measure-fps';
 import { loadShortcutPrefs, saveShortcutPrefs } from './shortcut-store';
 import {
   DEFAULT_EDITOR_LAYOUT,
+  effectiveAssistDock,
   withAssistDock,
   withLaneHeight,
   withTimelineHeight,
@@ -200,11 +201,15 @@ export interface RealFilmOptions {
    * is ever called missing.
    */
   assets?: AssetRecord;
+  /** Stable identifier for this real film (e.g., server film id or project id); scopes per-film browser state. */
+  filmId?: string;
 }
 
 export interface EditorOptions {
   real?: RealFilmOptions | null;
   initialWorkspace?: EditorWorkspace;
+  /** Default assistant dock when no explicit customer toggle is stored (`'bar'` normally, `'side'` with E-C chat open). */
+  defaultAssistDock?: AssistDock;
 }
 
 export type FilmStatus = 'loading' | 'ready';
@@ -294,10 +299,13 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
   const [compare, setCompare] = useState(false);
   const [magnet, setMagnet] = useState(true);
   const [zoomCommand, setZoomCommand] = useState<ZoomCommand>({ kind: 'fit', n: 0 });
+  const defaultAssistDock = options.defaultAssistDock ?? 'bar';
+  const defaultAssistDockRef = useRef<AssistDock>(defaultAssistDock);
+  defaultAssistDockRef.current = defaultAssistDock;
   const [layout, setLayout] = useState<EditorLayout>(DEFAULT_EDITOR_LAYOUT);
   const layoutRef = useRef<EditorLayout>(layout);
   layoutRef.current = layout;
-  const assistDock = layout.assistDock;
+  const assistDock = effectiveAssistDock(layout, defaultAssistDock);
   const [exportOpen, setExportOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [shortcutPrefs, setShortcutPrefsState] = useState<ShortcutPrefs>(DEFAULT_SHORTCUT_PREFS);
@@ -337,6 +345,12 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
   }, []);
   const blockedRef = useRef(blocked);
   blockedRef.current = blocked;
+  /** True while a right-side chat proposal draft is open on screen (S5): locks every edit path at `change()`. */
+  const draftLockedRef = useRef(false);
+  const isEditLocked = () => blockedRef.current || draftLockedRef.current;
+  const setDraftLocked = useCallback((locked: boolean) => {
+    draftLockedRef.current = locked;
+  }, []);
   const docRef = useRef(doc);
   docRef.current = doc;
   const unknownRef = useRef(unknownRates);
@@ -387,7 +401,7 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
     setMac(/Mac|iPhone|iPad/i.test(navigator.platform || navigator.userAgent));
   }, []);
   const setAssistDock = useCallback((dock: AssistDock) => {
-    const next = withAssistDock(layoutRef.current, dock);
+    const next = withAssistDock(layoutRef.current, dock, defaultAssistDockRef.current);
     if (next === layoutRef.current) return;
     layoutRef.current = next;
     setLayout(next);
@@ -439,6 +453,31 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the catalogue and the unmeasured list change with these
     [isReal, docSequence, storedFilm, tentative, unknownRates, variableRates],
   );
+  /**
+   * Read-only `StoredFilmView` for an unapplied chat draft (S1): includes `inheritClip` entries for
+   * pending split pairs WITHOUT mutating `catalogue.current`, so the draft preview matches the applied
+   * film identically (including parent-scoped colour grades and sound offsets).
+   */
+  const previewDraftView = useCallback(
+    (draftSequence: FrameSequence, inherit?: ReadonlyArray<readonly [string, string]>): StoredFilmView | null => {
+      if (!isReal) return null;
+      let known: Record<string, ComposeClip> = catalogue.current;
+      if (inherit && inherit.length > 0) {
+        known = { ...catalogue.current };
+        for (const [to, from] of inherit) {
+          const origin = known[from];
+          if (origin && !known[to]) known[to] = inheritClip(origin, to);
+        }
+      }
+      return storedFilmView(draftSequence, storedFilm ?? emptyComposerProject(draftSequence.aspect), {
+        known,
+        unmeasuredSources: unmeasuredSources(),
+        tentative,
+      });
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- matches `filmView` dependencies
+    [isReal, storedFilm, tentative, unknownRates, variableRates],
+  );
   const sequence = filmView ? filmView.sequence : docSequence;
   const fps = sequence.fps;
   const spans = useMemo(() => spansOf(sequence), [sequence]);
@@ -456,8 +495,8 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
    * `coalesce` so one drag is one step, not one per pixel.
    */
   const change = useCallback((mutate: (current: EditorDoc) => EditorDoc | null, coalesce?: string) => {
-    // A real film that is still loading, or that this person may only look at, takes no edits.
-    if (blockedRef.current) return;
+    // A real film that is loading, read-only, or previewing an open chat draft takes no edits (S5).
+    if (isEditLocked()) return;
     const { merge, mark } = mergeWindow(lastChange.current, coalesce, Date.now());
     lastChange.current = mark;
     setStored((current) => applyChange(current, mutate(current.doc), merge));
@@ -466,21 +505,38 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
   /** A change to the cuts. `inherit` pairs each new cut with the cut whose look and framing it keeps. */
   const edit = useCallback(
     (mutate: (current: FrameSequence) => FrameSequence, inherit?: ReadonlyArray<readonly [string, string]>, coalesce?: string) => {
+      if (isEditLocked()) return;
       if (inherit) remember(inherit);
       change((current) => withSequence(current, mutate(current.sequence), inherit), coalesce);
     },
     [change],
   );
 
+  /**
+   * Commits a chat proposal in 1 undo step, lifting the draft lock and recording split `inherit` pairs
+   * in `catalogue` (B1 + S5). Still respects `blockedRef` (read-only / loading).
+   */
+  const commitChatEdit = useCallback(
+    (mutate: (current: FrameSequence) => FrameSequence, inherit?: ReadonlyArray<readonly [string, string]>) => {
+      if (blockedRef.current) return;
+      draftLockedRef.current = false;
+      if (inherit && inherit.length > 0) remember(inherit);
+      const { merge, mark } = mergeWindow(lastChange.current, undefined, Date.now());
+      lastChange.current = mark;
+      setStored((current) => applyChange(current, withSequence(current.doc, mutate(current.doc.sequence), inherit), merge));
+    },
+    [],
+  );
+
   const undo = useCallback(() => {
-    if (blockedRef.current) return;
+    if (isEditLocked()) return;
     setStored((current) => {
       const result = undoHistory(current.history, current.doc);
       return result ? { doc: result.doc, history: result.history } : current;
     });
   }, []);
   const redo = useCallback(() => {
-    if (blockedRef.current) return;
+    if (isEditLocked()) return;
     setStored((current) => {
       const result = redoHistory(current.history, current.doc);
       return result ? { doc: result.doc, history: result.history } : current;
@@ -692,7 +748,7 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
 
   // ── Cut ──
   const splitAtPlayhead = useCallback(() => {
-    if (blockedRef.current) return;
+    if (isEditLocked()) return;
     if (sequence.clips.length >= MAX_COMPOSE_CLIPS) return say(cutLimitLine(copy));
     const parent = frameStateAt(sequence, playhead).active;
     if (!parent || parent.offset === 0) return say(copy.toast.splitNo);
@@ -702,6 +758,7 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
 
   const trimToPlayhead = useCallback(
     (edge: 'start' | 'end') => {
+      if (isEditLocked()) return;
       const active = frameStateAt(sequence, playhead).active;
       if (!active || active.offset === 0) return;
       if (edge === 'start') {
@@ -722,7 +779,7 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
 
   const removeClips = useCallback(
     (ids: readonly string[]) => {
-      if (blockedRef.current) return;
+      if (isEditLocked()) return;
       const hit = sequence.clips.filter((clip) => ids.includes(clip.id));
       if (hit.length === 0) return;
       if (hit.length >= sequence.clips.length) return say(copy.toast.lastCut);
@@ -734,6 +791,7 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
 
   const addMaterial = useCallback(
     (material: FixtureMaterial) => {
+      if (isEditLocked()) return;
       if (sequence.clips.length >= MAX_COMPOSE_CLIPS) return say(cutLimitLine(copy));
       const clip = clipOfMaterial(material, newId('cut'), labelOf(material.id), sequence.fps);
       edit((current) => insertClips(current, current.clips.length, [clip]));
@@ -742,19 +800,30 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
   );
 
   /**
-   * Puts the organization's footage at the end of the film, whole, after measuring its rate. The first
+   * Puts the organization's footage into the film, whole, after measuring its rate. The first
    * cut of an empty film sets the film's rate (23.976 → 24, 29.97 → 30).
+   * - `at: 'end'` (default, matching the materials list): appends at the end of the timeline;
+   * - `at: 'playhead'`: inserts at the same cut boundary `pasteClips` uses (`active ? active.index + 1 : clips.length`).
    */
   const addSource = useCallback(
-    async (source: EditorSource) => {
-      if (blockedRef.current) return;
-      if (docRef.current.sequence.clips.length >= MAX_COMPOSE_CLIPS) return say(cutLimitLine(copy));
+    async (
+      source: EditorSource,
+      options?: { at?: 'end' | 'playhead'; playhead?: number },
+    ): Promise<{ ok: true; index: number; frames: number; fps: number; label: string } | { ok: false; reason: 'blocked' | 'limit' }> => {
+      if (isEditLocked()) return { ok: false, reason: 'blocked' };
+      if (docRef.current.sequence.clips.length >= MAX_COMPOSE_CLIPS) {
+        say(cutLimitLine(copy));
+        return { ok: false, reason: 'limit' };
+      }
       setBusySource(source.key);
       const measured = await measureSource(source.srcUrl, sourceSeconds(source));
       setBusySource((current) => (current === source.key ? null : current));
       const now = docRef.current.sequence;
-      if (blockedRef.current) return;
-      if (now.clips.length >= MAX_COMPOSE_CLIPS) return say(cutLimitLine(copy));
+      if (isEditLocked()) return { ok: false, reason: 'blocked' };
+      if (now.clips.length >= MAX_COMPOSE_CLIPS) {
+        say(cutLimitLine(copy));
+        return { ok: false, reason: 'limit' };
+      }
       const fresh = now.clips.length === 0 && now.captions.length === 0;
       const fps = fresh ? snapFilmFps(measured?.fps ?? null) : now.fps;
       const seconds = sourceSeconds(source) ?? (measured ? measured.frames / measured.fps : null);
@@ -767,25 +836,34 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
       if (fresh) setTentative(!measured);
       const id = newId('cut');
       catalogue.current[id] = storedClipForSource(source, id, seconds);
+      const clipBase: FrameClip = {
+        id,
+        label: source.label,
+        srcUrl: source.srcUrl,
+        thumbUrl: source.thumbUrl,
+        sourceFps,
+        sourceFrames,
+        inFrame: 0,
+        phase: 0,
+        frames: 1,
+        speedNum: 1,
+        speedDen: 1,
+        volume: 1,
+        muted: false,
+      };
+      const placedFrames = clipMaxFrames(clipBase, fps);
+      const placement = options?.at ?? 'end';
+      const targetPlayhead = options?.playhead ?? 0;
+      const nowBase = fresh ? { ...now, fps } : now;
+      const nowActive = placement === 'playhead' ? frameStateAt(nowBase, targetPlayhead).active : null;
+      const insertedAt = placement === 'playhead' && nowActive ? nowActive.index + 1 : nowBase.clips.length;
       edit((current) => {
         const base = current.clips.length === 0 && current.captions.length === 0 ? { ...current, fps } : current;
-        const clip: FrameClip = {
-          id,
-          label: source.label,
-          srcUrl: source.srcUrl,
-          thumbUrl: source.thumbUrl,
-          sourceFps,
-          sourceFrames,
-          inFrame: 0,
-          phase: 0,
-          frames: 1,
-          speedNum: 1,
-          speedDen: 1,
-          volume: 1,
-          muted: false,
-        };
-        return insertClips(base, base.clips.length, [{ ...clip, frames: clipMaxFrames(clip, base.fps) }]);
+        const active = placement === 'playhead' ? frameStateAt(base, targetPlayhead).active : null;
+        const atIdx = placement === 'playhead' && active ? active.index + 1 : base.clips.length;
+        return insertClips(base, atIdx, [{ ...clipBase, frames: clipMaxFrames(clipBase, base.fps) }]);
       });
+      return { ok: true, index: insertedAt, frames: placedFrames, fps, label: source.label };
     },
     [edit, say, copy, noteRates, noteMissing],
   );
@@ -820,7 +898,7 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
   );
   const setSpeedCurve = useCallback(
     (index: number, points: readonly SpeedPoint[], coalesce = false) => {
-      if (blockedRef.current) return;
+      if (isEditLocked()) return;
       // A shape the cut cannot take leaves it as it is and says why (audit A2); the refused move still keeps a
       // drag's undo window open, and the retime is worked out once (review item 8, lib/brand-studio/editor-v2/edit-steps.ts).
       const clipKey = speedUndoKey(docRef.current.sequence.clips[index]?.id ?? String(index));
@@ -858,6 +936,7 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
     return true;
   }, [pick, doc]);
   const cutClips = useCallback(() => {
+    if (isEditLocked()) return;
     const clips = pick();
     if (clips.length === 0 || clips.length >= sequence.clips.length) return clips.length > 0 ? say(copy.toast.lastCut) : undefined;
     copyClips();
@@ -865,7 +944,7 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
   }, [pick, sequence, copyClips, removeClips, say, copy]);
   const insertCopies = useCallback(
     (source: Clipboard, atIndex: number) => {
-      if (blockedRef.current) return;
+      if (isEditLocked()) return;
       if (sequence.clips.length + source.clips.length > MAX_COMPOSE_CLIPS) return say(cutLimitLine(copy));
       const copies = source.clips.map((clip) => ({
         ...clip,
@@ -1215,6 +1294,7 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
       case 'workspaceColor': return setWorkspace('color');
       case 'workspaceSound': return setWorkspace('sound');
       case 'workspaceCaptions': return setWorkspace('captions');
+      case 'focusChat': return;
       case 'shortcuts': return setShortcutsOpen((open) => !open);
     }
   };
@@ -1228,6 +1308,7 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
     /** The stored film as last read or written (real film only): what v2 shows but does not own. */
     storedFilm,
     filmView,
+    previewDraftView,
     gradeNames: real?.gradeNames ?? null,
     status,
     readOnly,
@@ -1284,6 +1365,8 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
     redo,
     change,
     edit,
+    setDraftLocked,
+    commitChatEdit,
     tabs,
     setTab,
     workspace,

@@ -4,8 +4,10 @@ import { useEffect, useRef, useState } from 'react';
 import { fill } from '@/components/brand-studio/copy';
 import {
   MAX_BINDINGS_PER_ACTION,
+  SHORTCUT_DEFAULTS,
   SHORTCUT_GROUPS,
   SHORTCUT_SETS,
+  actionFor,
   assignBinding,
   bindingFromEvent,
   clearBinding,
@@ -17,6 +19,7 @@ import {
   type Binding,
   type ShortcutAction,
 } from '@/lib/brand-studio/editor-v2/shortcuts';
+import type { StudioEditorChatCopy } from '@/messages/studio-editor-chat';
 import { EditorIcon } from './icons';
 import type { EditorApi } from './use-editor';
 import styles from './editor-v2.module.css';
@@ -38,14 +41,16 @@ interface Notice {
  * Every keyboard action with its keys. Press a slot, then the new key: a key the browser keeps is
  * refused with a reason, a key another action holds asks before taking it. Saved in this browser.
  */
-export function ShortcutsPanel({ api }: { api: EditorApi }) {
+export function ShortcutsPanel({ api, chatCopy = null }: { api: EditorApi; chatCopy?: StudioEditorChatCopy | null }) {
   const { copy, shortcutPrefs: prefs, shortcutMap: map, mac } = api;
   const s = copy.shortcuts;
+  const labelOf = (action: ShortcutAction) => (action === 'focusChat' ? (chatCopy?.shortcutFocusChat ?? '') : s.actions[action]);
   const [capture, setCapture] = useState<Capture | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
+  const [dismissedChatConflict, setDismissedChatConflict] = useState(false);
   const dialog = useRef<HTMLDivElement | null>(null);
-  const live = useRef({ prefs, mac, capture, save: api.setShortcutPrefs });
-  live.current = { prefs, mac, capture, save: api.setShortcutPrefs };
+  const live = useRef({ prefs, mac, capture, save: api.setShortcutPrefs, chatOpen: Boolean(chatCopy) });
+  live.current = { prefs, mac, capture, save: api.setShortcutPrefs, chatOpen: Boolean(chatCopy) };
 
   useEffect(() => {
     dialog.current?.focus();
@@ -62,7 +67,10 @@ export function ShortcutsPanel({ api }: { api: EditorApi }) {
       if (event.code === 'Escape' && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey) return setCapture(null);
       const binding = bindingFromEvent(event, state.mac);
       if (!binding) return;
-      const result = assignBinding(state.prefs, state.capture.action, state.capture.slot, binding);
+      let result = assignBinding(state.prefs, state.capture.action, state.capture.slot, binding);
+      if (!result.ok && result.reason === 'taken' && result.by === 'focusChat' && !state.chatOpen) {
+        result = assignBinding(state.prefs, state.capture.action, state.capture.slot, binding, true);
+      }
       if (result.ok) {
         state.save(result.prefs);
         setNotice(null);
@@ -76,9 +84,17 @@ export function ShortcutsPanel({ api }: { api: EditorApi }) {
   }, [capture]);
 
   const caps = (binding: Binding) => formatBinding(binding, mac).join(' ');
-  const take = () => {
-    if (!notice || !notice.by) return;
-    const result = assignBinding(prefs, notice.action, notice.slot, notice.binding, true);
+  const chatDefaultKey = SHORTCUT_DEFAULTS[prefs.set].focusChat[0] ?? 'Slash';
+  const chatConflictHolder =
+    chatCopy && !dismissedChatConflict && map.focusChat.length === 0
+      ? (() => {
+          const holder = actionFor(chatDefaultKey, map);
+          return holder && holder !== 'focusChat' ? holder : null;
+        })()
+      : null;
+  const take = (target: Notice | null) => {
+    if (!target || !target.by) return;
+    const result = assignBinding(prefs, target.action, target.slot, target.binding, true);
     if (result.ok) api.setShortcutPrefs(result.prefs);
     setNotice(null);
   };
@@ -115,12 +131,19 @@ export function ShortcutsPanel({ api }: { api: EditorApi }) {
               <h3>{s.groups[group.id]}</h3>
               <ul>
                 {group.actions.map((action) => {
+                  if (action === 'focusChat' && !chatCopy) return null;
+                  const label = labelOf(action);
                   const keys = map[action];
                   const slots = Math.min(MAX_BINDINGS_PER_ACTION, keys.length + 1);
-                  const rowNotice = notice?.action === action ? notice : null;
+                  const rowNotice: Notice | null =
+                    notice?.action === action
+                      ? notice
+                      : action === 'focusChat' && chatConflictHolder
+                        ? { action: 'focusChat', slot: 0, binding: chatDefaultKey, by: chatConflictHolder }
+                        : null;
                   return (
                     <li key={action} data-editor-shortcut-row={action} data-custom={isCustomised(prefs, action) ? '' : undefined}>
-                      <span className={styles.shortcutName}>{s.actions[action]}</span>
+                      <span className={styles.shortcutName}>{label}</span>
                       <span className={styles.shortcutKeys}>
                         {Array.from({ length: slots }, (_, slot) => {
                           const binding = keys[slot];
@@ -132,7 +155,7 @@ export function ShortcutsPanel({ api }: { api: EditorApi }) {
                                 className={styles.keyBtn}
                                 data-empty={binding ? undefined : ''}
                                 onClick={() => { setNotice(null); setCapture(listening ? null : { action, slot }); }}
-                                aria-label={`${s.actions[action]}: ${binding ? caps(binding) : s.add}`}
+                                aria-label={`${label}: ${binding ? caps(binding) : s.add}`}
                                 data-editor-shortcut-slot={`${action}:${slot}`}
                               >
                                 {listening ? s.press : binding ? caps(binding) : s.add}
@@ -155,14 +178,14 @@ export function ShortcutsPanel({ api }: { api: EditorApi }) {
                         <p className={styles.shortcutNotice} role="alert" data-editor-shortcut-notice={rowNotice.by ? 'taken' : 'reserved'}>
                           <span>
                             <kbd>{caps(rowNotice.binding)}</kbd>
-                            {rowNotice.by ? fill(s.taken, { action: s.actions[rowNotice.by] }) : s.reserved}
+                            {rowNotice.by ? fill(s.taken, { action: labelOf(rowNotice.by) }) : s.reserved}
                           </span>
                           {rowNotice.by && (
-                            <button type="button" className={styles.fixBtn} onClick={take} data-editor-shortcut-take>
+                            <button type="button" className={styles.fixBtn} onClick={() => take(rowNotice)} data-editor-shortcut-take>
                               {s.take}
                             </button>
                           )}
-                          <button type="button" className={styles.quietBtn} onClick={() => setNotice(null)}>
+                          <button type="button" className={styles.quietBtn} onClick={() => { setNotice(null); if (action === 'focusChat' && chatConflictHolder) setDismissedChatConflict(true); }}>
                             {rowNotice.by ? s.cancel : copy.assist.dismiss}
                           </button>
                         </p>

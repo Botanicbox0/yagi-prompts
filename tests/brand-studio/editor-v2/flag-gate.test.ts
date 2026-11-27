@@ -359,7 +359,7 @@ describe('the page source', () => {
 describe('where the editor keeps anything', () => {
   const dir = join(ROOT, 'components/brand-studio/editor-v2');
   const files = readdirSync(dir).filter((name) => /\.(tsx?|ts)$/.test(name));
-  const STORES = ['shortcut-store.ts', 'film-store.ts', 'layout-store.ts'];
+  const STORES = ['shortcut-store.ts', 'film-store.ts', 'layout-store.ts', 'chat-store.ts'];
   /**
    * The files that may make a request, and the one way each may make it. The export and the footage reader
    * read the film's own media: the export to decode its sound; footage-facts a clip's timing boxes with
@@ -374,6 +374,8 @@ describe('where the editor keeps anything', () => {
     'footage-facts.ts': ['fetch('],
     'export-record.ts': ['postComposeOperation', 'compose-request'],
     'export-keep.tsx': ['createStudioApi', 'export-asset', 'share-review-dialog'],
+    'assist-client.ts': ['fetch(', '/api/'],
+    'chat-upload.ts': ['createStudioApi'],
   };
   const NETWORK = [
     'fetch(',
@@ -404,6 +406,13 @@ describe('where the editor keeps anything', () => {
     // The save makes one library client, for its one upload.
     const keep = readFileSync(join(dir, 'export-keep.tsx'), 'utf8');
     expect(keep.match(/createStudioApi\(/g), 'export-keep.tsx makes one upload client').toHaveLength(1);
+    // The chat planner client makes one fetch call, to /api/brand-studio/compose.
+    const assistClient = readFileSync(join(dir, 'assist-client.ts'), 'utf8');
+    expect(assistClient.match(/fetch\(/g), 'assist-client.ts makes one request').toHaveLength(1);
+    expect(assistClient).toContain("'/api/brand-studio/compose'");
+    // The chat attachment uploader makes one library upload client.
+    const chatUpload = readFileSync(join(dir, 'chat-upload.ts'), 'utf8');
+    expect(chatUpload.match(/createStudioApi\(/g), 'chat-upload.ts makes one upload client').toHaveLength(1);
   });
 
   it('no component keeps session storage, a database or a cache', () => {

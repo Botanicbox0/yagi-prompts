@@ -9,9 +9,16 @@ import { EDITOR_WORKSPACES, type EditorWorkspace } from '@/lib/brand-studio/edit
 import { EDITOR_ASSET_LIMIT, assetRecordOf, editorSources } from '@/lib/brand-studio/editor-v2/sources';
 import { createStudioMediaStore } from '@/lib/brand-studio/media-store';
 import { loadStudioSpine } from '@/lib/brand-studio/open-project-server';
+import { brandProjectIdOf } from '@/lib/brand-studio/open-project';
 import { assetView, assetsOf, jobsOf, viewsOf } from '@/lib/brand-studio/repo';
 import { scopedHref } from '@/lib/brands/workspace/selection';
-import { brandStudioEditorV2DefaultFor, brandStudioEditorV2Open, brandWorkspacePrototypeLayerOpen } from '@/lib/flags';
+import {
+  brandStudioEditAssistOpen,
+  brandStudioEditorV2ChatOpenFor,
+  brandStudioEditorV2DefaultFor,
+  brandStudioEditorV2Open,
+  brandWorkspacePrototypeLayerOpen,
+} from '@/lib/flags';
 import { NONCE_HEADER } from '@/lib/security/workspace-csp';
 
 /**
@@ -107,6 +114,22 @@ export default async function StudioEditorV2Page({
     locale: ctx.locale,
   };
 
+  const openFilmId = spine ? (brandProjectIdOf(spine.open) ?? 'own') : 'own';
+  const realChat =
+    brandStudioEditorV2ChatOpenFor(choice.id) && ctx.viewer?.userId
+      ? {
+          userId: ctx.viewer.userId,
+          filmId: openFilmId,
+          assistEnabled: brandStudioEditAssistOpen(),
+          locale: ctx.locale,
+          uploadCopy: {
+            errors: dict.brandStudio.errors,
+            unapprovedUpload: dict.brandStudio.unapprovedUpload,
+            uploadFailed: dict.brandStudio.uploadFailed,
+          },
+        }
+      : undefined;
+
   const editor = (
     <EditorV2
       copy={dict.studioEditor}
@@ -128,6 +151,7 @@ export default async function StudioEditorV2Page({
       keep={keep}
       nonce={nonce}
       {...(spine ? { spine } : {})}
+      {...(realChat ? { realChat, chatCopy: dict.studioEditorChat } : {})}
     />
   );
 

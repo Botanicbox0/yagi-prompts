@@ -1,16 +1,24 @@
 'use client';
 
-import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { fill } from '@/components/brand-studio/copy';
 import { ProjectChip, ProjectGoneNotice, useProjectSpine } from '@/components/brand-studio/project-chip';
 import { WorkspaceBell } from '@/components/brand-workspace/bell';
 import type { ExportPathOverride } from '@/lib/brand-studio/editor-v2/decode-plan';
-import { EDITOR_WORKSPACES, type EditorWorkspace } from '@/lib/brand-studio/editor-v2/model';
+import { frameStateAt, spansOf, totalFrames } from '@/lib/brand-studio/editor-v2/frames';
+import { EDITOR_WORKSPACES, withSequence, type EditorWorkspace } from '@/lib/brand-studio/editor-v2/model';
 import { filmHasSpeedTheOldEditorChanges } from '@/lib/brand-studio/editor-v2/stored';
 import { actionFor, bindingFromEvent, formatBinding, typingTarget } from '@/lib/brand-studio/editor-v2/shortcuts';
 import { brandProjectIdOf, type StudioSpineProps } from '@/lib/brand-studio/open-project';
 import type { StudioEditorCopy } from '@/messages/studio-editor';
+import type { StudioEditorChatCopy } from '@/messages/studio-editor-chat';
 import { Assistant } from './assistant';
+import { validChatExamples, type ChatExampleChip } from './chat-model';
+import { EditorChatPanel, createPlayheadBus, useEditorChatSession, type PlayheadBus } from './chat-panel';
+import { resolveChatFilmId } from './chat-store';
+import type { ChatUploadClient, ChatUploadErrorCopy } from './chat-upload';
+import type { MeasuredMedia } from '@/components/brand-studio/api';
+import type { StudioAssetKind } from '@/lib/brand-studio/contracts';
 import { ExportShareHost, shareWindowOpen, type ExportKeepCopy } from './export-keep';
 import { ExportSheet } from './export-sheet';
 import { EditorIcon } from './icons';
@@ -37,8 +45,30 @@ import { Timeline } from './timeline';
 import { useEditor, type EditorApi, type RealFilmOptions } from './use-editor';
 import styles from './editor-v2.module.css';
 
-const PREPAINT_SCRIPT = layoutPrepaintScript();
+const PREPAINT_SCRIPT_BAR = layoutPrepaintScript('bar');
+const PREPAINT_SCRIPT_SIDE = layoutPrepaintScript('side');
+const EMPTY_CHAT_EXAMPLES: readonly ChatExampleChip[] = [];
 const useIsoLayoutEffect = typeof document !== 'undefined' ? useLayoutEffect : useEffect;
+/** Transport & view shortcuts permitted while a chat proposal draft is previewed (S6). */
+const DRAFT_ALLOWED_ACTIONS: ReadonlySet<import('@/lib/brand-studio/editor-v2/shortcuts').ShortcutAction> = new Set([
+  'play',
+  'stepBack',
+  'stepForward',
+  'stepBack10',
+  'stepForward10',
+  'prevCut',
+  'nextCut',
+  'toStart',
+  'toEnd',
+  'shuttleBack',
+  'shuttleStop',
+  'shuttleForward',
+  'zoomIn',
+  'zoomOut',
+  'zoomFit',
+  'zoomFrames',
+  'shortcuts',
+]);
 
 export interface EditorV2Props {
   copy: StudioEditorCopy;
@@ -59,6 +89,19 @@ export interface EditorV2Props {
   spine?: StudioSpineProps | null;
   /** Per-request CSP nonce passed from the server page; inline pre-paint script is emitted only when present. */
   nonce?: string;
+  /** Right-side chat switch (slice E-C). Omitted when closed or in sample mode. */
+  realChat?: {
+    userId: string;
+    filmId?: string | null;
+    assistEnabled?: boolean;
+    locale?: 'ko' | 'en';
+    uploadCopy?: ChatUploadErrorCopy | null;
+    /** Optional test injection for library uploads (defaults to the studio library client in chat-upload.ts). */
+    uploadClient?: ChatUploadClient;
+    uploadMeasure?: (file: Blob, kind: StudioAssetKind) => Promise<MeasuredMedia>;
+  } | null;
+  /** Dedicated right-side chat dictionary (slice E-C). Passed only when `realChat` is open. */
+  chatCopy?: StudioEditorChatCopy | null;
 }
 
 /**
@@ -72,12 +115,149 @@ export interface EditorV2Props {
  * the cuts back (V1). Only cutting is real there; colour, sound and captions are locked and say so.
  * Without it, it runs the sample film and keeps everything in memory.
  */
-export function EditorV2({ copy, currentEditorHref, initialWorkspace, exportPath = null, autoDownload = true, real, keep = null, spine = null, nonce }: EditorV2Props) {
+export function EditorV2({ copy, currentEditorHref, initialWorkspace, exportPath = null, autoDownload = true, real, keep = null, spine = null, nonce, realChat = null, chatCopy = null }: EditorV2Props) {
   const spineCtx = useProjectSpine();
   const spineOpen = real ? (spineCtx?.open ?? spine?.open ?? undefined) : undefined;
   const spineActive = Boolean(spineOpen);
   const openBrandProjectId = spineOpen ? brandProjectIdOf(spineOpen) : undefined;
-  const api = useEditor(copy, { real, initialWorkspace });
+  const chatOpen = Boolean(real && realChat && chatCopy);
+  const api = useEditor(copy, { real, initialWorkspace, defaultAssistDock: chatOpen ? 'side' : 'bar' });
+  const playheadBusRef = useRef<PlayheadBus | null>(null);
+  if (!playheadBusRef.current) playheadBusRef.current = createPlayheadBus(api.playhead);
+  useEffect(() => {
+    playheadBusRef.current?.set(api.playhead, api.playing);
+  }, [api.playhead, api.playing]);
+  const chatInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+  const pendingChatFocusRef = useRef(false);
+  const chatExamples = useMemo(
+    () => (chatOpen && chatCopy ? validChatExamples(api.doc.sequence, copy, chatCopy) : EMPTY_CHAT_EXAMPLES),
+    [chatOpen, chatCopy, api.doc.sequence, copy],
+  );
+  const filmIdPending = Boolean(chatOpen && realChat && realChat.filmId === null && !real?.filmId && !openBrandProjectId);
+  const chatFilmId = filmIdPending
+    ? null
+    : resolveChatFilmId({
+        isReal: Boolean(real),
+        filmId: realChat?.filmId ?? real?.filmId,
+        projectId: openBrandProjectId,
+      });
+  const chatScope = useMemo(
+    () =>
+      chatOpen && real && realChat && chatFilmId
+        ? { organizationId: real.organizationId, userId: realChat.userId, filmId: chatFilmId }
+        : null,
+    [chatOpen, real?.organizationId, realChat?.userId, chatFilmId],
+  );
+  const chatSession = useEditorChatSession({
+    scope: chatScope,
+    scopePending: filmIdPending,
+    assistEnabled: realChat?.assistEnabled ?? true,
+    locale: realChat?.locale ?? keep?.locale ?? 'ko',
+    sequence: api.doc.sequence,
+    selection: api.selection,
+    canUndo: api.canUndo,
+    readOnly: api.readOnly,
+    status: api.status,
+    copy,
+    chatCopy: chatOpen ? chatCopy : null,
+    playheadBus: playheadBusRef.current,
+    edit: api.commitChatEdit,
+    undo: api.undo,
+    brandProjectId: openBrandProjectId ?? null,
+    sources: api.sources,
+    onAssetSaved: api.noteSavedAsset,
+    onInsertSource: api.addSource,
+    uploadCopy: realChat?.uploadCopy ?? null,
+    uploadClient: realChat?.uploadClient,
+    uploadMeasure: realChat?.uploadMeasure,
+  });
+  const [rightTab, setRightTab] = useState<'inspector' | 'chat'>('chat');
+  // ARIA-only wide-layout flag (>1360px): layout itself stays 100% CSS-driven (0 CLS), while above 1360px
+  // both visible panes present as labeled regions rather than tabpanels and the hidden tab bar is aria-hidden.
+  const [wideRightAria, setWideRightAria] = useState(false);
+  useEffect(() => {
+    if (!chatOpen || typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+      setWideRightAria(false);
+      return;
+    }
+    const mq = window.matchMedia('(min-width: 1361px)');
+    const sync = () => setWideRightAria(Boolean(mq.matches));
+    sync();
+    mq.addEventListener?.('change', sync);
+    return () => mq.removeEventListener?.('change', sync);
+  }, [chatOpen]);
+  const rightTabsId = useId();
+  const inspectorTabRef = useRef<HTMLButtonElement | null>(null);
+  const chatTabRef = useRef<HTMLButtonElement | null>(null);
+  const draftLocked = Boolean(chatOpen && chatSession?.openProposal);
+  // Lock `use-editor`'s `change()` in a layout effect (never writing refs during render — SMALL #3, S5).
+  useIsoLayoutEffect(() => {
+    api.setDraftLocked(draftLocked);
+    return () => api.setDraftLocked(false);
+  }, [api.setDraftLocked, draftLocked]);
+  const activeDraft = chatOpen ? (chatSession?.activeDraft ?? null) : null;
+  const activeDraftInherit = chatOpen ? (chatSession?.activeDraftInherit ?? undefined) : undefined;
+  const displayApi: EditorApi = useMemo(() => {
+    if (!activeDraft) return api;
+    // Derive draft's `filmView` with pending split `inheritClip` entries WITHOUT mutating `catalogue` (S1).
+    const draftFilmView = api.previewDraftView(activeDraft, activeDraftInherit);
+    const draftDoc = withSequence(api.doc, activeDraft, activeDraftInherit);
+    const draftSequence = draftFilmView ? draftFilmView.sequence : activeDraft;
+    const total = totalFrames(draftSequence);
+    const lastFrame = Math.max(0, total - 1);
+    const frame = frameStateAt(draftSequence, api.playhead);
+    return {
+      ...api,
+      doc: draftDoc,
+      filmView: draftFilmView,
+      sequence: draftSequence,
+      spans: spansOf(draftSequence),
+      total,
+      lastFrame,
+      durationSec: total / Math.max(1, draftSequence.fps),
+      frame,
+      activeClip: frame.active,
+      playhead: frame.frame,
+      playheadSec: frame.frame / Math.max(1, draftSequence.fps),
+      readOnly: true,
+      canUndo: false,
+      canRedo: false,
+    };
+  }, [api, activeDraft, activeDraftInherit]);
+  const chatKeyRef = useRef({ chatOpen, rightTab, assistDock: api.assistDock, draftLocked });
+  chatKeyRef.current = { chatOpen, rightTab, assistDock: api.assistDock, draftLocked };
+  useIsoLayoutEffect(() => {
+    if (!pendingChatFocusRef.current || rightTab !== 'chat') return;
+    pendingChatFocusRef.current = false;
+    chatInputRef.current?.focus?.();
+  }, [rightTab]);
+  const onChatEscapeFocus = useCallback((): boolean => {
+    const prev = previousFocusRef.current;
+    previousFocusRef.current = null;
+    if (prev && prev !== chatInputRef.current && typeof prev.focus === 'function' && (prev.isConnected ?? true)) {
+      prev.focus();
+      return true;
+    }
+    return false;
+  }, []);
+  const onRightTabKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowRight' || event.key === 'Home' || event.key === 'End') {
+      event.preventDefault();
+      event.stopPropagation();
+      const next: 'inspector' | 'chat' =
+        event.key === 'Home'
+          ? 'inspector'
+          : event.key === 'End'
+            ? 'chat'
+            : rightTab === 'inspector'
+              ? 'chat'
+              : 'inspector';
+      setRightTab(next);
+      (next === 'inspector' ? inspectorTabRef : chatTabRef).current?.focus?.();
+    }
+  };
+  const prepaintScript = chatOpen ? PREPAINT_SCRIPT_SIDE : PREPAINT_SCRIPT_BAR;
   // "에셋에 저장" and "검수 · 공유" are for people who may change the organization's own film; the review share
   // window is titled by the film's name, as the header shows it. Anyone else gets neither, nor the window's host.
   const exportKeep = real && keep && real.canEdit ? { copy: keep.copy, title: fill(copy.real.filmName, { name: real.organizationName }) } : null;
@@ -370,6 +550,22 @@ export function EditorV2({ copy, currentEditorHref, initialWorkspace, exportPath
       }
       const action = actionFor(bindingFromEvent(event, editor.mac), editor.shortcutMap);
       if (!action) return;
+      if (action === 'focusChat') {
+        const chatState = chatKeyRef.current;
+        if (!chatState.chatOpen) return;
+        event.preventDefault();
+        previousFocusRef.current = (document.activeElement as HTMLElement | null) ?? null;
+        if (chatState.assistDock === 'side' && chatState.rightTab !== 'chat') {
+          pendingChatFocusRef.current = true;
+          setRightTab('chat');
+        } else {
+          chatInputRef.current?.focus?.();
+        }
+        return;
+      }
+      // While a chat proposal draft is open, allow transport/playback & view shortcuts (Space, step, J/K/L,
+      // Home/End, prev/next cut) so the customer can preview the draft, and block editing actions, undo & redo (S6).
+      if (chatKeyRef.current.draftLocked && !DRAFT_ALLOWED_ACTIONS.has(action)) return;
       const tag = target?.tagName;
       if ((tag === 'BUTTON' || tag === 'A' || tag === 'SUMMARY') && (event.code === 'Space' || event.code === 'Enter')) return;
       if (target?.hasAttribute('data-curve-point') && /^(Arrow|Home|End|Backspace|Delete)/.test(event.code)) return;
@@ -394,9 +590,11 @@ export function EditorV2({ copy, currentEditorHref, initialWorkspace, exportPath
       data-editor-mode={api.real ? 'real' : 'sample'}
       data-editor-status={api.status}
       data-editor-read-only={api.readOnly ? '' : undefined}
+      data-real-chat={chatOpen ? '' : undefined}
+      data-chat-draft={activeDraft ? '' : undefined}
       suppressHydrationWarning
     >
-      {emitPrepaintScript && <script data-ev-prepaint="" nonce={nonce} suppressHydrationWarning dangerouslySetInnerHTML={{ __html: PREPAINT_SCRIPT }} />}
+      {emitPrepaintScript && <script data-ev-prepaint="" nonce={nonce} suppressHydrationWarning dangerouslySetInnerHTML={{ __html: prepaintScript }} />}
       <header ref={topRef} className={styles.top}>
         <div className={styles.topLeft}>
           <OldEditorLink copy={copy} href={currentEditorHref} speedDiffers={api.real && filmHasSpeedTheOldEditorChanges(api.sequence)} />
@@ -437,10 +635,10 @@ export function EditorV2({ copy, currentEditorHref, initialWorkspace, exportPath
           ))}
         </nav>
         <div className={styles.topRight}>
-          <button type="button" className={styles.iconBtn} onClick={api.undo} disabled={!api.canUndo} aria-label={copy.top.undo} title={copy.top.undo} data-editor-undo>
+          <button type="button" className={styles.iconBtn} onClick={api.undo} disabled={!api.canUndo || draftLocked} aria-label={copy.top.undo} title={copy.top.undo} data-editor-undo>
             <EditorIcon name="undo" />
           </button>
-          <button type="button" className={styles.iconBtn} onClick={api.redo} disabled={!api.canRedo} aria-label={copy.top.redo} title={copy.top.redo}>
+          <button type="button" className={styles.iconBtn} onClick={api.redo} disabled={!api.canRedo || draftLocked} aria-label={copy.top.redo} title={copy.top.redo}>
             <EditorIcon name="redo" />
           </button>
           <button
@@ -468,10 +666,89 @@ export function EditorV2({ copy, currentEditorHref, initialWorkspace, exportPath
       </header>
       {spineActive ? <ProjectGoneNotice /> : null}
 
-      <Materials api={api} />
-      <Preview api={api} />
-      <ActionPanel api={api} classicHref={currentEditorHref} />
-      {api.assistDock === 'side' && <Assistant api={api} placement="side" />}
+      <Materials api={displayApi} draggableSources={chatOpen} />
+      <Preview api={displayApi} />
+      {chatOpen && chatSession && chatCopy ? (
+        api.assistDock === 'side' ? (
+          <div className={styles.rightDock} data-editor-right-dock="" data-active-tab={rightTab}>
+            <div
+              className={`${styles.tabs} ${styles.rightTabBar}`}
+              role={wideRightAria ? undefined : 'tablist'}
+              aria-label={wideRightAria ? undefined : chatCopy.rightTabsLabel}
+              aria-hidden={wideRightAria || undefined}
+              onKeyDown={onRightTabKeyDown}
+              data-editor-right-tabs
+            >
+              <button
+                ref={inspectorTabRef}
+                id={`${rightTabsId}-tab-inspector`}
+                type="button"
+                role={wideRightAria ? undefined : 'tab'}
+                aria-selected={wideRightAria ? undefined : rightTab === 'inspector'}
+                aria-controls={wideRightAria ? undefined : `${rightTabsId}-pane-inspector`}
+                tabIndex={wideRightAria ? -1 : rightTab === 'inspector' ? 0 : -1}
+                onClick={() => setRightTab('inspector')}
+                data-editor-right-tab="inspector"
+              >
+                {chatCopy.tabInspector}
+              </button>
+              <button
+                ref={chatTabRef}
+                id={`${rightTabsId}-tab-chat`}
+                type="button"
+                role={wideRightAria ? undefined : 'tab'}
+                aria-selected={wideRightAria ? undefined : rightTab === 'chat'}
+                aria-controls={wideRightAria ? undefined : `${rightTabsId}-pane-chat`}
+                tabIndex={wideRightAria ? -1 : rightTab === 'chat' ? 0 : -1}
+                onClick={() => setRightTab('chat')}
+                data-editor-right-tab="chat"
+              >
+                {chatCopy.tabChat}
+              </button>
+            </div>
+            <div
+              id={`${rightTabsId}-pane-inspector`}
+              role={wideRightAria ? 'region' : 'tabpanel'}
+              aria-labelledby={wideRightAria ? undefined : `${rightTabsId}-tab-inspector`}
+              aria-label={wideRightAria ? chatCopy.tabInspector : undefined}
+              className={styles.rightPaneInspector}
+              data-editor-right-pane="inspector"
+            >
+              <ActionPanel api={displayApi} classicHref={currentEditorHref} />
+            </div>
+            <div
+              id={`${rightTabsId}-pane-chat`}
+              role={wideRightAria ? 'region' : 'tabpanel'}
+              aria-labelledby={wideRightAria ? undefined : `${rightTabsId}-tab-chat`}
+              aria-label={wideRightAria ? chatCopy.tabChat : undefined}
+              className={styles.rightPaneChat}
+              data-editor-right-pane="chat"
+            >
+              <EditorChatPanel
+                session={chatSession}
+                sequence={api.doc.sequence}
+                canUndo={api.canUndo}
+                readOnly={api.readOnly}
+                status={api.status}
+                chatCopy={chatCopy}
+                examples={chatExamples}
+                playheadBus={playheadBusRef.current}
+                placement="side"
+                onSetDock={api.setAssistDock}
+                inputRef={chatInputRef}
+                onEscapeFocus={onChatEscapeFocus}
+              />
+            </div>
+          </div>
+        ) : (
+          <ActionPanel api={displayApi} classicHref={currentEditorHref} />
+        )
+      ) : (
+        <>
+          <ActionPanel api={api} classicHref={currentEditorHref} />
+          {api.assistDock === 'side' && <Assistant api={api} placement="side" />}
+        </>
+      )}
 
       <div ref={bottomRef} className={styles.bottom}>
         <div
@@ -493,8 +770,26 @@ export function EditorV2({ copy, currentEditorHref, initialWorkspace, exportPath
           onDoubleClick={() => api.setTimelineHeight(null, true)}
           onKeyDown={onMainHandleKey}
         />
-        {api.assistDock === 'bar' && <Assistant api={api} placement="bar" />}
-        <Timeline api={api} />
+        {api.assistDock === 'bar' &&
+          (chatOpen && chatSession && chatCopy ? (
+            <EditorChatPanel
+              session={chatSession}
+              sequence={api.doc.sequence}
+              canUndo={api.canUndo}
+              readOnly={api.readOnly}
+              status={api.status}
+              chatCopy={chatCopy}
+              examples={chatExamples}
+              playheadBus={playheadBusRef.current}
+              placement="bar"
+              onSetDock={api.setAssistDock}
+              inputRef={chatInputRef}
+              onEscapeFocus={onChatEscapeFocus}
+            />
+          ) : (
+            <Assistant api={api} placement="bar" />
+          ))}
+        <Timeline api={displayApi} />
       </div>
 
       {api.conflict && (
@@ -518,7 +813,7 @@ export function EditorV2({ copy, currentEditorHref, initialWorkspace, exportPath
         />
       )}
       {real && keep && exportKeep && <ExportShareHost organizationId={real.organizationId} locale={keep.locale} />}
-      {api.shortcutsOpen && <ShortcutsPanel api={api} />}
+      {api.shortcutsOpen && <ShortcutsPanel api={api} chatCopy={chatOpen ? chatCopy : null} />}
       {api.toast && <p className={styles.toast} role="status" data-editor-toast>{api.toast}</p>}
     </div>
   );

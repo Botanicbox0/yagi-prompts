@@ -20,6 +20,8 @@ export interface EditorLayout {
   timelineHeight: number | null;
   lanes: Partial<Record<LaneKind, number>>;
   assistDock: AssistDock;
+  /** Present and `true` only after the customer explicitly toggled the dock position. */
+  assistDockSet?: true;
 }
 
 export const DEFAULT_EDITOR_LAYOUT: EditorLayout = {
@@ -28,6 +30,12 @@ export const DEFAULT_EDITOR_LAYOUT: EditorLayout = {
   lanes: {},
   assistDock: 'bar',
 };
+
+/** Right-side chat layout breakpoints & chrome constants (slice E-C). */
+export const EDITOR_OUTER_CHROME_PX = 112;
+export const EDITOR_COL_GAP_PX = 8;
+export const CHAT_TABBED_MAX_WIDTH = 1360;
+export const CHAT_WIDE_MIN_WIDTH = 1680;
 
 export const LANE_MIN_HEIGHT = 22;
 export const LANE_MAX_HEIGHT = 160;
@@ -125,9 +133,68 @@ export function withTimelineHeight(layout: EditorLayout, height: number | null):
   return { ...layout, timelineHeight: next };
 }
 
-export function withAssistDock(layout: EditorLayout, dock: AssistDock): EditorLayout {
-  if (layout.assistDock === dock) return layout;
-  return { ...layout, assistDock: dock };
+export function withAssistDock(layout: EditorLayout, dock: AssistDock, defaultDock: AssistDock = 'bar'): EditorLayout {
+  if (effectiveAssistDock(layout, defaultDock) === dock) return layout;
+  return { ...layout, assistDock: dock, assistDockSet: true };
+}
+
+/**
+ * Resolves the active dock placement given the mode's default (`'side'` when right-side chat is open,
+ * `'bar'` otherwise). A saved explicit customer choice (`assistDockSet === true`) always wins; when
+ * closed (`defaultDock === 'bar'`), legacy E-L saved `'side'` values are preserved.
+ */
+export function effectiveAssistDock(layout: EditorLayout, defaultDock: AssistDock): AssistDock {
+  if (layout.assistDockSet) return layout.assistDock;
+  return defaultDock === 'side' ? 'side' : layout.assistDock;
+}
+
+export interface EditorColumnWidths {
+  mode: '3col' | 'tabbed' | '4col';
+  left: number;
+  preview: number;
+  inspector: number;
+  chat: number;
+}
+
+/**
+ * Pure column width calculation for the editor grid at a given viewport width (outer chrome = 112px,
+ * grid gap = 8px). Pins the 1280 / 1440 / 1920 preview widths for slice E-C.
+ */
+export function editorColumnWidths(viewportWidth: number, assistDock: AssistDock, realChat: boolean): EditorColumnWidths {
+  const inner = Math.max(0, Math.round(viewportWidth) - EDITOR_OUTER_CHROME_PX);
+  if (realChat && assistDock === 'side') {
+    if (viewportWidth <= CHAT_TABBED_MAX_WIDTH) {
+      const left = 220;
+      const right = 320;
+      const preview = Math.max(0, inner - 2 * EDITOR_COL_GAP_PX - left - right);
+      return { mode: 'tabbed', left, preview, inspector: right, chat: right };
+    }
+    if (viewportWidth < CHAT_WIDE_MIN_WIDTH) {
+      const left = 232;
+      const inspector = 292;
+      const chat = 316;
+      const preview = Math.max(0, inner - 3 * EDITOR_COL_GAP_PX - left - inspector - chat);
+      return { mode: '4col', left, preview, inspector, chat };
+    }
+    const left = 264;
+    const inspector = 324;
+    const chat = 340;
+    const preview = Math.max(0, inner - 3 * EDITOR_COL_GAP_PX - left - inspector - chat);
+    return { mode: '4col', left, preview, inspector, chat };
+  }
+  if (assistDock === 'side') {
+    const narrow = viewportWidth <= CHAT_TABBED_MAX_WIDTH;
+    const left = narrow ? 196 : 264;
+    const inspector = narrow ? 276 : 324;
+    const chat = narrow ? 268 : 300;
+    const preview = Math.max(0, inner - 3 * EDITOR_COL_GAP_PX - left - inspector - chat);
+    return { mode: '4col', left, preview, inspector, chat };
+  }
+  const narrow = viewportWidth <= CHAT_TABBED_MAX_WIDTH;
+  const left = narrow ? 228 : 264;
+  const inspector = narrow ? 300 : 324;
+  const preview = Math.max(0, inner - 2 * EDITOR_COL_GAP_PX - left - inspector);
+  return { mode: '3col', left, preview, inspector, chat: 0 };
 }
 
 export interface KeyModifiers {
@@ -235,7 +302,8 @@ export function sanitizeEditorLayout(layout: EditorLayout): EditorLayout {
       ? Math.min(MAX_STORED_TIMELINE_HEIGHT, Math.round(layout.timelineHeight))
       : null;
   const assistDock: AssistDock = layout.assistDock === 'side' ? 'side' : 'bar';
-  return { v: LAYOUT_VERSION, timelineHeight, lanes, assistDock };
+  const base: EditorLayout = { v: LAYOUT_VERSION, timelineHeight, lanes, assistDock };
+  return layout.assistDockSet === true ? { ...base, assistDockSet: true } : base;
 }
 
 export function parseEditorLayout(raw: unknown, bounds?: TimelineBounds): EditorLayout {
@@ -261,7 +329,8 @@ export function parseEditorLayout(raw: unknown, bounds?: TimelineBounds): Editor
   }
 
   const assistDock: AssistDock = record.assistDock === 'side' ? 'side' : 'bar';
-  return { v: LAYOUT_VERSION, timelineHeight, lanes, assistDock };
+  const base: EditorLayout = { v: LAYOUT_VERSION, timelineHeight, lanes, assistDock };
+  return record.assistDockSet === true ? { ...base, assistDockSet: true } : base;
 }
 
 export function stepTimelineByKey(
