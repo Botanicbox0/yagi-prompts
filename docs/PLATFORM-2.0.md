@@ -379,6 +379,7 @@ PR #76의 `identity_selfies`를 그대로 확장한다(새 테이블 없음).
 
 ### 16.2 설계 원칙
 - 브랜드는 **정하고 보고 지불**한다. 선정·검수·지급 확정은 계속 TWINGS가 한다(KAIPER 원칙 유지: 결제가 선정·검수·지급을 대신하지 않는다).
+  - **2026-11-27 대표 결정(선정만 바뀐다):** "브랜드가 최종 확정까지 할 수 있게도 할거야. 크리에이터 만약 선정을 희망하는 경우에는." 참여할 크리에이터는 캠페인마다 TWINGS가 선정하거나 브랜드가 직접 최종 확정한다. 검수와 지급 확정은 그대로 TWINGS가 하고, 결제가 선정을 대신하지 않는다는 원칙도 그대로다. 약관 제2조 3항·제8조 6항과 개인정보처리방침 4항을 같은 날 고쳤다(`lib/legal/documents.ts`, 시행일 2026-11-27). 브랜드가 직접 확정하는 기능 자체는 아직 없다: 만들 때 캠페인 페이지에 "브랜드가 직접 선정"을 표시하고, 지원 화면의 동의 문구에 지원 정보가 브랜드에 전달된다는 것을 넣어야 약관과 맞는다. 아래 §16.4와 §6.3의 "선정은 TWINGS"는 기본값(TWINGS에 맡기기)의 설명으로 읽는다.
 - 캠페인 하나 = 화면 하나. 프로젝트 상세 탭에 **지원자·참여자·결제**를 합쳐 한 타임라인으로 보여준다(브리프 → 검토 → 모집 → 선정 → 제작·게시 → 리포트 → 정산).
 - 기존 서비스·컴포넌트 재사용: `createBrandProject`·`loadBrandProject`·`loadProjectCollaboration`·`issueInvitation`·`loadCampaignParticipation`(퍼널 수)·`campaignPerformance`·펀딩 `quote→accept→order→confirm`, `ActionForm`·`ConfirmStep`·`ProjectTabs`·`CampaignPerformance`·`ParticipantDetail`·`FundingActions`. 새로 쓰지 않는다.
 - Operate 모드. 브랜드 워크스페이스의 `bw-*` 토큰과 `brandWorkspace` 사전으로 통일한다.
