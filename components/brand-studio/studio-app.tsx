@@ -290,6 +290,7 @@ export function StudioApp({ organizationId, organizationName, locale, copy, bill
   const [editorState, setEditorState] = useState<{
     nonce: number;
     base: LayerEditorProps["base"];
+    sourceOutputId: string | null;
     isBlankCanvas?: boolean;
     initialTool: "move" | "marquee";
     initialPatch: LayerEditorProps["initialPatch"];
@@ -401,6 +402,7 @@ export function StudioApp({ organizationId, organizationName, locale, copy, bill
           height: preset.height,
           name: locale === "en" ? `Canvas ${preset.label}` : `빈 캔버스 ${preset.label}`,
         },
+        sourceOutputId: null,
         isBlankCanvas: true,
         initialTool: "move",
         initialPatch: null,
@@ -412,6 +414,7 @@ export function StudioApp({ organizationId, organizationName, locale, copy, bill
 
   const openLayerEditor = useCallback(
     async (source: RefSource, opts: { tool: "move" | "marquee"; preset?: LayerEditorRegionPreset | null }) => {
+      const sourceOutputId = "outputId" in source ? source.outputId : null;
       const asset = "assetId" in source ? lookup.asset(source.assetId) : null;
       const output = "outputId" in source ? lookup.output(source.outputId) : null;
       const file = asset ?? output;
@@ -439,6 +442,7 @@ export function StudioApp({ organizationId, organizationName, locale, copy, bill
                   height: pSize.height,
                   name: parentAst?.name ?? null,
                 },
+                sourceOutputId,
                 initialTool: "move",
                 initialPatch: {
                   id: `patch-${output.id}`,
@@ -466,6 +470,7 @@ export function StudioApp({ organizationId, organizationName, locale, copy, bill
       setEditorState({
         nonce: editorNonceRef.current,
         base: { ref: source, url: file.url, width: size.width, height: size.height, name: asset?.name ?? null },
+        sourceOutputId,
         initialTool: opts.tool,
         initialPatch: null,
         initialRegionPreset: opts.preset ?? null,
@@ -947,6 +952,7 @@ export function StudioApp({ organizationId, organizationName, locale, copy, bill
             locale={locale}
             canGenerate={dockOpen}
             canEdit={canCreate}
+            {...(send ? { sendOpen: true } : {})}
             canStop={canCreate}
             stopping={stopping}
             notes={jobNotes}
@@ -1072,6 +1078,7 @@ export function StudioApp({ organizationId, organizationName, locale, copy, bill
         <ShareReviewDialog
           target={shareTarget}
           locale={locale}
+          {...(send ? { sendOpen: true } : {})}
           onClose={() => setShareTarget(null)}
         />
       )}
@@ -1186,6 +1193,23 @@ export function StudioApp({ organizationId, organizationName, locale, copy, bill
             setStatus(copy.gallery.decorated);
             void asset;
           }}
+          {...(state?.editToWall
+            ? {
+                saveEdited: (file: File, options?: { requestId?: string }) =>
+                  studio.saveEditedImage(file, {
+                    ...(options?.requestId ? { requestId: options.requestId } : {}),
+                    parentOutputId: editorState.sourceOutputId,
+                  }),
+                onSavedToWall: () => {
+                  setStatus(copy.gallery.editSaved);
+                },
+              }
+            : {})}
+          errorText={(failure) =>
+            failure.projectGone
+              ? (spineCtx?.copy.goneNotice ?? studioUploadErrorLine(copy, "not_found"))
+              : studioUploadErrorLine(copy, failure.code, failure.reason)
+          }
           onClose={() => setEditorState(null)}
           copy={layersCopy}
         />

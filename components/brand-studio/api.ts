@@ -18,6 +18,10 @@ import {
   type AssetReserveSchema,
   type AssetUpdateSchema,
   type BrandProjectArchiveInput,
+  type OutputEditCompleteSchema,
+  type OutputEditReserveSchema,
+  type StudioOutputEditReserved,
+  type StudioOutputEditSaved,
   type BrandProjectFilesInput,
   type BrandProjectFilingInput,
   type BrandProjectListInput,
@@ -97,6 +101,8 @@ export interface StudioOps {
   "output.waveform": [z.input<typeof OutputWaveformSchema>, StudioDone];
   "lyrics.draft": [z.input<typeof LyricsDraftSchema>, StudioLyricsDraft];
   "music.design": [z.input<typeof MusicDesignSchema>, StudioMusicDesign];
+  "output.edit.reserve": [z.input<typeof OutputEditReserveSchema> & BrandProjectFilingInput, StudioOutputEditReserved];
+  "output.edit.complete": [z.input<typeof OutputEditCompleteSchema> & BrandProjectFilingInput, StudioOutputEditSaved];
 }
 // Compile-time guard: every contract operation has a row above and nothing else does.
 type Exact<A, B> = [A] extends [B] ? ([B] extends [A] ? true : never) : never;
@@ -387,6 +393,55 @@ export function createStudioApi({ organizationId, fetch: fetcher = (...args) => 
       if (!put.ok) return failed(STATUS_CODES[put.status] ?? "failed");
       const size = options.measure ? await options.measure(file, kind).catch(() => ({}) as MeasuredMedia) : {};
       return call("asset.complete", { organizationId, assetId: reserved.id, ...cleanMeasure(size), ...(options.transient ? { transient: true } : {}) });
+    },
+
+    async saveEditedImage(
+      file: UploadFile & Blob,
+      options: {
+        requestId?: string;
+        parentOutputId?: string | null;
+        brandProjectId?: string | null;
+        projectId?: string | null;
+      } = {},
+    ): Promise<ApiResult<StudioOutputEditSaved>> {
+      const mime = (STUDIO_UPLOAD_MIMES.image as readonly string[]).includes(file.type)
+        ? (file.type as (typeof STUDIO_UPLOAD_MIMES.image)[number])
+        : null;
+      if (!mime) return failed("unsupported_file");
+      if (!Number.isFinite(file.size) || file.size <= 0) return failed("invalid");
+      if (file.size > STUDIO_LIMITS.imageBytesMax) return failed("file_too_large");
+      const reqId = options.requestId ?? newRequestId();
+      const basePayload = {
+        organizationId,
+        requestId: reqId,
+        mime,
+        ...(options.parentOutputId ? { parentOutputId: options.parentOutputId } : {}),
+        ...(options.brandProjectId ? { brandProjectId: options.brandProjectId } : {}),
+        ...(options.projectId ? { projectId: options.projectId } : {}),
+      };
+      const reserved = await call("output.edit.reserve", {
+        ...basePayload,
+        sizeBytes: file.size,
+      });
+      if (isFailure(reserved)) return reserved;
+      if ("job" in reserved) return { ok: true, job: reserved.job };
+      const uploadTarget =
+        reserved.url || `${STUDIO_ENDPOINT}/edit/${encodeURIComponent(reqId)}?organizationId=${encodeURIComponent(organizationId)}`;
+      let put: Response;
+      try {
+        put = reserved.direct
+          ? await fetcher(uploadTarget, { method: "PUT", body: file, headers: { "Content-Type": mime } })
+          : await fetcher(uploadTarget, {
+              method: "POST",
+              body: file,
+              credentials: "same-origin",
+              headers: { "Content-Type": mime },
+            });
+      } catch {
+        return failed("failed");
+      }
+      if (!put.ok) return failed(STATUS_CODES[put.status] ?? "failed");
+      return call("output.edit.complete", basePayload);
     },
   };
 }

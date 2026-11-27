@@ -213,15 +213,50 @@ function stateOf(answer: unknown): unknown {
 }
 
 /**
- * For the three open-spine member reads where R-B adds a single optional top-level key (`listed` on filtered
+ * For the open-spine member reads where R-B adds optional top-level keys (`listed` on filtered
  * `project.cards`/`project.overview`, `project` on `project.files` with `scope.kind === 'project'`), remove ONLY
- * that new key before comparing against the Step 0 untouched-branch snapshot.
+ * those new keys before comparing against the Step 0 untouched-branch snapshot. Also strips Fix Round 3 Item 8's
+ * always-present `cover.model` field on `project.overview` covers and `project.cards.unfiled.covers` without
+ * regenerating the Step 0 snapshot.
  */
-function stripRbOptional(kind: 'cards_filtered' | 'overview_filtered' | 'files_project', answer: unknown): unknown {
+function stripCoverModel(body: Record<string, unknown>, includeProjectCovers: boolean): Record<string, unknown> {
+  const stripCovers = (list: unknown) =>
+    Array.isArray(list)
+      ? list.map((c) => {
+          if (!c || typeof c !== 'object') return c;
+          const { model: _m, ...rest } = c as Record<string, unknown>;
+          return rest;
+        })
+      : list;
+  const projects =
+    includeProjectCovers && Array.isArray(body.projects)
+      ? body.projects.map((g) => {
+          if (!g || typeof g !== 'object') return g;
+          const rec = g as Record<string, unknown>;
+          return { ...rec, covers: stripCovers(rec.covers) };
+        })
+      : body.projects;
+  const unfiled =
+    body.unfiled && typeof body.unfiled === 'object'
+      ? { ...(body.unfiled as Record<string, unknown>), covers: stripCovers((body.unfiled as Record<string, unknown>).covers) }
+      : body.unfiled;
+  return { ...body, projects, unfiled };
+}
+
+function stripRbOptional(
+  kind: 'cards_none' | 'cards_filtered' | 'overview_none' | 'overview_filtered' | 'files_project',
+  answer: unknown,
+): unknown {
   if (!answer || typeof answer !== 'object' || !(answer as { ok?: boolean }).ok) return answer;
-  if (kind === 'cards_filtered' || kind === 'overview_filtered') {
+  if (kind === 'cards_none') return stripCoverModel(answer as Record<string, unknown>, false);
+  if (kind === 'overview_none') return stripCoverModel(answer as Record<string, unknown>, true);
+  if (kind === 'cards_filtered') {
     const { listed: _l, ...rest } = answer as Record<string, unknown>;
-    return rest;
+    return stripCoverModel(rest, false);
+  }
+  if (kind === 'overview_filtered') {
+    const { listed: _l, ...rest } = answer as Record<string, unknown>;
+    return stripCoverModel(rest, true);
   }
   const { project: _p, ...rest } = answer as Record<string, unknown>;
   return rest;
@@ -265,11 +300,13 @@ async function collectBaseline(
     const filesOpen = await studio(v, 'project.files', { scope: { kind: 'project', brandProjectId: w.P_OPEN_SELF } });
     const filesDone = await studio(v, 'project.files', { scope: { kind: 'project', brandProjectId: w.P_DONE_SELF } });
 
+    const cardsNone = await studio(v, 'project.cards', {});
     out[`${name} project.list`] = await studio(v, 'project.list', {});
-    out[`${name} project.cards none`] = await studio(v, 'project.cards', {});
+    out[`${name} project.cards none`] = options.stripOpenOptionalKeys ? stripRbOptional('cards_none', cardsNone) : cardsNone;
     out[`${name} project.cards active`] = options.stripOpenOptionalKeys ? stripRbOptional('cards_filtered', cardsActive) : cardsActive;
     out[`${name} project.cards all`] = options.stripOpenOptionalKeys ? stripRbOptional('cards_filtered', cardsAll) : cardsAll;
-    out[`${name} project.overview none`] = await studio(v, 'project.overview', {});
+    const overviewNone = await studio(v, 'project.overview', {});
+    out[`${name} project.overview none`] = options.stripOpenOptionalKeys ? stripRbOptional('overview_none', overviewNone) : overviewNone;
     out[`${name} project.overview active`] = options.stripOpenOptionalKeys ? stripRbOptional('overview_filtered', overviewActive) : overviewActive;
     out[`${name} project.overview all`] = options.stripOpenOptionalKeys ? stripRbOptional('overview_filtered', overviewAll) : overviewAll;
     out[`${name} project.files open`] = options.stripOpenOptionalKeys ? stripRbOptional('files_project', filesOpen) : filesOpen;

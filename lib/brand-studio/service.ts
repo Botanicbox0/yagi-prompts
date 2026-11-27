@@ -24,12 +24,14 @@ import {
   type StudioOperation,
   type StudioPromptPreview,
   type StudioShieldedPromptPreview,
+  type StudioOutputEditReserved,
+  type StudioOutputEditSaved,
   type StudioReviseMarkRead,
   type StudioRevisePlan,
   type StudioState,
   type StudioStateScope,
 } from './contracts';
-import { brandStudioV2Open } from '@/lib/flags';
+import { brandStudioEditToWallOpenFor, brandStudioV2Open } from '@/lib/flags';
 import { studioSeat } from './access';
 import { isBrandProjectRead, runBrandProjectRead, type BrandProjectReadResult } from './brand-project-files';
 import {
@@ -42,6 +44,7 @@ import {
 } from './brand-projects';
 import { loadOrganizationStorageSummary, toStudioStorageQuotaView } from '@/lib/brands/storage-quota';
 import { assetFromOutput, completeStudioAsset, deleteStudioAsset, deleteStudioOutput, reserveStudioAsset, updateStudioAsset } from './assets';
+import { completeEditedOutput, editSwitchEnvOf, reserveEditedOutput } from './edit-save';
 import { handoffToCampaign } from './handoff';
 import { analyzeStudioFilm, cancelStudioJob, createStudioJob, deleteStudioJob, previewStudioPrompt } from './jobs';
 import { createStudioJobGroup } from './job-group';
@@ -78,6 +81,8 @@ export type StudioOperationResult =
   | StudioReviseMarkRead
   | StudioAssetReserved
   | StudioAssetSaved
+  | StudioOutputEditReserved
+  | StudioOutputEditSaved
   | StudioHandoffDone;
 
 const SELF_STUDIO_OPS: ReadonlySet<StudioOperation> = new Set([
@@ -91,6 +96,8 @@ const SELF_STUDIO_OPS: ReadonlySet<StudioOperation> = new Set([
   'revise.talk',
   'handoff.campaign',
   'job.assign_project',
+  'output.edit.reserve',
+  'output.edit.complete',
 ]);
 
 /**
@@ -179,6 +186,16 @@ export async function runStudioOperation(deps: StudioDeps, viewer: Viewer, opera
       return handoffToCampaign(deps, viewer, input);
     case 'job.assign_project':
       return assignStudioJobProject(deps, viewer, input);
+    case 'output.edit.reserve': {
+      const reserved = await reserveEditedOutput(deps, viewer, input);
+      return reserved.ok && 'job' in reserved
+        ? { ...reserved, job: (await withBrandProjects(deps.sql, organizationId, [reserved.job]))[0]! }
+        : reserved;
+    }
+    case 'output.edit.complete': {
+      const done = await completeEditedOutput(deps, viewer, input);
+      return done.ok ? { ...done, job: (await withBrandProjects(deps.sql, organizationId, [done.job]))[0]! } : done;
+    }
   }
 }
 
@@ -228,6 +245,9 @@ export async function loadStudioState(
         ...(seat.canCreate && deps.env.outpaint ? { canFillEmpty: true } : {}),
         ...(seat.canCreate && deps.env.regionV2 ? { regionV2: true } : {}),
         ...(seat.canCreate && deps.env.reviseV2 ? { reviseV2: true } : {}),
+        ...(seat.canCreate && brandStudioEditToWallOpenFor(organizationId, editSwitchEnvOf(deps))
+          ? { editToWall: true }
+          : {}),
         ...(projects ? { projects } : {}),
       };
     }),

@@ -626,7 +626,7 @@ describe('Slice 4c UI: lookup, chips, refusals, clipboard, and keyboard', () => 
         copy={KO}
         locale="ko"
         transport={mockTransport({
-          file: vi.fn(async () => ({ ok: true as const, file: makeFile(), threads: [] })),
+          file: vi.fn(async () => ({ ok: true as const, file: makeFile({ kind: 'video', url: '/v.mp4' }), threads: [] })),
         })}
         invite
         inviteTransport={mockInviteTransport({
@@ -734,7 +734,7 @@ describe('Slice 4c UI: lookup, chips, refusals, clipboard, and keyboard', () => 
     const postedThread = makeThread({ root: postedMsg });
 
     const transport = mockTransport({
-      file: vi.fn(async () => ({ ok: true as const, file: makeFile(), threads: [] })),
+      file: vi.fn(async () => ({ ok: true as const, file: makeFile({ kind: 'video', url: '/v.mp4' }), threads: [] })),
     });
     const inviteTransport = mockInviteTransport({
       post: vi.fn(() => postPromise as never),
@@ -821,7 +821,7 @@ describe('Slice 4c UI: lookup, chips, refusals, clipboard, and keyboard', () => 
     mounted = null;
 
     const transportAfterRemount = mockTransport({
-      file: vi.fn(async () => ({ ok: true as const, file: makeFile(), threads: [postedThread] })),
+      file: vi.fn(async () => ({ ok: true as const, file: makeFile({ kind: 'video', url: '/v.mp4' }), threads: [postedThread] })),
     });
     mounted = await mountDom(
       <SendPanel

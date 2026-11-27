@@ -232,10 +232,10 @@ export async function loadBrandStudioOps(
       failed_24h: number;
     }>(
       `select
-         count(*) filter (where status in ('succeeded', 'failed') and coalesce(finished_at, created_at) >= $1::timestamptz)::int as finished_1h,
-         count(*) filter (where status = 'failed' and coalesce(finished_at, created_at) >= $1::timestamptz)::int as failed_1h,
-         count(*) filter (where status = 'succeeded' and coalesce(finished_at, created_at) >= $1::timestamptz)::int as succeeded_1h,
-         count(*) filter (where status = 'failed' and coalesce(finished_at, created_at) >= $2::timestamptz)::int as failed_24h
+         count(*) filter (where status in ('succeeded', 'failed') and coalesce(params->>'edited', '') <> 'true' and coalesce(finished_at, created_at) >= $1::timestamptz)::int as finished_1h,
+         count(*) filter (where status = 'failed' and coalesce(params->>'edited', '') <> 'true' and coalesce(finished_at, created_at) >= $1::timestamptz)::int as failed_1h,
+         count(*) filter (where status = 'succeeded' and coalesce(params->>'edited', '') <> 'true' and coalesce(finished_at, created_at) >= $1::timestamptz)::int as succeeded_1h,
+         count(*) filter (where status = 'failed' and coalesce(params->>'edited', '') <> 'true' and coalesce(finished_at, created_at) >= $2::timestamptz)::int as failed_24h
        from brand_studio_jobs`,
       [oneHourAgoIso, oneDayAgoIso],
     ),
@@ -468,7 +468,8 @@ export async function runBrandStudioOpsAlertPass(
          count(*) filter (where status = 'failed')::int as failed_n,
          count(*) filter (where status in ('succeeded', 'failed'))::int as finished_n
        from brand_studio_jobs
-      where coalesce(finished_at, created_at) >= $1::timestamptz`,
+      where coalesce(finished_at, created_at) >= $1::timestamptz
+        and coalesce(params->>'edited', '') <> 'true'`,
       [windowStartIso],
     ),
     sql.query<{ seen_at: unknown }>("select seen_at from brand_studio_lanes where lane = 'sunra_mcp' limit 1"),

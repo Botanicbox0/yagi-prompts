@@ -7,7 +7,7 @@ import { buildOrgInviteEmail } from '@/lib/brands/workspace/invite-mail';
 import { runRoomOperation } from '@/lib/brand-rooms/messages';
 import { sendInviteAcceptHooks } from '@/lib/brand-rooms/send-invite';
 import type { SendPosted } from '@/lib/brand-rooms/send-contracts';
-import { as, closeWorld, imageResult, libraryPicture, ok, openSend, sendWorld, type SendWorld } from '../send/helpers';
+import { as, closeWorld, libraryVideo, ok, openSend, sendWorld, videoResult, type SendWorld } from '../send/helpers';
 import { invitation, openInvites, person, recording, tokenOf } from './helpers';
 
 /**
@@ -24,7 +24,7 @@ beforeEach(async () => {
   w = await sendWorld();
   openSend(w.f.orgId);
   openInvites();
-  file = (await imageResult(w, w.f.projectId)).outputId;
+  file = (await videoResult(w, w.f.projectId)).outputId;
 });
 afterEach(async () => {
   await closeWorld(w);
@@ -129,7 +129,7 @@ describe('what it costs (statements, local recording)', () => {
     const statementsFor = async (lines: number, email: string): Promise<number> => {
       const live = await invitation(w.f.sql, { organizationId: w.f.orgId, email, createdBy: w.f.ids.owner, token: tokenOf(email) });
       for (let i = 0; i < lines; i += 1) {
-        const asset = await libraryPicture(w, w.f.projectId);
+        const asset = await libraryVideo(w, w.f.projectId);
         await ok(w, as(w.f.ids.owner), 'send.post', { requestId: randomUUID(), file: { kind: 'asset', assetId: asset }, body: `line ${i}`, invites: [email] });
       }
       expect(Number((await w.f.sql.query<{ n: number }>('select count(*)::int as n from brand_room_pending_mentions where invite_id = $1', [live])).rows[0]!.n)).toBe(lines);

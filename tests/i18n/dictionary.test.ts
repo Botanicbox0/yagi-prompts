@@ -120,6 +120,8 @@ describe('dictionary completeness (§3.9)', () => {
       'prompts.cardAuthor',
       // 2026-10-29 brand landing: the right-hand column of each comparison is labelled with the product name.
       'brandLanding.landing.contrast.ours',
+      // 2026-11-27 studio polish A: the founder asked for the literal English token "edited" in both locales.
+      'brandStudio.gallery.editedMark',
     ]);
 
     const untranslated = enLeaves

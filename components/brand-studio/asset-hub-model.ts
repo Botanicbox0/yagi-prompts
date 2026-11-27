@@ -34,6 +34,10 @@ export interface HubEntry {
   createdAt: string;
   parentOutputId: string | null;
   jobId: string | null;
+  /** The model id of the run that made this output, or null for uploads. */
+  model?: string | null;
+  /** Whether a generated result came from saving a detail edit (wired in Batch 2). */
+  edited?: boolean;
   /** The project the run that made this belongs to (`BRAND_STUDIO_PROJECTS`); null for uploads and when closed. */
   projectId: string | null;
   asset: StudioAssetView | null;
@@ -129,6 +133,8 @@ export function buildHubEntries(assets: readonly StudioAssetView[], jobs: readon
       createdAt: asset.createdAt,
       parentOutputId: null,
       jobId: null,
+      model: null,
+      edited: false,
       projectId: null,
       asset,
       output: null,
@@ -153,6 +159,8 @@ export function buildHubEntries(assets: readonly StudioAssetView[], jobs: readon
         createdAt: output.createdAt,
         parentOutputId: job.parentOutputId,
         jobId: job.id,
+        model: job.model,
+        edited: Boolean(job.edited),
         projectId: job.projectId ?? null,
         asset: null,
         output,
@@ -282,7 +290,7 @@ export function hubActions(
       more.push({ key: "reverse", label: copy.reverse, href: `/brand/studio/video?${params}`, marker: "data-asset-hub-reverse" });
     }
   }
-  if (canOpenStudio && canCreate && (entry.kind === "image" || entry.kind === "video")) {
+  if (canOpenStudio && canCreate && (entry.kind === "video" || (entry.kind === "image" && !opts.externalLinkLabel))) {
     more.push({ key: "share", label: opts.externalLinkLabel ?? copy.share, marker: "data-asset-hub-share-review" });
   }
   more.push({ key: "similar", label: copy.similar, marker: "data-asset-hub-similar" });

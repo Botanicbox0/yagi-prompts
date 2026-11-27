@@ -238,6 +238,8 @@ export interface StudioJobParams {
   clipSheets?: Record<string, FilmSheet>;
   /** A run whose text is assembled server-side from lib/brand-studio/workflows/presets; never shown. */
   preset?: { id: string; vars: Record<string, string> };
+  /** True for an edited image saved to the studio wall from LayerEditor (`output.edit.complete`). */
+  edited?: true;
 }
 
 /** A provider (or worker) result waiting to be stored, per output slot. */

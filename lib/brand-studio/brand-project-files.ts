@@ -36,9 +36,10 @@
  */
 import type { Viewer } from '@/lib/auth/identity';
 import type { SqlRunner } from '@/lib/db/sql-runner';
-import { brandRoomsOpen } from '@/lib/flags';
+import { brandRoomsOpen, brandStudioEditToWallOpenFor } from '@/lib/flags';
 import { loadRoomStages, roomUnreadCounts, type RoomProjectStatus } from '@/lib/brand-rooms/overview';
 import { StudioDenied, type StudioSeat } from './access';
+import { editSwitchEnvOf } from './edit-save';
 import {
   BRAND_MATERIAL,
   LISTED_LIBRARY_ASSETS,
@@ -162,18 +163,27 @@ interface CoverRow {
   width: number | null;
   height: number | null;
   created_at: Date | string;
+  model?: string | null;
+  edited?: boolean;
 }
 
-function coverView(row: CoverRow, media: StudioMediaStore): StudioBrandProjectCover {
+function coverView(row: CoverRow, media: StudioMediaStore, includeEdited = false): StudioBrandProjectCover {
+  const image = row.kind !== 'video';
   return {
     outputId: String(row.id),
     jobId: String(row.job_id),
-    kind: row.kind === 'video' ? 'video' : 'image',
+    kind: image ? 'image' : 'video',
     url: media.url(row.storage_key),
     thumbUrl: row.thumb_key ? media.url(row.thumb_key) : null,
     width: row.width ?? null,
     height: row.height ?? null,
     createdAt: iso(row.created_at),
+    model: image ? (row.model ?? null) : null,
+    ...(includeEdited
+      ? {
+          edited: image ? Boolean(row.edited) : false,
+        }
+      : {}),
   };
 }
 
@@ -198,7 +208,13 @@ interface ProjectGroups {
  * statement, whatever the number of projects (the column probes are remembered). Each count is grouped by the shown
  * project and whether that project can still take work, so the files of finished projects are known apart.
  */
-async function projectGroups(sql: SqlRunner, media: StudioMediaStore, seat: StudioSeat, filter: BrandProjectViewFilter): Promise<ProjectGroups> {
+async function projectGroups(
+  sql: SqlRunner,
+  media: StudioMediaStore,
+  seat: StudioSeat,
+  filter: BrandProjectViewFilter,
+  includeEdited = false,
+): Promise<ProjectGroups> {
   const organizationId = seat.organizationId;
   const listed: ListedBrandProject[] =
     filter === 'all'
@@ -242,10 +258,11 @@ async function projectGroups(sql: SqlRunner, media: StudioMediaStore, seat: Stud
     )
   ).rows;
   // The newest image and video results of every group at once.
+  const modelCols = includeEdited ? ", j.model, (coalesce(j.params ->> 'edited', '') = 'true') as edited" : ', j.model';
   const coverRows = (
     await sql.query<CoverRow & { rn: number }>(
       `select c.* from (
-         select sp.id::text as bucket, o.id, o.job_id, o.kind, o.storage_key, o.thumb_key, o.width, o.height, o.created_at,
+         select sp.id::text as bucket, o.id, o.job_id, o.kind, o.storage_key, o.thumb_key, o.width, o.height, o.created_at${modelCols},
                 row_number() over (partition by sp.id order by o.created_at desc, o.id desc) as rn
            from brand_studio_jobs j
            join brand_studio_outputs o on o.job_id = j.id
@@ -288,7 +305,7 @@ async function projectGroups(sql: SqlRunner, media: StudioMediaStore, seat: Stud
   for (const row of coverRows) {
     const key = row.bucket ? row.bucket.toLowerCase() : '';
     const list = coverLists.get(key) ?? [];
-    list.push(coverView(row, media));
+    list.push(coverView(row, media, includeEdited));
     coverLists.set(key, list);
   }
   return {
@@ -334,7 +351,13 @@ export async function loadBrandProjectOverview(deps: StudioDeps, viewer: Viewer,
     deps.sql.transaction(async (sql) => {
       const seat = await spineSeat(sql, viewer, organizationId, false);
       const view = viewFilterOf(raw);
-      const groups = await projectGroups(sql, deps.media, seat, view.filter);
+      const groups = await projectGroups(
+        sql,
+        deps.media,
+        seat,
+        view.filter,
+        brandStudioEditToWallOpenFor(organizationId, editSwitchEnvOf(deps)),
+      );
       // 브랜드 자료's newest entries: the same statement as its first page, cut to the cover count.
       const materialRows = (
         await sql.query<AssetRow>(
@@ -452,10 +475,10 @@ async function projectResultCoversByIds(
   if (ids.length === 0) return map;
   const rows = (
     await sql.query<CoverRow>(
-      `select p.id::text as bucket, x.id, x.job_id, x.kind, x.storage_key, x.thumb_key, x.width, x.height, x.created_at
+      `select p.id::text as bucket, x.id, x.job_id, x.kind, x.storage_key, x.thumb_key, x.width, x.height, x.created_at, x.model
          from unnest($2::uuid[]) as p(id)
          cross join lateral (
-           select o.id, o.job_id, o.kind, o.storage_key, o.thumb_key, o.width, o.height, o.created_at
+           select o.id, o.job_id, o.kind, o.storage_key, o.thumb_key, o.width, o.height, o.created_at, j.model
              from brand_studio_jobs j
              join brand_studio_outputs o on o.job_id = j.id
             where j.organization_id = $1 and j.brand_project_id = p.id

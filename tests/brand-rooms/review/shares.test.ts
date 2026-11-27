@@ -18,7 +18,10 @@ import {
   VISITOR_COOKIE,
 } from '@/lib/brand-rooms/shares';
 import type { ShareCreated } from '@/lib/brand-rooms/share-contracts';
-import { studioDeps, studioFixture, viewerOf, type StudioFixture } from '@/tests/brand-studio/server/helpers';
+import { resetBrandSendProbe } from '@/lib/brand-rooms/members-schema';
+import { staffCreateStoryboard, staffReplaceFrames, staffShareStoryboard } from '@/lib/brand-rooms/storyboards';
+import { resetSpineProbe } from '@/lib/brand-studio/brand-projects';
+import { pngBytes, studioDeps, studioFixture, viewerOf, type StudioFixture } from '@/tests/brand-studio/server/helpers';
 import { roomDraft, seedOutput } from './fixtures';
 
 /**
@@ -223,5 +226,50 @@ describe('the team', () => {
     expect(await staffRevokeShare(sdeps(), admin, { shareId: created.share.id })).toEqual({ ok: true, kind: 'review', targetId: reviewId });
     expect((await f.sql.query('select revoked_by from brand_room_shares')).rows[0]).toEqual({ revoked_by: f.ids.admin });
     expect(await resolveShare(f.sql, created.token)).toBeNull();
+  });
+});
+
+describe('when 보내기 is open', () => {
+  it('refuses new image review links with invalid before writing, while allowing video review, storyboard, closed orgs, and pre-existing links', async () => {
+    resetSpineProbe();
+    resetBrandSendProbe();
+    const imgReviewId = await roomDraft(f, deps, 'image', 'Still draft');
+    const vidReviewId = await roomDraft(f, deps, 'video', 'Video draft');
+
+    // Create a shared storyboard
+    const admin = { ...viewerOf(f.ids.admin), isAdmin: true };
+    const boardRes = await staffCreateStoryboard(deps, admin, { projectId: f.projectId, title: 'Board' });
+    const storyboardId = (boardRes as { board: { id: string } }).board.id;
+    await staffReplaceFrames(deps, admin, { storyboardId, frames: [{ picture: await pngBytes(20, 20), text: { scene: '1', shot: '1', description: 'Cut' } }] });
+    await staffShareStoryboard(deps, admin, { storyboardId });
+
+    // Pre-existing image link created while 보내기 is closed
+    vi.stubEnv('BRAND_SEND', 'off');
+    const legacy = (await createShare(sdeps(), owner(), { organizationId: f.orgId, kind: 'review', targetId: imgReviewId })) as ShareCreated;
+    expect(legacy.ok).toBe(true);
+
+    // Closed via excluded org list: creating another image link still works
+    vi.stubEnv('BRAND_SEND', 'on');
+    vi.stubEnv('BRAND_ROOM_NOTIFY', 'on');
+    vi.stubEnv('BRAND_PROJECT_SPINE', 'on');
+    vi.stubEnv('BRAND_PROJECT_SPINE_ORGS', '00000000-0000-4000-8000-00000000dead');
+    expect((await createShare(sdeps(), owner(), { organizationId: f.orgId, kind: 'review', targetId: imgReviewId })).ok).toBe(true);
+
+    // Open 보내기 for this organization
+    vi.stubEnv('BRAND_PROJECT_SPINE_ORGS', f.orgId);
+    const beforeCount = (await f.sql.query<{ n: number }>('select count(*)::int as n from brand_room_shares')).rows[0]!.n;
+
+    expect(await createShare(sdeps(), owner(), { organizationId: f.orgId, kind: 'review', targetId: imgReviewId })).toEqual({ ok: false, code: 'invalid' });
+    const afterRefused = (await f.sql.query<{ n: number }>('select count(*)::int as n from brand_room_shares')).rows[0]!.n;
+    expect(afterRefused).toBe(beforeCount);
+
+    // Video review & storyboard still create cleanly
+    expect((await createShare(sdeps(), owner(), { organizationId: f.orgId, kind: 'review', targetId: vidReviewId })).ok).toBe(true);
+    expect((await createShare(sdeps(), owner(), { organizationId: f.orgId, kind: 'storyboard', targetId: storyboardId })).ok).toBe(true);
+
+    // Pre-existing image link still lists, opens, and revokes cleanly
+    expect(await listShares(sdeps(), owner(), { organizationId: f.orgId, kind: 'review', targetId: imgReviewId })).toMatchObject({ ok: true });
+    expect(await loadSharePage(sdeps(), legacy.token, noCookies)).toMatchObject({ state: 'open' });
+    expect(await revokeShare(sdeps(), owner(), { organizationId: f.orgId, shareId: legacy.share.id })).toEqual({ ok: true });
   });
 });

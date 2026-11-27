@@ -68,6 +68,10 @@ function validInput(operation: StudioOperation, organizationId: string): Record<
     case 'asset.from_output':
     case 'output.delete':
       return { organizationId, outputId: id };
+    case 'output.edit.reserve':
+      return { organizationId, requestId: requestId(), mime: 'image/png', sizeBytes: 1000 };
+    case 'output.edit.complete':
+      return { organizationId, requestId: requestId(), mime: 'image/png' };
     case 'output.waveform':
       return { organizationId, outputId: id, peaks: [0, 0.5, 1] };
     case 'lyrics.draft':

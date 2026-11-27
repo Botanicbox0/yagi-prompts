@@ -14,6 +14,7 @@ import type {
 } from "@/lib/brand-studio/contracts";
 import type { Dictionary } from "@/lib/i18n/dictionaries";
 import { humanTitle, type HubDeliverable } from "../asset-hub-model";
+import { HubModelChip } from "../asset-hub-tile";
 import s from "../asset-hub.module.css";
 import { RailIcon } from "../rail/icons";
 import { clock, fill } from "../rail/text";
@@ -45,6 +46,8 @@ export interface ByProjectViewProps {
   overview: StudioBrandProjectOverview;
   libraryCopy: Dictionary["studioLibrary"];
   projectSpineCopy: Dictionary["projectSpine"];
+  /** Dictionary key `brandStudio.gallery.editedMark`. */
+  editedMark?: string;
   state: StudioState | null;
   deliverables: readonly HubDeliverable[];
   canMove: boolean;
@@ -70,7 +73,9 @@ function CoverRow({
   uploadCovers = [],
   groupLabel,
   videoLabel,
+  editedMark = "",
   outputSecondsById,
+  jobMetaById,
   extraTiles,
   onSelect,
 }: {
@@ -78,7 +83,9 @@ function CoverRow({
   uploadCovers?: readonly StudioAssetView[];
   groupLabel: string;
   videoLabel: string;
+  editedMark?: string;
   outputSecondsById: ReadonlyMap<string, number>;
+  jobMetaById: ReadonlyMap<string, { model: string; edited: boolean }>;
   extraTiles?: ReactNode;
   onSelect(): void;
 }) {
@@ -88,6 +95,9 @@ function CoverRow({
       {covers.map((cover, idx) => {
         const still = cover.thumbUrl ?? (cover.kind === "image" ? cover.url : null);
         const seconds = cover.kind === "video" ? outputSecondsById.get(cover.outputId) : undefined;
+        const fallback = cover.kind === "image" ? jobMetaById.get(cover.jobId) : undefined;
+        const model = cover.kind === "image" ? (cover.model !== undefined ? cover.model : fallback?.model) : null;
+        const edited = cover.kind === "image" ? (cover.edited !== undefined ? cover.edited : Boolean(fallback?.edited)) : false;
         return (
           <li key={cover.outputId} className={sp.coverItem} data-kind={cover.kind}>
             <button
@@ -103,6 +113,7 @@ function CoverRow({
               ) : (
                 <span className={sp.coverBlank} aria-hidden="true" />
               )}
+              {cover.kind === "image" && <HubModelChip model={model} edited={edited} editedMark={editedMark} />}
               {cover.kind === "video" && (
                 <span className={`${s.badge} ${sp.coverBadge}`} data-asset-hub-length="">
                   <PlayGlyph />
@@ -136,6 +147,7 @@ export function ByProjectView({
   overview,
   libraryCopy,
   projectSpineCopy,
+  editedMark = "",
   state,
   deliverables,
   canMove,
@@ -162,14 +174,16 @@ export function ByProjectView({
     [h.kinds.image, h.kinds.video, projectSpineCopy.film, spineCopy.kindDeliverables, spineCopy.kindSound, spineCopy.kindUploads],
   );
 
-  const outputSecondsById = useMemo(() => {
-    const map = new Map<string, number>();
+  const { outputSecondsById, jobMetaById } = useMemo(() => {
+    const secondsMap = new Map<string, number>();
+    const metaMap = new Map<string, { model: string; edited: boolean }>();
     for (const job of state?.jobs ?? []) {
+      metaMap.set(job.id, { model: job.model, edited: Boolean(job.edited) });
       for (const out of job.outputs) {
-        if (out.seconds != null) map.set(out.id, out.seconds);
+        if (out.seconds != null) secondsMap.set(out.id, out.seconds);
       }
     }
-    return map;
+    return { outputSecondsById: secondsMap, jobMetaById: metaMap };
   }, [state?.jobs]);
 
   const materialsCounts = useMemo(
@@ -373,7 +387,9 @@ export function ByProjectView({
                   uploadCovers={uploadCovers}
                   groupLabel={group.project.title}
                   videoLabel={libraryCopy.item.video}
+                  editedMark={editedMark}
                   outputSecondsById={outputSecondsById}
+                  jobMetaById={jobMetaById}
                   extraTiles={
                     origin === "team" && teamDeliverables > 0 && deliverableSlots > 0
                       ? deliverables
@@ -447,7 +463,9 @@ export function ByProjectView({
             covers={overview.unfiled.covers}
             groupLabel={projectSpineCopy.unfiled}
             videoLabel={libraryCopy.item.video}
+            editedMark={editedMark}
             outputSecondsById={outputSecondsById}
+            jobMetaById={jobMetaById}
             onSelect={onOpenUnfiled}
           />
         </section>

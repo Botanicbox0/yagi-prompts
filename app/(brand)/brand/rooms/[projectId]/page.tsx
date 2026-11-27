@@ -22,6 +22,8 @@ import { loadOrganizationStorageSummary } from "@/lib/brands/storage-quota";
 import { scopedHref } from "@/lib/brands/workspace/selection";
 import { brandRoomInvitesOpen, brandStudioV2Open } from "@/lib/flags";
 import { campaignOpsOpenForViewer } from "@/lib/brands/workspace/campaign-ops";
+import { brandSendOpenFor, brandSendSwitchesOn } from "@/lib/brand-rooms/members-channel";
+import { memberSeesBrandProjects } from "@/lib/brand-studio/brand-projects";
 import { canTalkIn, roomSeat } from "@/lib/brand-rooms/access";
 import { RoomShareInvitesProvider, type RoomShareInvites } from "@/components/brand-rooms/share/invites-context";
 import { ProjectShareButton } from "@/components/brand-rooms/share/invite-dialog";
@@ -113,6 +115,14 @@ export default async function ProjectRoomPage({
   // The retention note matters once the work is delivered: a project-only room shows it only when completed.
   const retentionNotice = isProjectOnlyOrg && project.status === "completed";
   const opsOpen = campaignOpsOpenForViewer(choice);
+  const sendOpen =
+    canEdit &&
+    brandSendSwitchesOn() &&
+    choice.role !== "guest" &&
+    !access.projectScopedOnly &&
+    memberSeesBrandProjects({ staff: false, role: choice.role }) &&
+    (await brandSendOpenFor(sql, choice.id).catch(() => false));
+
   const roomNode = (
     <div className="brr-room" data-project-room={project.id} data-room-tab-current={activeTab}>
       <RoomHeader
@@ -165,6 +175,7 @@ export default async function ProjectRoomPage({
               ...(atMs !== null ? { atMs } : {}),
               ...(commentId ? { commentId } : {}),
             }}
+            {...(sendOpen ? { sendOpen: true } : {})}
           />
         ) : (
           <>

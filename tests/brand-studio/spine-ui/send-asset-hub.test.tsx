@@ -354,8 +354,9 @@ describe('hubEntryToSendRef & hubActions externalLinkLabel (Batch D)', () => {
     expect(hubEntryToSendRef(null)).toBeNull();
   });
 
-  it('renames existing share action to 외부 링크 만들기 only when share already exists (canOpenStudio && canCreate && (image || video))', () => {
+  it('renames existing share action to 외부 링크 만들기 only when share already exists (canOpenStudio && canCreate && video), omitting image external-link controls when send is open', () => {
     const picEntry = buildHubEntries([asset(1)], [], '생성 결과')[0]!;
+    const vidEntry = buildHubEntries([asset(3, { kind: 'video', url: '/v.mp4', seconds: 6 })], [], '생성 결과')[0]!;
     const sndEntry = buildHubEntries([asset(2, { kind: 'audio', url: '/s.mp3', width: null, height: null, thumbUrl: null })], [], '생성 결과')[0]!;
 
     const baseCopy = actionCopy('ko');
@@ -374,31 +375,40 @@ describe('hubEntryToSendRef & hubActions externalLinkLabel (Batch D)', () => {
       copy: baseCopy,
       externalLinkLabel: KO.externalLink,
     });
-    expect(ownerPic.more.find((a) => a.key === 'share')).toMatchObject({
+    expect(ownerPic.more.find((a) => a.key === 'share')).toBeUndefined();
+
+    const ownerVid = hubActions(vidEntry, {
+      organizationId: ORG,
+      canOpenStudio: true,
+      canCreate: true,
+      copy: baseCopy,
+      externalLinkLabel: KO.externalLink,
+    });
+    expect(ownerVid.more.find((a) => a.key === 'share')).toMatchObject({
       key: 'share',
       label: KO.externalLink,
       marker: 'data-asset-hub-share-review',
     });
 
     // viewer -> canCreate: false -> NO external link action added
-    const viewerPic = hubActions(picEntry, {
+    const viewerVid = hubActions(vidEntry, {
       organizationId: ORG,
       canOpenStudio: true,
       canCreate: false,
       copy: baseCopy,
       externalLinkLabel: KO.externalLink,
     });
-    expect(viewerPic.more.find((a) => a.key === 'share')).toBeUndefined();
+    expect(viewerVid.more.find((a) => a.key === 'share')).toBeUndefined();
 
     // project-only -> canOpenStudio: false -> NO external link action added
-    const closedStudioPic = hubActions(picEntry, {
+    const closedStudioVid = hubActions(vidEntry, {
       organizationId: ORG,
       canOpenStudio: false,
       canCreate: true,
       copy: baseCopy,
       externalLinkLabel: KO.externalLink,
     });
-    expect(closedStudioPic.more.find((a) => a.key === 'share')).toBeUndefined();
+    expect(closedStudioVid.more.find((a) => a.key === 'share')).toBeUndefined();
 
     // audio -> no share today -> NO external link action added
     const ownerAudio = hubActions(sndEntry, {
@@ -441,6 +451,7 @@ describe('HubDetail & BrandAssetHub send integration (Batch D)', () => {
       <HubDetail
         entry={entry}
         copy={KO_DICT.studioLibrary}
+        editedMark={KO_DICT.brandStudio.gallery.editedMark}
         name="Perfume shot"
         liked={false}
         main={acts.main}
@@ -459,16 +470,18 @@ describe('HubDetail & BrandAssetHub send integration (Batch D)', () => {
     const sendProp: ViewerSendProp = { organizationId: ORG, copy: KO };
     const pic = asset(1);
     const snd = asset(2, { kind: 'audio', url: '/s.mp3', width: null, height: null, thumbUrl: null });
+    const vid = asset(3, { kind: 'video', url: '/v.mp4', seconds: 6 });
     const picOut = output(1);
     const picJob = job(1, { kind: 'image', outputs: [picOut] });
     const entries = buildHubEntries(
-      [pic, snd],
+      [pic, snd, vid],
       [picJob],
       '생성 결과',
     );
     const byKey = new Map(entries.map((e) => [e.key, e]));
     const picEntry = byKey.get(`a:${pic.id}`)!;
     const sndEntry = byKey.get(`a:${snd.id}`)!;
+    const vidEntry = byKey.get(`a:${vid.id}`)!;
     const outEntry = byKey.get(`o:${picOut.id}`)!;
 
     const renderDetail = (
@@ -486,6 +499,7 @@ describe('HubDetail & BrandAssetHub send integration (Batch D)', () => {
         <HubDetail
           entry={entry}
           copy={KO_DICT.studioLibrary}
+          editedMark={KO_DICT.brandStudio.gallery.editedMark}
           name="Item"
           liked={false}
           main={acts.main}
@@ -499,11 +513,17 @@ describe('HubDetail & BrandAssetHub send integration (Batch D)', () => {
       );
     };
 
-    // Owner/editor on image asset: both 보내기 and 외부 링크 만들기
+    // Owner/editor on image asset: 보내기 YES, 외부 링크 만들기 NO (workspace-internal sharing only for images)
     const ownerPicHtml = renderDetail(picEntry, { canCreate: true });
     expect(ownerPicHtml).toContain('data-asset-hub-send');
-    expect(ownerPicHtml).toContain(KO.externalLink);
+    expect(ownerPicHtml).not.toContain(KO.externalLink);
     expect(ownerPicHtml).not.toContain(KO_DICT.studioLibrary.hub.shareReview);
+
+    // Owner/editor on video asset: both 보내기 and 외부 링크 만들기
+    const ownerVidHtml = renderDetail(vidEntry, { canCreate: true });
+    expect(ownerVidHtml).toContain('data-asset-hub-send');
+    expect(ownerVidHtml).toContain(KO.externalLink);
+    expect(ownerVidHtml).not.toContain(KO_DICT.studioLibrary.hub.shareReview);
 
     // Owner/editor on audio: 보내기 YES, 외부 링크 만들기 NO
     const ownerAudioHtml = renderDetail(sndEntry, { canCreate: true });
@@ -640,7 +660,7 @@ describe('HubDetail & BrandAssetHub send integration (Batch D)', () => {
     );
     expect(spineDetailHtml).toContain(`data-asset-hub-detail="o:${scopedOut.id}"`);
     expect(spineDetailHtml).toContain('data-asset-hub-send');
-    expect(spineDetailHtml).toContain(KO.externalLink);
+    expect(spineDetailHtml).not.toContain(KO.externalLink);
   });
 
   it('opens HubDetail from BrandAssetHub, loads send.file once across parent re-renders, triggers external link action, and layers Escape cleanly (picker -> SendPanel -> HubDetail)', async () => {
@@ -652,7 +672,10 @@ describe('HubDetail & BrandAssetHub send integration (Batch D)', () => {
     const transport = mockTransport({ file: fileMock });
     const state0 = studioState({
       canCreate: true,
-      assets: [asset(1, { name: '봄 향수 컷.png' })],
+      assets: [
+        asset(1, { name: '봄 향수 컷.png' }),
+        asset(2, { kind: 'video', name: '런칭 컷.mp4', url: 'https://media.example/st/v.mp4', seconds: 6, createdAt: '2026-11-08T00:00:00Z' }),
+      ],
       jobs: [],
     });
     const lib0 = stubLibrary();
@@ -742,8 +765,15 @@ describe('HubDetail & BrandAssetHub send integration (Batch D)', () => {
     await flush();
     expect(mounted.query('[data-asset-hub-detail]')).toBeNull();
 
-    // Reopen detail and verify "외부 링크 만들기" invokes the existing ShareReviewDialog
-    await mounted.click('[data-asset-hub-open]');
+    // Reopen image detail -> external link action is omitted; video detail keeps "외부 링크 만들기" -> ShareReviewDialog
+    const openBtns = mounted.queryAll('[data-asset-hub-open]');
+    await mounted.click(openBtns[0]!);
+    await flush();
+    expect(mounted.query('[data-asset-hub-share-review]')).toBeNull();
+    await mounted.click('[data-asset-hub-detail-close]');
+    await flush();
+
+    await mounted.click(openBtns[1]!);
     await flush();
     const extBtn = mounted.query('[data-asset-hub-share-review]')!;
     expect(extBtn.textContent).toBe(KO.externalLink);
@@ -1068,18 +1098,19 @@ describe('Fix round 5 (locale, tile menu externalLink, unloaded job exclusion)',
     expect(mounted.container.textContent).not.toContain('20분 전');
   });
 
-  it('uses brandSend.externalLink in tile menus when send is present, leaving without-send tile menus unchanged (Item 4)', async () => {
-    const state0 = studioState({ canCreate: true, assets: [asset(1, { name: '향수.png' })], jobs: [] });
+  it('uses brandSend.externalLink on video tile menus and omits it on image tile menus when send is present (Item 4 + Batch 3)', async () => {
+    const vidState = studioState({ canCreate: true, assets: [asset(2, { kind: 'video', name: '영상.mp4', url: 'https://media.example/st/v.mp4', seconds: 6 })], jobs: [] });
+    const imgState = studioState({ canCreate: true, assets: [asset(1, { name: '향수.png' })], jobs: [] });
 
-    // Without send -> tile menu keeps 검수 · 공유
+    // Without send -> video tile menu keeps 검수 · 공유
     mounted = await mountHubDom(
       <BrandAssetHubIsland
         organizationId={ORG}
         studioCopy={KO_DICT.brandStudio}
         libraryCopy={KO_DICT.studioLibrary}
-        initialState={state0}
+        initialState={vidState}
         injectedLibrary={stubLibrary()}
-        api={stubApi(state0)}
+        api={stubApi(vidState)}
       />,
     );
     await flush();
@@ -1089,20 +1120,39 @@ describe('Fix round 5 (locale, tile menu externalLink, unloaded job exclusion)',
       KO_DICT.studioLibrary.hub.shareReview,
     );
 
-    // With send -> tile menu uses 외부 링크 만들기 (same as detail)
+    // With send -> video tile menu uses 외부 링크 만들기
     await mounted.rerender(
       <BrandAssetHubIsland
         organizationId={ORG}
         studioCopy={KO_DICT.brandStudio}
         libraryCopy={KO_DICT.studioLibrary}
-        initialState={state0}
+        initialState={vidState}
         injectedLibrary={stubLibrary()}
-        api={stubApi(state0)}
+        api={stubApi(vidState)}
         send={{ organizationId: ORG, copy: KO, locale: 'ko', transport: mockTransport() }}
       />,
     );
     await flush();
     expect(mounted.document.querySelector('[data-asset-hub-share-review]')?.textContent).toBe(KO.externalLink);
+
+    // With send -> image tile menu omits 외부 링크 만들기 (mount image hub cleanly)
+    await mounted.unmount();
+    mounted = await mountHubDom(
+      <BrandAssetHubIsland
+        organizationId={ORG}
+        studioCopy={KO_DICT.brandStudio}
+        libraryCopy={KO_DICT.studioLibrary}
+        initialState={imgState}
+        injectedLibrary={stubLibrary()}
+        api={stubApi(imgState)}
+        send={{ organizationId: ORG, copy: KO, locale: 'ko', transport: mockTransport() }}
+      />,
+    );
+    await flush();
+    await mounted.click('[aria-haspopup="menu"]');
+    await flush();
+    expect(mounted.document.querySelector('[data-asset-hub-similar]')).not.toBeNull();
+    expect(mounted.document.querySelector('[data-asset-hub-share-review]')).toBeNull();
   });
 
   it('omits 보내기 in HubDetail rendered from BrandAssetHub when an output job is not loaded (Item 5)', async () => {
@@ -1156,6 +1206,7 @@ describe('Fix round 5 (locale, tile menu externalLink, unloaded job exclusion)',
       <HubDetail
         entry={entryWithoutJob}
         copy={KO_DICT.studioLibrary}
+        editedMark={KO_DICT.brandStudio.gallery.editedMark}
         name="Result"
         liked={false}
         main={null}
@@ -1183,6 +1234,7 @@ describe('Fix round 5 (locale, tile menu externalLink, unloaded job exclusion)',
       <HubDetail
         entry={entry}
         copy={KO_DICT.studioLibrary}
+        editedMark={KO_DICT.brandStudio.gallery.editedMark}
         name="향수컷.png"
         liked={false}
         main={null}

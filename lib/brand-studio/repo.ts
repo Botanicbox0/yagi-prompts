@@ -146,6 +146,7 @@ export function jobView(row: JobRow, outputs: OutputRow[], media: StudioMediaSto
     finalPrompt: sentText,
     ...(p.preset ? { finalPrompt: null, preset: p.preset.id } : {}),
     ...(p.reviewedPrompt ? { reviewed: true } : {}),
+    ...(p.edited === true ? { edited: true } : {}),
     // The video prompt shield (lib/brand-studio/prompt-shield): open for this organization, a VIDEO run's sent
     // text stays on the server; the view says whether there is one (`architect`) and how to draw it (`sent`).
     // Closed, or any other kind, adds nothing: the answer is exactly as before.

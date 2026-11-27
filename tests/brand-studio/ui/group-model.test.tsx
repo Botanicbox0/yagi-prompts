@@ -345,10 +345,27 @@ describe("results", () => {
     // Every tile of the group (results and the failed one) can be outlined together; none is lit at rest.
     expect([...html.matchAll(/class="bs-tile"[^>]*data-group="([^"]+)"/g)].map((m) => m[1])).toEqual(["g-1", "g-1", "g-1"]);
     expect(html).not.toContain("data-group-lit");
-    // A lone run carries no model badge and nothing to outline.
+    // A lone image run carries its model label at bottom-left with no group outline; a lone video run keeps neither.
     const lone = renderToStaticMarkup(<Wall mode="image" jobs={[job(1, { outputs: [output(1)] })]} copy={ko} locale="ko" canGenerate canEdit library={{ ready: true, liked: new Set(), folders: [] } as never} parentOf={() => null} onAction={() => {}} onRetry={() => {}} onNotice={() => {}} />);
-    expect(lone).not.toContain("data-studio-tile-model");
+    expect(lone).toContain(`data-studio-tile-model="seedream-5.5"`);
     expect(lone).not.toContain("data-group");
+    const loneVideo = renderToStaticMarkup(
+      <Wall
+        mode="video"
+        jobs={[job(1, { kind: "video", model: "seedance-2.5", outputs: [output(1, { kind: "video" })] })]}
+        copy={ko}
+        locale="ko"
+        canGenerate
+        canEdit
+        library={{ ready: true, liked: new Set(), folders: [] } as never}
+        parentOf={() => null}
+        onAction={() => {}}
+        onRetry={() => {}}
+        onNotice={() => {}}
+      />,
+    );
+    expect(loneVideo).not.toContain("data-studio-tile-model");
+    expect(loneVideo).not.toContain("data-group");
   });
 
   it("switches between results made together, keeping a failed one in the row with its reason", () => {

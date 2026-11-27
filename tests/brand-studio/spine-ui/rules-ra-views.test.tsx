@@ -447,6 +447,7 @@ describe('Spine rules R-A markup tests', () => {
             key={entry.key}
             entry={entry}
             copy={d.studioLibrary}
+            editedMark={d.brandStudio.gallery.editedMark}
             name="img"
             liked={false}
             {...hubActions(entry, {
@@ -668,6 +669,7 @@ describe('Spine rules R-A markup tests', () => {
                 key={entry.key}
                 entry={entry}
                 copy={d.studioLibrary}
+                editedMark={d.brandStudio.gallery.editedMark}
                 name={entry.label ?? d.studioLibrary.item[entry.kind]}
                 liked={false}
                 {...effective}
@@ -749,6 +751,7 @@ describe('Spine rules R-A markup tests', () => {
       <HubDetail
         entry={singleEntry}
         copy={d.studioLibrary}
+        editedMark={d.brandStudio.gallery.editedMark}
         name="Result"
         liked={false}
         main={null}

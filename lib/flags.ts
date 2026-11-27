@@ -329,38 +329,32 @@ export function brandProjectSpineFor(
  * secret to sign with (lib/brand-studio/prompt-shield/shield.ts `videoPromptShieldActive`). Closed means every
  * answer is exactly as before.
  */
-function orgSwitchOpenFor(
+function orgListSwitchOpen(
   flagValue: string | undefined,
-  orgsValue: string | undefined,
+  orgsRaw: string | undefined,
   organizationId: string | null | undefined,
 ): boolean {
-  if (flagValue !== 'on' || !organizationId?.trim()) return false;
-  const orgs = (orgsValue ?? '')
+  if (flagValue !== 'on' || !organizationId) return false;
+  const orgs = (orgsRaw ?? '')
     .split(',')
     .map((entry) => entry.trim().toLowerCase())
     .filter((entry) => entry !== '');
   if (orgs.length === 0 || orgs.some((entry) => entry === '*' || entry === 'all')) return true;
-  return orgs.includes(organizationId.trim().toLowerCase());
+  return orgs.includes(organizationId.toLowerCase());
 }
 
 export function videoPromptShieldOpenFor(
   organizationId: string | null | undefined,
   env: Record<string, string | undefined> = process.env,
 ): boolean {
-  return orgSwitchOpenFor(env.BRAND_STUDIO_VIDEO_PROMPT_SHIELD, env.BRAND_STUDIO_VIDEO_PROMPT_SHIELD_ORGS, organizationId);
+  return orgListSwitchOpen(env.BRAND_STUDIO_VIDEO_PROMPT_SHIELD, env.BRAND_STUDIO_VIDEO_PROMPT_SHIELD_ORGS, organizationId);
 }
 
-/**
- * Campaign ops C1: the "캠페인 운영" mode with `/brand/campaigns` and `/brand/production`.
- * Default OFF: open only when `BRAND_CAMPAIGN_OPS=on` and the organization matches `BRAND_CAMPAIGN_OPS_ORGS`
- * (empty, `*`, or `all` = every organization; otherwise comma-separated organization ids). Only has an effect
- * where the rail has modes (rooms open for the brand).
- */
-export function brandCampaignOpsOpenFor(
+export function brandStudioEditToWallOpenFor(
   organizationId: string | null | undefined,
   env: Record<string, string | undefined> = process.env,
 ): boolean {
-  return orgSwitchOpenFor(env.BRAND_CAMPAIGN_OPS, env.BRAND_CAMPAIGN_OPS_ORGS, organizationId);
+  return orgListSwitchOpen(env.BRAND_STUDIO_EDIT_TO_WALL, env.BRAND_STUDIO_EDIT_TO_WALL_ORGS, organizationId);
 }
 
 /**
@@ -584,4 +578,17 @@ export function promptGuardMode(
  */
 export function brandSeedanceRulesV2Open(env: Record<string, string | undefined> = process.env): boolean {
   return env.BRAND_SEEDANCE_RULES_V2 === 'on';
+}
+
+/**
+ * Campaign ops C1: the "캠페인 운영" mode with `/brand/campaigns` and `/brand/production`.
+ * Default OFF: open only when `BRAND_CAMPAIGN_OPS=on` and the organization matches `BRAND_CAMPAIGN_OPS_ORGS`
+ * (empty, `*`, or `all` = every organization; otherwise comma-separated organization ids). Only has an effect
+ * where the rail has modes (rooms open for the brand).
+ */
+export function brandCampaignOpsOpenFor(
+  organizationId: string | null | undefined,
+  env: Record<string, string | undefined> = process.env,
+): boolean {
+  return orgListSwitchOpen(env.BRAND_CAMPAIGN_OPS, env.BRAND_CAMPAIGN_OPS_ORGS, organizationId);
 }

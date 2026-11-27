@@ -232,6 +232,8 @@ export interface ReviewItem extends ReviewListItem {
    * null when not measured; the player then measures it while the film plays.
    */
   fps?: number | null;
+  /** Live external share link count, populated on image details only while 보내기 is open for the organization. */
+  liveShareCount?: number;
 }
 
 export interface ReviewComment {

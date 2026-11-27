@@ -152,8 +152,8 @@ export const STUDIO_UPLOAD_MIMES = {
 
 /* -------------------------------------------------------------- helpers */
 
-const Id = z.uuid();
-const RequestId = z.string().min(8).max(80).regex(/^[A-Za-z0-9_-]+$/);
+export const Id = z.uuid();
+export const RequestId = z.string().min(8).max(80).regex(/^[A-Za-z0-9_-]+$/);
 const Note = z.string().trim().max(STUDIO_LIMITS.noteMax);
 
 /** A box in fractions of the picture (0..1), origin at the top-left corner. */
@@ -570,6 +570,23 @@ export const AssetCompleteSchema = z.object({
   transient: z.boolean().optional(),
 });
 
+export const OutputEditReserveSchema = z.object({
+  organizationId: Id,
+  requestId: RequestId,
+  mime: z.enum(STUDIO_UPLOAD_MIMES.image),
+  sizeBytes: z.number().int().positive().max(STUDIO_LIMITS.imageBytesMax),
+  parentOutputId: Id.optional(),
+  projectId: Id.optional(),
+});
+
+export const OutputEditCompleteSchema = z.object({
+  organizationId: Id,
+  requestId: RequestId,
+  mime: z.enum(STUDIO_UPLOAD_MIMES.image),
+  parentOutputId: Id.optional(),
+  projectId: Id.optional(),
+});
+
 /** Read a reference video already in the library. `depth` defaults to `basic`. */
 export const FilmAnalyzeSchema = z.object({ organizationId: Id, assetId: Id, depth: z.enum(FILM_DEPTHS).optional() });
 
@@ -906,8 +923,29 @@ export const STUDIO_OPERATIONS = [
   'output.waveform',
   'lyrics.draft',
   'music.design',
+  'output.edit.reserve',
+  'output.edit.complete',
 ] as const;
 export type StudioOperation = (typeof STUDIO_OPERATIONS)[number];
+
+export type StudioOutputEditReserved =
+  | {
+      ok: true;
+      direct: boolean;
+      url: string;
+    }
+  | {
+      ok: true;
+      direct: false;
+      url: '';
+      /** Present when reserving an already-succeeded edit requestId: client skips re-upload and re-complete. */
+      job: StudioJobView;
+    };
+
+export interface StudioOutputEditSaved {
+  ok: true;
+  job: StudioJobView;
+}
 
 /* ------------------------------------------------------------ responses */
 
@@ -1010,6 +1048,8 @@ export interface StudioJobView {
   preset?: string;
   /** True when `finalPrompt` is the sentence the customer read (and may have edited) before sending. */
   reviewed?: boolean;
+  /** True for an edited image saved to the studio wall (`output.edit.complete`); omitted otherwise. */
+  edited?: boolean;
   /**
    * The video prompt shield (`BRAND_STUDIO_VIDEO_PROMPT_SHIELD`), open for the organization, on a VIDEO run only
    * (`video`, `video_remix`, `video_final`, revisions): `finalPrompt` is then always null and the sent text is
@@ -1160,6 +1200,8 @@ export interface StudioState {
    * is a conversation (we pick the way and say why), and drafts and finals are named on version cards.
    */
   reviseV2?: boolean;
+  /** Present (`true`) only when `BRAND_STUDIO_EDIT_TO_WALL` is open for the organization and the member can create. */
+  editToWall?: boolean;
   /**
    * Present only while runs can belong to a project (`BRAND_STUDIO_PROJECTS=on` and migration 0091
    * applied): the projects a run can be put in, newest first. Absent means the feature is closed.
@@ -1233,6 +1275,8 @@ export interface StudioBrandProjectCover {
   width: number | null;
   height: number | null;
   createdAt: string;
+  model?: string | null;
+  edited?: boolean;
 }
 
 /** One project's group on the 프로젝트별 tab. */

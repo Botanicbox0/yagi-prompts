@@ -528,7 +528,39 @@ export function useStudio({
     [api, refreshSilently, spineActive],
   );
 
-  return { store, load, wasStartedHere, createJob, createGroup, assignProject, createProject, cancelJob, saveOutput, deleteOutput, deleteJob, removeJobs, moveToBrandProject, updateAsset, deleteAsset, onSourceDeleted, handoff, enhancePrompt, planRevision, talkRevision, readMark, films, analyzeFilm, uploads, upload };
+  const saveEditedImage = useCallback(
+    async (file: File, options: { requestId?: string; parentOutputId?: string | null } = {}) => {
+      const brandProjectId = spineActive ? intoBrandProject.current : null;
+      const legacyProjectId = !spineActive ? intoProject.current : null;
+      const result = await api.saveEditedImage(file, {
+        ...(options.requestId ? { requestId: options.requestId } : {}),
+        parentOutputId: options.parentOutputId ?? null,
+        ...(brandProjectId ? { brandProjectId } : {}),
+        ...(legacyProjectId ? { projectId: legacyProjectId } : {}),
+      });
+      if (!isFailure(result)) {
+        dispatch({ type: "jobAdded", job: result.job });
+        refreshSilently();
+        return result;
+      }
+      if (
+        brandProjectId &&
+        onProjectGoneRef.current &&
+        (await handleNotFoundForOpenProject({
+          code: result.code,
+          openProjectId: brandProjectId,
+          listProjects: () => api.listBrandProjects(),
+          onProjectGone: (goneId) => onProjectGoneRef.current?.(goneId),
+        }))
+      ) {
+        return { ...result, projectGone: true as const };
+      }
+      return result;
+    },
+    [api, refreshSilently, spineActive],
+  );
+
+  return { store, load, wasStartedHere, createJob, createGroup, assignProject, createProject, cancelJob, saveOutput, deleteOutput, deleteJob, removeJobs, moveToBrandProject, updateAsset, deleteAsset, onSourceDeleted, handoff, enhancePrompt, planRevision, talkRevision, readMark, films, analyzeFilm, uploads, upload, saveEditedImage };
 }
 
 /**

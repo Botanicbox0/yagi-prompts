@@ -34,7 +34,7 @@ export async function memberUsage(
               coalesce(sum(${jobUsageKrwSql('j')}), 0)::bigint as used, count(*)::int as runs
          from brand_studio_jobs j
          left join profiles p on p.id = j.created_by
-        where j.organization_id = $1 and j.status not in ('failed','canceled') and j.created_at >= $2 and j.created_at < $3
+        where j.organization_id = $1 and j.status not in ('failed','canceled') and coalesce(j.params->>'edited', '') <> 'true' and j.created_at >= $2 and j.created_at < $3
         group by j.created_by, p.email, p.display_name`,
       [organizationId, window.start.toISOString(), window.end.toISOString()],
     )
