@@ -171,14 +171,25 @@ export const SKIN_REALISM_NB_PHOTO_LABEL = 'a real photograph';
 export const SKIN_REALISM_GPT_PHOTO_LABEL = 'a photorealistic photograph';
 export const SKIN_REALISM_GPT_CLOSER = 'No glamorization, no heavy retouching, no over-sharpened skin.';
 
+export const SKIN_BASE_NO_EXTRA_MARKS_PHRASE = 'and add no freckles, moles or blemishes they do not have';
+
 export const SKIN_TONE_DEPTH_LIST = 'fair, light, medium, tan or deep';
 export const SKIN_TONE_UNDERTONE_LIST = 'warm, neutral, cool or olive';
+export const SKIN_TONE_NONE_ROLE_PHRASE = "the person's face, hair, build and skin as they are";
+export function skinToneNoneRolePhrase(tokens: readonly string[]): string {
+  return `${tokens.join(', ')} ${tokens.length === 1 ? 'supplies' : 'supply'} ${SKIN_TONE_NONE_ROLE_PHRASE}`;
+}
+export const SKIN_TONE_KEEP_NANO_BANANA_PHRASE = 'keep them exactly as they are';
+export const SKIN_TONE_KEEP_DEFAULT_PHRASE = 'do not lighten, darken, warm, cool or even them out';
 
 export const SKIN_RESTORE_KEEP_PHRASE = 'the same person, the same face shape, expression, gaze, make-up and light';
 export const SKIN_RESTORE_ACTION_NANO_BANANA_PHRASE = `restore fine, natural skin detail in place with ${SKIN_RESTORE_KEEP_PHRASE} as they are`;
 export const SKIN_RESTORE_ACTION_DEFAULT_PHRASE = `restore fine, natural skin detail in place, with ${SKIN_RESTORE_KEEP_PHRASE} unchanged`;
+export const SKIN_RESTORE_TEXTURE_PHRASE = 'Add only fine texture where the skin looks smoothed or waxy';
 export const SKIN_RESTORE_ZONES_PHRASE =
   'slightly more visible fine pores on the forehead, nose and inner cheeks, softer outer cheeks, natural lip lines and a little natural colour variation';
+export const SKIN_RESTORE_MARKS_NANO_BANANA_PHRASE = 'with every mark the person has kept where it is';
+export const SKIN_RESTORE_MARKS_DEFAULT_PHRASE = 'Keep every mark the person has and add none.';
 
 const NEVER_WORDS = 'Never write beauty or perfection words for skin (flawless, perfect, porcelain, glass skin, poreless, airbrushed, dewy glow) or realism tags (8k, hyper-detailed, "every pore visible").';
 
@@ -187,7 +198,7 @@ function baseRule(profile: StudioPromptProfile): string {
     return `People: describe their skin the way a real photograph shows it at this camera distance: ${SKIN_BASE_NANO_BANANA_PHRASE}. ${NEVER_WORDS} Phrase the skin positively; the picture needs no list of what to avoid.`;
   }
   const gaze = profile === 'gpt-image' ? ' Say how each person is framed and where they look.' : '';
-  return `People: describe their skin the way a real photograph shows it at this camera distance: ${SKIN_BASE_DEFAULT_PHRASE}, and add no freckles, moles or blemishes they do not have. ${NEVER_WORDS} When nothing is asked about expression or gaze, keep them relaxed and unposed.${gaze}`;
+  return `People: describe their skin the way a real photograph shows it at this camera distance: ${SKIN_BASE_DEFAULT_PHRASE}, ${SKIN_BASE_NO_EXTRA_MARKS_PHRASE}. ${NEVER_WORDS} When nothing is asked about expression or gaze, keep them relaxed and unposed.${gaze}`;
 }
 
 function realismRule(profile: StudioPromptProfile): string {
@@ -207,10 +218,10 @@ function realismRule(profile: StudioPromptProfile): string {
 function toneRule(profile: StudioPromptProfile, variant: SkinVariant, tokens: readonly string[]): string {
   if (tokens.length === 0) return '';
   const who = tokens.length === 1 ? `the person in ${tokens[0]}` : `each person (${tokens.join(', ')})`;
-  const keep = profile === 'nano-banana' ? 'and keep them exactly as they are' : 'and keep them: do not lighten, darken, warm, cool or even them out';
+  const keep = profile === 'nano-banana' ? `and ${SKIN_TONE_KEEP_NANO_BANANA_PHRASE}` : `and keep them: ${SKIN_TONE_KEEP_DEFAULT_PHRASE}`;
   switch (variant) {
     case 'none':
-      return `Skin tone: ${tokens.join(', ')} ${tokens.length === 1 ? 'supplies' : 'supply'} the person's face, hair, build and skin as they are; state that role and add no description of the skin's colour.`;
+      return `Skin tone: ${skinToneNoneRolePhrase(tokens)}; state that role and add no description of the skin's colour.`;
     case 'short':
       return `Skin tone: name the skin of ${who} in one clause as you see it in the picture, its depth (${SKIN_TONE_DEPTH_LIST}) and its undertone (${SKIN_TONE_UNDERTONE_LIST}), ${keep}.`;
     case 'full':
@@ -220,9 +231,9 @@ function toneRule(profile: StudioPromptProfile, variant: SkinVariant, tokens: re
 
 function restoreRule(profile: StudioPromptProfile): string {
   if (profile === 'nano-banana') {
-    return `The boxed part is a face or skin: ${SKIN_RESTORE_ACTION_NANO_BANANA_PHRASE}. Add only fine texture where the skin looks smoothed or waxy: ${SKIN_RESTORE_ZONES_PHRASE}, with every mark the person has kept where it is.`;
+    return `The boxed part is a face or skin: ${SKIN_RESTORE_ACTION_NANO_BANANA_PHRASE}. ${SKIN_RESTORE_TEXTURE_PHRASE}: ${SKIN_RESTORE_ZONES_PHRASE}, ${SKIN_RESTORE_MARKS_NANO_BANANA_PHRASE}.`;
   }
-  return `The boxed part is a face or skin: ${SKIN_RESTORE_ACTION_DEFAULT_PHRASE}. Add only fine texture where the skin looks smoothed or waxy: ${SKIN_RESTORE_ZONES_PHRASE}. Keep every mark the person has and add none.`;
+  return `The boxed part is a face or skin: ${SKIN_RESTORE_ACTION_DEFAULT_PHRASE}. ${SKIN_RESTORE_TEXTURE_PHRASE}: ${SKIN_RESTORE_ZONES_PHRASE}. ${SKIN_RESTORE_MARKS_DEFAULT_PHRASE}`;
 }
 
 export interface SkinRulesInput {
@@ -252,12 +263,17 @@ export function skinAllowPhrases(input: SkinRulesInput): string[] {
   const out: string[] = [];
   if (plan.restore) {
     out.push(
-      profile === 'nano-banana' ? SKIN_RESTORE_ACTION_NANO_BANANA_PHRASE : SKIN_RESTORE_ACTION_DEFAULT_PHRASE,
-      SKIN_RESTORE_ZONES_PHRASE,
+      profile === 'nano-banana'
+        ? `${SKIN_RESTORE_ACTION_NANO_BANANA_PHRASE}. ${SKIN_RESTORE_TEXTURE_PHRASE}: ${SKIN_RESTORE_ZONES_PHRASE}, ${SKIN_RESTORE_MARKS_NANO_BANANA_PHRASE}`
+        : `${SKIN_RESTORE_ACTION_DEFAULT_PHRASE}. ${SKIN_RESTORE_TEXTURE_PHRASE}: ${SKIN_RESTORE_ZONES_PHRASE}. ${SKIN_RESTORE_MARKS_DEFAULT_PHRASE}`,
     );
   }
   if (plan.mode === 'base' || plan.mode === 'realism' || plan.maybePerson) {
-    out.push(profile === 'nano-banana' ? SKIN_BASE_NANO_BANANA_PHRASE : SKIN_BASE_DEFAULT_PHRASE);
+    out.push(
+      profile === 'nano-banana'
+        ? SKIN_BASE_NANO_BANANA_PHRASE
+        : `${SKIN_BASE_DEFAULT_PHRASE}, ${SKIN_BASE_NO_EXTRA_MARKS_PHRASE}`,
+    );
   }
   if (plan.mode === 'realism' && !plan.restore) {
     out.push(
@@ -268,8 +284,16 @@ export function skinAllowPhrases(input: SkinRulesInput): string[] {
     );
     if (profile === 'gpt-image') out.push(SKIN_REALISM_GPT_CLOSER);
   }
-  if (plan.toneMatch && input.personTokens.length > 0 && input.variant !== 'none') {
-    out.push(SKIN_TONE_DEPTH_LIST, SKIN_TONE_UNDERTONE_LIST);
+  if (plan.toneMatch && input.personTokens.length > 0) {
+    if (input.variant === 'none') {
+      out.push(skinToneNoneRolePhrase(input.personTokens));
+    } else {
+      out.push(
+        SKIN_TONE_DEPTH_LIST,
+        SKIN_TONE_UNDERTONE_LIST,
+        profile === 'nano-banana' ? SKIN_TONE_KEEP_NANO_BANANA_PHRASE : SKIN_TONE_KEEP_DEFAULT_PHRASE,
+      );
+    }
   }
   return out;
 }

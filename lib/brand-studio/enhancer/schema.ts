@@ -11,6 +11,11 @@ import type { EnhanceInput } from './types';
 export const ENHANCED_PROMPT_MAX = 6000;
 const PROMPT_MIN = 12;
 export const NOTES_MAX = 160;
+export const REGION_EDIT_NO_MOVE_LINE = 'Do not move or resize anything else.';
+
+export function videoEditStayLine(ref: string): string {
+  return `Everything else in ${ref} stays as it is.`;
+}
 
 export const EnhancerOutputSchema = z.object({
   prompt: z.string(),
@@ -161,12 +166,12 @@ export function checkEnhancedPrompt(raw: string, input: EnhanceInput, binding: B
 
   // Lines a kind cannot go without.
   if (input.kind === 'region_edit' && !/do not move or resize anything else/i.test(prompt)) {
-    prompt = `${prompt}\nDo not move or resize anything else.`;
+    prompt = `${prompt}\n${REGION_EDIT_NO_MOVE_LINE}`;
   }
   if (input.profile === 'seedance' && input.video) {
     if (input.kind === 'video_remix' && input.video.method === 'edit' && !/everything else stays as it is/i.test(prompt)) {
       const ref = binding.bound.find((b) => b.ref.kind === 'video')?.token ?? '@Video1';
-      prompt = `${prompt}\nEverything else in ${ref} stays as it is.`;
+      prompt = `${prompt}\n${videoEditStayLine(ref)}`;
     }
     const withAudio = enforceAudio(prompt, input.video.audio);
     if (withAudio === null) return { ok: false, reason: 'music_in_ambient' };

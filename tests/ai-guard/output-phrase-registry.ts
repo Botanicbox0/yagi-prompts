@@ -75,6 +75,15 @@ export const REEXPORT_PHRASE_ALIASES: Readonly<Record<string, string>> = {
 };
 
 export const OUTPUT_PHRASE_REGISTRY: readonly RegistryPhraseEntry[] = [
+  // profiles/core
+  {
+    id: 'core-region-match-phrase',
+    moduleName: 'profiles/core',
+    exportName: 'CORE_REGION_MATCH_PHRASE',
+    value: coreMod.CORE_REGION_MATCH_PHRASE,
+    category: 'output_phrase',
+  },
+
   // profiles/seedream
   {
     id: 'seedream-use-case-list',
@@ -280,6 +289,27 @@ export const OUTPUT_PHRASE_REGISTRY: readonly RegistryPhraseEntry[] = [
     value: seedanceMod.SEEDANCE_V2_EXCLUSION_GAZE_PHRASE,
     category: 'output_phrase',
   },
+  {
+    id: 'seedance-product-consistency-phrase',
+    moduleName: 'profiles/seedance',
+    exportName: 'SEEDANCE_PRODUCT_CONSISTENCY_PHRASE',
+    value: seedanceMod.SEEDANCE_PRODUCT_CONSISTENCY_PHRASE,
+    category: 'output_phrase',
+  },
+  {
+    id: 'seedance-v2-person-authority-phrase',
+    moduleName: 'profiles/seedance',
+    exportName: 'SEEDANCE_V2_PERSON_AUTHORITY_PHRASE',
+    value: seedanceMod.SEEDANCE_V2_PERSON_AUTHORITY_PHRASE,
+    category: 'output_phrase',
+  },
+  {
+    id: 'seedance-v2-wardrobe-authority-phrase',
+    moduleName: 'profiles/seedance',
+    exportName: 'SEEDANCE_V2_WARDROBE_AUTHORITY_PHRASE',
+    value: seedanceMod.SEEDANCE_V2_WARDROBE_AUTHORITY_PHRASE,
+    category: 'output_phrase',
+  },
 
   // profiles/skin
   {
@@ -294,6 +324,13 @@ export const OUTPUT_PHRASE_REGISTRY: readonly RegistryPhraseEntry[] = [
     moduleName: 'profiles/skin',
     exportName: 'SKIN_BASE_DEFAULT_PHRASE',
     value: skinMod.SKIN_BASE_DEFAULT_PHRASE,
+    category: 'output_phrase',
+  },
+  {
+    id: 'skin-base-no-extra-marks-phrase',
+    moduleName: 'profiles/skin',
+    exportName: 'SKIN_BASE_NO_EXTRA_MARKS_PHRASE',
+    value: skinMod.SKIN_BASE_NO_EXTRA_MARKS_PHRASE,
     category: 'output_phrase',
   },
   {
@@ -367,6 +404,27 @@ export const OUTPUT_PHRASE_REGISTRY: readonly RegistryPhraseEntry[] = [
     category: 'output_phrase',
   },
   {
+    id: 'skin-tone-none-role-phrase',
+    moduleName: 'profiles/skin',
+    exportName: 'SKIN_TONE_NONE_ROLE_PHRASE',
+    value: skinMod.SKIN_TONE_NONE_ROLE_PHRASE,
+    category: 'output_phrase',
+  },
+  {
+    id: 'skin-tone-keep-nb-phrase',
+    moduleName: 'profiles/skin',
+    exportName: 'SKIN_TONE_KEEP_NANO_BANANA_PHRASE',
+    value: skinMod.SKIN_TONE_KEEP_NANO_BANANA_PHRASE,
+    category: 'output_phrase',
+  },
+  {
+    id: 'skin-tone-keep-default-phrase',
+    moduleName: 'profiles/skin',
+    exportName: 'SKIN_TONE_KEEP_DEFAULT_PHRASE',
+    value: skinMod.SKIN_TONE_KEEP_DEFAULT_PHRASE,
+    category: 'output_phrase',
+  },
+  {
     id: 'skin-restore-keep-phrase',
     moduleName: 'profiles/skin',
     exportName: 'SKIN_RESTORE_KEEP_PHRASE',
@@ -388,10 +446,31 @@ export const OUTPUT_PHRASE_REGISTRY: readonly RegistryPhraseEntry[] = [
     category: 'output_phrase',
   },
   {
+    id: 'skin-restore-texture-phrase',
+    moduleName: 'profiles/skin',
+    exportName: 'SKIN_RESTORE_TEXTURE_PHRASE',
+    value: skinMod.SKIN_RESTORE_TEXTURE_PHRASE,
+    category: 'output_phrase',
+  },
+  {
     id: 'skin-restore-zones-phrase',
     moduleName: 'profiles/skin',
     exportName: 'SKIN_RESTORE_ZONES_PHRASE',
     value: skinMod.SKIN_RESTORE_ZONES_PHRASE,
+    category: 'output_phrase',
+  },
+  {
+    id: 'skin-restore-marks-nb-phrase',
+    moduleName: 'profiles/skin',
+    exportName: 'SKIN_RESTORE_MARKS_NANO_BANANA_PHRASE',
+    value: skinMod.SKIN_RESTORE_MARKS_NANO_BANANA_PHRASE,
+    category: 'output_phrase',
+  },
+  {
+    id: 'skin-restore-marks-default-phrase',
+    moduleName: 'profiles/skin',
+    exportName: 'SKIN_RESTORE_MARKS_DEFAULT_PHRASE',
+    value: skinMod.SKIN_RESTORE_MARKS_DEFAULT_PHRASE,
     category: 'output_phrase',
   },
 
@@ -462,11 +541,28 @@ export const OUTPUT_PHRASE_REGISTRY: readonly RegistryPhraseEntry[] = [
     category: 'output_phrase',
   },
   {
+    id: 'task-region-crop-pixels-prefix',
+    moduleName: 'profiles/tasks',
+    exportName: 'REGION_TASK_CROP_PIXELS_PREFIX',
+    value: tasksMod.REGION_TASK_CROP_PIXELS_PREFIX,
+    category: 'output_phrase',
+  },
+  {
     id: 'task-revision-edit-keep-phrase',
     moduleName: 'profiles/tasks',
     exportName: 'REVISION_EDIT_KEEP_PHRASE',
     value: tasksMod.REVISION_EDIT_KEEP_PHRASE,
     category: 'output_phrase',
+  },
+
+  // enhancer/schema
+  {
+    id: 'schema-region-edit-no-move-line',
+    moduleName: 'enhancer/schema',
+    exportName: 'REGION_EDIT_NO_MOVE_LINE',
+    value: schemaMod.REGION_EDIT_NO_MOVE_LINE,
+    category: 'output_phrase',
+    postAnswerSource: 'schema.ts checkEnhancedPrompt region_edit',
   },
 
   // enhancer/lines
@@ -554,10 +650,24 @@ export const OUTPUT_PHRASE_REGISTRY: readonly RegistryPhraseEntry[] = [
     postAnswerSource: 'compiler.ts scrubSeedanceAntiPatterns v1',
   },
   {
+    id: 'director-v1-reference-authority-phrase',
+    moduleName: 'director/compiler',
+    exportName: 'DIRECTOR_V1_REFERENCE_AUTHORITY_PHRASE',
+    value: compilerMod.DIRECTOR_V1_REFERENCE_AUTHORITY_PHRASE,
+    category: 'output_phrase',
+  },
+  {
     id: 'director-v1-palette-roles-list',
     moduleName: 'director/compiler',
     exportName: 'DIRECTOR_V1_PALETTE_ROLES_LIST',
     value: compilerMod.DIRECTOR_V1_PALETTE_ROLES_LIST,
+    category: 'output_phrase',
+  },
+  {
+    id: 'director-v1-visual-style-phrase',
+    moduleName: 'director/compiler',
+    exportName: 'DIRECTOR_V1_VISUAL_STYLE_PHRASE',
+    value: compilerMod.DIRECTOR_V1_VISUAL_STYLE_PHRASE,
     category: 'output_phrase',
   },
   {
@@ -649,7 +759,50 @@ export const OUTPUT_PHRASE_REGISTRY: readonly RegistryPhraseEntry[] = [
     value: rulesV2Mod.DIRECTOR_V2_EXCLUSIONS_PHRASE,
     category: 'output_phrase',
   },
+  {
+    id: 'director-v2-person-authority-phrase',
+    moduleName: 'director/rules-v2',
+    exportName: 'DIRECTOR_V2_PERSON_AUTHORITY_PHRASE',
+    value: rulesV2Mod.DIRECTOR_V2_PERSON_AUTHORITY_PHRASE,
+    category: 'output_phrase',
+  },
+  {
+    id: 'director-v2-garment-authority-phrase',
+    moduleName: 'director/rules-v2',
+    exportName: 'DIRECTOR_V2_GARMENT_AUTHORITY_PHRASE',
+    value: rulesV2Mod.DIRECTOR_V2_GARMENT_AUTHORITY_PHRASE,
+    category: 'output_phrase',
+  },
 ];
+
+export type ConfigFamily =
+  | 'enhancer-image-seedream'
+  | 'enhancer-image-nano-banana'
+  | 'enhancer-image-gpt-image'
+  | 'enhancer-region-edit'
+  | 'enhancer-seedance-v1'
+  | 'enhancer-seedance-v2'
+  | 'director-v1'
+  | 'director-v2';
+
+export function configFamilyOf(cfg: Pick<EquivalenceConfig, 'site' | 'env' | 'input'>): ConfigFamily {
+  const v2 = cfg.env.BRAND_SEEDANCE_RULES_V2 === 'on';
+  if (cfg.site === 'director') {
+    return v2 ? 'director-v2' : 'director-v1';
+  }
+  const inp = cfg.input as EnhanceInput;
+  if (inp.kind === 'region_edit') return 'enhancer-region-edit';
+  switch (inp.profile) {
+    case 'seedream':
+      return 'enhancer-image-seedream';
+    case 'nano-banana':
+      return 'enhancer-image-nano-banana';
+    case 'gpt-image':
+      return 'enhancer-image-gpt-image';
+    case 'seedance':
+      return v2 ? 'enhancer-seedance-v2' : 'enhancer-seedance-v1';
+  }
+}
 
 export interface EquivalenceConfig {
   readonly id: string;
@@ -675,14 +828,14 @@ export function postAnswerAppendedLinesForConfig(cfg: EquivalenceConfig): string
   if (cfg.site === 'enhancer') {
     const inp = cfg.input as EnhanceInput;
     if (inp.kind === 'region_edit') {
-      out.push('Do not move or resize anything else.');
+      out.push(schemaMod.REGION_EDIT_NO_MOVE_LINE);
     }
     if (inp.profile === 'seedance' && inp.video) {
       if (inp.video.audio === 'ambient') out.push(linesMod.AMBIENT_AUDIO_LINE);
       else if (inp.video.audio === 'native') out.push(linesMod.NATIVE_AUDIO_LINE);
       if (inp.kind === 'video_remix' && inp.video.method === 'edit') {
         const ref = bindReferences(inp).bound.find((b) => b.ref.kind === 'video')?.token ?? '@Video1';
-        out.push(`Everything else in ${ref} stays as it is.`);
+        out.push(schemaMod.videoEditStayLine(ref));
       }
     }
     return out;

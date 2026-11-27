@@ -9,6 +9,7 @@ import { audioLine, effectiveSeconds, formatRange, keepPhrase, planShots, refere
 import { withClarified } from '../revision/clarify';
 import { replaceMarks, type MarkWords } from './marks';
 import { bindReferences, mapCustomerMentions, type Binding, type BoundReference } from './references';
+import { REGION_EDIT_NO_MOVE_LINE } from './schema';
 import type { EnhanceInput, EnhanceResult } from './types';
 
 const FALLBACK_NOTES = {
@@ -48,7 +49,7 @@ function imagePrompt(
       : input.profile === 'seedream' ? `In ${target}, change only this` : `Using ${target}, change only this`;
     return [
       `${lead}: ${sentence(request)}`,
-      'Do not move or resize anything else.',
+      REGION_EDIT_NO_MOVE_LINE,
       ...refs,
       `Keep the exact framing, camera angle, object scale, outer silhouette, contours, perspective, light direction, colour, shadows, texture, grain and pixel positions of ${target}; never redraw, enlarge or reshape the surrounding object.`,
     ].join(input.profile === 'seedream' ? ' ' : '\n');

@@ -68,25 +68,33 @@ export const SEEDANCE_V2_DYNAMIC_CAMERA_LIST =
 export const SEEDANCE_V2_EDITORIAL_MOTION_LIST =
   'small weight shift, slow head turn, breath, a hair strand moving';
 export const SEEDANCE_V2_EXCLUSION_GAZE_PHRASE = 'natural off-axis gaze without staring into the lens';
+export const SEEDANCE_PRODUCT_CONSISTENCY_PHRASE = 'the same shape, label and size in every range';
+export const SEEDANCE_V2_PERSON_AUTHORITY_PHRASE = 'a person reference supplies face and hair only';
+export const SEEDANCE_V2_WARDROBE_AUTHORITY_PHRASE =
+  'it supplies wardrobe only (silhouette, tailoring, fabric and colour; never face or skin)';
 
 export function seedanceAllowPhrases(env: Record<string, string | undefined> = process.env): string[] {
   if (brandSeedanceRulesV2Open(env)) {
     return [
       sleeveVolumeLine('@Image 1'),
-      `${SEEDANCE_PALETTE_ROLES_LIST}, ${SEEDANCE_V2_LIGHTING_PHRASE}`,
+      `(${SEEDANCE_PALETTE_ROLES_LIST}), ${SEEDANCE_V2_LIGHTING_PHRASE}`,
       SEEDANCE_VIDEO_SKIN_EXPOSURE_FORMULA,
       SEEDANCE_VIDEO_FILM_EXPOSURE_FORMULA,
       SEEDANCE_V2_DYNAMIC_CAMERA_LIST,
       SEEDANCE_V2_EDITORIAL_MOTION_LIST,
       SEEDANCE_V2_EXCLUSION_GAZE_PHRASE,
+      SEEDANCE_PRODUCT_CONSISTENCY_PHRASE,
+      SEEDANCE_V2_PERSON_AUTHORITY_PHRASE,
+      SEEDANCE_V2_WARDROBE_AUTHORITY_PHRASE,
     ];
   }
   return [
-    `${SEEDANCE_PALETTE_ROLES_LIST}, ${SEEDANCE_V1_LIGHTING_PHRASE}`,
+    `(${SEEDANCE_PALETTE_ROLES_LIST}), ${SEEDANCE_V1_LIGHTING_PHRASE}`,
     SEEDANCE_V1_CAMERA_VOCAB_LIST,
     SEEDANCE_V1_SKIN_FAITHFUL_PHRASE,
     SEEDANCE_V1_SKIN_NO_GLARE_PHRASE,
     SEEDANCE_V1_FACE_LIGHT_PHRASE,
+    SEEDANCE_PRODUCT_CONSISTENCY_PHRASE,
   ];
 }
 
@@ -102,15 +110,15 @@ Write in English, in this order, as short blocks separated by line breaks:
 5. The sound, as ONE line starting "Audio:" — spoken words in double quotes with who speaks and in which language ("A woman, in Korean, softly: \\"…\\""), diegetic Foley, room ambience, effects, and whether there is music. Speech only when the request gives the words; keep them verbatim.
 
 People: ${SEEDANCE_V1_SKIN_FAITHFUL_PHRASE} (when a person reference is attached), ${SEEDANCE_V1_SKIN_NO_GLARE_PHRASE} — never write "glass-skin", "poreless porcelain" or "dewy highlighter"; performance, expression and off-axis gaze follow the request, and when it says nothing, calm and unposed; ${SEEDANCE_V1_FACE_LIGHT_PHRASE}.
-Products: the same shape, label and size in every range; never mirrored.
+Products: ${SEEDANCE_PRODUCT_CONSISTENCY_PHRASE}; never mirrored.
 On-screen text only when asked for, verbatim, inside 【】. Omit all redundant headers: never write "Create a Seedance video", model names, duration, aspect ratio, resolution or FPS headers.`;
 
 export const SEEDANCE_PROFILE_V2 = `Model: a video model that generates picture and sound together and follows time-ranged directions.
 
 Write in English, in this order, as short blocks separated by line breaks (total prompt up to 15,000 characters):
 1. Reference authority, one concise block per attached reference using the exact tokens given ("@Image1", "@Video1", "@Audio1"):
-   - Person reference (when attached): a person reference supplies face and hair only (never background, lighting, body proportions, or casual clothing); wardrobe comes from the brief's words unless a separate clothing reference is bound, and include once: "${sleeveVolumeLine('@Image 1')}" (using the exact person image number).
-   - Separate clothing reference (when bound): it supplies wardrobe only (silhouette, tailoring, fabric and colour; never face or skin).
+   - Person reference (when attached): ${SEEDANCE_V2_PERSON_AUTHORITY_PHRASE} (never background, lighting, body proportions, or casual clothing); wardrobe comes from the brief's words unless a separate clothing reference is bound, and include once: "${sleeveVolumeLine('@Image 1')}" (using the exact person image number).
+   - Separate clothing reference (when bound): ${SEEDANCE_V2_WARDROBE_AUTHORITY_PHRASE}.
    - Product/logo/style/place references: state once what each supplies ("@Image1 supplies only the bottle: its exact shape, label and colours"). Skip this block when no token is given.
 2. "Visual style:" once per prompt (never repeated per shot), combining concrete #Hex palette roles (${SEEDANCE_PALETTE_ROLES_LIST}), ${SEEDANCE_V2_LIGHTING_PHRASE}, and the exposure/skin formula:
    - When a person appears: "${SEEDANCE_VIDEO_SKIN_EXPOSURE_FORMULA}".
@@ -125,7 +133,7 @@ Write in English, in this order, as short blocks separated by line breaks (total
 4. The last frame: one sentence on what is on screen when the video ends.
 5. One shared Exclusions block (when needed, e.g. ${SEEDANCE_V2_EXCLUSION_GAZE_PHRASE}) and ONE "Audio:" line — spoken words in double quotes with speaker and language ("A woman, in Korean, softly: \\"…\\""), diegetic Foley, room ambience, effects, and whether there is music. Speech only when the request gives the words; keep them verbatim.
 
-Products: the same shape, label and size in every range; never mirrored.
+Products: ${SEEDANCE_PRODUCT_CONSISTENCY_PHRASE}; never mirrored.
 On-screen text only when asked for, verbatim, inside 【】. Omit all redundant headers: never write "Create a Seedance video", model names, duration, aspect ratio, resolution or FPS headers.`;
 
 export function seedanceProfile(env: Record<string, string | undefined> = process.env): string {

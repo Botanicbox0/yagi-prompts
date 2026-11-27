@@ -26,9 +26,10 @@ import {
   skinVariantOf,
   taskAllowPhrases,
 } from './profiles';
+import { CORE_REGION_MATCH_PHRASE } from './profiles/core';
 import { sleeveVolumeLine } from './profiles/seedance';
 import { bindReferences, mapCustomerMentions, type Binding } from './references';
-import { checkEnhancedPrompt, cleanNotes, ENHANCED_PROMPT_MAX, ENHANCER_RESPONSE_SCHEMA, EnhancerOutputSchema, exemptText, NOTES_MAX } from './schema';
+import { checkEnhancedPrompt, cleanNotes, ENHANCED_PROMPT_MAX, ENHANCER_RESPONSE_SCHEMA, EnhancerOutputSchema, exemptText, NOTES_MAX, REGION_EDIT_NO_MOVE_LINE, videoEditStayLine } from './schema';
 import type { EnhanceDeps, EnhanceInput, EnhanceMeta, EnhanceResult } from './types';
 
 export { enhanceMeta } from './meta';
@@ -202,6 +203,31 @@ function thumbParts(input: EnhanceInput, binding: Binding, guard: GuardedRequest
   return parts;
 }
 
+const WORD_CHAR_RE = /[\p{L}\p{N}_]/u;
+
+function containsWordBounded(haystack: string, needle: string): boolean {
+  if (needle.length === 0 || haystack.length <= needle.length) return false;
+  let at = haystack.indexOf(needle);
+  while (at !== -1) {
+    const end = at + needle.length;
+    const leftOk = at === 0 || !WORD_CHAR_RE.test(haystack[at - 1]!);
+    const rightOk = end === haystack.length || !WORD_CHAR_RE.test(haystack[end]!);
+    if (leftOk && rightOk) return true;
+    at = haystack.indexOf(needle, at + 1);
+  }
+  return false;
+}
+
+/**
+ * Drops a `dictatedSpans` extract only when an explicit allow entry present in `system`
+ * already encloses that span at word boundaries (preserving mid-word partial matches).
+ */
+export function filterSubsumedDictated(explicit: readonly string[], spans: readonly string[], system: string): string[] {
+  return spans.filter(
+    (span) => !explicit.some((entry) => entry.length > span.length && containsWordBounded(entry, span) && system.includes(entry)),
+  );
+}
+
 /**
  * Our fixed lines that are meant to appear in a written prompt (the prompt guard's allow-list for this
  * writer): the lines `checkEnhancedPrompt` adds, every output phrase belonging to this request's active
@@ -224,7 +250,7 @@ export function enhancerAllow(
 
   const profilePhrases: string[] = [];
   if (input.kind === 'region_edit') {
-    profilePhrases.push('Do not move or resize anything else.', ...regionEditProfileAllowPhrases(input.profile));
+    profilePhrases.push(CORE_REGION_MATCH_PHRASE, REGION_EDIT_NO_MOVE_LINE, ...regionEditProfileAllowPhrases(input.profile));
   } else {
     switch (input.profile) {
       case 'seedream':
@@ -252,7 +278,7 @@ export function enhancerAllow(
       else if (input.video.audio === 'native') seedanceRuntimeLines.push(NATIVE_AUDIO_LINE);
 
       if (input.kind === 'video_remix' && input.video.method === 'edit') {
-        seedanceRuntimeLines.push(`Everything else in ${ref} stays as it is.`);
+        seedanceRuntimeLines.push(videoEditStayLine(ref));
       }
     }
 
@@ -266,14 +292,12 @@ export function enhancerAllow(
     }
   }
 
+  const explicit = [...profilePhrases, ...taskPhrases, ...skinPhrases, ...seedanceRuntimeLines];
   return [
     ...new Set(
       [
-        ...profilePhrases,
-        ...taskPhrases,
-        ...skinPhrases,
-        ...seedanceRuntimeLines,
-        ...dictatedSpans(system),
+        ...explicit,
+        ...filterSubsumedDictated(explicit, dictatedSpans(system), system),
         fallbackText,
       ].filter((s) => s.length > 0 && wordUnits(foldText(s)).length >= 4),
     ),

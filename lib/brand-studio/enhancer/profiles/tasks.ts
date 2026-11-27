@@ -3,6 +3,7 @@ import type { StudioAudioMode } from '@/lib/brand-studio/contracts';
 import { AMBIENT_SOUND_CLOSE_PHRASE, AMBIENT_SOUND_OPEN_PHRASE, formatRange, KEEP_PHRASES, keepPhrase, type PlannedShot } from '../lines';
 import type { Binding } from '../references';
 import type { EnhanceInput } from '../types';
+import { SEEDANCE_PRODUCT_CONSISTENCY_PHRASE } from './seedance';
 
 export { AMBIENT_SOUND_CLOSE_PHRASE, AMBIENT_SOUND_OPEN_PHRASE, KEEP_PHRASES };
 
@@ -23,6 +24,12 @@ export const REGION_TASK_CROP_KEEP_TAIL =
 
 export function regionTaskCropKeepPhrase(target: string): string {
   return `Keep ${target}'s ${REGION_TASK_CROP_KEEP_TAIL}`;
+}
+
+export const REGION_TASK_CROP_PIXELS_PREFIX = 'keep every surrounding pixel identical to';
+
+export function regionTaskCropPixelsPhrase(target: string): string {
+  return `${REGION_TASK_CROP_PIXELS_PREFIX} ${target}`;
 }
 
 export const REVISION_EDIT_KEEP_PHRASE =
@@ -86,7 +93,7 @@ Start with "In ${target}, change only <the named part and where it is> into <the
 Never zoom, crop, reframe, extend, rotate or change the aspect. Do not describe or change anything outside the boxed part.`;
   }
   return `Task: change one boxed part of an existing picture.${sources}${sourceInspection}
-Image 1 (${target}) is an enlarged crop cut out from a larger photograph, so it may look soft. ${regionTaskCropKeepPhrase(target)}. Never redraw, enlarge, or re-shape the surrounding object (never invent curvature or new geometry). Apply ONLY the requested local change, then keep every surrounding pixel identical to ${target}.
+Image 1 (${target}) is an enlarged crop cut out from a larger photograph, so it may look soft. ${regionTaskCropKeepPhrase(target)}. Never redraw, enlarge, or re-shape the surrounding object (never invent curvature or new geometry). Apply ONLY the requested local change, then ${regionTaskCropPixelsPhrase(target)}.
 Start with ${opening} Then say how the changed part must look, then the keep-list (exact object scale, outer silhouette, contours, light direction, colour, shadows, texture, grain and pixel positions of ${target}).
 Never zoom, crop, reframe, extend, rotate or change the aspect. Do not describe or change anything outside the change.`;
 }
@@ -145,7 +152,7 @@ Write, in this order:
 4. The timeline, one line per range, using exactly the ${shots.length || 'given'} ranges in "video.shots" from 0.0s to ${length}, with no gaps or overlaps, even when it is five seconds or shorter. Each line: the framing, ONE action, then "Camera —" with travel (the camera body moving through space: push in, pull back, track, crane, orbit, handheld follow, or none), pan/tilt (turning in place, or none) and zoom (the lens only, or none) as three separate parts, each with where it starts and where it ends. End every line except the last with its handover: "Hard cut.", "Continuous into the next range, no cut." or the named transition and what drives it.
 5. "Last frame:" one sentence on what is on screen when the video ends.
 6. The sound line.
-Kept from the blueprint: ${kept}. For each kept item carry the blueprint's words over in plain language; rewrite only what the change replaces, and keep a replaced product the same shape, label and size in every range.
+Kept from the blueprint: ${kept}. For each kept item carry the blueprint's words over in plain language; rewrite only what the change replaces, and keep a replaced product ${SEEDANCE_PRODUCT_CONSISTENCY_PHRASE}.
 ${soundRule(audio)}`;
 }
 
@@ -257,7 +264,11 @@ export function taskAllowPhrases(input: EnhanceInput, binding: Binding): string[
       return out;
     case 'region_edit': {
       const target = binding.editTarget ?? 'image 1';
-      out.push(input.regionWindow ? regionTaskWideKeepPhrase(target) : regionTaskCropKeepPhrase(target));
+      out.push(
+        ...(input.regionWindow
+          ? [regionTaskWideKeepPhrase(target)]
+          : [regionTaskCropKeepPhrase(target), regionTaskCropPixelsPhrase(target)]),
+      );
       return out;
     }
     case 'video':
