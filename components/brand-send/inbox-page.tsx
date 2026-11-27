@@ -43,6 +43,20 @@ export interface SendInboxPageProps {
   initialThread?: SendThreadPage | null;
   initialThreadGone?: boolean;
   initialPeople?: readonly SendPerson[];
+  /**
+   * When the server rendered this page (ISO). The first client render reads relative times ("N분 전",
+   * the day dividers) against this instant instead of the browser's clock, so the server markup and the
+   * hydrated markup agree even when a minute or midnight passes in between. After mount the live clock
+   * takes over, as before.
+   */
+  renderedAt?: string | null;
+}
+
+/** The seed instant of the first render; undefined (= the live clock) when absent or unreadable. */
+function seedClock(renderedAt: string | null | undefined): Date | undefined {
+  if (!renderedAt) return undefined;
+  const at = new Date(renderedAt);
+  return Number.isNaN(at.getTime()) ? undefined : at;
 }
 
 function isDocumentVisible(): boolean {
@@ -107,6 +121,7 @@ export function SendInboxPage({
   initialThread = null,
   initialThreadGone = false,
   initialPeople,
+  renderedAt = null,
 }: SendInboxPageProps) {
   const organizationId = send.organizationId;
   const activeTransport = useMemo(() => transport ?? sendTransport(organizationId), [organizationId, transport]);
@@ -116,6 +131,10 @@ export function SendInboxPage({
   const [state, setState] = useState<InboxPollState>(() => initialInboxPollState(initialView, initialInbox));
   const [selectedRootId, setSelectedRootId] = useState<string | null>(initialThreadId);
   const [markingAll, setMarkingAll] = useState(false);
+  const [seedNow, setSeedNow] = useState<Date | undefined>(() => seedClock(renderedAt));
+  useEffect(() => {
+    setSeedNow(undefined);
+  }, []);
 
   const stateRef = useRef(state);
   stateRef.current = state;
@@ -396,7 +415,7 @@ export function SendInboxPage({
           ) : (
             <>
               {state.threads.map((thread) => {
-                const words = threadRowWords(thread, copy, locale);
+                const words = threadRowWords(thread, copy, locale, seedNow);
                 const isActive =
                   selectedRootId !== null && selectedRootId.toLowerCase() === thread.rootId.toLowerCase();
                 const rowInner = (
@@ -501,6 +520,7 @@ export function SendInboxPage({
             initialPeople={initialPeople}
             closed={state.closed}
             stage
+            now={seedNow}
             headEnd={bellSlot}
             onThreadLoaded={handleThreadLoaded}
             onReplyPosted={handleReplyPosted}

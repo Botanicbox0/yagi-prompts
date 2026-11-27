@@ -51,6 +51,8 @@ export interface SendThreadViewProps {
   initialPeople?: readonly SendPerson[];
   closed?: boolean;
   stage?: boolean;
+  /** The instant day dividers are read against on the first render (see SendInboxPage.renderedAt); the live clock when absent. */
+  now?: Date;
   headEnd?: ReactNode;
   onThreadLoaded?: (thread: SendThreadSummary, marked: boolean) => void;
   onReplyPosted?: (posted: SendPosted) => void;
@@ -164,6 +166,7 @@ export function SendThreadView({
   initialPeople,
   closed = false,
   stage = false,
+  now,
   headEnd,
   onThreadLoaded,
   onReplyPosted,
@@ -573,7 +576,7 @@ export function SendThreadView({
   const streamEl = (
     <div ref={streamRef} className={styles.stream} onScroll={handleStreamScroll} data-send-thread-stream>
       {(items ?? []).map((item) => {
-        const day = formatThreadDay(item.message.createdAt, locale, copy);
+        const day = formatThreadDay(item.message.createdAt, locale, copy, now);
         const showDay = day !== '' && day !== lastDay;
         if (day) lastDay = day;
         return (
