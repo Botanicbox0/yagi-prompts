@@ -122,6 +122,9 @@ describe('dictionary completeness (§3.9)', () => {
       'brandLanding.landing.contrast.ours',
       // 2026-11-27 studio polish A: the founder asked for the literal English token "edited" in both locales.
       'brandStudio.gallery.editedMark',
+      // 2026-11-27 video studio modes VM-1: founder-specified mode names shared across locales.
+      'studioVideoModes.modes.reArchitect',
+      'studioVideoModes.modes.motionTransfer',
     ]);
 
     const untranslated = enLeaves

@@ -18,6 +18,7 @@ import { intakeBriefEn } from './intake-brief';
 import { studioShellEn } from './studio-shell';
 import { studioLibraryEn } from './studio-library';
 import { studioVideoEn } from './studio-video';
+import { studioVideoModesEn } from './studio-video-modes';
 import { studioReviewEn } from './studio-review';
 import { studioLayersEn } from './studio-layers';
 import { studioComposeEn } from './studio-compose';
@@ -74,6 +75,7 @@ export const en = {
   studioShell: studioShellEn,
   studioLibrary: studioLibraryEn,
   studioVideo: studioVideoEn,
+  studioVideoModes: studioVideoModesEn,
   studioReview: studioReviewEn,
   studioLayers: studioLayersEn,
   studioCompose: studioComposeEn,
