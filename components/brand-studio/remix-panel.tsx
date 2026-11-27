@@ -44,6 +44,8 @@ export interface RemixPanelProps {
   videoAssetId?: string | null;
   /** Opens `ClipTrimModal` on `@video1` so trimming to `<= 30s` unlocks direct reference/edit. */
   onTrimVideo?(): void;
+  /** Video studio modes (VM-1): hides the redundant method cards row when the top mode switch replaces it. */
+  hideMethodRow?: boolean;
   onChange(
     patch: Partial<
       Pick<DockDraft, "method" | "methodPinned" | "keep" | "change" | "audio" | "seconds" | "targetTotalSeconds" | "clipCount">
@@ -87,6 +89,7 @@ export function RemixPanel({
   videoCopy,
   videoAssetId = null,
   onTrimVideo,
+  hideMethodRow = false,
   onChange,
 }: RemixPanelProps) {
   const r = copy.remix;
@@ -107,6 +110,9 @@ export function RemixPanel({
   // A blueprint is written from the reading: a clip that could not be read cannot be remade from one.
   const unreadable = film?.status === "done" && !film.sheet;
   const effectiveMethod: StudioRemixMethod = overRawLimit || multiActive ? "blueprint" : draft.method;
+  // Round 5 item 2: when the mode switch is open and Re-Architect has an unreadable reading, hide blueprint-only
+  // controls (openPanel, clip plan/target length, keep chips, sound, draft note); keep the method-independent change field.
+  const unreadableBlueprintMode = hideMethodRow && effectiveMethod === "blueprint" && unreadable;
 
   const label = (method: StudioRemixMethod) => {
     if (method === "blueprint") return v.blueprint;
@@ -183,13 +189,15 @@ export function RemixPanel({
             {r.reading}
           </p>
         )}
-        <button type="button" className="bs-btn" data-variant="ghost" data-size="sm" onClick={() => openReversePanel(videoAssetId)} data-studio-remix-open-panel>
-          {v.openPanel}
-        </button>
+        {(!hideMethodRow || (effectiveMethod === "blueprint" && !unreadable)) && (
+          <button type="button" className="bs-btn" data-variant="ghost" data-size="sm" onClick={() => openReversePanel(videoAssetId)} data-studio-remix-open-panel>
+            {v.openPanel}
+          </button>
+        )}
       </div>
 
-      {/* AI Director Duration & Multi-Clip Planner Banner */}
-      {effectiveMethod !== "edit" && (
+      {/* AI Director Duration & Multi-Clip Planner Banner (blueprint only when mode switch is open — W4 & Round 5 item 2). */}
+      {(hideMethodRow ? effectiveMethod === "blueprint" && !unreadable : effectiveMethod !== "edit") && (
         <div className={w.directorBanner} data-studio-director-banner>
           <div className={w.directorHead}>
             <span className={w.directorBadge}>{v.director.badge}</span>
@@ -301,69 +309,73 @@ export function RemixPanel({
           <p>{film.sheet.summary}</p>
         </div>
       )}
-      <div className="bs-remix-row">
-        <span className="bs-label" id={`${id}-method`}>
-          {r.method}
-        </span>
-        <div className="bs-remix-field">
-          <div className="bs-seg" role="radiogroup" aria-labelledby={`${id}-method`}>
-            {METHODS.map((method) => {
-              const methodDisabled =
-                disabled ||
-                (method === "blueprint" && unreadable) ||
-                (method !== "blueprint" && overRawLimit) ||
-                (method === "edit" && !editable);
-              return (
-                <label key={method} className="bs-seg-option" data-studio-remix-method={method}>
-                  <input
-                    type="radio"
-                    name={`${id}-method`}
-                    value={method}
-                    checked={effectiveMethod === method}
-                    disabled={methodDisabled}
-                    aria-describedby={method === "blueprint" ? unreadableId : undefined}
-                    onChange={() =>
-                      onChange({
-                        method,
-                        methodPinned: true,
-                        ...(method !== "blueprint" ? { clipCount: 1, targetTotalSeconds: null } : {}),
-                      })
-                    }
-                  />
-                  <span>{label(method)}</span>
-                </label>
-              );
-            })}
+      {!hideMethodRow && (
+        <div className="bs-remix-row">
+          <span className="bs-label" id={`${id}-method`}>
+            {r.method}
+          </span>
+          <div className="bs-remix-field">
+            <div className="bs-seg" role="radiogroup" aria-labelledby={`${id}-method`}>
+              {METHODS.map((method) => {
+                const methodDisabled =
+                  disabled ||
+                  (method === "blueprint" && unreadable) ||
+                  (method !== "blueprint" && overRawLimit) ||
+                  (method === "edit" && !editable);
+                return (
+                  <label key={method} className="bs-seg-option" data-studio-remix-method={method}>
+                    <input
+                      type="radio"
+                      name={`${id}-method`}
+                      value={method}
+                      checked={effectiveMethod === method}
+                      disabled={methodDisabled}
+                      aria-describedby={method === "blueprint" ? unreadableId : undefined}
+                      onChange={() =>
+                        onChange({
+                          method,
+                          methodPinned: true,
+                          ...(method !== "blueprint" ? { clipCount: 1, targetTotalSeconds: null } : {}),
+                        })
+                      }
+                    />
+                    <span>{label(method)}</span>
+                  </label>
+                );
+              })}
+            </div>
+            {hint && <p className="bs-muted">{hint}</p>}
+            {unreadable && (
+              <p className="bs-muted" id={unreadableId} data-studio-remix-unreadable>
+                {v.unreadable}
+              </p>
+            )}
           </div>
-          {hint && <p className="bs-muted">{hint}</p>}
-          {unreadable && (
-            <p className="bs-muted" id={unreadableId} data-studio-remix-unreadable>
-              {v.unreadable}
-            </p>
-          )}
         </div>
-      </div>
-      <div className="bs-remix-row">
-        <span className="bs-label" id={`${id}-keep`}>
-          {r.keep}
-        </span>
-        <div className="bs-keep" role="group" aria-labelledby={`${id}-keep`}>
-          {STUDIO_KEEP_KEYS.map((key) => (
-            <button
-              key={key}
-              type="button"
-              className="bs-chip"
-              data-size="sm"
-              data-selected={draft.keep.includes(key) ? "" : undefined}
-              aria-pressed={draft.keep.includes(key)}
-              disabled={disabled}
-              onClick={() => toggleKeep(key)}
-            >
-              {r.keepKeys[key]}
-            </button>
-          ))}
+      )}
+      {!unreadableBlueprintMode && (
+        <div className="bs-remix-row">
+          <span className="bs-label" id={`${id}-keep`}>
+            {r.keep}
+          </span>
+          <div className="bs-keep" role="group" aria-labelledby={`${id}-keep`}>
+            {STUDIO_KEEP_KEYS.map((key) => (
+              <button
+                key={key}
+                type="button"
+                className="bs-chip"
+                data-size="sm"
+                data-selected={draft.keep.includes(key) ? "" : undefined}
+                aria-pressed={draft.keep.includes(key)}
+                disabled={disabled}
+                onClick={() => toggleKeep(key)}
+              >
+                {r.keepKeys[key]}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
       <div className="bs-remix-row">
         <label className="bs-label" htmlFor={`${id}-change`}>
           {r.change}
@@ -379,22 +391,26 @@ export function RemixPanel({
           onChange={(event) => onChange({ change: event.target.value })}
         />
       </div>
-      <div className="bs-remix-row">
-        <span className="bs-label" id={`${id}-sound`}>
-          {copy.dock.sound}
-        </span>
-        <div className="bs-seg" role="radiogroup" aria-labelledby={`${id}-sound`} data-studio-remix-sound>
-          {STUDIO_AUDIO_MODES.map((mode) => (
-            <label key={mode} className="bs-seg-option">
-              <input type="radio" name={`${id}-sound`} value={mode} checked={draft.audio === mode} disabled={disabled} onChange={() => onChange({ audio: mode })} />
-              <span>{copy.sound[mode]}</span>
-            </label>
-          ))}
-        </div>
-      </div>
-      <p className="bs-muted bs-remix-note" data-studio-draft-note>
-        {copy.dock.draftNote}
-      </p>
+      {!unreadableBlueprintMode && (
+        <>
+          <div className="bs-remix-row">
+            <span className="bs-label" id={`${id}-sound`}>
+              {copy.dock.sound}
+            </span>
+            <div className="bs-seg" role="radiogroup" aria-labelledby={`${id}-sound`} data-studio-remix-sound>
+              {STUDIO_AUDIO_MODES.map((mode) => (
+                <label key={mode} className="bs-seg-option">
+                  <input type="radio" name={`${id}-sound`} value={mode} checked={draft.audio === mode} disabled={disabled} onChange={() => onChange({ audio: mode })} />
+                  <span>{copy.sound[mode]}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+          <p className="bs-muted bs-remix-note" data-studio-draft-note>
+            {copy.dock.draftNote}
+          </p>
+        </>
+      )}
     </section>
   );
 }

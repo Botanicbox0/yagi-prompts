@@ -27,7 +27,15 @@ const STATUS_MS = 4000;
 
 const has = (event: DragEvent, type: string) => Array.from(event.dataTransfer.types).includes(type);
 
-export function LibraryRail(props: LibraryRailProps & { copy: Dictionary["studioLibrary"]; /** Before a remembered tab is read; uploads by default. */ initialTab?: RailTab }) {
+export function LibraryRail(
+  props: LibraryRailProps & {
+    copy: Dictionary["studioLibrary"];
+    /** Before a remembered tab is read; uploads by default. */
+    initialTab?: RailTab;
+    /** Incrementing signal (VM-1 W6): unfolds the rail, selects uploads, and focuses the search input. */
+    openSignal?: number;
+  },
+) {
   const { copy, library, canCreate, attachOnPress } = props;
   const [tab, setTab] = useState<RailTab>(props.initialTab ?? "uploads");
   const [collapsed, setCollapsed] = useState(false);
@@ -85,6 +93,24 @@ export function LibraryRail(props: LibraryRailProps & { copy: Dictionary["studio
       // Not remembered this time; nothing else depends on it.
     }
   }, []);
+  // W6: when triggered (e.g. "보관함에서 고르기"), unfold desktop rail, select uploads, and focus search.
+  const pendingBrowseFocus = useRef(false);
+  useEffect(() => {
+    if (!props.openSignal) return;
+    pendingBrowseFocus.current = true;
+    setCollapsed(false);
+    setTab("uploads");
+    remember({ tab: "uploads", collapsed: false });
+  }, [props.openSignal, remember]);
+  useEffect(() => {
+    if (!pendingBrowseFocus.current || folded || tab !== "uploads") return;
+    pendingBrowseFocus.current = false;
+    const target =
+      typeof document.getElementById === "function"
+        ? document.getElementById(props.searchId)
+        : root.current?.querySelector<HTMLElement>(`[id="${props.searchId}"]`);
+    target?.focus();
+  }, [folded, props.openSignal, props.searchId, tab]);
   const choose = useCallback(
     (next: RailTab, expand = false) => {
       setTab(next);

@@ -33,7 +33,7 @@ import { memberSeesBrandProjects } from "@/lib/brand-studio/brand-projects";
 import { VideoStudioWorkspace } from "@/components/brand-studio/video/workspace";
 import s from "@/components/brand-studio/video/video.module.css";
 import { scopedHref } from "@/lib/brands/workspace/selection";
-import { brandStudioV2Open } from "@/lib/flags";
+import { brandStudioV2Open, brandStudioVideoModesOpenFor } from "@/lib/flags";
 
 /**
  * `/brand/studio/video` — Unified Video Studio Workspace (Studio Pro Suite v4, docs/STUDIO-PRO-SUITE-V4.md):
@@ -225,6 +225,7 @@ export default async function StudioVideoPage({
     sendBase && (await brandSendInviteOpenFor(ctx.deps.sql, choice.id).catch(() => false))
       ? { ...sendBase, invite: true }
       : sendBase;
+  const videoModesOpen = brandStudioVideoModesOpenFor(choice.id);
 
   const title = <h1 className="bs-title">{t.title}</h1>;
   const page = (
@@ -293,6 +294,7 @@ export default async function StudioVideoPage({
             }
           : {})}
         {...(send ? { send } : {})}
+        {...(videoModesOpen ? { videoModes: true, videoModesCopy: dict.studioVideoModes } : {})}
         musicGeneration={studioEnv().musicGeneration === true}
       />
     </div>

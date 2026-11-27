@@ -594,3 +594,18 @@ export function brandCampaignOpsOpenFor(
   if (!organizationId?.trim()) return false;
   return orgListSwitchOpen(env.BRAND_CAMPAIGN_OPS, env.BRAND_CAMPAIGN_OPS_ORGS, organizationId);
 }
+
+/**
+ * Video studio modes (slice VM-1): top-of-dock mode switch (`기본` / `Re-Architect` / `Motion Transfer`),
+ * empty-video drop well, first-use visual explainer + `!` popover, and draggable recent creations.
+ * Default OFF: open only when `BRAND_STUDIO_VIDEO_MODES=on` and the organization matches
+ * `BRAND_STUDIO_VIDEO_MODES_ORGS` (empty, `*`, or `all` = every organization; otherwise comma-separated
+ * organization ids). A blank organization id never opens it. Closed leaves the video studio byte-identical.
+ */
+export function brandStudioVideoModesOpenFor(
+  organizationId: string | null | undefined,
+  env: Record<string, string | undefined> = process.env,
+): boolean {
+  if (!organizationId?.trim()) return false;
+  return orgListSwitchOpen(env.BRAND_STUDIO_VIDEO_MODES, env.BRAND_STUDIO_VIDEO_MODES_ORGS, organizationId);
+}
