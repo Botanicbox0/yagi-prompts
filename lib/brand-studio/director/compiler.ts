@@ -853,7 +853,7 @@ export class DefaultPromptCompiler implements PromptCompiler {
 
     // The prompt guard (lib/ai-guard, docs/PROMPT-GUARD.md): canary + one shared rule on the system part,
     // the customer's material in named data blocks. With PROMPT_GUARD=off the request is byte for byte as before.
-    const guard = guardRequest({ site: 'brand-studio.director', env: deps.env, internal: system });
+    const guard = guardRequest({ site: 'brand-studio.director', env: deps.env, organizationId: deps.organizationId, internal: system });
 
     try {
       const raw = await callGeminiJson(config, deps.fetch, {

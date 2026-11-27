@@ -159,6 +159,8 @@ export interface GuardRequestInput {
   site: string;
   /** The server environment: `PROMPT_GUARD` is read from it (lib/flags.ts `promptGuardMode`). */
   env: Record<string, string | undefined>;
+  /** Organization the call is made for, when known (`PROMPT_GUARD_ORGS`). */
+  organizationId?: string | null;
   /** The internal text of this call (system prompt, profile, rules), exactly as the site built it. */
   internal: string;
   log?: GuardLog;
@@ -167,7 +169,7 @@ export interface GuardRequestInput {
 }
 
 export function guardRequest(input: GuardRequestInput): GuardedRequest {
-  const mode = promptGuardMode(input.env, input.site);
+  const mode = promptGuardMode(input.env, input.site, input.organizationId);
   const log = input.log ?? defaultGuardLog;
   if (mode === 'off') {
     return {

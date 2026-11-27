@@ -528,10 +528,26 @@ export type PromptGuardMode = 'off' | 'observe' | 'enforce';
  *     as `enforced`) is read as `enforce`: once someone has set the switch, it fails closed.
  * Site by site: with `observe`, the call sites named in `PROMPT_GUARD_ENFORCE` (comma-separated site ids such
  * as `brand-studio.enhancer`) run in `enforce`. With the guard off, the list changes nothing.
+ * Organization by organization: `PROMPT_GUARD_ORGS` is an optional comma-separated list of organization ids
+ * (spaces around ids and empty entries ignored, compared case-insensitively). Unset or empty: the mode applies
+ * to every call. Set: `PROMPT_GUARD` (and `PROMPT_GUARD_ENFORCE`) apply ONLY to calls for a listed organization;
+ * every other organization, and any call whose organization is unknown, runs as `off`.
  */
-export function promptGuardMode(env: Record<string, string | undefined> = process.env, site?: string): PromptGuardMode {
+export function promptGuardMode(
+  env: Record<string, string | undefined> = process.env,
+  site?: string,
+  organizationId?: string | null,
+): PromptGuardMode {
   const value = env.PROMPT_GUARD?.trim().toLowerCase() ?? '';
   if (value === '' || value === 'off') return 'off';
+  const orgs = (env.PROMPT_GUARD_ORGS ?? '')
+    .split(',')
+    .map((entry) => entry.trim().toLowerCase())
+    .filter((entry) => entry !== '');
+  if (orgs.length > 0) {
+    const org = organizationId?.trim().toLowerCase() ?? '';
+    if (!org || !orgs.includes(org)) return 'off';
+  }
   if (value !== 'observe') return 'enforce';
   const enforced = (env.PROMPT_GUARD_ENFORCE ?? '').split(',').map((s) => s.trim()).filter(Boolean);
   return site !== undefined && enforced.includes(site) ? 'enforce' : 'observe';
