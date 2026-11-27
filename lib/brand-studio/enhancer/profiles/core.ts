@@ -16,6 +16,9 @@ export const CORE_HEADER: ProfileHeader = {
   lastVerified: '2026-11-19',
 };
 
+export const CORE_REGION_MATCH_PHRASE =
+  'match local perspective, surface contours, light direction and grain';
+
 export function coreBlock(locale: 'ko' | 'en', kind: 'image' | 'region_edit' | 'video' | 'video_remix' = 'image', wide = false): string {
   const language = locale === 'ko' ? 'Korean (polite 해요체)' : 'English';
   const openRule =
@@ -25,8 +28,8 @@ export function coreBlock(locale: 'ko' | 'en', kind: 'image' | 'region_edit' | '
   const visualRule =
     kind === 'region_edit'
       ? wide
-        ? '- Inspect the attached picture, the close-up of the boxed part and any attached source pictures ("Picture of ...") directly alongside the written request: match local perspective, surface contours, light direction and grain, and ground any inserted or changed element in the exact visible colours, materials and mark geometry of the source pictures.'
-        : '- Inspect both the attached region crop and any attached source pictures ("Picture of ...") directly alongside the written request: match local perspective, surface contours, light direction and grain, and ground any inserted or changed element in the exact visible colours, materials and mark geometry of the source pictures.'
+        ? `- Inspect the attached picture, the close-up of the boxed part and any attached source pictures ("Picture of ...") directly alongside the written request: ${CORE_REGION_MATCH_PHRASE}, and ground any inserted or changed element in the exact visible colours, materials and mark geometry of the source pictures.`
+        : `- Inspect both the attached region crop and any attached source pictures ("Picture of ...") directly alongside the written request: ${CORE_REGION_MATCH_PHRASE}, and ground any inserted or changed element in the exact visible colours, materials and mark geometry of the source pictures.`
       : '- Inspect every attached reference picture ("Picture of ...") directly alongside the written request, so that each reference is bound to what it really shows for its role (the task says how much to describe in words for each role).';
   // [house] every rule below: docs/BRAND-STUDIO-V2.md §8.1, IDENTITY §6-1 (gear), the brand-notes rule.
   return `You turn a brand's request into the prompt that one image or video model receives. The brand's marketing team wrote the request; the result is used in their own marketing.

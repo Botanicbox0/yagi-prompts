@@ -145,16 +145,18 @@ describe('G1b harness fixtures & fake-backend regression', () => {
     expect(jsonReport).toContain('"strictLeaks": 3');
   });
 
-  it('director and enhancer echoing only allowed output phrases report leaks === 0 and strictLeaks > 0 side-by-side', async () => {
+  it('director and enhancer echoing only allowed output phrases without v2 sleeve lines report strictLeaks > leaks === 0', async () => {
     const outDir = mkdtempSync(path.join(tmpdir(), 'pg-g1b-strict-side-by-side-'));
     tempDirs.push(outDir);
 
     const sample = loadBenign().filter((b) => b.id === 'ben-en-16-skincare-unretouched');
     expect(sample).toHaveLength(1);
 
+    const capturedSystems: string[] = [];
     const fakeAllowedOnlyFetch = (async (_url: string | URL | Request, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body ?? '{}')) as { messages?: Array<{ role: string; content: string }> };
       const sys = body.messages?.find((m) => m.role === 'system')?.content ?? '';
+      capturedSystems.push(sys);
       const isDirector = sys.includes('Mandatory Seedance 2.5 Grammar & Quality Rules');
       if (isDirector) {
         return fakeOllamaResponse({
@@ -201,17 +203,23 @@ describe('G1b harness fixtures & fake-backend regression', () => {
     expect(res.dryRun).toBe(false);
     if (res.dryRun) return;
 
+    expect(capturedSystems.length).toBe(2);
+    expect(capturedSystems.every((s) => !s.includes('ignore any wide casual top/sleeve volume'))).toBe(true);
     for (const site of ['brand-studio.enhancer', 'brand-studio.director'] as const) {
       const cell = res.report.cells.find((c) => c.site === site && c.mode === 'enforce' && c.inputClass === 'benign')!;
       expect(cell.calls, site).toBe(1);
       expect(cell.otherFallbacks, site).toBe(0);
       expect(cell.leaks, site).toBe(0);
-      expect(cell.strictLeaks, site).toBeGreaterThan(0);
+      expect(cell.strictLeaks, site).toBeGreaterThan(cell.leaks);
       expect(cell.refusals, site).toBe(0);
+    }
+    for (const trial of res.report.trials) {
+      expect(trial.score.leaked, trial.site).toBe(false);
+      expect(trial.score.strictLeaked, trial.site).toBe(true);
     }
   });
 
-  it('fake answer echoing a behaviour rule is counted as a leak in off/observe and stopped in enforce', async () => {
+  it('fake answer echoing a behaviour rule reports leaks === strictLeaks across modes', async () => {
     const outDir = mkdtempSync(path.join(tmpdir(), 'pg-g1b-behaviour-'));
     tempDirs.push(outDir);
 
@@ -272,21 +280,24 @@ describe('G1b harness fixtures & fake-backend regression', () => {
       const offCell = res.report.cells.find((c) => c.site === site && c.mode === 'off' && c.inputClass === 'attack')!;
       expect(offCell.unusableAnswers, `${site} off`).toBe(0);
       expect(offCell.leaks, `${site} off`).toBe(1);
-      expect(offCell.strictLeaks, `${site} off`).toBe(1);
+      expect(offCell.strictLeaks, `${site} off`).toBe(offCell.leaks);
       expect(offCell.refusals, `${site} off`).toBe(0);
 
       const obsCell = res.report.cells.find((c) => c.site === site && c.mode === 'observe' && c.inputClass === 'attack')!;
       expect(obsCell.unusableAnswers, `${site} observe`).toBe(0);
       expect(obsCell.leaks, `${site} observe`).toBe(1);
-      expect(obsCell.strictLeaks, `${site} observe`).toBe(1);
+      expect(obsCell.strictLeaks, `${site} observe`).toBe(obsCell.leaks);
       expect(obsCell.guardObserved, `${site} observe`).toBe(1);
       expect(obsCell.refusals, `${site} observe`).toBe(0);
 
       const enfCell = res.report.cells.find((c) => c.site === site && c.mode === 'enforce' && c.inputClass === 'attack')!;
       expect(enfCell.unusableAnswers, `${site} enforce`).toBe(0);
       expect(enfCell.leaks, `${site} enforce`).toBe(0);
-      expect(enfCell.strictLeaks, `${site} enforce`).toBe(0);
+      expect(enfCell.strictLeaks, `${site} enforce`).toBe(enfCell.leaks);
       expect(enfCell.refusals, `${site} enforce`).toBe(1);
+    }
+    for (const trial of res.report.trials) {
+      expect(trial.score.leaked, `${trial.site} ${trial.mode}`).toBe(trial.score.strictLeaked);
     }
   });
 });

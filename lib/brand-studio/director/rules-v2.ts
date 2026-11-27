@@ -6,6 +6,7 @@
  */
 import { dictatedSpans } from '@/lib/ai-guard';
 import { foldText, wordUnits } from '@/lib/ai-guard/text';
+import { filterSubsumedDictated } from '@/lib/brand-studio/enhancer';
 import { enhanceMeta } from '@/lib/brand-studio/enhancer/meta';
 import {
   SEEDANCE_V2_EDITORIAL_MOTION_LIST,
@@ -57,6 +58,9 @@ export const DIRECTOR_V2_LIGHTING_PRODUCT_PHRASE =
 export const DIRECTOR_V2_DYNAMIC_CAMERA_LIST =
   'Steadicam tracking, crane sweep, 45°–180° orbital arc, FPV push-in';
 export const DIRECTOR_V2_EXCLUSIONS_PHRASE = 'off-axis gaze and no on-screen text or watermarks';
+export const DIRECTOR_V2_PERSON_AUTHORITY_PHRASE = 'A person reference supplies face and hair';
+export const DIRECTOR_V2_GARMENT_AUTHORITY_PHRASE =
+  'the separate clothing reference supplies wardrobe only (exact silhouette, tailoring, fabric, and colour; never face or skin)';
 
 const EXPLICIT_MUSIC_PERFORMANCE_RE =
   /\b(?:sing(?:s|ing)?|singer|vocal(?:s|ist)?|song|bgm|background\s+music|soundtrack|musical\s+score|live\s+band|concert|choir|rap(?:ping)?|guitar\s+solo|playing\s+(?:the\s+)?(?:piano|guitar|violin|drums|cello|saxophone)|music\s+video|dance\s+to\s+the\s+beat)\b|노래|보컬|가창|연주|배경\s*음악|뮤직\s*비디오|음악에\s*맞춰/i;
@@ -208,8 +212,8 @@ export function buildSeedanceDirectorSystemInstructionV2(options: {
         ? `For ${personTokens.join(', ')}, state face and hair authority only (never body proportions, background, lighting, or casual clothing), and include once: "${personTokens.map(sleeveVolumeLine).join('; ')}".`
         : `When an attached image shows a person, state face and hair authority only (never body proportions, background, lighting, or casual clothing), and include once: "${sleeveVolumeLine('<person @Image token>')}".`;
     const wardrobeClause = options.hasSeparateGarmentRef
-      ? 'A person reference supplies face and hair; the separate clothing reference supplies wardrobe only (exact silhouette, tailoring, fabric, and colour; never face or skin).'
-      : "A person reference supplies face and hair; wardrobe comes from the brief's words unless a separate clothing reference is bound (in which case the separate clothing reference supplies wardrobe only).";
+      ? `${DIRECTOR_V2_PERSON_AUTHORITY_PHRASE}; ${DIRECTOR_V2_GARMENT_AUTHORITY_PHRASE}.`
+      : `${DIRECTOR_V2_PERSON_AUTHORITY_PHRASE}; wardrobe comes from the brief's words unless a separate clothing reference is bound (in which case the separate clothing reference supplies wardrobe only).`;
     referenceAuthorityRule = `   - "Reference authority:" ${wardrobeClause} ${sleeveDirective} Keep product/logo/style/place tokens concise by role.`;
   }
 
@@ -496,6 +500,7 @@ export function directorV2OutputPhrases(options: {
   hasPerson: boolean;
   personTokens: readonly string[];
   hasImageRefs?: boolean;
+  hasSeparateGarmentRef?: boolean;
   audioMode: DirectorAudioMode;
   explicitMusic: boolean;
   noBgmLine: string;
@@ -506,26 +511,31 @@ export function directorV2OutputPhrases(options: {
       : options.hasImageRefs
         ? [sleeveVolumeLine('<person @Image token>')]
         : [];
+  const authorityPhrases = options.hasImageRefs
+    ? options.hasSeparateGarmentRef
+      ? [`${DIRECTOR_V2_PERSON_AUTHORITY_PHRASE}; ${DIRECTOR_V2_GARMENT_AUTHORITY_PHRASE}`]
+      : [DIRECTOR_V2_PERSON_AUTHORITY_PHRASE]
+    : [];
   const out: string[] = [
     DIRECTOR_V2_SAFE_MATTE_SKIN,
     options.hasPerson ? SEEDANCE_VIDEO_SKIN_EXPOSURE_FORMULA : SEEDANCE_VIDEO_FILM_EXPOSURE_FORMULA,
-    `${DIRECTOR_V2_PALETTE_ROLES_LIST}, ${DIRECTOR_V2_LIGHTING_PRODUCT_PHRASE}`,
+    `(${DIRECTOR_V2_PALETTE_ROLES_LIST}), ${DIRECTOR_V2_LIGHTING_PRODUCT_PHRASE}`,
     DIRECTOR_V2_DYNAMIC_CAMERA_LIST,
     SEEDANCE_V2_EDITORIAL_MOTION_LIST,
+    DIRECTOR_V2_EXCLUSIONS_PHRASE,
+    ...authorityPhrases,
     ...sleevePhrases,
   ];
   if (options.audioMode !== 'off' && options.audioMode !== 'silent') {
     if (options.explicitMusic) {
-      out.push(`${DIRECTOR_V2_EXCLUSIONS_PHRASE}\n${DIRECTOR_EXPLICIT_MUSIC_AUDIO_LINE}`);
+      out.push(DIRECTOR_EXPLICIT_MUSIC_AUDIO_LINE);
     } else {
       out.push(
-        `${DIRECTOR_V2_EXCLUSIONS_PHRASE}\n${options.noBgmLine}`,
+        options.noBgmLine,
         DIRECTOR_NO_BGM_CLAUSE,
         DIRECTOR_NO_BGM_REBUILT_TAIL,
       );
     }
-  } else {
-    out.push(DIRECTOR_V2_EXCLUSIONS_PHRASE);
   }
   return out;
 }
@@ -555,6 +565,9 @@ export function directorAllowV2(
 
   const hasPerson = hasPersonInDirectorScene(input, analysis);
   const hasImageRefs = binding.bound.some((b) => b.token && b.ref.kind === 'image');
+  const hasSeparateGarmentRef = binding.bound.some(
+    (b) => b.token && b.ref.kind === 'image' && isGarmentReference(b.ref),
+  );
   const personTokens = binding.bound
     .filter((b) => b.token && b.ref.kind === 'image' && b.ref.role === 'person')
     .map((b) => spacedToken(b.token)!);
@@ -563,11 +576,21 @@ export function directorAllowV2(
   const explicitMusic =
     audioMode !== 'sfx' && audioMode !== 'ambient' && requestsExplicitMusicPerformance(userText);
 
+  const explicit = directorV2OutputPhrases({
+    hasPerson,
+    personTokens,
+    hasImageRefs,
+    hasSeparateGarmentRef,
+    audioMode,
+    explicitMusic,
+    noBgmLine,
+  });
+  const dictated = filterSubsumedDictated(explicit, dictatedSpans(system), system);
   return [
     ...new Set(
       [
-        ...directorV2OutputPhrases({ hasPerson, personTokens, hasImageRefs, audioMode, explicitMusic, noBgmLine }),
-        ...dictatedSpans(system),
+        ...explicit,
+        ...dictated,
         fallbackText,
       ].filter((s) => s.length > 0 && wordUnits(foldText(s)).length >= 4),
     ),

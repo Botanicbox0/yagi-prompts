@@ -27,7 +27,7 @@
 import { dictatedSpans, guardRequest, type GuardedRequest } from '@/lib/ai-guard';
 import { foldText, wordUnits } from '@/lib/ai-guard/text';
 import type { StudioAudioMode } from '@/lib/brand-studio/contracts';
-import { composeFallbackPrompt, effectiveSeconds, enhancePrompt } from '@/lib/brand-studio/enhancer';
+import { composeFallbackPrompt, effectiveSeconds, enhancePrompt, filterSubsumedDictated } from '@/lib/brand-studio/enhancer';
 import { blueprintShots, isBlueprint } from '@/lib/brand-studio/enhancer/blueprint';
 import { callGeminiJson, inlinePart, studioGeminiConfig, type GeminiPart } from '@/lib/brand-studio/enhancer/gemini';
 import { planShots } from '@/lib/brand-studio/enhancer/lines';
@@ -77,7 +77,11 @@ const THUMB_MIMES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 export const DIRECTOR_NO_BGM_AUDIO_LINE = `Audio: ${DIRECTOR_NO_BGM_CLAUSE}.`;
 
 export const DIRECTOR_SCRUB_SKIN_PHRASE = 'natural skin texture with zero plastic beauty-filter glare';
+export const DIRECTOR_V1_REFERENCE_AUTHORITY_PHRASE =
+  'locking identity, exact facial bone structure, wardrobe, and product geometry/labels';
 export const DIRECTOR_V1_PALETTE_ROLES_LIST = 'shadow floor, primary surface/wardrobe, key/accent';
+export const DIRECTOR_V1_VISUAL_STYLE_PHRASE =
+  'motivated light source & grounded shadow floor, lens feel, and material texture';
 export const DIRECTOR_V1_ANTI_COMPOSITE_LIGHTING_PHRASE =
   'match ambient shadow floor and color spill across subject and environment';
 export const DIRECTOR_V1_SKIN_WITH_REF_PHRASE =
@@ -364,8 +368,8 @@ ${modeGuidance}
 Mandatory Seedance 2.5 Grammar & Quality Rules:
 1. OMIT all redundant boilerplate headers: never write "Create a Seedance video", aspect ratio (9:16, 16:9), resolution (480p, 1080p, 4K), FPS, or model names.
 2. Exact block order separated by line breaks:
-   - "Reference authority:" (when references are attached) locking identity, exact facial bone structure, wardrobe, and product geometry/labels to ${options.hasImageRefs ? '@Image 1 (and any additional @Image N tokens)' : 'the attached references only'}.
-   - "Visual style:" concrete #Hex color palette roles (${DIRECTOR_V1_PALETTE_ROLES_LIST}), motivated light source & grounded shadow floor, lens feel, and material texture.
+   - "Reference authority:" (when references are attached) ${DIRECTOR_V1_REFERENCE_AUTHORITY_PHRASE} to ${options.hasImageRefs ? '@Image 1 (and any additional @Image N tokens)' : 'the attached references only'}.
+   - "Visual style:" concrete #Hex color palette roles (${DIRECTOR_V1_PALETTE_ROLES_LIST}), ${DIRECTOR_V1_VISUAL_STYLE_PHRASE}.
    - Anti-composite lighting: ${DIRECTOR_V1_ANTI_COMPOSITE_LIGHTING_PHRASE} — never pasted-on or flat front-lit.
    - Anti-plastic skin: enforce ${options.hasImageRefs ? DIRECTOR_V1_SKIN_WITH_REF_PHRASE : `${DIRECTOR_V1_SKIN_NO_REF_PHRASE} (no image is attached: write no @Image token), ${DIRECTOR_V1_SKIN_NO_GLARE_PHRASE}`}. NEVER write "glass-skin", "poreless porcelain", or "dewy highlighter" (causes upscaler boiling).
    - Seconds-based timeline from 0.0s to ${options.seconds.toFixed(1)}s ("0.0s–Xs: …") with contiguous ranges, off-axis eyelines & camera angle alternation across cuts (18° / 45° / 90° / OTS — never repetitive flat passport front-stares), concrete camera start-to-end movement, and an explicit cut handoff at the end of every shot except the final shot ("hard cut", "match cut on …", or "continuous").
@@ -621,7 +625,8 @@ export function directorV1OutputPhrases(options: {
 }): string[] {
   const out: string[] = [
     DIRECTOR_SCRUB_SKIN_PHRASE,
-    DIRECTOR_V1_PALETTE_ROLES_LIST,
+    DIRECTOR_V1_REFERENCE_AUTHORITY_PHRASE,
+    `(${DIRECTOR_V1_PALETTE_ROLES_LIST}), ${DIRECTOR_V1_VISUAL_STYLE_PHRASE}`,
     DIRECTOR_V1_ANTI_COMPOSITE_LIGHTING_PHRASE,
     ...(options.hasImageRefs
       ? [DIRECTOR_V1_SKIN_WITH_REF_PHRASE]
@@ -664,11 +669,13 @@ export function directorAllow(
   const explicitMusic =
     audioMode !== 'sfx' && audioMode !== 'ambient' && requestsExplicitMusicPerformance(userText);
 
+  const explicit = directorV1OutputPhrases({ hasImageRefs, audioMode, explicitMusic });
+  const dictated = filterSubsumedDictated(explicit, dictatedSpans(system), system);
   return [
     ...new Set(
       [
-        ...directorV1OutputPhrases({ hasImageRefs, audioMode, explicitMusic }),
-        ...dictatedSpans(system),
+        ...explicit,
+        ...dictated,
         fallbackText,
       ].filter((s) => s.length > 0 && wordUnits(foldText(s)).length >= 4),
     ),
