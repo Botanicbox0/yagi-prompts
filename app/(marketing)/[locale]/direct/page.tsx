@@ -7,7 +7,8 @@ import { SITE_TWITTER_CARD, siteOgImage } from '@/lib/seo/og';
 import { MarketingFooter, MarketingNav } from '@/components/marketing/chrome';
 import { PersonalIdentity } from '@/components/audience/personal-identity';
 import { DirectSceneStudio } from '@/components/audience/direct-scene-studio';
-import { cachedSubscriptionAvailability } from '@/lib/creator-subscriptions/cached-availability';
+import { getPromptCatalog } from '@/lib/prompts/public-catalog';
+import { heroEvidence } from '@/lib/content/slots';
 
 export const revalidate = 3600;
 
@@ -50,37 +51,21 @@ export default async function DirectScenePage({
   const { locale: raw } = await params;
   const locale: Locale = isLocale(raw) ? raw : DEFAULT_LOCALE;
   const dict = getDictionary(locale);
-  const ds = dict.creatorJourney.directScene;
-  // Credits appear only once web subscriptions are open, the same switch the template page reads.
-  const subscriptionOpen = (await cachedSubscriptionAvailability()).status === 'open';
+  const catalog = await getPromptCatalog();
+  const evidence = heroEvidence();
 
   return (
     <PersonalIdentity>
       <MarketingNav locale={locale} dict={dict} rest="/direct" />
       <main id="main" data-direct-scene-page>
         <section data-section data-theme="light" className="section">
-          <div className="audience-shell pt-24 pb-16 lg:pt-32 lg:pb-24">
-            <div className="max-w-3xl">
-              <p className="text-[13px] font-medium text-[#71717A]">
-                {ds.heroEyebrow}
-              </p>
-              <h1 className="audience-title mt-3 whitespace-pre-line">
-                {ds.heroHeading}
-              </h1>
-              <p className="mt-5 max-w-2xl text-base leading-relaxed text-[#52525B]">
-                {ds.heroSubcopy}
-              </p>
-            </div>
-
-            <div className="mt-12">
-              <DirectSceneStudio
-                locale={locale}
-                videoCatalogHref={templatesHref(locale, 'video')}
-                creatorWorkspaceHref={`${CREATOR_WORKSPACE_PATH}/formats/new`}
-                showCredits={subscriptionOpen}
-              />
-            </div>
-          </div>
+          <DirectSceneStudio
+            locale={locale}
+            videoCatalogHref={templatesHref(locale, 'video')}
+            creatorWorkspaceHref={`${CREATOR_WORKSPACE_PATH}/formats/new`}
+            catalog={catalog}
+            evidence={evidence}
+          />
         </section>
       </main>
       <MarketingFooter locale={locale} dict={dict} />
