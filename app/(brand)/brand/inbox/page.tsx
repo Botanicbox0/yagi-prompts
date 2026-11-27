@@ -107,6 +107,7 @@ export default async function BrandInboxPage({
       initialInbox={initialInbox}
       initialThread={initialThread}
       initialThreadGone={initialThreadGone}
+      renderedAt={new Date().toISOString()}
     />
   );
 }

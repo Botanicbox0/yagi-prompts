@@ -847,3 +847,96 @@ describe('inbox stage source & CSS module guards', () => {
     }
   });
 });
+
+describe('inbox first render reads relative times against the server instant', () => {
+  // Before: `threadRowWords` and `formatThreadDay` read `new Date()` during render, so a page rendered on the
+  // server at 13:00:58 and hydrated at 13:01:03 printed "지금" and then "1분 전": a hydration error on a
+  // minute boundary, and a wrong "오늘"/"어제" divider across Seoul midnight.
+  const RENDERED_AT = '2026-11-26T04:41:10.000Z'; // 70 s after the fixture's last activity (04:40:00Z)
+  const LATER = new Date('2026-11-26T15:05:00.000Z'); // the browser's clock at hydration: past Seoul midnight
+
+  function seeds(): { inbox: SendInboxPageData; thread: SendThreadPage } {
+    const thread: SendThreadPage = { ok: true, thread: makeThread(), replies: [] };
+    return {
+      thread,
+      inbox: { ok: true, view: 'all', threads: [thread.thread], next: null, unread: 0, mentionsUnread: 0 },
+    };
+  }
+
+  function markup(renderedAt: string | null): string {
+    const { inbox, thread } = seeds();
+    return renderToStaticMarkup(
+      <SendInboxPage
+        send={{ organizationId: ORG }}
+        initialThreadId={ROOT_1}
+        locale="ko"
+        copy={KO}
+        initialInbox={inbox}
+        initialThread={thread}
+        renderedAt={renderedAt}
+      />,
+    );
+  }
+
+  it('prints the same markup whatever the clock says, as long as the server instant is passed', () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date(RENDERED_AT));
+      const onServer = markup(RENDERED_AT);
+      vi.setSystemTime(LATER);
+      const atHydration = markup(RENDERED_AT);
+      expect(atHydration).toBe(onServer);
+      expect(onServer).toContain(KO.today);
+      // Without the instant the two renders differ: this is the mismatch the prop removes.
+      const live = markup(null);
+      expect(live).not.toBe(onServer);
+      expect(live).not.toContain(`>${KO.today}<`);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('ignores an unreadable instant and falls back to the live clock', () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date(RENDERED_AT));
+      expect(markup('not a date')).toBe(markup(null));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('switches to the live clock after mount', async () => {
+    vi.useFakeTimers();
+    let dom: MountedDom | null = null;
+    try {
+      vi.setSystemTime(LATER);
+      const { inbox, thread } = seeds();
+      const transport = {
+        inbox: vi.fn(async () => inbox),
+        thread: vi.fn(async () => thread),
+        people: vi.fn(async () => ({ ok: true as const, people: PEOPLE })),
+      } as unknown as SendTransport;
+      dom = await mountDom(
+        <SendInboxPage
+          send={{ organizationId: ORG }}
+          initialThreadId={ROOT_1}
+          locale="ko"
+          copy={KO}
+          transport={transport}
+          initialInbox={inbox}
+          initialThread={thread}
+          renderedAt={RENDERED_AT}
+        />,
+      );
+      await act(async () => {});
+      // After mount the divider is read against the browser's clock (the next Seoul day): no longer "오늘".
+      const text = dom.container.textContent ?? '';
+      expect(text).toContain(KO.yesterday);
+      expect(text).not.toContain(KO.today);
+    } finally {
+      dom?.unmount();
+      vi.useRealTimers();
+    }
+  });
+});
