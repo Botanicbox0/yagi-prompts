@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from 'react';
 import { fill } from '@/components/brand-studio/copy';
+import { startRefDrag } from '@/components/brand-studio/refs';
 import { COMPOSE_ASPECTS, COMPOSE_DIMENSIONS, type CaptionPosition } from '@/lib/brand-studio/compose/timeline';
 import {
   FIXTURE_MATERIALS,
@@ -153,7 +154,7 @@ function ScopeSwitch({ api }: { api: EditorApi }) {
 
 // ── Left: materials ────────────────────────────────────────────────────────────────────────────
 
-export function Materials({ api }: { api: EditorApi }) {
+export function Materials({ api, draggableSources = false }: { api: EditorApi; draggableSources?: boolean }) {
   const { copy, workspace } = api;
   return (
     <aside className={styles.materials} aria-label={copy.panel.materials} data-editor-materials={workspace}>
@@ -161,7 +162,7 @@ export function Materials({ api }: { api: EditorApi }) {
         <p className={styles.note} data-editor-locked-materials>{copy.real.locked.materials}</p>
       ) : (
         <>
-          {workspace === 'cut' && (api.real ? <RealBin api={api} /> : <CutMaterials api={api} />)}
+          {workspace === 'cut' && (api.real ? <RealBin api={api} draggableSources={draggableSources} /> : <CutMaterials api={api} />)}
           {workspace === 'color' && <ColorMaterials api={api} />}
           {workspace === 'sound' && <SoundMaterials api={api} />}
           {workspace === 'captions' && <CaptionMaterials api={api} />}
@@ -173,9 +174,10 @@ export function Materials({ api }: { api: EditorApi }) {
 
 /**
  * The organization's footage (V1): video assets and finished video-studio cuts. A card puts the whole
- * clip at the end of the film once its frame rate is read.
+ * clip at the end of the film once its frame rate is read. When right-side chat is open (`draggableSources`),
+ * cards also carry `REF_DRAG_TYPE` so they can be dragged into the chat panel.
  */
-function RealBin({ api }: { api: EditorApi }) {
+function RealBin({ api, draggableSources = false }: { api: EditorApi; draggableSources?: boolean }) {
   const { copy } = api;
   const c = copy.cut.materials;
   const closed = api.readOnly || api.status !== 'ready';
@@ -193,6 +195,15 @@ function RealBin({ api }: { api: EditorApi }) {
             const busy = api.busySource === source.key;
             const rate = api.rates[source.srcUrl];
             const seconds = sourceSeconds(source);
+            const dragProps = draggableSources
+              ? {
+                  draggable: !closed,
+                  onDragStart: (event: React.DragEvent<HTMLButtonElement>) => {
+                    if (closed) return;
+                    startRefDrag(event, source.kind === 'output' ? { outputId: source.id } : { assetId: source.id });
+                  },
+                }
+              : {};
             return (
               <li key={source.key}>
                 <button
@@ -203,6 +214,7 @@ function RealBin({ api }: { api: EditorApi }) {
                   title={c.add}
                   data-editor-source={source.key}
                   data-busy={busy ? '' : undefined}
+                  {...dragProps}
                 >
                   <span className={styles.materialThumb} style={source.thumbUrl ? { backgroundImage: `url(${source.thumbUrl})` } : undefined}>
                     {!source.thumbUrl && <video src={`${source.srcUrl}#t=0.1`} muted playsInline preload="metadata" aria-hidden="true" />}
@@ -528,7 +540,7 @@ function PanelHead({ title, meta }: { title: string; meta?: string }) {
 }
 
 /** The keys a first-time person needs; the full list and rebinding live in the shortcut panel. */
-const KEY_ROWS: ReadonlyArray<ShortcutAction> = ['play', 'split', 'trimStart', 'trimEnd', 'stepForward', 'stepForward10', 'nextCut', 'remove', 'undo', 'zoomFrames', 'magnet'];
+const KEY_ROWS = ['play', 'split', 'trimStart', 'trimEnd', 'stepForward', 'stepForward10', 'nextCut', 'remove', 'undo', 'zoomFrames', 'magnet'] as const;
 
 function KeyCaps({ api, action }: { api: EditorApi; action: ShortcutAction }) {
   const keys = api.shortcutMap[action];

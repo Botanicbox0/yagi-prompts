@@ -14,7 +14,7 @@ export const SHORTCUT_GROUPS = [
   { id: 'move', actions: ['play', 'stepBack', 'stepForward', 'stepBack10', 'stepForward10', 'prevCut', 'nextCut', 'toStart', 'toEnd', 'shuttleBack', 'shuttleStop', 'shuttleForward'] },
   { id: 'cut', actions: ['split', 'trimStart', 'trimEnd', 'remove', 'magnet'] },
   { id: 'edit', actions: ['undo', 'redo', 'copy', 'cut', 'paste', 'duplicate', 'selectAll', 'deselect'] },
-  { id: 'view', actions: ['zoomIn', 'zoomOut', 'zoomFit', 'zoomFrames', 'workspaceCut', 'workspaceColor', 'workspaceSound', 'workspaceCaptions', 'shortcuts'] },
+  { id: 'view', actions: ['zoomIn', 'zoomOut', 'zoomFit', 'zoomFrames', 'workspaceCut', 'workspaceColor', 'workspaceSound', 'workspaceCaptions', 'focusChat', 'shortcuts'] },
 ] as const;
 
 export type ShortcutGroupId = (typeof SHORTCUT_GROUPS)[number]['id'];
@@ -62,6 +62,7 @@ const EVERYDAY: Record<ShortcutAction, Binding[]> = {
   workspaceColor: ['Digit2'],
   workspaceSound: ['Digit3'],
   workspaceCaptions: ['Digit4'],
+  focusChat: ['Slash'],
   shortcuts: ['Shift+Slash'],
 };
 
