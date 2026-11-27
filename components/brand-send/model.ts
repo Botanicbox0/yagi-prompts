@@ -1515,17 +1515,19 @@ export function inboxThreadHref(organizationId: string, rootId: string): string 
 function fileOpenHref(file: SendFileCard, organizationId: string): string | null {
   if (!file.available) return null;
   const orgParam = encodeURIComponent(organizationId);
+  const projectQuery =
+    file.project?.selectable === true ? `&project=${encodeURIComponent(file.project.id)}` : '';
   if (file.ref.kind === 'asset') {
-    return `/brand/library?organizationId=${orgParam}`;
+    return `/brand/library?organizationId=${orgParam}${projectQuery}`;
   }
   const viewParam = encodeURIComponent(`o:${file.ref.outputId}`);
   if (file.kind === 'video') {
-    return `/brand/studio/video?organizationId=${orgParam}&view=${viewParam}`;
+    return `/brand/studio/video?organizationId=${orgParam}${projectQuery}&view=${viewParam}`;
   }
   if (file.kind === 'audio') {
-    return `/brand/studio/sound?organizationId=${orgParam}`;
+    return `/brand/studio/sound?organizationId=${orgParam}${projectQuery}`;
   }
-  return `/brand/studio?organizationId=${orgParam}&view=${viewParam}`;
+  return `/brand/studio?organizationId=${orgParam}${projectQuery}&view=${viewParam}`;
 }
 
 export interface FileCardInfo {
