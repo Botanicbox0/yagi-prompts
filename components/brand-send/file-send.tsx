@@ -88,6 +88,7 @@ export interface FileSendRenderState {
 export interface FileSendProps {
   send: ViewerSendProp & { locale?: SendLocale; transport?: SendTransport; inviteTransport?: SendInviteTransport };
   fileRef: SendFileRef | null;
+  fileKind?: 'image' | 'video' | 'audio';
   locale: SendLocale;
   closeLabel: string;
   panelHidden?: boolean;
@@ -104,6 +105,7 @@ const FileSendContext = createContext<FileSendRenderState | null>(null);
 export function FileSend({
   send,
   fileRef,
+  fileKind,
   locale,
   closeLabel,
   panelHidden = false,
@@ -179,6 +181,7 @@ export function FileSend({
           key={fileKey ?? undefined}
           organizationId={send.organizationId}
           fileRef={fileRef}
+          fileKind={fileKind}
           copy={send.copy}
           locale={locale}
           transport={send.transport}
@@ -192,7 +195,7 @@ export function FileSend({
           onInnerEscape={markSendEscapeRecent}
         />
       ) : null,
-    [canSend, closeLabel, fileKey, fileRef, leave, locale, markClosed, markUnsendable, open, panelHidden, send],
+    [canSend, closeLabel, fileKey, fileKind, fileRef, leave, locale, markClosed, markUnsendable, open, panelHidden, send],
   );
 
   const value = useMemo<FileSendRenderState>(
@@ -210,6 +213,7 @@ export function FileSend({
 export function FileSendHost({
   send,
   fileRef,
+  fileKind,
   locale,
   closeLabel,
   panelHidden = false,
@@ -221,7 +225,7 @@ export function FileSendHost({
     return <>{children}</>;
   }
   return (
-    <FileSend send={send} fileRef={fileRef} locale={locale} closeLabel={closeLabel} panelHidden={panelHidden}>
+    <FileSend send={send} fileRef={fileRef} fileKind={fileKind} locale={locale} closeLabel={closeLabel} panelHidden={panelHidden}>
       {children}
     </FileSend>
   );

@@ -748,8 +748,14 @@ textarea.bs-field { resize: vertical; }
 .bs-prompt-tab[data-status="designing"] .bs-prompt-tab-mark { border-color: transparent; background: currentColor; animation: bs-pulse 0.8s var(--ys-ease) infinite alternate; }
 .bs-prompt-tab[data-status="failed"] .bs-prompt-tab-mark { border-color: #d97706; background: #d97706; opacity: 1; }
 .bs-prompt-tab-state { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 0; padding: 0 4px; font-size: 12px; color: var(--ys-ink-muted); }
-/* The model of a result made with others in one request: quiet, bottom-left, gives way to the info pill on hover. */
+/* The model of an image result (or a tile made with other models in one request): quiet, bottom-left, gives way to the info pill on hover. */
 .bs-tile-model { position: absolute; left: 8px; bottom: 8px; max-width: calc(100% - 16px); overflow: hidden; padding: 3px 9px; border: 1px solid var(--ys-stage-border, rgba(255, 255, 255, 0.09)); border-radius: 9999px; background: var(--ys-glass-dark); color: #ffffff; font-size: 11px; font-weight: 500; letter-spacing: -0.01em; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; transition: opacity 160ms var(--ys-ease); }
+.bs-tile-model[data-edited="split"] { display: inline-flex; align-items: center; }
+.bs-tile-model-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bs-tile-model-sep { flex: none; white-space: pre; }
+.bs-tile-model-mark { flex: none; white-space: nowrap; }
+.bs-tile[data-state="pending"] .bs-tile-model,
+.bs-tile[data-state="failed"] .bs-tile-model:not([data-inline]) { max-width: calc(100% - 124px); }
 .bs-tile[data-state="ready"]:hover .bs-tile-model, .bs-tile[data-state="ready"]:focus-within .bs-tile-model { opacity: 0; }
 /*
  * Pointing at (or focusing) a tile of a request made on several models outlines every tile of it, in ink
@@ -773,13 +779,20 @@ textarea.bs-field { resize: vertical; }
   .bs-tile-pill-label { display: none; }
   .bs-tile-info { max-width: calc(100% - 64px); }
 }
+@container tile-foot (max-width: 220px) {
+  .bs-tile[data-state="pending"] .bs-tile-model-name,
+  .bs-tile[data-state="pending"] .bs-tile-model-sep { display: none; }
+}
 /* Too narrow for a readable name beside the credits: the credits alone (never a sliver of a name). */
 @container tile-foot (max-width: 179px) {
+  .bs-tile[data-state="pending"] .bs-tile-model:not([data-edited="split"]):not([data-studio-tile-model="detail-edit"]) { display: none; }
   .bs-tile-info-name { display: none; }
   .bs-tile-info span + span::before { content: none; }
 }
 @container tile-foot (max-width: 139px) {
   .bs-tile-info { display: none; }
+  .bs-tile-model-name,
+  .bs-tile-model-sep { display: none; }
 }
 /*
  * Touch: every corner control is a 44 px box from its corner (the visible round button sits inside it), so on a

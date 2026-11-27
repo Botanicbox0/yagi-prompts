@@ -263,6 +263,7 @@ export function brandRouteAllowed(pathname: string, method: string): boolean {
     return read || method === 'OPTIONS';
   }
   if (/^\/api\/brand-studio\/assets\/[a-f0-9-]{36}$/.test(pathname)) return method === 'POST';
+  if (/^\/api\/brand-studio\/edit\/[A-Za-z0-9_-]{8,80}$/.test(pathname)) return method === 'POST';
   if (/^\/api\/brand-studio\/media\/st\/[a-f0-9]{64}\.(?:png|jpg|webp|mp4|mov|mp3|wav)$/.test(pathname)) return read;
   // Project room conversations (docs/BRAND-ROOMS.md §4): the stream, a thread, the lines about one thing
   // and the operations; the rail's and the inbox's unread summary; the local attachment gateway.

@@ -5,7 +5,7 @@ import { createBrandInvitation, BRAND_INVITES_PER_DAY } from '@/lib/brands/works
 import { runRoomOperation } from '@/lib/brand-rooms/messages';
 import { SEND_LIMITS, type SendPosted } from '@/lib/brand-rooms/send-contracts';
 import { ROOM_LIMITS } from '@/lib/brand-rooms/message-contracts';
-import { as, closeWorld, code, imageResult, libraryPicture, ok, op, openSend, sendWorld, staffViewer, type SendWorld } from '../send/helpers';
+import { as, closeWorld, code, libraryVideo, ok, op, openSend, sendWorld, staffViewer, videoResult, type SendWorld } from '../send/helpers';
 import { invitation, openInvites, person, recording, tokenOf, waiting } from './helpers';
 
 /**
@@ -25,7 +25,7 @@ beforeEach(async () => {
   w = await sendWorld();
   openSend(w.f.orgId);
   openInvites();
-  file = (await imageResult(w, w.f.projectId)).outputId;
+  file = (await videoResult(w, w.f.projectId)).outputId;
 });
 afterEach(async () => {
   await closeWorld(w);
@@ -309,7 +309,7 @@ describe('what each address becomes (decision 5)', () => {
   });
 
   it('an unfiled library entry can be sent with an invitation too', async () => {
-    const asset = await libraryPicture(w);
+    const asset = await libraryVideo(w);
     const sent = await ok<SendPosted>(w, owner(), 'send.post', { requestId: randomUUID(), file: { kind: 'asset', assetId: asset }, body: 'Our logo', invites: ['logo@example.com'] });
     expect(sent.thread.file.project).toBeNull();
     expect(sent.invited![0]!.result).toBe('invited');

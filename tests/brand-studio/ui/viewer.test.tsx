@@ -168,7 +168,7 @@ describe("asset library", () => {
     );
     expect(html).toContain("JPG·PNG·WebP 15MB, MP4·MOV 50MB, MP3·WAV 15MB까지");
     expect(html).toMatch(/<video[^>]*muted=""[^>]*preload="metadata"/);
-    expect(html).toContain(`aria-label="참조에 넣기: Bottle front"`);
+    expect(html).toContain(`aria-label="레퍼런스에 추가: Bottle front"`);
     expect(html).toContain('aria-haspopup="menu"');
     expect(html).toContain('<label class="bs-sr" for="assets-search">');
   });

@@ -125,7 +125,7 @@ export async function loadFirstRunChecklistState(
     hasJobs
       ? sql
           .query<{ n: string | number }>(
-            "select count(*)::int as n from brand_studio_jobs where organization_id = $1 and deleted_at is null and kind = 'image' and status = 'succeeded'",
+            "select count(*)::int as n from brand_studio_jobs where organization_id = $1 and deleted_at is null and kind = 'image' and status = 'succeeded' and coalesce(params->>'edited', '') <> 'true'",
             [organizationId],
           )
           .then((r) => Number(r.rows[0]?.n ?? 0))

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { roomsReviewEn, roomsReviewKo } from "@/messages/rooms-review";
 import { studioShareDialogEn, studioShareDialogKo } from "@/messages/studio-share-dialog";
 
 export const OPEN_SHARE_REVIEW_EVENT = "twings:open-share-review";
@@ -85,6 +86,7 @@ interface BridgeContextResponse {
   code?: string;
   canWrite?: boolean;
   roomsOpen?: boolean;
+  externalLinkAllowed?: boolean;
   review?: {
     id: string;
     title: string;
@@ -106,11 +108,33 @@ interface BridgeContextResponse {
 export interface ShareReviewDialogProps {
   target: ShareReviewTarget;
   locale?: "ko" | "en";
+  sendOpen?: boolean;
+  targetKind?: "image" | "video";
+  onSharesChanged?: (liveCount: number) => void;
   onClose: () => void;
   onNavigate?: (href: string) => void;
 }
 
 const EXPIRY_OPTIONS = [7, 14, 30] as const;
+
+const SHARE_DATE = new Map<string, Intl.DateTimeFormat>();
+function formatShareDay(iso: string, locale: "ko" | "en"): string {
+  let formatter = SHARE_DATE.get(locale);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat(locale === "ko" ? "ko-KR" : "en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      timeZone: "Asia/Seoul",
+    });
+    SHARE_DATE.set(locale, formatter);
+  }
+  return formatter.format(new Date(iso));
+}
+
+function fillTemplate(template: string, values: Record<string, string | number>): string {
+  return template.replace(/\{(\w+)\}/g, (match, key: string) => (key in values ? String(values[key]) : match));
+}
 
 /** True when the dialog is shown as a modal; a browser that does not know `:modal` throws, and then it is not. */
 function isModal(dialog: HTMLDialogElement): boolean {
@@ -435,8 +459,17 @@ const DIALOG_STYLES = `
 }
 `;
 
-export function ShareReviewDialog({ target, locale = "ko", onClose, onNavigate }: ShareReviewDialogProps) {
+export function ShareReviewDialog({
+  target,
+  locale = "ko",
+  sendOpen = false,
+  targetKind,
+  onSharesChanged,
+  onClose,
+  onNavigate,
+}: ShareReviewDialogProps) {
   const c = locale === "en" ? studioShareDialogEn : studioShareDialogKo;
+  const r = (locale === "en" ? roomsReviewEn : roomsReviewKo).share;
   const headingId = useId();
   const [pieceTitle, setPieceTitle] = useState(() => target.title?.trim() || c.pieceFallback);
   const [allowComments, setAllowComments] = useState(true);
@@ -448,6 +481,9 @@ export function ShareReviewDialog({ target, locale = "ko", onClose, onNavigate }
   const [chatNote, setChatNote] = useState("");
   const [knownReviewId, setKnownReviewId] = useState<string | null>(target.reviewId ?? null);
   const [activeShareCount, setActiveShareCount] = useState(0);
+  const [shares, setShares] = useState<NonNullable<BridgeContextResponse["shares"]>>([]);
+  const [revokingShareId, setRevokingShareId] = useState<string | null>(null);
+  const [contextExternalLinkAllowed, setContextExternalLinkAllowed] = useState<boolean | null>(null);
   const [mintedPath, setMintedPath] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [busyAction, setBusyAction] = useState<"mint" | "review" | "chat" | null>(null);
@@ -473,6 +509,9 @@ export function ShareReviewDialog({ target, locale = "ko", onClose, onNavigate }
         if (cancelled) return;
         const data = raw as unknown as BridgeContextResponse;
         if (!data.ok) return;
+        if (typeof data.externalLinkAllowed === "boolean") {
+          setContextExternalLinkAllowed(data.externalLinkAllowed);
+        }
         if (data.review) {
           setKnownReviewId(data.review.id);
           if (!target.title && data.review.title) setPieceTitle(data.review.title);
@@ -487,6 +526,7 @@ export function ShareReviewDialog({ target, locale = "ko", onClose, onNavigate }
           });
         }
         if (Array.isArray(data.shares)) {
+          setShares(data.shares);
           setActiveShareCount(data.shares.length);
         }
       })
@@ -568,6 +608,36 @@ export function ShareReviewDialog({ target, locale = "ko", onClose, onNavigate }
       setError(c.errorGeneric);
     } finally {
       setBusyAction(null);
+    }
+  };
+
+  const handleRevokeShare = async (shareId: string) => {
+    if (typeof window !== "undefined" && typeof window.confirm === "function" && !window.confirm(r.revokeConfirm)) return;
+    setError(null);
+    setRevokingShareId(shareId);
+    try {
+      const res = await fetch("/api/brand-rooms/shares", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          operation: "share.revoke",
+          input: { organizationId: target.organizationId, shareId },
+        }),
+      });
+      const json = (await res.json().catch(() => null)) as { ok?: boolean } | null;
+      if (!res.ok || !json?.ok) {
+        setError(c.errorGeneric);
+        return;
+      }
+      const next = shares.filter((item) => item.id !== shareId);
+      setShares(next);
+      setActiveShareCount(next.length);
+      onSharesChanged?.(next.length);
+    } catch {
+      setError(c.errorGeneric);
+    } finally {
+      setRevokingShareId(null);
     }
   };
 
@@ -673,6 +743,52 @@ export function ShareReviewDialog({ target, locale = "ko", onClose, onNavigate }
         </label>
 
         {/* 1. External /s/[token] share link */}
+        {(() => {
+          const externalBlocked = Boolean(sendOpen && targetKind === "image") || contextExternalLinkAllowed === false;
+          const manageOnlyLinks = externalBlocked && shares.length > 0;
+          if (externalBlocked && !manageOnlyLinks) return null;
+          if (manageOnlyLinks) {
+            return (
+              <section className="srd-card" data-share-bridge-link-section data-share-manage-only>
+                <div className="srd-card-head">
+                  <h3 className="srd-card-title">{c.shareHeading}</h3>
+                  <span className="srd-badge">
+                    {activeShareCount === 1
+                      ? c.activeLinksOne
+                      : c.activeLinksCount.replace("{count}", String(activeShareCount))}
+                  </span>
+                </div>
+                <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: "8px" }}>
+                  {shares.map((link) => (
+                    <li
+                      key={link.id}
+                      className="srd-minted"
+                      data-share-item={link.id}
+                      style={{ justifyContent: "space-between" }}
+                    >
+                      <span className="srd-label">
+                        {fillTemplate(r.until, { date: formatShareDay(link.expiresAt, locale) })} ·{" "}
+                        {fillTemplate(r.views, { count: link.views })}
+                        {link.hasPassphrase ? ` · ${r.withPassphrase}` : ""}
+                        {link.allowComments ? ` · ${r.withComments}` : ""}
+                        {link.allowDownload ? ` · ${r.withDownload}` : ""}
+                      </span>
+                      <button
+                        type="button"
+                        className="srd-ghost"
+                        disabled={busyAction !== null || revokingShareId !== null}
+                        onClick={() => void handleRevokeShare(link.id)}
+                        data-share-revoke={link.id}
+                      >
+                        {r.revoke}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            );
+          }
+          return (
         <section className="srd-card" data-share-bridge-link-section>
           <div className="srd-card-head">
             <h3 className="srd-card-title">{c.shareHeading}</h3>
@@ -764,6 +880,8 @@ export function ShareReviewDialog({ target, locale = "ko", onClose, onNavigate }
             </div>
           )}
         </section>
+          );
+        })()}
 
         {/* 2. Frame.io-grade precision review stage */}
         <section className="srd-card" data-share-bridge-review-section>

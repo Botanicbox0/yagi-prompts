@@ -28,6 +28,7 @@ import { loadFeaturePolicies } from '@/lib/brands/entitlements';
 import { adjustOrganizationStorageBytes } from '@/lib/brands/storage-quota';
 import { RoomDenied, requireEdit, requireRoomProject, roomSeat, seatInProject, type RoomSeat } from '@/lib/brand-rooms/access';
 import { postRoomEvent, type RoomEventInput } from '@/lib/brand-rooms/events';
+import { brandSendOpenFor } from '@/lib/brand-rooms/members-channel';
 import { brandRoomsOpen } from '@/lib/flags';
 import { requireCreate, StudioDenied, studioSeat, type StudioSeat } from './access';
 import type { StudioMediaStore } from './media-store';
@@ -57,6 +58,7 @@ import {
   type ReviewErrorCode,
   type ReviewFailure,
   type ReviewItem,
+  type ReviewKind,
   type ReviewList,
   type ReviewListItem,
   type ReviewOperation,
@@ -716,6 +718,25 @@ async function extension(sql: SqlRunner, row: ReviewRow, media: StudioMediaStore
   return { extended: true, versions: await stackVersions(sql, String(row.stack_id ?? row.id), String(row.organization_id), media) };
 }
 
+async function imageLiveShareCount(sql: SqlRunner, organizationId: string, row: ReviewRow): Promise<number | undefined> {
+  if (row.s_kind === 'video') return undefined;
+  if (!(await brandSendOpenFor(sql, organizationId))) return undefined;
+  if (!(await roomReviewReady(sql))) return 0;
+  const counted = (
+    await sql.query<{ n: number }>(
+      `select count(*)::int as n
+         from brand_room_shares
+        where organization_id = $1
+          and kind = 'review'
+          and target_id = $2
+          and revoked_at is null
+          and expires_at > now()`,
+      [organizationId, row.id],
+    )
+  ).rows[0];
+  return Number(counted?.n ?? 0);
+}
+
 /** `GET /api/brand-studio/review?organizationId=…&review=…` */
 export async function loadReviewDetail(deps: ReviewDeps, viewer: Viewer, organizationId: string, reviewId: string): Promise<ReviewDetail | ReviewFailure> {
   return guard(() =>
@@ -723,10 +744,11 @@ export async function loadReviewDetail(deps: ReviewDeps, viewer: Viewer, organiz
       const seat = await reviewSeat(sql, viewer.userId, organizationId);
       const row = await reviewRow(sql, reviewId, organizationId);
       if (!row) throw new ReviewDenied('not_found');
+      const liveShareCount = await imageLiveShareCount(sql, organizationId, row);
       return {
         ok: true as const,
         canWrite: seat.canCreate,
-        review: itemView(row, deps.media),
+        review: { ...itemView(row, deps.media), ...(liveShareCount !== undefined ? { liveShareCount } : {}) },
         comments: await commentsOf(sql, row.id, viewer.userId ?? null),
         ...(await extension(sql, row, deps.media)),
       };
@@ -1185,12 +1207,13 @@ export async function loadRoomReviewDetail(
     deps.sql.transaction(async (sql) => {
       const seat = await roomGate(sql, viewer, organizationId, projectId);
       const row = await roomReview(sql, reviewId, organizationId, projectId);
+      const liveShareCount = await imageLiveShareCount(sql, organizationId, row);
       return {
         ok: true as const,
         canWrite: seat.canEdit,
         canEdit: seat.canEdit,
         canTalk: seat.canTalk,
-        review: itemView(row, deps.media),
+        review: { ...itemView(row, deps.media), ...(liveShareCount !== undefined ? { liveShareCount } : {}) },
         comments: await commentsOf(sql, row.id, viewer.userId ?? null),
         extended: true,
         versions: await stackVersions(sql, String(row.stack_id ?? row.id), organizationId, deps.media),
@@ -1539,7 +1562,18 @@ export async function addGuestComment(
 }
 
 /** A live review of this organization, and the project it sits in (share creation checks the room). */
-export async function reviewTarget(sql: SqlRunner, organizationId: string, reviewId: string): Promise<{ id: string; projectId: string | null; title: string } | null> {
+export async function reviewTarget(
+  sql: SqlRunner,
+  organizationId: string,
+  reviewId: string,
+): Promise<{ id: string; projectId: string | null; title: string; kind: ReviewKind } | null> {
   const row = await reviewRow(sql, reviewId, organizationId);
-  return row ? { id: String(row.id), projectId: row.project_id ? String(row.project_id) : null, title: String(row.title) } : null;
+  return row
+    ? {
+        id: String(row.id),
+        projectId: row.project_id ? String(row.project_id) : null,
+        title: String(row.title),
+        kind: row.s_kind === 'video' ? 'video' : 'image',
+      }
+    : null;
 }

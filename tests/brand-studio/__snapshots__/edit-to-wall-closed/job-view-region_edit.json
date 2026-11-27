@@ -1,0 +1,56 @@
+{
+  "id": "00000000-0000-4000-8000-000000000102",
+  "kind": "region_edit",
+  "status": "succeeded",
+  "model": "seedream-5.5",
+  "prompt": "라벨을 흰색으로",
+  "finalPrompt": "Region designed: replace the label with a plain white one.",
+  "expected": 1,
+  "aspect": null,
+  "resolution": "2K",
+  "seconds": null,
+  "audio": null,
+  "references": [],
+  "parentOutputId": null,
+  "parentAssetId": "00000000-0000-4000-8000-000000000901",
+  "box": {
+    "x": 0.1,
+    "y": 0.1,
+    "w": 0.5,
+    "h": 0.5
+  },
+  "method": null,
+  "keep": [],
+  "change": null,
+  "outputs": [
+    {
+      "id": "00000000-0000-4000-8000-000000000203",
+      "jobId": "00000000-0000-4000-8000-000000000102",
+      "kind": "image",
+      "url": "/api/brand-studio/media/st/0000000000000000000000000000000000000000000000000000000000000003.png",
+      "thumbUrl": null,
+      "width": 720,
+      "height": 1280,
+      "seconds": null,
+      "draft": false,
+      "savedAssetId": null,
+      "regionPatch": {
+        "url": "/api/brand-studio/media/st/0000000000000000000000000000000000000000000000000000000000000031.png",
+        "maskUrl": "/api/brand-studio/media/st/0000000000000000000000000000000000000000000000000000000000000032.png",
+        "x": 0.1,
+        "y": 0.1,
+        "w": 0.5,
+        "h": 0.5
+      },
+      "sourceRef": {
+        "assetId": "00000000-0000-4000-8000-000000000901"
+      },
+      "createdAt": "2026-11-20T10:03:00.000Z"
+    }
+  ],
+  "estimateKrw": 700,
+  "countedOutputs": 1,
+  "errorCode": null,
+  "createdAt": "2026-11-20T10:02:00.000Z",
+  "finishedAt": "2026-11-20T10:03:00.000Z"
+}

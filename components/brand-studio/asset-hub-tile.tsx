@@ -11,6 +11,7 @@ import type { SendTransport } from "@/components/brand-rooms/chat/transport";
 import { FileSendButton, FileSendHost, FileSendPanelSlot, FileSendShareLabel, SendPageScope, isSendEscapeRecent } from "@/components/brand-send/file-send";
 import type { SendLocale, ViewerSendProp } from "@/components/brand-send/model";
 import type { StudioJobView } from "@/lib/brand-studio/contracts";
+import { tileModelLabel, tileModelParts } from "@/lib/brand-studio/model-label";
 import { clampRatio, hubEntryToSendRef, humanTitle, tileSources, type HubAction, type HubDeliverable, type HubEntry } from "./asset-hub-model";
 import s from "./asset-hub.module.css";
 import { useModal } from "./modal";
@@ -36,9 +37,45 @@ function Heart({ liked, label, onPress, className }: { liked: boolean; label: st
   );
 }
 
+export function HubModelChip({
+  model,
+  edited = false,
+  editedMark,
+  className,
+}: {
+  model: string | null | undefined;
+  edited?: boolean;
+  editedMark: string;
+  className?: string;
+}) {
+  const parts = tileModelParts({ model, edited, editedMark });
+  if (!parts) return null;
+  const split = Boolean(parts.name && parts.edited);
+  return (
+    <span
+      className={className ? `${s.modelChip} ${className}` : s.modelChip}
+      data-asset-hub-model={model ?? undefined}
+      data-edited={split ? "split" : undefined}
+      aria-hidden="true"
+    >
+      {split ? (
+        <>
+          <span className={s.modelChipName}>{parts.name}</span>
+          <span className={s.modelChipSep} aria-hidden="true">{" · "}</span>
+          <span className={s.modelChipMark}>{parts.edited}</span>
+        </>
+      ) : (
+        parts.name ?? parts.edited
+      )}
+    </span>
+  );
+}
+
 export interface HubTileProps {
   entry: HubEntry;
   copy: LibraryCopy;
+  /** Dictionary string `brandStudio.gallery.editedMark`. */
+  editedMark: string;
   /** What assistive tech calls the item: its name, else its kind. */
   name: string;
   liked: boolean;
@@ -61,7 +98,7 @@ export interface HubTileProps {
   onAction(action: HubAction): void;
 }
 
-export function HubTile({ entry, copy, name, liked, main, more, moreLabel, compact = false, soundMarker = false, selecting = false, selected = false, onToggleSelect, menuOpen, onMenu, onOpen, onLike, onAction }: HubTileProps) {
+export function HubTile({ entry, copy, editedMark, name, liked, main, more, moreLabel, compact = false, soundMarker = false, selecting = false, selected = false, onToggleSelect, menuOpen, onMenu, onOpen, onLike, onAction }: HubTileProps) {
   // A stored size is trusted; a guessed one is corrected from the media itself once it loads.
   const [measured, setMeasured] = useState<number | null>(null);
   const [hovering, setHovering] = useState(false);
@@ -148,6 +185,10 @@ export function HubTile({ entry, copy, name, liked, main, more, moreLabel, compa
           {entry.kind === "video" ? <PlayGlyph /> : <RailIcon name="wave" />}
           {entry.seconds != null ? clock(entry.seconds) : copy.item[entry.kind]}
         </span>
+      )}
+
+      {entry.origin === "generated" && entry.kind === "image" && (
+        <HubModelChip model={entry.model} edited={entry.edited} editedMark={editedMark} />
       )}
 
       {selecting ? (
@@ -246,6 +287,8 @@ export function HubLinkTile({ item, href, copy, compact = false }: { item: HubDe
 export interface HubDetailProps {
   entry: HubEntry;
   copy: LibraryCopy;
+  /** Dictionary string `brandStudio.gallery.editedMark`. */
+  editedMark: string;
   name: string;
   liked: boolean;
   main: HubAction | null;
@@ -262,6 +305,7 @@ export interface HubDetailProps {
 export function HubDetail({
   entry,
   copy,
+  editedMark,
   name,
   liked,
   main,
@@ -277,9 +321,14 @@ export function HubDetail({
   const film = useRef<HTMLVideoElement>(null);
   const h = copy.hub;
   const prompt = entry.prompt.trim();
+  const modelLabel =
+    entry.origin === "generated" && entry.kind === "image"
+      ? tileModelLabel({ model: entry.model, edited: entry.edited, editedMark })
+      : null;
 
   const sendLocale: SendLocale = send?.locale ?? "ko";
   const sendRef = send ? hubEntryToSendRef(entry, sendJob) : null;
+  const shownMore = send && entry.kind === "image" ? more.filter((action) => action.key !== "share") : more;
 
   useEffect(() => {
     // Muted autoplay is allowed everywhere; a refusal just leaves the first frame and the controls.
@@ -320,6 +369,12 @@ export function HubDetail({
             <span className={s.detailOrigin}>
               {entry.origin === "upload" ? h.sourceUpload : h.sourceGenerated}
               {entry.seconds != null && entry.kind !== "image" ? ` · ${clock(entry.seconds)}` : ""}
+              {modelLabel ? (
+                <>
+                  {" · "}
+                  <span data-asset-hub-detail-model={entry.model ?? undefined}>{modelLabel}</span>
+                </>
+              ) : null}
             </span>
             <Heart liked={liked} label={fill(liked ? copy.item.unlike : copy.item.like, { name })} onPress={onLike} className={s.detailIcon} />
             <button type="button" className={s.detailIcon} aria-label={copy.close} title={copy.close} onClick={onClose} data-asset-hub-detail-close>
@@ -348,7 +403,7 @@ export function HubDetail({
             </div>
           )}
 
-          <FileSendHost send={send} fileRef={sendRef} locale={sendLocale} closeLabel={copy.close}>
+          <FileSendHost send={send} fileRef={sendRef} fileKind={entry.kind} locale={sendLocale} closeLabel={copy.close}>
           <div className={s.detailActions}>
             {main && (
               <a className={s.detailMain} href={main.href} {...marker(main)}>
@@ -356,7 +411,7 @@ export function HubDetail({
               </a>
             )}
             {send && <FileSendButton className={s.detailRow} dataAssetHubSend>{send.copy.action}</FileSendButton>}
-            {more.map((action) =>
+            {shownMore.map((action) =>
               action.href ? (
                 <a key={action.key} className={s.detailRow} href={action.href} {...marker(action)}>
                   {send && action.key === "share" ? <FileSendShareLabel fallback={action.label} externalLink={send.copy.externalLink} /> : action.label}

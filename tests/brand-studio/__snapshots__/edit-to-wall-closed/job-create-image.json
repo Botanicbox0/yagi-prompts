@@ -1,0 +1,29 @@
+{
+  "ok": true,
+  "job": {
+    "id": "<id1>",
+    "kind": "image",
+    "status": "queued",
+    "model": "seedream-5.5",
+    "prompt": "White glass bottle",
+    "finalPrompt": null,
+    "expected": 1,
+    "aspect": "1:1",
+    "resolution": "2K",
+    "seconds": null,
+    "audio": null,
+    "references": [],
+    "parentOutputId": null,
+    "parentAssetId": null,
+    "box": null,
+    "method": null,
+    "keep": [],
+    "change": null,
+    "outputs": [],
+    "estimateKrw": 70,
+    "countedOutputs": 1,
+    "errorCode": null,
+    "createdAt": "<time>",
+    "finishedAt": null
+  }
+}

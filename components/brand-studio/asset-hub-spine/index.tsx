@@ -556,6 +556,7 @@ export function AssetHubSpine({
             overview={overview}
             libraryCopy={libraryCopy}
             projectSpineCopy={projectSpineCopy}
+            editedMark={studioCopy.gallery.editedMark}
             state={state}
             deliverables={deliverables}
             canMove={canMove}

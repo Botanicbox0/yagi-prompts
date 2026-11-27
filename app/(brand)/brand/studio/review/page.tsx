@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import { studioRouteContext } from "@/components/brand-studio/route-context";
 import { ReviewApp } from "@/components/brand-studio/review/review-app";
+import { brandSendOpenFor, brandSendSwitchesOn } from "@/lib/brand-rooms/members-channel";
+import { memberSeesBrandProjects } from "@/lib/brand-studio/brand-projects";
 import { createStudioMediaStore } from "@/lib/brand-studio/media-store";
 import { loadReviewDetail, loadReviewList } from "@/lib/brand-studio/review";
 import { parseReviewTime } from "@/lib/brand-studio/review-contracts";
@@ -29,6 +31,10 @@ export default async function StudioReviewPage({
   const asked = Array.isArray(params.review) ? params.review[0] : params.review;
   const chosen = (asked && list.reviews.find((r) => r.id === asked)?.id) || list.reviews[0]?.id || null;
   const detail = chosen ? await loadReviewDetail(deps, ctx.viewer, organizationId, chosen) : null;
+  const sendOpen =
+    brandSendSwitchesOn() &&
+    memberSeesBrandProjects({ staff: ctx.access.staff, role: ctx.choice.role }) &&
+    (await brandSendOpenFor(ctx.deps.sql, organizationId).catch(() => false));
   return (
     <ReviewApp
       organizationId={organizationId}
@@ -37,6 +43,7 @@ export default async function StudioReviewPage({
       initialList={list}
       initialDetail={detail && detail.ok ? detail : null}
       initialMs={chosen && chosen === asked ? parseReviewTime(params.t) : null}
+      {...(sendOpen ? { sendOpen: true } : {})}
     />
   );
 }

@@ -15,7 +15,7 @@ import { REVIEW_LIMITS, reviewHref } from '@/lib/brand-studio/review-contracts';
 import { studioLog } from '@/lib/brand-studio/runtime';
 import { runRoomOperation, type RoomNotice } from '@/lib/brand-rooms/messages';
 import { SHARE_LIMITS, shareHttpStatus, sharePath, type ShareLink } from '@/lib/brand-rooms/share-contracts';
-import { createShare as createRoomShare, listShares } from '@/lib/brand-rooms/shares';
+import { createShare as createRoomShare, isExternalReviewShareBlocked, listShares } from '@/lib/brand-rooms/shares';
 
 /**
  * `/api/brand-studio/share-bridge` — 1-click bridge between Brand Studio (Image / Video / Compose /
@@ -130,6 +130,40 @@ function tellTheTeam(sql: SqlRunner, notice: RoomNotice | null): void {
       studioLog('share_bridge_notice_failed', { message: error instanceof Error ? error.message.slice(0, 200) : 'unknown' });
     }
   });
+}
+
+async function subjectKindOf(
+  sql: SqlRunner,
+  organizationId: string,
+  opts: { reviewId?: string | null; assetId?: string | null; outputId?: string | null },
+): Promise<'image' | 'video' | null> {
+  const row = opts.reviewId
+    ? (
+        await sql.query<{ kind: string | null }>(
+          `select coalesce(a.kind, o.kind) as kind
+             from brand_studio_reviews r
+             left join brand_studio_assets a on a.id = r.asset_id
+             left join brand_studio_outputs o on o.id = r.output_id
+            where r.id = $1 and r.organization_id = $2 and r.deleted_at is null`,
+          [opts.reviewId, organizationId],
+        )
+      ).rows[0]
+    : opts.assetId
+      ? (
+          await sql.query<{ kind: string | null }>(
+            'select kind from brand_studio_assets where id = $1 and organization_id = $2 and deleted_at is null',
+            [opts.assetId, organizationId],
+          )
+        ).rows[0]
+      : opts.outputId
+        ? (
+            await sql.query<{ kind: string | null }>(
+              'select kind from brand_studio_outputs where id = $1 and organization_id = $2 and deleted_at is null',
+              [opts.outputId, organizationId],
+            )
+          ).rows[0]
+        : undefined;
+  return row?.kind === 'image' || row?.kind === 'video' ? row.kind : null;
 }
 
 interface ResolvedReview {
@@ -376,7 +410,14 @@ export async function POST(request: NextRequest) {
           { reviewId: input.reviewId, assetId: input.assetId, outputId: input.outputId },
           ready,
         );
-        return { seat, ready, projectRows, review };
+        const externalLinkBlocked = await isExternalReviewShareBlocked(tx, seat.organizationId, () =>
+          subjectKindOf(tx, seat.organizationId, {
+            reviewId: input.reviewId,
+            assetId: input.assetId,
+            outputId: input.outputId,
+          }),
+        ).catch(() => false);
+        return { seat, ready, projectRows, review, externalLinkBlocked };
       });
 
       let shares: ShareLink[] = [];
@@ -395,6 +436,7 @@ export async function POST(request: NextRequest) {
         ok: true,
         canWrite: gateSeat.canCreate,
         roomsOpen: brandRoomsOpen(),
+        ...(contextData.externalLinkBlocked ? { externalLinkAllowed: false } : {}),
         review: contextData.review
           ? {
               id: contextData.review.id,
@@ -450,6 +492,19 @@ export async function POST(request: NextRequest) {
         requireCreate(seat);
         const ready = await roomReviewReady(tx);
         if (!ready) throw new StudioDenied('provider_unavailable');
+
+        if (
+          input.issueShareLink &&
+          (await isExternalReviewShareBlocked(tx, seat.organizationId, () =>
+            subjectKindOf(tx, seat.organizationId, {
+              reviewId: input.reviewId,
+              assetId: input.assetId,
+              outputId: input.outputId,
+            }),
+          ))
+        ) {
+          throw new StudioDenied('invalid');
+        }
 
         const review = await ensureReviewRecord(
           tx,

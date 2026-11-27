@@ -5,7 +5,7 @@ import { resetFreeIntelRateLimits } from '@/lib/brand-studio/jobs';
 import { loadRoomSummary } from '@/lib/brand-rooms/messages';
 import { sendInviteAcceptHooks } from '@/lib/brand-rooms/send-invite';
 import { SEND_LIMITS, type SendFileThreads, type SendInboxPage, type SendLookup, type SendPosted, type SendThreadPage } from '@/lib/brand-rooms/send-contracts';
-import { as, closeWorld, code, imageResult, ok, openSend, sendWorld, type SendWorld } from '../send/helpers';
+import { as, closeWorld, code, ok, openSend, sendWorld, videoResult, type SendWorld } from '../send/helpers';
 import { openInvites, person, recording } from './helpers';
 
 /**
@@ -25,7 +25,7 @@ beforeEach(async () => {
   resetFreeIntelRateLimits();
   openSend(w.f.orgId);
   openInvites();
-  file = (await imageResult(w, w.f.projectId)).outputId;
+  file = (await videoResult(w, w.f.projectId)).outputId;
 });
 afterEach(async () => {
   vi.restoreAllMocks();

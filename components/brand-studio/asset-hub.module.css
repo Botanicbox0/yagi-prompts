@@ -467,7 +467,7 @@
   -webkit-box-orient: vertical;
 }
 
-/* The only thing a picture carries at rest: how long a film or a sound is. */
+/* Badges a picture carries at rest: duration for film/audio, and model chip for generated images. */
 .badge {
   position: absolute;
   top: 8px;
@@ -498,6 +498,67 @@
   width: 10px;
   height: 10px;
   fill: currentColor;
+}
+
+.modelChip {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  max-width: calc(100% - 16px);
+  overflow: hidden;
+  padding: 3px 9px;
+  border: 1px solid var(--hub-glass-line);
+  border-radius: var(--ys-r-pill);
+  background: var(--hub-glass);
+  color: var(--hub-on-media);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+  transition: opacity 160ms var(--ys-ease);
+}
+
+.modelChip[data-edited="split"] {
+  display: inline-flex;
+  align-items: center;
+}
+
+.modelChipName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.modelChipSep {
+  flex: none;
+  white-space: pre;
+}
+
+.modelChipMark {
+  flex: none;
+  white-space: nowrap;
+}
+
+@container (max-width: 139px) {
+  .modelChipName,
+  .modelChipSep {
+    display: none;
+  }
+}
+
+.tile:focus-within .modelChip,
+.tile[data-menu-open] .modelChip {
+  opacity: 0;
+}
+
+@media (hover: hover) {
+  .tile:hover .modelChip {
+    opacity: 0;
+  }
 }
 
 .heart {
@@ -649,6 +710,7 @@
 
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .badge,
+  .modelChip,
   .heart:not([aria-pressed="true"]),
   .footMore {
     -webkit-backdrop-filter: blur(8px);

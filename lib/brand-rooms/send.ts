@@ -297,11 +297,16 @@ function cardOf(ref: SendFileRef, row: FileRow | undefined, media: StudioMediaSt
 }
 
 /** A file a member may send: this organization's, and one a member can open. Its STORED project decides the channel. */
-async function sendableFile(sql: SqlRunner, organizationId: string, ref: SendFileRef): Promise<{ projectId: string | null }> {
+async function sendableFile(
+  sql: SqlRunner,
+  organizationId: string,
+  ref: SendFileRef,
+): Promise<{ projectId: string | null; kind: 'image' | 'video' | 'audio' | null }> {
   const row = (await fileRows(sql, organizationId, [ref])).get(fileRefKeyOf(ref));
   // Made up, another organization's, deleted, not ready, a fill strip or the editor's export: one answer.
   if (!row || !row.visible || !row.storage_key) throw new SendDenied('not_found');
-  return { projectId: row.stored_project_id ? String(row.stored_project_id).toLowerCase() : null };
+  const kind = row.kind === 'image' || row.kind === 'video' || row.kind === 'audio' ? row.kind : null;
+  return { projectId: row.stored_project_id ? String(row.stored_project_id).toLowerCase() : null, kind };
 }
 
 /* ------------------------------------------------------------------ threads */
@@ -559,6 +564,7 @@ async function post(ctx: Ctx, input: unknown): Promise<SendPosted> {
   // The organization row is already held `for key share` (`runSendOperation`), so where the file is filed is read only
   // after any move in progress committed, and a move that starts later waits for this root and carries it.
   const file = await sendableFile(ctx.sql, ctx.organizationId, ref);
+  if (v.invites.length > 0 && file.kind === 'image') throw new SendDenied('invalid');
   const named = await requireMembers(ctx, v.mentions);
   // 초대하고 보내기 (slice 4c): what each address becomes, every refusal before anything is written.
   const { plan, mentions } = await planInvites(ctx.sql, ctx, { invites: v.invites, body: v.body, mentions: named });
@@ -573,6 +579,15 @@ async function post(ctx: Ctx, input: unknown): Promise<SendPosted> {
 /** The writer's answer with what each address became (only when the request named any). */
 function withInvited(answer: SendPosted, outcomes: SendInviteOutcome[]): SendPosted {
   return outcomes.length > 0 ? { ...answer, invited: outcomes } : answer;
+}
+
+/** Resolve the underlying asset/output media kind while still live (`reply` guard for image invites). */
+async function fileKindOf(sql: SqlRunner, organizationId: string, ref: SendFileRef): Promise<'image' | 'video' | 'audio' | null> {
+  const row =
+    ref.kind === 'output'
+      ? (await sql.query<{ kind: string }>('select kind from brand_studio_outputs where id = $1 and organization_id = $2 and deleted_at is null', [ref.outputId, organizationId])).rows[0]
+      : (await sql.query<{ kind: string }>('select kind from brand_studio_assets where id = $1 and organization_id = $2 and deleted_at is null', [ref.assetId, organizationId])).rows[0];
+  return row?.kind === 'image' || row?.kind === 'video' || row?.kind === 'audio' ? row.kind : null;
 }
 
 /**
@@ -592,6 +607,10 @@ async function reply(ctx: Ctx, input: unknown): Promise<SendPosted> {
   }
   await requireRate(ctx);
   const root = await membersRoot(ctx.sql, ctx.organizationId, rootId, true);
+  if (v.invites.length > 0) {
+    const rootFileRef = parseFileRefKey(root.ref_key);
+    if (rootFileRef && (await fileKindOf(ctx.sql, ctx.organizationId, rootFileRef)) === 'image') throw new SendDenied('invalid');
+  }
   const named = await requireMembers(ctx, v.mentions);
   const { plan, mentions } = await planInvites(ctx.sql, ctx, { invites: v.invites, body: v.body, mentions: named });
   const id = await insertLine(ctx, { projectId: root.project_id, channel: root.channel, parentId: root.id, body: v.body, ref: root.ref, refKey: root.ref_key, mentions, requestId: v.requestId });

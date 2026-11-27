@@ -2135,7 +2135,7 @@ export const en = {
       like: 'Like',
       unlike: 'Remove like',
       folder: 'Add to folder',
-      reference: 'Use as reference',
+      reference: 'Add to references',
       more: 'More',
       library: 'Assets',
       menu: {
@@ -2163,6 +2163,7 @@ export const en = {
       sending: 'Sending',
       failed: 'Result that could not be made',
       decorated: 'Saved the edited image to your assets.',
+      editSaved: 'Saved the edited image as a new image.',
       reviewTitle: 'Studio result',
       decorateBlank: 'Start from blank',
       selectTile: 'Select result {n}',
@@ -2176,6 +2177,7 @@ export const en = {
       bulkDeleteVersions: 'Only the version shown is deleted. Earlier versions stay.',
       addedMany: 'Added {n} to {name}.',
       downloadFailed: 'Some files did not download. Please try again.',
+      editedMark: 'edited',
     },
     board: {
       label: 'Results',
@@ -2514,7 +2516,7 @@ export const en = {
       refsHint: 'Drag in, pick, or press Ctrl+V to paste photos. In your sentence they start at number 2.',
       dropHere: 'Drop to add as a reference',
       addRefs: 'Pick photos',
-      addOne: 'Add as reference: {name}',
+      addOne: 'Add to references: {name}',
       recent: 'Recent results and uploads',
       roleLabel: 'What number {n} is',
       roleNone: 'Kind',

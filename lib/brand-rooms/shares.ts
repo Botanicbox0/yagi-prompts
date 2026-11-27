@@ -31,6 +31,7 @@ import { addGuestComment, reviewTarget, sharedReviewView } from '@/lib/brand-stu
 import type { ReviewComment, ReviewCommentAdded, ReviewItem } from '@/lib/brand-studio/review-contracts';
 import { RoomDenied, requireEdit, requireRoomProject, roomSeat, type RoomSeat } from './access';
 import { postRoomEvent } from './events';
+import { brandSendOpenFor } from './members-channel';
 import { guestNoteNotice, guestNotePreview, type RoomTeamNotice, type RoomTeamNotify } from './team-notice';
 import { roomDeskPath } from './message-contracts';
 import { reviewAdminPath } from '@/lib/brand-studio/review';
@@ -199,14 +200,33 @@ async function organizationOpen(sql: SqlRunner, organizationId: string): Promise
   return !featureDenied(denied, 'generative_media');
 }
 
-/** The item a link would show: live, in this organization, in a room this seat may open. Returns its project. */
-async function targetFor(deps: ShareDeps, sql: SqlRunner, seat: RoomSeat, kind: ShareKind, targetId: string): Promise<string | null> {
+/**
+ * Single enforcement predicate for external share-link creation: checks `brandSendOpenFor` FIRST (zero DB
+ * reads when closed) and blocks new external links only when `보내기` is open and the target is an image.
+ */
+export async function isExternalReviewShareBlocked(
+  sql: SqlRunner,
+  organizationId: string,
+  getKind: () => Promise<'image' | 'video' | 'storyboard' | null>,
+): Promise<boolean> {
+  if (!(await brandSendOpenFor(sql, organizationId))) return false;
+  return (await getKind()) === 'image';
+}
+
+/** The item a link would show: live, in this organization, in a room this seat may open. Returns its project and media kind. */
+async function targetFor(
+  deps: ShareDeps,
+  sql: SqlRunner,
+  seat: RoomSeat,
+  kind: ShareKind,
+  targetId: string,
+): Promise<{ projectId: string | null; kind: 'image' | 'video' | 'storyboard' }> {
   if (kind === 'review') {
     const review = await reviewTarget(sql, seat.organizationId, targetId);
     if (!review) throw new ShareDenied('not_found');
     if (review.projectId) await requireRoomProject(sql, seat, review.projectId);
     else if (seat.projectIds) throw new ShareDenied('not_found');
-    return review.projectId;
+    return { projectId: review.projectId, kind: review.kind };
   }
   const board = (
     await sql.query<{ project_id: string; status: string }>(
@@ -217,7 +237,7 @@ async function targetFor(deps: ShareDeps, sql: SqlRunner, seat: RoomSeat, kind: 
   // A draft is not the brand's to see yet, so it is nobody else's either.
   if (!board || board.status === 'draft') throw new ShareDenied('not_found');
   await requireRoomProject(sql, seat, String(board.project_id));
-  return String(board.project_id);
+  return { projectId: String(board.project_id), kind: 'storyboard' };
 }
 
 /** Owners and editors of a seated organization, with 0084 applied. */
@@ -244,7 +264,10 @@ export async function createShare(deps: ShareDeps, viewer: Viewer, raw: unknown)
   return guard(() =>
     deps.sql.transaction(async (sql) => {
       const seat = await editorSeat(sql, viewer, organizationId);
-      const projectId = await targetFor(deps, sql, seat, v.kind, v.targetId);
+      const target = await targetFor(deps, sql, seat, v.kind, v.targetId);
+      if (v.kind === 'review' && (await isExternalReviewShareBlocked(sql, organizationId, async () => target.kind))) {
+        throw new ShareDenied('invalid');
+      }
       await sql.query('select id from brand_organizations where id = $1 for update', [organizationId]);
       const live = (
         await sql.query<{ n: number }>(
@@ -258,7 +281,7 @@ export async function createShare(deps: ShareDeps, viewer: Viewer, raw: unknown)
         await sql.query<ShareRow>(
           `insert into brand_room_shares (token_hash, organization_id, project_id, kind, target_id, allow_comments, allow_download, passphrase_hash, expires_at, created_by, created_role)
              values ($1, $2, $3, $4, $5, $6, $7, $8, now() + make_interval(days => $9), $10, 'brand') returning *`,
-          [hashShareToken(token), organizationId, projectId, v.kind, v.targetId, v.allowComments, v.allowDownload, passphraseHash, v.expiresInDays, seat.userId],
+          [hashShareToken(token), organizationId, target.projectId, v.kind, v.targetId, v.allowComments, v.allowDownload, passphraseHash, v.expiresInDays, seat.userId],
         )
       ).rows[0]!;
       return { ok: true as const, share: linkView(row, now.getTime()), token };

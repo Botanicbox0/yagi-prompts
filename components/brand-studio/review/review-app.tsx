@@ -11,6 +11,7 @@ import "./review.css";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Explainer } from "../explainer";
 import { ShareReviewDialog, useShareReviewEvent, type ShareReviewTarget } from "../share-review-dialog";
+import { fetchShares } from "@/components/brand-rooms/review/api";
 import { reviewHref, type ReviewDetail, type ReviewList, type ReviewListItem } from "@/lib/brand-studio/review-contracts";
 import { fetchReviewDetail, fetchReviewList, postReview } from "./api";
 import { ReviewPicker } from "./picker";
@@ -28,9 +29,10 @@ export interface ReviewAppProps {
   initialList: ReviewList;
   initialDetail: ReviewDetail | null;
   initialMs: number | null;
+  sendOpen?: boolean;
 }
 
-export function ReviewApp({ organizationId, locale, copy, initialList, initialDetail, initialMs }: ReviewAppProps) {
+export function ReviewApp({ organizationId, locale, copy, initialList, initialDetail, initialMs, sendOpen = false }: ReviewAppProps) {
   const [list, setList] = useState<ReviewListItem[]>(initialList.reviews);
   const [canWrite, setCanWrite] = useState(initialList.canWrite);
   const [selectedId, setSelectedId] = useState<string | null>(initialDetail?.review.id ?? null);
@@ -39,6 +41,7 @@ export function ReviewApp({ organizationId, locale, copy, initialList, initialDe
   const [error, setError] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
   const [shareTarget, setShareTarget] = useState<ShareReviewTarget | null>(null);
+  const [liveSharesByReview, setLiveSharesByReview] = useState<Record<string, number>>({});
 
   useShareReviewEvent(organizationId, setShareTarget);
 
@@ -122,10 +125,31 @@ export function ReviewApp({ organizationId, locale, copy, initialList, initialDe
     () => (selectedId ? list.find((item) => item.id === selectedId) ?? null : null),
     [list, selectedId],
   );
+  const detailReview = detail?.ok && detail.review.id === selectedId ? detail.review : null;
+  const activeKind = detailReview?.kind ?? activeSummary?.kind ?? null;
+  const knownLiveShares = selectedId
+    ? (liveSharesByReview[selectedId] ?? detailReview?.liveShareCount)
+    : undefined;
+
+  useEffect(() => {
+    if (!sendOpen || !canWrite || !selectedId || activeKind !== "image" || knownLiveShares !== undefined) return;
+    let cancelled = false;
+    void fetchShares(organizationId, "review", selectedId).then((res) => {
+      if (cancelled) return;
+      const liveCount = res.ok ? res.shares.filter((item) => item.state === "live").length : 0;
+      setLiveSharesByReview((prev) => ({ ...prev, [selectedId]: liveCount }));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [sendOpen, canWrite, selectedId, activeKind, knownLiveShares, organizationId]);
+
+  const isBlockedImage = Boolean(sendOpen && activeKind === "image");
+  const canOpenShare = Boolean(canWrite && selectedId && (!isBlockedImage || (knownLiveShares ?? 0) > 0));
   // The share dialog opens from the stage's head, as the room's 공유 does: a ghost button after the one filled
   // action (docs/design/TASTE.md 16, 18). The page's own head keeps only the quiet "pick" button.
   const shareButton =
-    canWrite && selectedId ? (
+    canOpenShare && selectedId ? (
       <button
         type="button"
         className="bsv-ghost"
@@ -286,6 +310,12 @@ export function ReviewApp({ organizationId, locale, copy, initialList, initialDe
         <ShareReviewDialog
           target={shareTarget}
           locale={locale}
+          {...(sendOpen ? { sendOpen: true, ...(activeKind ? { targetKind: activeKind } : {}) } : {})}
+          onSharesChanged={(count) => {
+            if (!shareTarget.reviewId) return;
+            const id = shareTarget.reviewId;
+            setLiveSharesByReview((prev) => ({ ...prev, [id]: count }));
+          }}
           onClose={() => setShareTarget(null)}
         />
       )}

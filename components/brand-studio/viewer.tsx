@@ -18,6 +18,7 @@ import { copyImageUrlToClipboard, isEditableTextTarget } from "@/lib/brand-studi
 import type { RegionBox, StudioAllowanceView, StudioAssetView, StudioJobView, StudioOutputView } from "@/lib/brand-studio/contracts";
 import type { BillingPlanCatalogueItem } from "@/lib/brands/billing-ui";
 import type { BrandBillingCopy } from "@/messages/brand-billing";
+import { tileModelLabel } from "@/lib/brand-studio/model-label";
 import { studioModelOrLegacy, type StudioImageModel } from "@/lib/brand-studio/models";
 import { errorLine, fill, runFailedLine, type StudioCopy, type StudioLocale } from "./copy";
 import { qualityOf, regionCredits, regionInstructionForForm, regionProblem, type RegionProblem } from "./dock-model";
@@ -135,8 +136,8 @@ export interface ViewerProps {
 
 export const itemKey = (item: ViewerItem) => (item.type === "output" ? `o:${item.output.id}` : `a:${item.asset.id}`);
 const media = (item: ViewerItem) => (item.type === "output" ? item.output : item.asset);
-/** Everything but a 1080p final can be made again with the settings it had (a preset workflow run cannot: its text is never shown). */
-export const canRerun = (job: StudioJobView) => job.kind !== "video_final" && !job.preset;
+/** Everything but a 1080p final, preset workflow run, or LayerEditor save can be made again with the settings it had. */
+export const canRerun = (job: StudioJobView) => job.kind !== "video_final" && !job.preset && !job.edited;
 
 /** What the viewer shows: the opened result for its own version, else the result that represents the picked version. */
 export function shownVersion(opened: ViewerItem, chain: readonly ChainVersion[], own: number, selected: number): ViewerItem {
@@ -559,11 +560,15 @@ function ViewerContent({
   const sentCopy = Boolean(job && sentPromptCopyable(job));
   const sentMode = job && !sentCopy ? sentPromptMode(job) : null;
   const protectedSent = (sentMode?.kind === "pictures" || Boolean(job?.finalPrompt)) && !sentCopy;
-  // Only a partial edit compares against what it was made from (a final or a clip version also has a parent).
-  const parent = job?.kind === "region_edit" ? parentOf(job.parentOutputId) : null;
+  // Only a partial edit or LayerEditor save compares against what it was made from (a final or a clip version also has a parent).
+  const parent = job?.kind === "region_edit" || job?.edited ? parentOf(job.parentOutputId) : null;
   const parentAsset = job?.kind === "region_edit" && !parent && parentAssetOf ? parentAssetOf(job.parentAssetId) : null;
   const before = parent ?? parentAsset;
   const image = file.kind === "image";
+  const modelLabel =
+    item.type === "output" && image && job
+      ? tileModelLabel({ model: job.model, edited: Boolean(job.edited), editedMark: copy.gallery.editedMark })
+      : null;
 
   const copyCurrentImage = async () => {
     if (!image) return;
@@ -593,9 +598,15 @@ function ViewerContent({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [image, file.url]);
   const name = item.type === "asset" ? item.asset.name : "";
-  const comparing = !region && image && job?.kind === "region_edit" && before?.kind === "image";
+  const comparing = !region && image && (job?.kind === "region_edit" || job?.edited) && before?.kind === "image";
   // Results of one request on several models: the switcher, and "모델 비교" with every model side by side.
   const siblings = job?.group && siblingsOf ? siblingsOf(job) : [];
+  const hasSiblingSwitcher = Boolean(
+    job?.group &&
+      siblingsOf &&
+      onOpenOutput &&
+      siblings.filter((run) => !(run.status === "succeeded" && run.outputs.length === 0)).length >= 2,
+  );
   const entries = job && item.type === "output" && siblings.length > 1 ? compareEntries(job, item.output, siblings, copy) : [];
   const comparable = !region && image && canCompareModels(entries);
   const modelCompare = comparingModels && comparable;
@@ -687,7 +698,7 @@ function ViewerContent({
   const saved = canCreate && Boolean(output?.savedAssetId);
   // The action tiles and the prompt: in their place below, or (conversation open) behind the title row's control.
   const actionsBlock = (
-    <FileSendHost send={send} fileRef={viewerItemToSendRef(item)} locale={locale} closeLabel={v.close} panelHidden={region}>
+    <FileSendHost send={send} fileRef={viewerItemToSendRef(item)} fileKind={file.kind} locale={locale} closeLabel={v.close} panelHidden={region}>
     <div className="bs-viewer-actions" data-studio-viewer-actions>
       {comparing && <p className="bs-muted">{v.compareHint}</p>}
       {sentLine && (
@@ -742,7 +753,7 @@ function ViewerContent({
             {v.delete}
           </button>
         )}
-        {send && canCreate && Boolean(actions.review) && (
+        {send && file.kind !== "image" && canCreate && Boolean(actions.review) && (
           <button type="button" className="bs-btn" data-variant="ghost" data-size="sm" data-action="external-link" onClick={() => actions.review?.(item)}>
             <StudioIcon name="open" />
             {send.copy.externalLink}
@@ -784,7 +795,7 @@ function ViewerContent({
     </div>
     </FileSendHost>
   );
-  const promptBlock = job && !region && (
+  const promptBlock = job && !region && !(job.edited && !job.prompt.trim()) && (
     <div className="bs-prompt-block" data-studio-prompt-block>
     {/* A preset workflow run: what was sent is a server-side text, never shown, and its settings are not reused. */}
     {!job.preset && (
@@ -827,7 +838,7 @@ function ViewerContent({
         {sentMode?.kind === "not_designed" ? v.notEnhanced : (job.finalPrompt ?? v.notEnhanced)}
       </p>
       )}
-      {canGenerate && job.kind !== "video_final" && (
+      {canGenerate && job.kind !== "video_final" && !job.edited && (
         <button
           type="button"
           className="bs-btn"
@@ -1063,7 +1074,14 @@ function ViewerContent({
             {promptBlock}
           </div>
         ) : (
-          actionsBlock
+          <>
+            {modelLabel && !hasSiblingSwitcher && (
+              <p className="bs-label" data-studio-viewer-model={job?.model || undefined}>
+                {modelLabel}
+              </p>
+            )}
+            {actionsBlock}
+          </>
         )}
         {talkOpen ? null : notice && <p className="bs-notice" role="status">{notice}</p>}
         {talkOpen ? null : promptBlock}

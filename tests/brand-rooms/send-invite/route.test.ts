@@ -6,7 +6,7 @@ import type { SqlRunner } from '@/lib/db/sql-runner';
 import type { EmailMessage, Mailer } from '@/lib/notify/mailer';
 import { resetFreeIntelRateLimits } from '@/lib/brand-studio/jobs';
 import { sendInviteTransport, sendTransport } from '@/components/brand-rooms/chat/transport';
-import { as, closeWorld, imageResult, openSend, sendWorld, type SendWorld } from '../send/helpers';
+import { as, closeWorld, openSend, sendWorld, videoResult, type SendWorld } from '../send/helpers';
 import { openInvites, person } from './helpers';
 
 /**
@@ -60,7 +60,7 @@ beforeEach(async () => {
   mocks.viewer = as(w.f.ids.editor);
   openSend(w.f.orgId);
   openInvites();
-  file = (await imageResult(w, w.f.projectId)).outputId;
+  file = (await videoResult(w, w.f.projectId)).outputId;
 });
 afterEach(async () => {
   await closeWorld(w);

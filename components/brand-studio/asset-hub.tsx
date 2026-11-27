@@ -492,6 +492,7 @@ export function BrandAssetHub({
         key={entry.key}
         entry={entry}
         copy={libraryCopy}
+        editedMark={studioCopy.gallery.editedMark}
         name={name}
         liked={library.liked.has(entry.key)}
         main={main}
@@ -739,6 +740,7 @@ export function BrandAssetHub({
       key={detail.key}
       entry={detail}
       copy={libraryCopy}
+      editedMark={studioCopy.gallery.editedMark}
       name={nameOf(detail)}
       liked={library.liked.has(detail.key)}
       {...(spine && detailScopeKey
@@ -954,7 +956,7 @@ export function BrandAssetHub({
           onClose={() => setPicking(null)}
         />
       )}
-      {shareTarget && <ShareReviewDialog target={shareTarget} locale={hubLocale} onClose={() => setShareTarget(null)} />}
+      {shareTarget && <ShareReviewDialog target={shareTarget} locale={hubLocale} {...(send ? { sendOpen: true } : {})} onClose={() => setShareTarget(null)} />}
     </div>
   );
 }

@@ -561,6 +561,7 @@ describe("Fix round 5 item 1 DOM race: move -> delete on 미분류", () => {
                 key={entry.key}
                 entry={entry}
                 copy={ko.studioLibrary}
+                editedMark={ko.brandStudio.gallery.editedMark}
                 name={entry.label ?? ko.studioLibrary.item[entry.kind]}
                 liked={false}
                 selecting={selectOpts?.selecting}

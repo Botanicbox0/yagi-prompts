@@ -104,8 +104,8 @@ export function planReuse(
     siblings?: readonly StudioJobView[];
   },
 ): ReusePlan {
-  // A preset workflow run has no setting to bring back: its sent text is server-side and never shown.
-  if (job.preset) return { to: "none" };
+  // A preset workflow run or LayerEditor save has no generation settings to bring back.
+  if (job.preset || job.edited) return { to: "none" };
   if (job.kind === "video_remix" && job.method === "blueprint") return { to: "reverse", jobId: job.id };
   if (job.kind === "region_edit") return planRegionReuse(job, ctx);
   if (job.kind === "image") {
