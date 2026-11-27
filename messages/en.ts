@@ -4314,7 +4314,7 @@ export const en = {
     /**
      * docs/PERSONAL-STUDIO.md §3.4.4 (T1a) — the row under the example video: the parts this template fixes, so a
      * buyer knows before paying. `heading` names the row; `locked` says the part cannot be changed; `wholeVideo` is the
-     * range of a part with no marked range; `hint` says a tap replays that range. PROVISIONAL (wording pass pending).
+     * range of a part with no marked range; `hint` says a tap replays that range. Wording confirmed by the founder (2026-11-27).
      */
     fixed: {
       heading: 'What this template decides',
@@ -4326,7 +4326,7 @@ export const en = {
     },
     notForSale: "Coming soon",
     notForSaleBody: "Generation is not available for this template yet. You can browse its sample results.",
-    // Founder 2026-11-25 — a template whose text leaves no room for edits. Provisional: founder confirms the wording.
+    // Founder 2026-11-25 — a template whose text leaves no room for edits. Wording confirmed by the founder (2026-11-27).
     editsClosed: "This template is at full length, so it can't take change requests.",
     closedBrowseVideoCta: "Browse other video templates",
     closedBrowseImageCta: "Browse other image templates",
@@ -4430,7 +4430,7 @@ export const en = {
       needPet: 'Choose your pet’s photo.',
       needPartner: 'Choose the other person’s photo.',
       needConsent: 'Confirm they agreed.',
-      // docs/PERSONAL-STUDIO.md §6.1 — shown only while the Sunra face switch is on. Provisional: founder confirms the wording.
+      // docs/PERSONAL-STUDIO.md §6.1 — shown only while the Sunra face switch is on. Wording confirmed by the founder (2026-11-27).
       birthYearLabel: 'Year of birth',
       birthYearPlaceholder: 'Choose a year',
       adultAttest: 'I am 19 or older.',
@@ -4622,14 +4622,14 @@ export const en = {
         rate_limited: 'You have used up today’s renders.',
         identity_required: 'Verify your face first.',
         selfie_required: 'Save your photo first.',
-        // Provisional: founder confirms the wording. The saved photo's row is live but its file is gone.
+        // Wording confirmed by the founder (2026-11-27). The saved photo's row is live but its file is gone.
         selfie_file_missing: "We couldn't open your saved photo. Please choose a photo again.",
         slot_missing: 'A photo is missing. Choose it again.',
         bad_slot_photo: 'This photo cannot be used. Choose a JPG, PNG or WebP of at least 256px.',
         partner_consent_required: 'Confirm the other person agreed.',
         not_a_pet: 'Only a photo of your pet can go here. Choose one with no people in it.',
         pet_check_unavailable: 'We could not check the photo just now. Try again in a moment.',
-        // docs/PERSONAL-STUDIO.md §6.1–6.2 — only while the Sunra face switch is on. Provisional: founder confirms the wording.
+        // docs/PERSONAL-STUDIO.md §6.1–6.2 — only while the Sunra face switch is on. Wording confirmed by the founder (2026-11-27).
         adult_confirmation_required: 'Choose your year of birth and confirm you are 19 or older.',
         adult_only: 'Videos and images with another person are for ages 19 and up.',
         partner_not_one_person: 'Use a photo with only the person who will appear with you.',
@@ -6321,6 +6321,30 @@ export const en = {
         input: 'The form could not be read. Reload the page and try again.',
       },
     },
+    /** Admin setting of `platform_formats.example_url` for the studio's own formats (`format.setOriginalPost`). */
+    originalPost: {
+      heading: 'Original post URL',
+      current: 'Currently saved URL',
+      currentEmpty: 'No URL saved.',
+      statusLabel: 'Display status',
+      status: {
+        visible: 'Shown on the template page',
+        not_post: 'Profile URL — not shown on the template page',
+        empty: 'None',
+      },
+      fieldLabel: 'Instagram post or reel URL',
+      fieldHint: 'Only Instagram post (/p/) or reel (/reel/) URLs are accepted. Save with an empty field to clear it.',
+      placeholder: 'Instagram post or reel URL (https://www.instagram.com/reel/...)',
+      save: 'Save URL',
+      refusals: {
+        not_found: 'No format was found for this template.',
+        not_accepted: 'Only an accepted format can be updated.',
+        not_company: "The studio cannot edit a creative's format.",
+        not_post: 'Only Instagram post (/p/) or reel (/reel/) URLs are allowed. Profile URLs and other sites are refused.',
+        unchanged: 'The URL is unchanged.',
+        input: 'The form could not be read. Reload the page and try again.',
+      },
+    },
     /** docs/PERSONAL-STUDIO.md §3.4.4 (T1a): the marks editor on a template with a lock block (`prompt.marks`). */
     templateMarks: {
       heading: 'Fixed parts: descriptions and ranges',
@@ -6568,8 +6592,8 @@ export const en = {
 
   /**
    * docs/PERSONAL-STUDIO.md §2.3, §3.1 — the edit sheet card on a template page (flag `TWINGS_PERSONAL_EDIT_SHEET`):
-   * the customer's requests shown back as three blocks. PROVISIONAL: not final, a wording pass replaces these
-   * strings; keep each key's meaning. Never name models, providers, prompts or internal terms here.
+   * the customer's requests shown back as three blocks. Wording confirmed by the founder (2026-11-27); keep each
+   * key's meaning. Never name models, providers, prompts or internal terms here.
    */
   editSheet: {
     /** Card heading above the three blocks: the list of changes this order will make. */
@@ -6645,13 +6669,13 @@ export const en = {
     },
     /** Live line when a request asked to change only fixed parts: nothing was added. */
     refusedLocked: "That part is fixed and can't be changed.",
-    /** Founder 2026-11-25 — an edit that would not fit the clip (Seedance 2.5: 15,000 characters). Provisional. */
+    /** Founder 2026-11-25 — an edit that would not fit the clip (Seedance 2.5: 15,000 characters). Confirmed 2026-11-27. */
     tooLong: "That's more than this template can hold. Please shorten your changes.",
     /** Live line when a request was added but the part of it about fixed parts was left out. */
     updatedLocked: 'Added what can be changed. Fixed parts stay as they are.',
     /** Example in the request box on a template with fixed parts: a change it allows (an expression), nothing fixed. */
     lockedPlaceholder: 'e.g. Have me smile softly at the camera at the end',
-    // docs/PERSONAL-STUDIO.md §3.4.9 (S2) — the make card's styled hair and makeup choice. Provisional wording.
+    // docs/PERSONAL-STUDIO.md §3.4.9 (S2) — the make card's styled hair and makeup choice. Wording confirmed by the founder (2026-11-27).
     styleChoiceLabel: '{part} style',
     styleTemplate: 'Template style',
     styleMine: 'From my photo',
@@ -6664,8 +6688,8 @@ export const en = {
     styleOutfitPhotoCta: 'Add an outfit photo',
     styleOutfitAttached: 'Made with the outfit photo you added.',
   },
-  // docs/PERSONAL-STUDIO.md §3.4.10 — the template style preference (TWINGS_TEMPLATE_LOOK). Provisional wording until
-  // the founder confirms. A style, never a gender; the women's style is listed first everywhere.
+  // docs/PERSONAL-STUDIO.md §3.4.10 — the template style preference (TWINGS_TEMPLATE_LOOK). Wording confirmed by the
+  // founder (2026-11-27). A style, never a gender; the women's style is listed first everywhere.
   templateLook: {
     female: "Women's styles",
     male: "Men's styles",

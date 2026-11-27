@@ -388,7 +388,7 @@ describe('lock copy', () => {
     }
   });
 
-  it('is the reviewed wording (provisional)', () => {
+  it('is the confirmed wording (founder, 2026-11-27)', () => {
     expect({ ...pick(ko.editSheet), locks: ko.editSheet.locks }).toEqual({
       lockedHeading: '고정된 부분',
       lockedNote: '이 템플릿에서는 바꿀 수 없어요.',
