@@ -34,15 +34,17 @@
  * Imports from ./engines are used inside functions only (engines.ts imports this module back).
  */
 import { SUNRA_TOPUP_FEE_MULTIPLIER, SunraError, fromSunraTaskId, sunraConfigFromEnv, createSunraClient, toSunraTaskId, type SunraClient, type SunraQueueResult, type SunraQueueState } from '@/lib/sunra/client';
+import { Magi2RequestError, estimateMagi2Usd, magi2ReferenceRequest } from '@/lib/sunra/magi2';
 import { SeedanceRequestError, estimateSeedanceUsd, seedanceReferenceRequest, toSunraReferenceSyntax, unattachedReferences } from '@/lib/sunra/seedance';
 import { downloadResult } from '@/lib/brand-studio/provider/download';
-import { personalSunraFacesOpen } from '@/lib/flags';
-import { videoModelForEngine } from '@/lib/video/models';
+import { personalMagi2Open, personalSunraFacesOpen } from '@/lib/flags';
+import { UnknownVideoEngineError, videoModelForEngine, type VideoModelKey } from '@/lib/video/models';
 import { evaluateSunraPriceGuardrail, type CircuitBreakerState } from './provider-router';
 import { RenderFailure, VIDEO_RESOLUTION, looksLikeFaceRefusal, type RenderEngineDeps, type StartedVideo, type VideoPoll, type VideoRenderInput } from './engines';
 
-/** The one model this lane renders on: the endpoint the brand studio has run against the provider. */
+/** The default Seedance model this lane renders on; MAGI-2 also runs here when `TWINGS_PERSONAL_MAGI2=on`. */
 export const SUNRA_LANE_MODEL = 'seedance-2.5' as const;
+export type SunraLaneModel = typeof SUNRA_LANE_MODEL | 'magi-2';
 /**
  * Written to `render_jobs.provider_task_id` by the caller BEFORE submit, replaced by `sunra:{request_id}`
  * right after. A marker that outlives `SUNRA_DISPATCH_STALE_MS` means the submit's answer was lost.
@@ -173,31 +175,86 @@ export async function startSunraRender(
   env: Record<string, string | undefined> = process.env,
 ): Promise<StartedVideo> {
   if (!personalSunraFacesOpen(env)) throw refuse('the personal Sunra lane is closed (TWINGS_PERSONAL_SUNRA_FACES is not on)');
+  if (input.engine === 'magi-2' && !personalMagi2Open(env)) {
+    throw refuse('MAGI-2 on the personal Sunra lane is closed (TWINGS_PERSONAL_MAGI2 is not on)');
+  }
   const client = deps.sunra === undefined ? sunraClientFromEnv(env) : deps.sunra;
   if (client === null) throw new RenderFailure('no_engine_key', 'SUNRA_API_KEY is not set', false);
   // Fail closed: a billed submission whose possible charge nobody could record is not sent.
   if (!deps.onProviderCharge) throw refuse('no charge recorder: a Sunra submission is never sent without one');
 
-  const { model, seconds } = videoModelForEngine(input.engine, input.seconds);
-  if (model !== SUNRA_LANE_MODEL) throw refuse(`${input.engine} renders on ${model}; the Sunra lane renders ${SUNRA_LANE_MODEL} only`);
-  const resolution = laneResolution(input.resolution);
-  if (resolution === null) throw refuse(`the Sunra lane renders 720p or 1080p, not ${String(input.resolution)}`);
+  let model: VideoModelKey;
+  let seconds: number;
+  try {
+    ({ model, seconds } = videoModelForEngine(input.engine, input.seconds));
+  } catch (error) {
+    if (error instanceof UnknownVideoEngineError) throw refuse(error.message);
+    throw error;
+  }
+  if (model !== SUNRA_LANE_MODEL && model !== 'magi-2') {
+    throw refuse(`${input.engine} renders on ${model}; the Sunra lane renders ${SUNRA_LANE_MODEL} or magi-2 only`);
+  }
+  if (model === 'magi-2' && !personalMagi2Open(env)) {
+    throw refuse('MAGI-2 on the personal Sunra lane is closed (TWINGS_PERSONAL_MAGI2 is not on)');
+  }
+
   // Only URLs a caller chose: no photo bytes, no ModelArk asset, no fixed list outside the recipe's references.
   if (input.photo || input.assetId) throw refuse('the Sunra lane takes reference URLs only, never photo bytes or an asset');
   if (!input.references || input.references.length === 0) throw refuse('the Sunra lane needs the step references');
-  if (input.references.some((reference) => reference.type !== 'image')) throw refuse('the Sunra lane sends reference images only');
-  const images = input.references.map((reference) => reference.url);
-
-  const prompt = toSunraReferenceSyntax(input.prompt, images.length);
-  const missing = unattachedReferences(prompt, images.length);
-  if (missing.length) throw refuse(`the prompt names ${missing.join(', ')} that this request does not carry`);
 
   let request: { endpoint: string; body: Record<string, unknown> };
-  try {
-    request = seedanceReferenceRequest({ prompt, resolution, ratio: input.aspect, seconds, referenceImages: images });
-  } catch (error) {
-    if (error instanceof SeedanceRequestError) throw refuse(error.message);
-    throw error;
+  let estimateUsd: number;
+
+  if (model === 'magi-2') {
+    if (input.resolution !== undefined && input.resolution !== '1080p') {
+      throw refuse(`MAGI-2 renders 1080p only, not ${String(input.resolution)}`);
+    }
+    // Each reference by its explicit type; a type this lane does not know is refused, never guessed into audio.
+    const referenceImages: string[] = [];
+    const referenceVideos: string[] = [];
+    const referenceAudios: string[] = [];
+    for (const reference of input.references) {
+      const type: unknown = reference.type;
+      if (type === 'image') referenceImages.push(reference.url);
+      else if (type === 'video') referenceVideos.push(reference.url);
+      else if (type === 'audio') referenceAudios.push(reference.url);
+      else throw refuse(`MAGI-2 takes image, video or audio references, not ${JSON.stringify(type ?? null)}`);
+    }
+    // The prompt checks (unresolved {{…}} tokens, a reference it names but this request does not carry) run in
+    // `magi2ReferenceRequest`; the prompt is sent exactly as written (MAGI-2's reference syntax is unverified).
+    try {
+      request = magi2ReferenceRequest({
+        prompt: input.prompt,
+        seconds,
+        aspectRatio: input.aspect,
+        resolution: '1080p',
+        generateAudio: true,
+        referenceImages,
+        referenceVideos,
+        referenceAudios,
+      });
+    } catch (error) {
+      if (error instanceof Magi2RequestError) throw refuse(error.message);
+      throw error;
+    }
+    estimateUsd = sunraBookedUsd(estimateMagi2Usd(seconds));
+  } else {
+    const resolution = laneResolution(input.resolution);
+    if (resolution === null) throw refuse(`the Sunra lane renders 720p or 1080p, not ${String(input.resolution)}`);
+    if (input.references.some((reference) => reference.type !== 'image')) throw refuse('the Sunra lane sends reference images only');
+    const images = input.references.map((reference) => reference.url);
+
+    const prompt = toSunraReferenceSyntax(input.prompt, images.length);
+    const missing = unattachedReferences(prompt, images.length);
+    if (missing.length) throw refuse(`the prompt names ${missing.join(', ')} that this request does not carry`);
+
+    try {
+      request = seedanceReferenceRequest({ prompt, resolution, ratio: input.aspect, seconds, referenceImages: images });
+    } catch (error) {
+      if (error instanceof SeedanceRequestError) throw refuse(error.message);
+      throw error;
+    }
+    estimateUsd = estimatedBookedUsd(resolution, seconds);
   }
 
   let id: string;
@@ -208,17 +265,18 @@ export async function startSunraRender(
     const outcome = classifySubmitError(error);
     if (outcome.circuit) await openCircuit(deps, outcome.circuit, outcome.failure.message);
     if (outcome.ambiguous) {
-      const recorded = await recordCharge(deps, null, estimatedBookedUsd(resolution, seconds), 'estimate');
+      const recorded = await recordCharge(deps, null, estimateUsd, 'estimate');
       if (!recorded) throw new RenderFailure(outcome.failure.code, `${outcome.failure.message} (possible charge NOT recorded)`, false);
     }
     throw outcome.failure;
   }
-  return { taskId: toSunraTaskId(id), model: SUNRA_LANE_MODEL, seconds, provider: 'sunra' };
+  return { taskId: toSunraTaskId(id), model, seconds, provider: 'sunra' };
 }
 
 /* ------------------------------------------------------------------ poll */
 
 export interface SunraPollArgs {
+  model?: VideoModelKey;
   seconds: number;
   resolution?: string;
   /** Called once Sunra reports success, before the film is downloaded (the wait's "마무리"). Must not throw. */
@@ -244,8 +302,9 @@ async function failCharged(deps: SunraRenderDeps, taskId: string, failure: Rende
 }
 
 export async function pollSunraRender(taskId: string, args: SunraPollArgs, deps: SunraRenderDeps): Promise<VideoPoll> {
-  const resolution = laneResolution(args.resolution) ?? '720p';
-  const estimate = estimatedBookedUsd(resolution, args.seconds);
+  const model: SunraLaneModel = args.model === 'magi-2' ? 'magi-2' : SUNRA_LANE_MODEL;
+  const resolution: '720p' | '1080p' = model === 'magi-2' ? '1080p' : (laneResolution(args.resolution) ?? '720p');
+  const estimate = model === 'magi-2' ? sunraBookedUsd(estimateMagi2Usd(args.seconds)) : estimatedBookedUsd(resolution, args.seconds);
 
   // The caller's marker: the submit was sent (or about to be) and its answer is not on the row yet.
   if (taskId.startsWith(SUNRA_DISPATCH_PREFIX)) {
@@ -322,8 +381,13 @@ export async function pollSunraRender(taskId: string, args: SunraPollArgs, deps:
   if (file.bytes.byteLength === 0) return { status: 'pending' };
 
   if (billed !== null) {
-    const guard = evaluateSunraPriceGuardrail({ model: SUNRA_LANE_MODEL, resolution, seconds: args.seconds, actualBilledUsd: billed });
-    if (!guard.withinGuardrail) await openCircuit(deps, 'open_price_drift', `price drift ${guard.alert?.driftPercent ?? '?'}% (${resolution} ${args.seconds}s billed $${billed})`);
+    const guard = evaluateSunraPriceGuardrail({ model, resolution, seconds: args.seconds, actualBilledUsd: billed });
+    if (!guard.withinGuardrail) {
+      const reason = guard.alert?.reason === 'no_baseline'
+        ? `no pinned price baseline for ${model} ${resolution} (${args.seconds}s billed $${billed})`
+        : `price drift ${guard.alert?.driftPercent ?? '?'}% (${resolution} ${args.seconds}s billed $${billed})`;
+      await openCircuit(deps, 'open_price_drift', reason);
+    }
   }
   const mime = file.mime && file.mime !== 'application/octet-stream' ? file.mime : 'video/mp4';
   return {

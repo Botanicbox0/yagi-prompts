@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { price1080KrwFor, quoteRecipe, quoteRecipeBase, quoteRecipeByResolution } from '@/lib/recipes/pricing';
-import { authoredResolution, recipeAtResolution, recipeResolutions } from '@/lib/recipes/resolution';
+import { authoredResolution, defaultRecipeResolution, recipeAtResolution, recipeResolutions, resolveRecipeResolution } from '@/lib/recipes/resolution';
 import { parseRecipe, type Recipe } from '@/lib/recipes/schema';
 import { baseKrw } from '@/lib/twings/template-price';
 import { quoteVideo } from '@/lib/video/models';
@@ -106,5 +106,36 @@ describe('recipe price by resolution', () => {
 
   it('has no resolution prices for an image set', () => {
     expect(quoteRecipeByResolution(carousel, 0)).toEqual({});
+  });
+
+  it('treats a 1080p-only engine (MAGI-2) recipe as 1080p only and never defaults to 720p', () => {
+    const magiRecipe = {
+      version: 2,
+      slots: { selfie: { kind: 'image', source: 'user', required: true } },
+      steps: [{ id: 'film', kind: 'video', engine: 'magi-2', inputs: ['selfie'], prompt: 'The person in {{selfie}} walks.', params: { aspect: '9:16', duration: 10, resolution: '1080p' } }],
+      output: { from: 'film' },
+    } as Recipe;
+    expect(recipeResolutions(magiRecipe)).toEqual(['1080p']);
+    expect(defaultRecipeResolution(magiRecipe)).toBe('1080p');
+    expect(defaultRecipeResolution(film('720p'))).toBe('720p');
+    expect(resolveRecipeResolution(magiRecipe, '')).toBe('1080p');
+    expect(resolveRecipeResolution(magiRecipe, null)).toBe('1080p');
+    expect(resolveRecipeResolution(magiRecipe, '1080p')).toBe('1080p');
+    expect(resolveRecipeResolution(magiRecipe, '720p')).toBeNull();
+    expect(recipeAtResolution(magiRecipe, '')).toBe(magiRecipe);
+    expect(recipeAtResolution(magiRecipe, '720p')).toBe(magiRecipe);
+    expect((recipeAtResolution(magiRecipe, null).steps[0] as Extract<Recipe['steps'][number], { kind: 'video' }>).params.resolution).toBe('1080p');
+    const badMagi = {
+      ...magiRecipe,
+      steps: [{ id: 'film', kind: 'video', engine: 'magi-2', inputs: ['selfie'], prompt: 'The person in {{selfie}} walks.', params: { aspect: '9:16', duration: 10, resolution: '720p' } }],
+    } as Recipe;
+    expect((recipeAtResolution(badMagi, '').steps[0] as Extract<Recipe['steps'][number], { kind: 'video' }>).params.resolution).toBe('1080p');
+    const quotes = quoteRecipeByResolution(magiRecipe, 0);
+    expect(Object.keys(quotes)).toEqual(['1080p']);
+    expect(quotes['1080p']!.providerUsd).toBe(0.84);
+    expect(quotes['1080p']!.baseCredits).toBe(126);
+    expect(quotes['1080p']!.floorKrw).toBe(1500);
+    expect(quoteRecipeBase(magiRecipe, 0)).toEqual(quotes['1080p']);
+    expect(price1080KrwFor(magiRecipe, 1500)).toBe(0);
   });
 });

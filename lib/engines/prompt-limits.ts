@@ -1,5 +1,5 @@
-import { isEngineId, type EngineId } from '@/lib/images/engines';
-import { videoModelForEngine } from '@/lib/video/models';
+import { isEngineId, isVideoEngine, type EngineId } from '@/lib/images/engines';
+import { isVideoModelKey, videoModelForEngine, videoModelLabel } from '@/lib/video/models';
 
 /**
  * How long one prompt may be, per engine — the single source for the recipe rules, the editor's counter, the admin
@@ -15,6 +15,8 @@ import { videoModelForEngine } from '@/lib/video/models';
  * "한 클립당 … 15000자라서 클립 2개면 각각 클립당 15000자씩임".
  */
 export const SEEDANCE_25_PROMPT_CHARS = 15_000;
+/** MAGI-2 (Sand.ai on Sunra) takes a prompt of up to 15,000 characters per clip. */
+export const MAGI2_PROMPT_CHARS = 15_000;
 
 /**
  * Every other engine: the product's step cap since 2026-10-29 (a creative's published Seedance film prompt then ran
@@ -25,6 +27,7 @@ export const DEFAULT_PROMPT_CHARS = 8_000;
 /** Provider limits we have verified, per engine id. Add a row only with a source (provider docs or a founder decision). */
 const VERIFIED_PROMPT_CHARS: Partial<Record<EngineId, number>> = {
   'seedance-2.5': SEEDANCE_25_PROMPT_CHARS,
+  'magi-2': MAGI2_PROMPT_CHARS,
 };
 
 /** The longest prompt any engine accepts: what a step may hold before its own engine's rule is applied. */
@@ -42,11 +45,13 @@ export function promptCharLimit(engine: string | null | undefined): number {
 
 /**
  * A catalogue template's prompt goes to the model its engine renders on for its runtime (a Seedance 2.0 template longer
- * than 15 s renders on 2.5 — lib/video/models.ts `videoModelForEngine`). The verified limit of THAT model, or null.
+ * than 15 s renders on 2.5 — lib/video/models.ts `videoModelForEngine`). Empty or unknown engines resolve like main's
+ * default path (Seedance 2.0 up to 15 s, Seedance 2.5 above 15 s); MAGI-2 keeps 15,000.
  */
 export function templatePromptCharLimit(template: { medium: string; engine: string | null; runtimeSeconds: number | null }): number | null {
   if (template.medium !== 'video') return null;
-  return verifiedPromptCharLimit(videoModelForEngine(template.engine, template.runtimeSeconds ?? 0).model);
+  const engine = template.engine && isVideoEngine(template.engine) ? template.engine : null;
+  return verifiedPromptCharLimit(videoModelForEngine(engine, template.runtimeSeconds ?? 0).model);
 }
 
 /** "15,000" — how the limits are written in guides and messages, so a quoted number is always the constant. */
@@ -94,17 +99,31 @@ export interface ClipLength {
   limit: number;
 }
 
-const REFUSAL = /prompt length: clip (\d+)(?: \(step [a-z][a-z0-9_]*\))? is ([\d,]+) characters; Seedance 2\.5 takes up to ([\d,]+) per clip/;
+const REFUSAL = /prompt length: clip (\d+)(?: \(step [a-z][a-z0-9_]*\))? is ([\d,]+) characters; ([^;]+?) takes up to ([\d,]+) per clip/;
 
-/** A refusal a person can read as is; the admin screens read it back into their own sentence (`readPromptLengthRefusal`). */
-export function promptLengthRefusalDetail(field: string, clip: ClipLength): string {
-  const step = clip.stepId ? ` (step ${clip.stepId})` : '';
-  return `${field}: prompt length: clip ${clip.clip}${step} is ${formatPromptChars(clip.chars)} characters; Seedance 2.5 takes up to ${formatPromptChars(clip.limit)} per clip`;
+function engineNameForRefusal(engine?: string): string {
+  if (!engine || engine === 'seedance-2.5') return 'Seedance 2.5';
+  if (engine === 'magi-2') return 'MAGI-2';
+  if (isVideoModelKey(engine)) return videoModelLabel(engine);
+  return engine;
 }
 
-export function readPromptLengthRefusal(detail: unknown): { clip: number; chars: number; limit: number } | null {
+/** A refusal a person can read as is; the admin screens read it back into their own sentence (`readPromptLengthRefusal`). */
+export function promptLengthRefusalDetail(field: string, clip: ClipLength, engine?: string): string {
+  const step = clip.stepId ? ` (step ${clip.stepId})` : '';
+  const engineName = engineNameForRefusal(engine);
+  return `${field}: prompt length: clip ${clip.clip}${step} is ${formatPromptChars(clip.chars)} characters; ${engineName} takes up to ${formatPromptChars(clip.limit)} per clip`;
+}
+
+export function readPromptLengthRefusal(detail: unknown): { clip: number; chars: number; limit: number; engine?: string } | null {
   const match = typeof detail === 'string' ? REFUSAL.exec(detail) : null;
   if (!match) return null;
   const n = (s: string) => Number(s.replace(/,/g, ''));
-  return { clip: n(match[1]!), chars: n(match[2]!), limit: n(match[3]!) };
+  const engine = match[3]!;
+  return {
+    clip: n(match[1]!),
+    chars: n(match[2]!),
+    limit: n(match[4]!),
+    ...(engine !== 'Seedance 2.5' ? { engine } : {}),
+  };
 }

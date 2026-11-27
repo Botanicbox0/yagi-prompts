@@ -7,7 +7,7 @@ import { audit } from '@/lib/creator-platform/service';
 import { listSelfies, savedSelfiePhoto } from '@/lib/identity/selfie-service';
 import { createRecipeSandboxRender } from '@/lib/renders/service';
 import { listMakerFiles, type MakerAsset } from './assets';
-import { quoteRecipeBase, type RecipeQuote } from './pricing';
+import { RecipePricingError, quoteRecipeBase, type RecipeQuote } from './pricing';
 import { parseDisclosure, parsePresentation, recipeSchemaReady, type Disclosure, type Presentation } from './repo';
 import { parseRecipe, recipeCast, recipeMedium, type Recipe, type RecipeMedium } from './schema';
 import { imageTestRecipe } from './test-render';
@@ -98,13 +98,21 @@ export async function loadReviewEntries(sql: SqlRunner, ids: string[]): Promise<
     const recipe: Recipe | null = checked.ok ? checked.recipe : null;
     const renders = await sql.query<{ id: string; status: string; error_code: string | null; outputs: number; created_at: unknown }>(`select j.id,j.status,j.error_code,(select count(*)::int from render_job_outputs o where o.render_id=j.id) outputs,j.created_at
       from render_job_recipes r join render_jobs j on j.id=r.render_id where r.format_id=$1 and r.purpose='studio_review' order by j.created_at desc limit 12`, [row.id]);
+    let quote: RecipeQuote | null = null;
+    if (recipe && row.royalty_krw !== null) {
+      try {
+        quote = quoteRecipeBase(recipe, row.royalty_krw);
+      } catch (error) {
+        if (!(error instanceof RecipePricingError)) throw error;
+      }
+    }
     entries.set(row.id, {
       id: row.id, titleKo: row.title_ko, medium: recipe ? recipeMedium(recipe) : null, valid: !!recipe,
       steps: recipe ? recipe.steps.map((step) => ({ id: step.id, kind: step.kind, engine: step.engine, inputs: step.inputs, aspect: step.params.aspect, duration: step.kind === 'video' ? step.params.duration : null, resolution: step.kind === 'video' ? step.params.resolution : null, prompt: step.prompt })) : [],
       slots: recipe ? Object.entries(recipe.slots).map(([name, slot]) => ({ name, source: slot.source, kind: slot.kind, asset: slot.source === 'creator' ? slot.asset : null })) : [],
       files: await listMakerFiles(sql, row.id),
       disclosure: parseDisclosure(row.disclosure), presentation: parsePresentation(row.presentation), royaltyKrw: row.royalty_krw,
-      quote: recipe && row.royalty_krw !== null ? quoteRecipeBase(recipe, row.royalty_krw) : null,
+      quote,
       testRendersUsed: row.test_renders_used,
       renders: renders.rows.map((r) => ({ id: r.id, status: r.status, errorCode: r.error_code, outputs: r.outputs, createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at) })),
     });

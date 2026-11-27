@@ -13,14 +13,18 @@ import {
   defaultAspect,
   defaultEngine,
   engineLabel,
+  engineProvider,
   enginesForMedium,
   estimateImageUsd,
   imageSizeFor,
   isEngineId,
   isGoogleEngine,
   isOpenAiEngine,
+  isSunraEngine,
+  isVideoEngine,
   sizeString,
 } from '@/lib/images/engines';
+import { MAKER_ENGINE_IDS, STUDIO_RECIPE_ENGINE_IDS } from '@/lib/recipes/schema';
 
 /**
  * The size tables are the contract with two paid APIs. Every entry must be a size the engine will
@@ -39,10 +43,20 @@ describe('image engines (docs/TEMPLATES-IA.md §7)', () => {
     expect(defaultEngine('image')).toBe('gpt-image-2.5-flare');
     expect(defaultEngine('video')).toBe('seedance-2.0');
     expect(enginesForMedium('video')).toEqual(['seedance-2.0', 'seedance-2.5', 'kling-omni']);
+    expect(enginesForMedium('video', { includeMagi2: false })).toEqual(['seedance-2.0', 'seedance-2.5', 'kling-omni']);
+    expect(enginesForMedium('video', { includeMagi2: true })).toEqual(['seedance-2.0', 'seedance-2.5', 'kling-omni', 'magi-2']);
     expect(isEngineId('kling-3.0')).toBe(false);
     expect(isEngineId('kling-omni')).toBe(true);
+    expect(isVideoEngine('magi-2')).toBe(true);
+    expect(isEngineId('magi-2')).toBe(true);
+    expect(isSunraEngine('magi-2')).toBe(true);
+    expect(isSunraEngine('seedance-2.5')).toBe(false);
     expect(engineLabel('kling-omni')).toBe('KLING OMNI');
     expect(engineLabel('seedance-2.5')).toBe('SEEDANCE 2.5');
+    expect(engineLabel('magi-2')).toBe('MAGI-2');
+    expect(engineProvider('magi-2')).toBe('sunra');
+    expect(MAKER_ENGINE_IDS).not.toContain('magi-2');
+    expect(STUDIO_RECIPE_ENGINE_IDS).not.toContain('magi-2');
     expect(isOpenAiEngine('gpt-image-2.5-sunburst')).toBe(true);
     expect(isOpenAiEngine('seedream-5.5')).toBe(false);
     for (const id of ['gpt-image-2.5-flare', 'gpt-image-2.5-sunburst', 'gpt-image-2'] as const) {

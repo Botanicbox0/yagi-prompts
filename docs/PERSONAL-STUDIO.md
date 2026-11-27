@@ -605,6 +605,8 @@ Template styling:
 
 - PR A (#341, 병합): 0188/0189 스키마(`adult_confirmations`, `render_slot_inputs.photo_check`·`photo_checked_at`, `render_provider_state`, 제공사 값 `sunra`), 스위치 `TWINGS_PERSONAL_SUNRA_FACES`(`personalSunraFacesOpen()`), Sunra 어댑터와 게이트. 아직 아무 데서도 부르지 않는다. 클라우드 적용 필요.
 - PR B (`claude/personal-sunra-lane-b`): 아래 6.1의 만 19세 확인과 6.2의 함께 나올 사람 사진 검사. **스위치가 켜져 있을 때만 적용한다.** 꺼져 있으면 묻지도 읽지도 않고 지금과 똑같다. 새 마이그레이션은 없다.
+- M1 (`gemini/magi2-engine`, 정의 계층): `magi-2`(Sunra `sand/magi-2/{reference,image,text}-to-video`, 1080p 단일 가격, 4–30초, 사운드 포함, 초당 원가 $0.08 · 견적 $0.084/초, 클립당 15,000자)와 스위치 `TWINGS_PERSONAL_MAGI2`(`personalMagi2Open()`, `TWINGS_PERSONAL_SUNRA_FACES`와 함께 켜질 때만 열림)를 모델·가격·프롬프트 길이·관리자 양식·Sunra 렌더 어댑터에 추가했다. M1에서는 정의와 어댑터까지만 두며, 실제 주문·실행 배선(`service.ts`·`execute.ts`)은 다음 단계(M2)에서 연결하므로 스위치가 꺼져 있는 동안 기존 동작은 바뀌지 않는다.
+- M1 판매 스위치 `TWINGS_PERSONAL_MAGI2_ORDERS`(`personalMagi2OrdersOpen()`, 위 두 스위치와 함께 켜질 때만 열림): **주문 배선(M2)이 병합될 때까지 꺼 둔다.** 꺼져 있으면 MAGI-2 템플릿은 가격이 저장돼 있어도 판매 해상도가 없고 결제 금액도 없다(`lib/twings/resolution.ts` `engineOrdersOpen`). 그래서 결제 생성은 `not_for_sale`(해상도를 지정하면 `bad_resolution`), 이미 만든 주문의 승인은 `price_changed`로 결제 전에 끝나고, 템플릿 페이지에는 만들기·구매 버튼이 없다. 다른 엔진은 이 스위치를 읽지 않는다.
 - 화면 문구(`messages/*.ts`의 `cast.photo`·`renders.studio.errors`)는 2026-11-27에 대표가 확정했다. 스위치는 §5.1의 조건이 갖춰진 뒤에만 켠다(§9).
 
 ### 6.1 나이

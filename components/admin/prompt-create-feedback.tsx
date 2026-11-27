@@ -29,8 +29,9 @@ type Labels = {
   /** docs/PERSONAL-STUDIO.md §3.4.9, rule 3: a person template without a styling block, and the block to copy. */
   stylingRequired?: string;
   stylingExample?: string;
-  /** The sentence a clip-length refusal is said in (`admin.promptLengthRefusal`). */
+  /** The sentence a clip-length refusal is said in (`admin.promptLengthRefusal` and `admin.promptLengthRefusalForEngine`). */
   lengthCopy?: string;
+  lengthCopyForEngine?: string;
 };
 
 /**
@@ -50,7 +51,7 @@ export function refusalMessage(
     return { message: labels.stylingRequired ?? labels.invalid, lock: null, example: labels.stylingExample ?? null };
   }
   // Founder 2026-11-25: a clip over its length limit, said as on the template's page.
-  const length = result.field === 'promptText' && labels.lengthCopy ? promptLengthRefusalText(result.detail, labels.lengthCopy) : null;
+  const length = result.field === 'promptText' && labels.lengthCopy ? promptLengthRefusalText(result.detail, labels.lengthCopy, labels.lengthCopyForEngine) : null;
   if (length !== null) return { message: length, lock: null };
   const message =
     result.field === 'useCase' ? labels.useCase
