@@ -300,6 +300,7 @@ describe('Inbox B Step 0 parity snapshots (untouched hosts)', () => {
         <HubDetail
           entry={assetEntry}
           copy={KO_DICT.studioLibrary}
+          editedMark={KO_DICT.brandStudio.gallery.editedMark}
           name="Hero Bottle"
           liked={false}
           main={acts.main}
