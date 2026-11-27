@@ -433,13 +433,16 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
     expect(guard.map((g) => g.tgname)).toEqual(['platform_private_format_guard']);
     expect(guard[0]!.src).toContain("current_setting('app.format_revision', true)");
     expect(guard[0]!.src).toContain("c.payout = 'company'");
+    // 0206 keeps 0192's `a.created_at = transaction_timestamp()` and adds the stamped transaction id.
     expect(guard[0]!.src).toContain('a.created_at = transaction_timestamp()');
+    expect(guard[0]!.src).toContain('a.txid = txid_current()');
     const { rows: immutable } = await db.query<{ n: number }>(
       "select count(*)::int as n from pg_trigger where tgrelid = 'public.platform_format_revisions'::regclass and tgname = 'platform_format_revisions_immutable'",
     );
     expect(immutable[0]!.n).toBe(1);
     await db.exec(readFileSync(join(MIGRATIONS_DIR, '0192_core_format_revision.sql'), 'utf8'));
-    expect((await db.query<{ n: number }>("select count(*)::int as n from pg_trigger where tgrelid = 'public.platform_format_revisions'::regclass and not tgisinternal")).rows[0]!.n).toBe(1);
+    // The immutability trigger and 0206's txid stamp.
+    expect((await db.query<{ n: number }>("select count(*)::int as n from pg_trigger where tgrelid = 'public.platform_format_revisions'::regclass and not tgisinternal")).rows[0]!.n).toBe(2);
     await db.close();
 
     const glue = readFileSync(join(MIGRATIONS_DIR, '0193_glue_format_revision.sql'), 'utf8');
@@ -452,6 +455,57 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
     expect(glue).not.toMatch(/grant[^;]*(update|delete)[^;]*platform_format_revisions/i);
     expect(glue).not.toMatch(/create\s+policy/i);
     for (const file of ['0192_core_format_revision.sql', '0193_glue_format_revision.sql']) {
+      expect(readFileSync(join(MIGRATIONS_DIR, file), 'utf8').startsWith('-- 클라우드 적용 필요'), file).toBe(true);
+    }
+  });
+
+  it('0206/0207 — the evidence rows carry a stamped transaction id: nullable, no default, one stamp each, twice is safe', async () => {
+    const db = await freshDb();
+    const columns = async () =>
+      (await db.query<{ table_name: string; data_type: string; is_nullable: string; column_default: string | null }>(
+        `select table_name, data_type, is_nullable, column_default from information_schema.columns
+          where table_schema = 'public' and column_name = 'txid' order by table_name`,
+      )).rows;
+    const stamps = async () =>
+      (await db.query<{ tgname: string; rel: string; fn: string }>(
+        `select t.tgname, t.tgrelid::regclass::text as rel, p.proname as fn from pg_trigger t join pg_proc p on p.oid = t.tgfoid
+          where not t.tgisinternal and p.proname = 'platform_stamp_txid' order by t.tgname`,
+      )).rows;
+    const expectedColumns = [
+      { table_name: 'platform_audit', data_type: 'bigint', is_nullable: 'YES', column_default: null },
+      { table_name: 'platform_format_revisions', data_type: 'bigint', is_nullable: 'YES', column_default: null },
+    ];
+    const expectedStamps = [
+      { tgname: 'platform_audit_txid', rel: 'platform_audit', fn: 'platform_stamp_txid' },
+      { tgname: 'platform_format_revisions_txid', rel: 'platform_format_revisions', fn: 'platform_stamp_txid' },
+    ];
+    expect(await columns()).toEqual(expectedColumns);
+    expect(await stamps()).toEqual(expectedStamps);
+    const guardSource = async () =>
+      (await db.query<{ src: string }>("select prosrc as src from pg_proc where proname = 'platform_private_format'")).rows[0]!.src;
+    for (const line of [
+      'a.txid = txid_current()',
+      'r.txid = txid_current()',
+      // 0192's two lines stay: never weaker than 0192 (a restored dump can repeat a transaction id, not a start time too).
+      'a.created_at = transaction_timestamp()',
+      'r.created_at = transaction_timestamp()',
+      "current_setting('app.format_revision', true)",
+      "c.payout = 'company'",
+    ]) {
+      expect(await guardSource()).toContain(line);
+    }
+    await db.exec(readFileSync(join(MIGRATIONS_DIR, '0206_core_format_revision_txid.sql'), 'utf8'));
+    expect(await columns()).toEqual(expectedColumns);
+    expect(await stamps()).toEqual(expectedStamps);
+    await db.close();
+
+    const glue = readFileSync(join(MIGRATIONS_DIR, '0207_glue_format_revision_txid.sql'), 'utf8');
+    for (const fn of ['platform_stamp_txid()', 'platform_private_format()']) {
+      expect(glue).toContain(`revoke all on function ${fn} from public,anon,authenticated`);
+      expect(glue).toContain(`alter function ${fn} set search_path=public,pg_temp`);
+    }
+    expect(glue.replace(/--[^\n]*/g, '')).not.toMatch(/\bgrant\b|create\s+policy/i);
+    for (const file of ['0206_core_format_revision_txid.sql', '0207_glue_format_revision_txid.sql']) {
       expect(readFileSync(join(MIGRATIONS_DIR, file), 'utf8').startsWith('-- 클라우드 적용 필요'), file).toBe(true);
     }
   });
