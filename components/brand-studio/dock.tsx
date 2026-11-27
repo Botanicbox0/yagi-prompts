@@ -75,6 +75,27 @@ import { usePageDrag } from "./use-page-drag";
 import { Tray } from "./tray";
 import { filmLimitLine } from "./use-dock";
 import type { FilmState } from "./use-studio";
+import type { StudioVideoModesCopy } from "@/messages/studio-video-modes";
+import {
+  draftAndStateAfterVideoAttach,
+  type PendingVideoMode,
+  type VideoModeOptionState,
+  type VideoStudioMode,
+} from "./video/video-modes-model";
+import { VideoModeBar, VideoModeEditToggle, VideoModeUndoLine, VideoModeWell } from "./video/video-modes-ui";
+
+export interface VideoModesDockProp {
+  activeMode: VideoStudioMode;
+  pendingMode: PendingVideoMode | null;
+  availability: Record<VideoStudioMode, VideoModeOptionState>;
+  copy: StudioVideoModesCopy;
+  undo: boolean;
+  forcedLimitMessage?: string | null;
+  onSelectMode(mode: VideoStudioMode): void;
+  onUndoRemoveVideo(): void;
+  onToggleEdit(nextMethod: "edit" | "reference"): void;
+  onRetryReadFilm?(): void;
+}
 
 export interface DockProps {
   /** The screen's medium; the bar never offers the other one. */
@@ -147,6 +168,8 @@ export interface DockProps {
   onTabText?(text: string): void;
   /** Designs one model's tab ("아직 설계 전", or one that could not be designed). */
   onDesignOne?(model: string): void;
+  /** Video studio modes (slice VM-1): present ONLY on the video dock when `BRAND_STUDIO_VIDEO_MODES` is open. */
+  videoModes?: VideoModesDockProp | null;
 }
 
 /** The bar's real height as `--bs-dock-h` on the page, so the wall, popovers and the help launcher clear it. */
@@ -232,6 +255,21 @@ export function Dock(props: DockProps) {
   const remix = remixActive(draft, tray);
   const effectiveMethod = remix ? resolveUnifiedRemixMethod(draft, tray) : draft.method;
   const effectiveDraft = remix && effectiveMethod !== draft.method ? { ...draft, method: effectiveMethod } : draft;
+  const resolvedVideoCopy = props.videoCopy ?? (locale === "ko" ? studioVideoKo : studioVideoEn);
+  const pendingNeedVideo = mode === "video" && Boolean(props.videoModes?.pendingMode) && !remix;
+  const unreadableBlueprint =
+    mode === "video" &&
+    Boolean(props.videoModes) &&
+    remix &&
+    effectiveMethod === "blueprint" &&
+    props.film?.status === "done" &&
+    !props.film.sheet;
+  const modeBlocked = pendingNeedVideo || unreadableBlueprint;
+  const guidanceText = pendingNeedVideo
+    ? props.videoModes!.copy.status.needVideo
+    : unreadableBlueprint
+      ? resolvedVideoCopy.remix.unreadable
+      : null;
   const fit = remix ? remixFit(effectiveDraft, tray) : null;
   const bpFit = remix ? remixBlueprintFit(effectiveDraft, tray) : null;
   const rawLimits = controls.model.medium === "video" ? (controls.model as StudioVideoModel).referenceVideoSeconds : null;
@@ -252,7 +290,6 @@ export function Dock(props: DockProps) {
       : null;
   const filmTrayItem = remix ? (tray.find((item) => item.kind === "video") ?? null) : null;
   const filmAsset = filmTrayItem?.assetId ?? null;
-  const resolvedVideoCopy = props.videoCopy ?? (locale === "ko" ? studioVideoKo : studioVideoEn);
 
   const [dropActive, setDropActive] = useState(false);
   // Video studio: while a reference or a file is dragged anywhere over the page, the bar says it takes it.
@@ -363,7 +400,16 @@ export function Dock(props: DockProps) {
     const inserted = applyMentionInsertion(text, cursor, mention.atIndex, candidate.token);
     if (candidate.attachItem) {
       const nextTray = [...tray, candidate.attachItem];
-      const nextDraft = draftAfterAttach(draft, candidate.attachItem, Boolean(props.mode), nextTray);
+      const nextDraft =
+        mode === "video" && props.videoModes?.pendingMode && candidate.attachItem.kind === "video"
+          ? draftAndStateAfterVideoAttach({
+              draft,
+              nextTray,
+              item: candidate.attachItem,
+              ui: { pendingMode: props.videoModes.pendingMode, pickedVideoModeByHand: true, undo: null, forcedLimitMessage: null },
+              copy,
+            }).draft
+          : draftAfterAttach(draft, candidate.attachItem, Boolean(props.mode), nextTray);
       if (props.onAttachItem) {
         props.onAttachItem(candidate.attachItem);
       } else if (candidate.attachItem.assetId) {
@@ -478,10 +524,30 @@ export function Dock(props: DockProps) {
       onDragLeave={dragOut}
       onDrop={drop}
     >
-      {props.toast && (
-        <p className="bs-dock-toast" aria-hidden="true" data-studio-toast>
-          {props.toast}
-        </p>
+      {mode === "video" && props.videoModes ? (
+        <>
+          {props.toast && (
+            <p className="bs-dock-toast" aria-hidden="true" data-studio-toast>
+              {props.toast}
+            </p>
+          )}
+          {controls.model.medium === "video" && (
+            <VideoModeBar
+              activeMode={props.videoModes.activeMode}
+              availability={props.videoModes.availability}
+              model={controls.model as StudioVideoModel}
+              copy={props.videoModes.copy}
+              disabled={busy}
+              onSelect={props.videoModes.onSelectMode}
+            />
+          )}
+        </>
+      ) : (
+        props.toast && (
+          <p className="bs-dock-toast" aria-hidden="true" data-studio-toast>
+            {props.toast}
+          </p>
+        )
       )}
       <Tray
         items={tray}
@@ -502,21 +568,72 @@ export function Dock(props: DockProps) {
         onMove={props.onTrayMove ?? (() => {})}
         onBrowse={props.onBrowse}
       />
-      {remix && (
-        <RemixPanel
-          draft={effectiveDraft}
-          film={props.film}
-          copy={copy}
-          disabled={busy}
-          limit={filmLimit}
-          editable={fit?.editable ?? true}
-          videoSeconds={filmTrayItem?.seconds ?? null}
-          rawMaxSeconds={rawLimits?.max ?? 30}
-          videoCopy={props.videoCopy}
-          videoAssetId={filmAsset}
-          onTrimVideo={filmTrayItem && props.onTrimVideo ? () => props.onTrimVideo!(filmTrayItem) : undefined}
-          onChange={set}
-        />
+      {mode === "video" && props.videoModes ? (
+        <>
+          {remix && (
+            <RemixPanel
+              draft={effectiveDraft}
+              film={props.film}
+              copy={copy}
+              disabled={busy}
+              limit={filmLimit ?? props.videoModes.forcedLimitMessage ?? null}
+              editable={fit?.editable ?? true}
+              videoSeconds={filmTrayItem?.seconds ?? null}
+              rawMaxSeconds={rawLimits?.max ?? 30}
+              videoCopy={props.videoCopy}
+              videoAssetId={filmAsset}
+              hideMethodRow
+              onTrimVideo={filmTrayItem && props.onTrimVideo ? () => props.onTrimVideo!(filmTrayItem) : undefined}
+              onChange={set}
+            />
+          )}
+          {remix &&
+            props.videoModes.activeMode === "motion_transfer" &&
+            (fit?.editable ?? true) &&
+            !blocking &&
+            !(
+              (draft.clipCount ?? 1) >= 2 ||
+              (typeof draft.targetTotalSeconds === "number" &&
+                controls.model.medium === "video" &&
+                draft.targetTotalSeconds > (controls.model as StudioVideoModel).maxSeconds)
+            ) && (
+              <VideoModeEditToggle
+                effectiveMethod={effectiveMethod}
+                copy={props.videoModes.copy.status}
+                disabled={busy}
+                onToggle={props.videoModes.onToggleEdit}
+              />
+            )}
+          {!remix && props.videoModes.pendingMode && controls.model.medium === "video" && (
+            <VideoModeWell
+              mode={props.videoModes.pendingMode}
+              model={controls.model as StudioVideoModel}
+              copy={props.videoModes.copy.well}
+              dropActive={dropActive}
+              dropReady={pageDrag || dropActive}
+              disabled={busy}
+              onFiles={props.onFiles}
+              onBrowse={props.onBrowse}
+            />
+          )}
+        </>
+      ) : (
+        remix && (
+          <RemixPanel
+            draft={effectiveDraft}
+            film={props.film}
+            copy={copy}
+            disabled={busy}
+            limit={filmLimit}
+            editable={fit?.editable ?? true}
+            videoSeconds={filmTrayItem?.seconds ?? null}
+            rawMaxSeconds={rawLimits?.max ?? 30}
+            videoCopy={props.videoCopy}
+            videoAssetId={filmAsset}
+            onTrimVideo={filmTrayItem && props.onTrimVideo ? () => props.onTrimVideo!(filmTrayItem) : undefined}
+            onChange={set}
+          />
+        )
       )}
       <div
         ref={wrapRef}
@@ -574,7 +691,7 @@ export function Dock(props: DockProps) {
               value={text}
               placeholder={mode === "video" ? d.placeholderVideo : d.placeholder}
               aria-describedby={
-                [message ? `${id}-message` : null, caretLine ? `${id}-mention` : null, activeTab && activeTab.status !== "ready" ? `${id}-tab-state` : null].filter(Boolean).join(" ") ||
+                [message || guidanceText ? `${id}-message` : null, caretLine ? `${id}-mention` : null, activeTab && activeTab.status !== "ready" ? `${id}-tab-state` : null].filter(Boolean).join(" ") ||
                 undefined
               }
               aria-expanded={mention.open ? true : undefined}
@@ -727,10 +844,44 @@ export function Dock(props: DockProps) {
           {message}
         </p>
       )}
-      {props.notice && (
-        <p className="bs-dock-note" role="status" data-studio-dock-notice>
-          {props.notice}
-        </p>
+      {mode === "video" && props.videoModes ? (
+        <>
+          {guidanceText && (
+            <p
+              id={message ? undefined : `${id}-message`}
+              className="bs-dock-guidance"
+              role="status"
+              data-studio-dock-guidance={unreadableBlueprint ? "unreadable" : "need-video"}
+            >
+              <span>{guidanceText}</span>
+              {unreadableBlueprint && props.videoModes.onRetryReadFilm && (
+                <button
+                  type="button"
+                  className="bs-link-btn bs-vmode-retry-btn"
+                  disabled={busy}
+                  onClick={props.videoModes.onRetryReadFilm}
+                  data-video-mode-read-again
+                >
+                  {props.videoModes.copy.status.readAgain}
+                </button>
+              )}
+            </p>
+          )}
+          {props.notice && (
+            <p className="bs-dock-note" role="status" data-studio-dock-notice>
+              {props.notice}
+            </p>
+          )}
+          {props.videoModes.undo && (
+            <VideoModeUndoLine copy={props.videoModes.copy.status} onUndo={props.videoModes.onUndoRemoveVideo} />
+          )}
+        </>
+      ) : (
+        props.notice && (
+          <p className="bs-dock-note" role="status" data-studio-dock-notice>
+            {props.notice}
+          </p>
+        )
       )}
       <div className="bs-controls">
         <div className="bs-controls-set" data-studio-controls>
@@ -876,12 +1027,12 @@ export function Dock(props: DockProps) {
             className="bs-btn bs-submit"
             data-variant="solid"
             data-size="md"
-            disabled={busy || enhancing || Boolean(blocking)}
-            aria-label={busy ? d.submitting : fill(d.submitLabel, { cost })}
+            disabled={busy || enhancing || Boolean(blocking) || modeBlocked}
+            aria-label={busy ? d.submitting : modeBlocked ? d.submit : fill(d.submitLabel, { cost })}
             data-studio-submit
           >
             <span>{busy ? d.submitting : d.submit}</span>
-            {!busy && (
+            {!busy && !modeBlocked && (
               <span className="bs-submit-cost bs-num" data-studio-quote>
                 {cost}
               </span>

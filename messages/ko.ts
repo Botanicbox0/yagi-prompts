@@ -18,6 +18,7 @@ import { intakeBriefKo } from './intake-brief';
 import { studioShellKo } from './studio-shell';
 import { studioLibraryKo } from './studio-library';
 import { studioVideoKo } from './studio-video';
+import { studioVideoModesKo } from './studio-video-modes';
 import { studioReviewKo } from './studio-review';
 import { studioLayersKo } from './studio-layers';
 import { studioComposeKo } from './studio-compose';
@@ -83,6 +84,7 @@ export const ko: Dictionary = {
   studioShell: studioShellKo,
   studioLibrary: studioLibraryKo,
   studioVideo: studioVideoKo,
+  studioVideoModes: studioVideoModesKo,
   studioReview: studioReviewKo,
   studioLayers: studioLayersKo,
   studioCompose: studioComposeKo,

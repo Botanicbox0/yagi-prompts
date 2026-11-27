@@ -3,12 +3,15 @@
 import { useMemo, useState } from "react";
 import type { StudioJobView, StudioOutputView } from "@/lib/brand-studio/contracts";
 import type { StudioVideoCopy } from "@/messages/studio-video";
+import { startRefDrag } from "../refs";
 import w from "./video-workspace.module.css";
 
 export interface RecentCreationsPanelProps {
   allJobs: StudioJobView[];
   canEdit: boolean;
   copy: StudioVideoCopy["workspace"]["drawer"];
+  /** Video studio modes (VM-1): makes recent cards draggable onto the dock via `startRefDrag`. */
+  draggableRefs?: boolean;
   onAttachOutput(output: StudioOutputView, label: string): void;
   onAddVideoToSequence(output: StudioOutputView, label: string): void;
 }
@@ -17,6 +20,7 @@ export function RecentCreationsPanel({
   allJobs,
   canEdit,
   copy,
+  draggableRefs = false,
   onAttachOutput,
   onAddVideoToSequence,
 }: RecentCreationsPanelProps) {
@@ -81,7 +85,17 @@ export function RecentCreationsPanel({
         ) : (
           <div className={w.recentGrid} data-recent-creations-grid>
             {items.map(({ output, label }) => (
-              <div key={output.id} className={w.recentCard} data-recent-output={output.id}>
+              <div
+                key={output.id}
+                className={w.recentCard}
+                data-recent-output={output.id}
+                {...(draggableRefs && canEdit
+                  ? {
+                      draggable: true,
+                      onDragStart: (event) => startRefDrag(event, { outputId: output.id }),
+                    }
+                  : {})}
+              >
                 <div className={w.recentThumb}>
                   {output.thumbUrl ? (
                     <img src={output.thumbUrl} alt={label} loading="lazy" />

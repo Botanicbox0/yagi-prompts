@@ -455,17 +455,20 @@ export function useStudio({
     [api],
   );
 
-  // A reference video is read once per asset; a failed reading is simply no reading.
+  // A reference video is read once per asset by default; `retry: true` runs the same `film.analyze` call again.
   const [films, setFilms] = useState<Record<string, FilmState>>({});
   const asked = useRef(new Set<string>());
   const analyzeFilm = useCallback(
-    (assetId: string) => {
-      if (asked.current.has(assetId)) return;
+    async (assetId: string, options?: { retry?: boolean }): Promise<ApiResult<StudioOps["film.analyze"][1]> | null> => {
+      if (!options?.retry && asked.current.has(assetId)) return null;
       asked.current.add(assetId);
       setFilms((current) => ({ ...current, [assetId]: { status: "loading" } }));
-      void api.call("film.analyze", { organizationId, assetId }).then((result) =>
-        setFilms((current) => ({ ...current, [assetId]: { status: "done", sheet: isFailure(result) ? null : result.sheet } })),
-      );
+      const result = await api.call("film.analyze", { organizationId, assetId });
+      setFilms((current) => ({
+        ...current,
+        [assetId]: { status: "done", sheet: isFailure(result) ? null : result.sheet },
+      }));
+      return result;
     },
     [api, organizationId],
   );

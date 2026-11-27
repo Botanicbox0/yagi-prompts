@@ -46,6 +46,7 @@ import type { Dictionary } from "@/lib/i18n/dictionaries";
 import { SendPageScope } from "@/components/brand-send/file-send";
 import type { ViewerSendProp } from "@/components/brand-send/model";
 import type { StudioVideoCopy } from "@/messages/studio-video";
+import type { StudioVideoModesCopy } from "@/messages/studio-video-modes";
 import { createStudioApi, isFailure, measureInBrowser, uploadProblem, type StudioApi } from "../api";
 import { ClosedAllowanceBanner } from "../closed-allowance-banner";
 import { EXAMPLES, jobsFor } from "../board";
@@ -91,6 +92,8 @@ import { ReversePanel } from "./reverse";
 import { collectSessionRunAdds, createSessionRunBook } from "./session-runs";
 import { fillText } from "./reverse-model";
 import { SequenceRail, type SequenceInspectorTab, type SequenceRailHeight } from "./sequence-rail";
+import { VideoModeExplainer } from "./mode-explainer";
+import { useVideoModes } from "./use-video-modes";
 import w from "./video-workspace.module.css";
 import { validateVideoEditDurationSeconds } from "./workspace-model";
 
@@ -124,6 +127,10 @@ export interface VideoStudioWorkspaceProps {
   api?: StudioApi;
   /** `BRAND_STUDIO_MUSIC_GENERATION`: music generation controls in the sequence rail. Closed by default. */
   musicGeneration?: boolean;
+  /** `BRAND_STUDIO_VIDEO_MODES` (VM-1): top-of-dock mode switch, drop well, and first-use explainer. */
+  videoModes?: boolean;
+  /** `dict.studioVideoModes`, passed ONLY when `videoModes` is open. */
+  videoModesCopy?: StudioVideoModesCopy;
 }
 
 const GUIDE_VIDEOS = [
@@ -482,7 +489,10 @@ export function VideoStudioWorkspace({
   send = null,
   api,
   musicGeneration = false,
+  videoModes = false,
+  videoModesCopy,
 }: VideoStudioWorkspaceProps) {
+  const videoModesOn = Boolean(videoModes && videoModesCopy);
   const wc = videoCopy.workspace;
   const spineCtx = useProjectSpine();
   const spineOpen = spineCtx?.open ?? spine?.open ?? undefined;
@@ -1259,6 +1269,7 @@ export function VideoStudioWorkspace({
   // Analyze reference video automatically when `@video1` enters the dock tray.
   const remixOn = remixActive(dock.draft, dock.tray);
   const remixVideo = remixOn ? dock.tray.find((item) => item.kind === "video") : undefined;
+  const remixFilm = remixVideo?.assetId ? (studio.films[remixVideo.assetId] ?? null) : null;
   const { analyzeFilm } = studio;
   const { setDraft } = dock;
   useEffect(() => {
@@ -1273,6 +1284,21 @@ export function VideoStudioWorkspace({
       setDraft((current) => (current.method === "edit" ? { ...current, method: "blueprint", methodPinned: false } : current));
     }
   }, [editable, setDraft]);
+
+  const videoModesState = useVideoModes({
+    enabled: videoModesOn,
+    modesCopy: videoModesCopy,
+    dock,
+    copy,
+    videoCopy,
+    remixOn,
+    remixFilm,
+    remixVideoAssetId: remixVideo?.assetId ?? null,
+    analyzeFilm,
+  });
+  const attachItem = videoModesState.attachItem;
+  const removeTrayItem = videoModesState.removeTrayItem;
+  const clearForcedLimit = videoModesState.clearForcedLimit;
 
   const parentOf = useCallback((outputId: string | null) => findOutput(allJobs, outputId), [allJobs]);
   const lookup = useMemo(
@@ -1349,9 +1375,9 @@ export function VideoStudioWorkspace({
   const attachSource = useCallback(
     (source: RefSource) => {
       const item = sourceItem(source);
-      if (item) dock.attach(item);
+      if (item) attachItem(item);
     },
-    [dock, sourceItem],
+    [attachItem, sourceItem],
   );
 
   // Initial URL / prop preselection (`?start=reverse&asset=<uuid>`, `?tab=edit&asset=<uuid>`)
@@ -1439,11 +1465,11 @@ export function VideoStudioWorkspace({
             if ((result as { projectGone?: boolean }).projectGone) return;
             return say(studioUploadErrorLine(copy, result.code, result.reason));
           }
-          if (attach) dock.attach(trayItemFromAsset(result.asset));
+          if (attach) attachItem(trayItemFromAsset(result.asset));
         }),
       );
     },
-    [copy, dock, studio],
+    [attachItem, copy, dock, studio],
   );
 
   const handleLocalSequenceFiles = useCallback(
@@ -1599,9 +1625,10 @@ export function VideoStudioWorkspace({
         copyList[idx] = replacement;
         return copyList;
       });
+      clearForcedLimit();
       dock.setDraft((current) => draftAfterAttach(current, replacement, true, dock.tray));
     },
-    [dock],
+    [clearForcedLimit, dock],
   );
 
   /* --------------------------------------------- Header Export & Share Handlers */
@@ -1696,7 +1723,7 @@ export function VideoStudioWorkspace({
       if (clip.assetId) {
         const asset = lookup.asset(clip.assetId);
         if (asset) {
-          dock.attach(trayItemFromAsset(asset));
+          attachItem(trayItemFromAsset(asset));
           if (railHeight === "full") setRailHeight("compact");
           window.setTimeout(focusPrompt, 0);
           return;
@@ -1705,13 +1732,13 @@ export function VideoStudioWorkspace({
       if (clip.outputId) {
         const output = lookup.output(clip.outputId);
         if (output) {
-          dock.attach(trayItemFromOutput(output, clip.label));
+          attachItem(trayItemFromOutput(output, clip.label));
           if (railHeight === "full") setRailHeight("compact");
           window.setTimeout(focusPrompt, 0);
           return;
         }
       }
-      dock.attach({
+      attachItem({
         key: clip.assetId ? `a:${clip.assetId}` : `o:${clip.outputId ?? clip.id}`,
         kind: "video",
         name: clip.label,
@@ -1726,7 +1753,7 @@ export function VideoStudioWorkspace({
       if (railHeight === "full") setRailHeight("compact");
       window.setTimeout(focusPrompt, 0);
     },
-    [dock, lookup, railHeight],
+    [attachItem, lookup, railHeight],
   );
 
   const [extendingScene, setExtendingScene] = useState(false);
@@ -1847,7 +1874,7 @@ export function VideoStudioWorkspace({
           if (isFailure(res)) setStatus(res.code === "conflict" ? copy.viewer.deleteBusy : errorLine(copy, res.code));
         });
       case "reference":
-        dock.attach(trayItemFromOutput(output, copy.viewer.label));
+        attachItem(trayItemFromOutput(output, copy.viewer.label));
         if (railHeight === "full") setRailHeight("compact");
         return focusPrompt();
       case "download":
@@ -1981,6 +2008,78 @@ export function VideoStudioWorkspace({
   // The folded prompt bar takes the same drops as the open one (same attach and upload path), and says so.
   const pillDrag = usePageDrag(Boolean(dockOpen && dockCollapsed), acceptsDrag);
   const [pillOver, setPillOver] = useState(false);
+
+  const dockElement = state && dockOpen && !dockCollapsed ? (
+    <Dock
+      organizationId={organizationId}
+      organizationName={organizationName}
+      mode="video"
+      draft={dock.draft}
+      tray={dock.tray}
+      labels={trayLabels(dock.tray, copy)}
+      copy={copy}
+      locale={locale}
+      billingCopy={billingCopy}
+      planCatalogue={planCatalogue}
+      allowance={effectiveAllowance ?? state.allowance}
+      credits={dockCredits(dock.draft, dock.tray)}
+      busy={dock.busy}
+      message={dock.message}
+      errorCode={dock.errorCode}
+      notice={dock.notice}
+      toast={status}
+      film={remixFilm}
+      uploading={studio.uploads.map((u) => u.name)}
+      enhancing={dock.enhancing}
+      enhanced={dock.enhanced}
+      videoCopy={videoCopy}
+      availableAssets={assets}
+      recentOutputs={recentOutputs}
+      onAttachItem={attachItem}
+      onTrimVideo={openTrimForTrayItem}
+      onDraft={dock.setDraft}
+      onTrayUpdate={dock.update}
+      onTrayRemove={removeTrayItem}
+      onTrayMove={dock.move}
+      onSubmit={() => {
+        if (videoModesState.blockSubmitIfPending()) return;
+        setStatus(null);
+        const trayAssetIds = dock.tray
+          .map((t) => t.assetId)
+          .filter((id): id is string => typeof id === "string" && id.length > 0);
+        const submittedPrompt = dock.draft.prompt || dock.draft.change || "";
+        const context = projectContextRef.current;
+        const actionScope = spineOpenRef.current;
+
+        // Lazy Create ("첫 생성 제출 또는 첫 클립 추가 시"): the project is made, and the references
+        // recorded on it, only once a run was accepted. A press the bar refuses (empty prompt, unknown
+        // mention, two reference videos …) or the server refuses leaves no project and no `?project=`.
+        // Runs carry no video-project id, so making it right after the accepted run changes nothing
+        // for the run; its clip joins the sequence when it lands, as before. If another project was
+        // opened (or a new one started) meanwhile, nothing is recorded for this press.
+        void dock.submit().then((started) => {
+          if (!started) return;
+          setStageTab("history");
+          setStatus(copy.state.started);
+          if (projectContextRef.current !== context) return;
+          const known = timelineRef.current;
+          const refsChanged = addProjectReferenceAssetIds(known, trayAssetIds) !== known;
+          setTimeline((prev) => addProjectReferenceAssetIds(prev, trayAssetIds));
+          setAfterRun({ firstPrompt: submittedPrompt, context, refsChanged, ...(actionScope ? { actionScope } : {}) });
+        });
+      }}
+      onDropSource={attachSource}
+      onFiles={(files) => void uploadFiles(files, true)}
+      onBrowse={() => {
+        setSheetOpen(true);
+        if (videoModesOn) videoModesState.openLibrary();
+        document.getElementById(searchId)?.focus();
+      }}
+      onEnhance={() => void dock.enhanceNow()}
+      onUndoEnhance={dock.undoEnhance}
+      {...(videoModesState.dockProp ? { videoModes: videoModesState.dockProp } : {})}
+    />
+  ) : null;
 
   const viewerModal = viewer.open && viewer.index >= 0 && (
     <Viewer
@@ -2201,73 +2300,19 @@ export function VideoStudioWorkspace({
                     {pillDrag ? copy.tray.drop : wc.projects.expandDock}
                   </button>
                 </div>
+              ) : videoModesOn && videoModesCopy && videoModesState.explainerMode ? (
+                <>
+                  <VideoModeExplainer
+                    mode={videoModesState.explainerMode}
+                    copy={videoModesCopy}
+                    model={videoModel}
+                    hidden={!videoModesState.hydrated}
+                    onDismiss={videoModesState.dismissExplainer}
+                  />
+                  {dockElement}
+                </>
               ) : (
-                <Dock
-                  organizationId={organizationId}
-                  organizationName={organizationName}
-                  mode="video"
-                  draft={dock.draft}
-                  tray={dock.tray}
-                  labels={trayLabels(dock.tray, copy)}
-                  copy={copy}
-                  locale={locale}
-                  billingCopy={billingCopy}
-                  planCatalogue={planCatalogue}
-                  allowance={effectiveAllowance ?? state.allowance}
-                  credits={dockCredits(dock.draft, dock.tray)}
-                  busy={dock.busy}
-                  message={dock.message}
-                  errorCode={dock.errorCode}
-                  notice={dock.notice}
-                  toast={status}
-                  film={remixVideo?.assetId ? (studio.films[remixVideo.assetId] ?? null) : null}
-                  uploading={studio.uploads.map((u) => u.name)}
-                  enhancing={dock.enhancing}
-                  enhanced={dock.enhanced}
-                  videoCopy={videoCopy}
-                  availableAssets={assets}
-                  recentOutputs={recentOutputs}
-                  onAttachItem={dock.attach}
-                  onTrimVideo={openTrimForTrayItem}
-                  onDraft={dock.setDraft}
-                  onTrayUpdate={dock.update}
-                  onTrayRemove={dock.remove}
-                  onTrayMove={dock.move}
-                  onSubmit={() => {
-                    setStatus(null);
-                    const trayAssetIds = dock.tray
-                      .map((t) => t.assetId)
-                      .filter((id): id is string => typeof id === "string" && id.length > 0);
-                    const submittedPrompt = dock.draft.prompt || dock.draft.change || "";
-                    const context = projectContextRef.current;
-                    const actionScope = spineOpenRef.current;
-
-                    // Lazy Create ("첫 생성 제출 또는 첫 클립 추가 시"): the project is made, and the references
-                    // recorded on it, only once a run was accepted. A press the bar refuses (empty prompt, unknown
-                    // mention, two reference videos …) or the server refuses leaves no project and no `?project=`.
-                    // Runs carry no video-project id, so making it right after the accepted run changes nothing
-                    // for the run; its clip joins the sequence when it lands, as before. If another project was
-                    // opened (or a new one started) meanwhile, nothing is recorded for this press.
-                    void dock.submit().then((started) => {
-                      if (!started) return;
-                      setStageTab("history");
-                      setStatus(copy.state.started);
-                      if (projectContextRef.current !== context) return;
-                      const known = timelineRef.current;
-                      const refsChanged = addProjectReferenceAssetIds(known, trayAssetIds) !== known;
-                      setTimeline((prev) => addProjectReferenceAssetIds(prev, trayAssetIds));
-                      setAfterRun({ firstPrompt: submittedPrompt, context, refsChanged, ...(actionScope ? { actionScope } : {}) });
-                    });
-                  }}
-                  onDropSource={attachSource}
-                  onFiles={(files) => void uploadFiles(files, true)}
-                  onBrowse={() => {
-                    setSheetOpen(true);
-                    document.getElementById(searchId)?.focus();
-                  }}
-                  onEnhance={() => void dock.enhanceNow()}
-                  onUndoEnhance={dock.undoEnhance}
-                />
+                dockElement
               )
             )}
           </div>
@@ -2290,8 +2335,9 @@ export function VideoStudioWorkspace({
               allJobs={allJobs}
               canEdit={canCreate}
               copy={wc.drawer}
+              {...(videoModesOn ? { draggableRefs: true } : {})}
               onAttachOutput={(output, label) => {
-                dock.attach(trayItemFromOutput(output, label));
+                attachItem(trayItemFromOutput(output, label));
                 if (railHeight === "full") setRailHeight("compact");
                 focusPrompt();
               }}
@@ -2323,6 +2369,7 @@ export function VideoStudioWorkspace({
               onFiles={(files) => void uploadFiles(files, false)}
               onUpdate={(assetId, patch) => studio.updateAsset({ assetId, ...patch })}
               onDelete={studio.deleteAsset}
+              {...(videoModesOn ? { openSignal: videoModesState.libraryOpenSignal } : {})}
               copy={libraryCopy}
             />
           </>

@@ -1037,3 +1037,42 @@ button.bs-sibling:focus-visible { outline: 2px solid var(--ys-focus); outline-of
 .bs-talk-field-tools .bs-revise-send[aria-disabled="true"] { background: var(--ys-raised); color: var(--ys-ink-muted); cursor: not-allowed; }
 /* Nothing said yet: one quiet line right above the input. */
 .bs-talk-first { margin: 0; color: var(--ys-ink-secondary); font-size: 13px; line-height: 1.5; word-break: keep-all; }
+
+/* Video studio modes (slice VM-1): top-of-dock 3-mode switch, empty-video drop well, quiet edit toggle & undo. */
+.bs-vmode-bar { display: grid; gap: 4px; }
+.bs-vmode-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-width: 0; }
+.bs-vmode-seg { display: inline-flex; flex: none; gap: 2px; padding: 3px; border-radius: var(--ys-r-pill); background: var(--ys-panel); }
+.bs-vmode-option { display: inline-flex; align-items: center; min-height: 28px; padding: 0 12px; border: 0; border-radius: var(--ys-r-pill); background: transparent; color: var(--ys-ink-secondary); font: inherit; font-size: 12.5px; font-weight: 500; letter-spacing: -0.02em; white-space: nowrap; cursor: pointer; transition: background-color 150ms var(--ys-ease), color 150ms var(--ys-ease); }
+.bs-vmode-option:hover:not(:disabled):not([aria-disabled="true"]):not([data-selected]) { background: var(--ys-hover); color: var(--ys-ink); }
+.bs-vmode-option[data-selected] { background: var(--ys-active-bg); color: var(--ys-active-fg); font-weight: 600; }
+.bs-vmode-option:focus-visible { outline: 2px solid var(--ys-focus); outline-offset: 2px; }
+.bs-vmode-option:disabled, .bs-vmode-option[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; }
+.bs-vmode-oneliner { margin: 0; min-width: 0; font-size: 12.5px; line-height: 1.4; color: var(--ys-ink-secondary); word-break: keep-all; }
+.bs-vmode-reasons { display: grid; gap: 2px; }
+.bs-vmode-reason { padding: 0 2px; font-size: 12px; color: var(--ys-ink-muted); }
+/* W7: visible circle + focus ring on dark dock surface; tooltip opens on hover and keyboard :focus-within. */
+.bs-vmode-tip .bs-tip-btn { border: 1px solid var(--ys-line-strong); background: var(--ys-raised); color: var(--ys-ink-secondary); }
+.bs-vmode-tip .bs-tip-btn:hover, .bs-vmode-tip .bs-tip-btn:focus-visible { border-color: var(--ys-ink); background: var(--ys-hover); color: var(--ys-ink); }
+.bs-vmode-tip-body { max-width: min(320px, calc(100vw - 32px)); gap: 6px; border: 1px solid var(--ys-line-strong); }
+.bs-vmode-tip-row { display: grid; gap: 1px; }
+.bs-vmode-tip-row strong { font-size: 11px; font-weight: 600; color: var(--ys-ink-muted); }
+.bs-vmode-tip-row span { font-size: 12px; color: var(--ys-ink); word-break: keep-all; }
+.bs-vmode-tip-note { padding-top: 4px; border-top: 1px solid var(--ys-hairline); font-size: 11.5px; color: var(--ys-ink-muted); word-break: keep-all; }
+/* W5: three distinct well states — rest (dashed neutral), drag on page (dashed accent tint), over target (solid accent). */
+.bs-vmode-well { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 14px; padding: 12px 14px; border: 1px dashed var(--ys-line-strong); border-radius: 16px; background: var(--ys-panel); transition: border-color 150ms var(--ys-ease), background-color 150ms var(--ys-ease); }
+.bs-vmode-well[data-drop-ready] { border: 1.5px dashed var(--ys-accent); background: color-mix(in srgb, var(--ys-accent) 8%, var(--ys-panel)); }
+.bs-vmode-well[data-drop-target] { border: 1.5px solid var(--ys-accent); background: color-mix(in srgb, var(--ys-accent) 12%, var(--ys-raised)); }
+.bs-vmode-well-copy { display: grid; gap: 2px; min-width: 0; }
+.bs-vmode-well-title { margin: 0; font-size: 13.5px; font-weight: 600; color: var(--ys-ink); word-break: keep-all; }
+.bs-vmode-well-limits { margin: 0; font-size: 12px; color: var(--ys-ink-muted); }
+.bs-vmode-well-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.bs-vmode-edit-row { display: flex; align-items: center; justify-content: flex-start; padding-left: 2px; }
+.bs-vmode-edit-btn { min-height: 28px; padding: 0 10px; font-size: 12px; font-weight: 500; color: var(--ys-ink-secondary); }
+.bs-vmode-undo { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+/* Round 3 items 1 & 3: neutral guidance line (`role="status"`) — never error/alert colour; leaves `.bs-dock-message` untouched. */
+.bs-dock-guidance { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 0; padding: 0 4px; font-size: 13px; color: var(--ys-ink-muted); word-break: keep-all; }
+.bs-vmode-retry-btn { font-size: 12.5px; color: var(--ys-ink-secondary); }
+.bs-vmode-retry-btn:hover:not(:disabled) { color: var(--ys-ink); }
+@media (prefers-reduced-motion: reduce) {
+  .bs-vmode-option, .bs-vmode-well { transition: none; }
+}
