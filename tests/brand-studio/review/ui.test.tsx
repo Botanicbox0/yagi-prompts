@@ -21,7 +21,18 @@ const state = vi.hoisted(() => ({
   list: null as unknown,
   details: {} as Record<string, unknown>,
   calls: [] as string[],
+  sendSwitchesOn: false,
+  sendOpenFor: false,
 }));
+
+vi.mock("@/lib/brand-rooms/members-channel", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/brand-rooms/members-channel")>();
+  return {
+    ...actual,
+    brandSendSwitchesOn: () => state.sendSwitchesOn,
+    brandSendOpenFor: async () => state.sendOpenFor,
+  };
+});
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
@@ -129,6 +140,8 @@ beforeEach(() => {
   state.locale = "ko";
   state.org = { id: ORG, name: "Fixture brand", role: "owner", denied: undefined };
   state.calls = [];
+  state.sendSwitchesOn = false;
+  state.sendOpenFor = false;
   seed();
 });
 afterEach(() => vi.unstubAllEnvs());
@@ -158,6 +171,16 @@ describe("/brand/studio/review", () => {
     expect(html).toContain("data-studio-review");
     expect(html).toContain("data-review-share-open");
     expect(state.calls).toEqual(["list", `detail:${R1}`]);
+  });
+
+  it("hides data-review-share-open on image reviews when 보내기 is open while keeping it on video reviews and for closed 보내기", async () => {
+    vi.stubEnv("BRAND_STUDIO_V2", "on");
+    state.sendSwitchesOn = true;
+    state.sendOpenFor = true;
+    const imgHtml = await page({ review: R2 });
+    expect(imgHtml).not.toContain("data-review-share-open");
+    const vidHtml = await page({ review: R1 });
+    expect(vidHtml).toContain("data-review-share-open");
   });
 });
 

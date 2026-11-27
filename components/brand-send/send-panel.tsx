@@ -32,6 +32,7 @@ import styles from './send-panel.module.css';
 export interface SendPanelProps {
   organizationId: string;
   fileRef: SendFileRef;
+  fileKind?: 'image' | 'video' | 'audio';
   copy: SendCopy;
   locale: SendLocale;
   transport?: SendTransport;
@@ -52,6 +53,7 @@ const EMPTY_INVITE_TOKENS: Readonly<Record<string, Record<string, string>>> = {}
 export function SendPanel({
   organizationId,
   fileRef,
+  fileKind,
   copy,
   locale,
   transport,
@@ -174,12 +176,15 @@ export function SendPanel({
     return res;
   }, [activeTransport]);
 
+  const resolvedKind = state.file?.kind ?? fileKind ?? null;
+  const allowInvite = Boolean(invite && resolvedKind !== 'image');
+
   const handleLookup = useCallback(
     async (email: string) => {
-      if (!activeInviteTransport) return { ok: false as const, code: 'invalid' as const };
+      if (!activeInviteTransport || !allowInvite) return { ok: false as const, code: 'invalid' as const };
       return activeInviteTransport.lookup(email);
     },
-    [activeInviteTransport],
+    [activeInviteTransport, allowInvite],
   );
 
   const handleSend = useCallback(
@@ -366,8 +371,8 @@ export function SendPanel({
                 hint={copy.sendHint}
                 onSend={handleSend}
                 loadPeople={loadPeople}
-                invite={invite}
-                lookupAddress={invite ? handleLookup : undefined}
+                invite={allowInvite}
+                lookupAddress={allowInvite ? handleLookup : undefined}
                 showNoMentionHint
                 submitDisabled={state.postGone}
                 hideNotFoundError

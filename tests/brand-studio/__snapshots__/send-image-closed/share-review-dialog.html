@@ -1,0 +1,303 @@
+<dialog class="srd-backdrop" data-share-review-dialog="true" aria-labelledby="_R_0_"><style>
+.srd-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  width: auto;
+  height: auto;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  border: 0;
+  padding: 16px;
+  overflow: hidden;
+  color: inherit;
+  background: rgba(9, 9, 11, 0.36);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+.srd-backdrop:not([open]) {
+  display: none;
+}
+.srd-backdrop::backdrop {
+  background: transparent;
+}
+.srd-backdrop:focus {
+  outline: none;
+}
+.srd-modal {
+  width: min(580px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  padding: 24px;
+  border-radius: 20px;
+  background: var(--ys-surface, #111113);
+  color: var(--ys-ink, #ededed);
+  border: 1px solid var(--ys-line-strong, rgba(255, 255, 255, 0.18));
+  box-shadow: var(--ys-float, inset 0 1px 0 0 rgba(255, 255, 255, 0.06));
+  font-family: var(--bw-font, 'Pretendard Variable', Pretendard, 'Geist', -apple-system, BlinkMacSystemFont, sans-serif);
+  box-sizing: border-box;
+  display: grid;
+  gap: 16px;
+}
+.srd-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.srd-title {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 650;
+  letter-spacing: -0.035em;
+  line-height: 1.25;
+  color: var(--ys-ink, #ededed);
+}
+.srd-close {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--ys-raised, #18181b);
+  color: var(--ys-ink, #ededed);
+  cursor: pointer;
+}
+.srd-close:hover {
+  background: var(--ys-hover, #27272a);
+}
+.srd-card {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 16px;
+  background: var(--ys-panel, #18181b);
+  border: 1px solid var(--ys-hairline, rgba(255, 255, 255, 0.08));
+}
+.srd-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.srd-card-title {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  color: var(--ys-ink, #ededed);
+}
+.srd-sub {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ys-ink-secondary, rgba(255, 255, 255, 0.64));
+}
+.srd-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--ys-surface, #111113);
+  color: var(--ys-ink, #ededed);
+  font-family: var(--ys-mono, 'Geist Mono', ui-monospace, SFMono-Regular, monospace);
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.srd-field {
+  display: grid;
+  gap: 6px;
+}
+.srd-label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ys-ink-secondary, rgba(255, 255, 255, 0.64));
+}
+.srd-input,
+.srd-select,
+.srd-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--ys-hairline, rgba(255, 255, 255, 0.08));
+  border-radius: 12px;
+  background: var(--ys-input-bg, #111113);
+  color: var(--ys-ink, #ededed);
+  font: inherit;
+  font-size: 13.5px;
+  padding: 10px 12px;
+}
+.srd-textarea {
+  min-height: 68px;
+  resize: vertical;
+  line-height: 1.45;
+}
+.srd-input::placeholder,
+.srd-textarea::placeholder {
+  color: var(--ys-placeholder, rgba(255, 255, 255, 0.42));
+}
+.srd-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.srd-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 13px;
+  border: 1px solid var(--ys-hairline, rgba(255, 255, 255, 0.08));
+  border-radius: 999px;
+  background: var(--ys-surface, #111113);
+  color: var(--ys-ink-secondary, rgba(255, 255, 255, 0.64));
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  cursor: pointer;
+}
+.srd-pill:hover:not(:disabled) {
+  background: var(--ys-hover, #27272a);
+  color: var(--ys-ink, #ededed);
+}
+.srd-pill[aria-pressed="true"] {
+  background: var(--ys-active-bg, #ededed);
+  color: var(--ys-active-fg, #09090b);
+}
+.srd-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.srd-expiry-group {
+  display: inline-flex;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--ys-surface, #111113);
+}
+.srd-expiry-btn {
+  min-height: 28px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ys-ink-secondary, rgba(255, 255, 255, 0.64));
+  font-family: var(--ys-mono, 'Geist Mono', ui-monospace, SFMono-Regular, monospace);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.srd-expiry-btn[aria-pressed="true"] {
+  background: var(--ys-active-bg, #ededed);
+  color: var(--ys-active-fg, #09090b);
+}
+.srd-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--ys-accent, #ff58ae);
+  color: var(--ys-on-accent, #09090b);
+  box-shadow: var(--ys-cta-shadow, none);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  cursor: pointer;
+}
+.srd-primary:hover:not(:disabled) {
+  background: var(--ys-accent-hover, #ff389f);
+}
+.srd-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--ys-active-bg, #ededed);
+  color: var(--ys-active-fg, #09090b);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  text-decoration: none;
+  cursor: pointer;
+}
+.srd-secondary:hover:not(:disabled) {
+  opacity: 0.88;
+}
+.srd-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 0 13px;
+  border: 1px solid var(--ys-hairline, rgba(255, 255, 255, 0.08));
+  border-radius: 999px;
+  background: var(--ys-surface, #111113);
+  color: var(--ys-ink, #ededed);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  text-decoration: none;
+  cursor: pointer;
+}
+.srd-ghost:hover:not(:disabled) {
+  background: var(--ys-hover, #27272a);
+}
+.srd-primary:disabled,
+.srd-secondary:disabled,
+.srd-ghost:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.srd-minted {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--ys-surface, #111113);
+}
+.srd-url {
+  flex: 1 1 220px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--ys-mono, 'Geist Mono', ui-monospace, SFMono-Regular, monospace);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ys-ink, #ededed);
+}
+.srd-error {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ys-danger, #f87171);
+}
+.srd-modal :is(button, a, input, select, textarea):focus-visible {
+  outline: 2px solid var(--ys-focus, #ededed);
+  outline-offset: 2px;
+}
+</style><div class="srd-modal"><div class="srd-head"><h2 id="_R_0_" class="srd-title">검수 · 외부 공유 · 대화방 연결</h2><button type="button" class="srd-close" aria-label="닫기" data-share-bridge-close="true">×</button></div><label class="srd-field"><span class="srd-label">검수 제목</span><input type="text" class="srd-input" maxLength="120" data-share-bridge-title="true" value="Still check"/></label><section class="srd-card" data-share-bridge-link-section="true"><div class="srd-card-head"><h3 class="srd-card-title">로그인 없이 확인할 수 있는 공유 링크 만들기</h3></div><p class="srd-sub">계정이 없는 외부 담당자도 링크 하나로 재생하고 피드백을 남길 수 있습니다.</p><div class="srd-toggles"><button type="button" class="srd-pill" aria-pressed="true" data-share-bridge-allow-comments="true">타임코드·화면 그리기 코멘트 허용</button><button type="button" class="srd-pill" aria-pressed="false" data-share-bridge-allow-download="true">다운로드 허용</button></div><div class="srd-row"><span class="srd-label">만료 기간</span><div class="srd-expiry-group" role="group" aria-label="만료 기간"><button type="button" class="srd-expiry-btn" aria-pressed="false" data-share-bridge-expiry="7">7일</button><button type="button" class="srd-expiry-btn" aria-pressed="true" data-share-bridge-expiry="14">14일</button><button type="button" class="srd-expiry-btn" aria-pressed="false" data-share-bridge-expiry="30">30일</button></div></div><label class="srd-field"><span class="srd-label">비밀번호 (선택)</span><input type="password" class="srd-input" maxLength="64" placeholder="비워두면 비밀번호 없음 (4~64자)" data-share-bridge-password="true" value=""/></label><div class="srd-row"><button type="button" class="srd-primary" data-share-bridge-mint="true">공유 링크 발급</button></div></section><section class="srd-card" data-share-bridge-review-section="true"><h3 class="srd-card-title">정밀 검수 화면 열기</h3><p class="srd-sub">타임코드 구간 코멘트, 화면 위 펜·화살표 그리기, 버전 나란히 비교(A/B)로 검토합니다.</p><div><button type="button" class="srd-secondary" data-share-bridge-open-review="true">정밀 검수 화면 열기 →</button></div></section><section class="srd-card" data-share-bridge-chat-section="true"><h3 class="srd-card-title">고객사 · 팀 대화방으로 보내기</h3><p class="srd-sub">프로젝트 대화방에 시안 카드를 올리고 바로 대화를 이어갑니다.</p><label class="srd-field"><span class="srd-label">연결할 프로젝트 룸</span><select class="srd-select" data-share-bridge-project-select="true"><option value="" selected="">스튜디오 공유 · 검수함 (자동 연결)</option></select></label><textarea class="srd-textarea" maxLength="2000" placeholder="함께 전달할 메모 (선택 — 예: 00:04 제품 클로즈업 톤 확인 부탁드립니다)" data-share-bridge-chat-note="true"></textarea><div><button type="button" class="srd-secondary" data-share-bridge-send-chat="true">대화방으로 보내고 열기 →</button></div></section></div></dialog>

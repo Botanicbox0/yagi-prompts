@@ -39,6 +39,7 @@ export interface ProjectFilesTabProps {
   initialCategory?: RoomFilesCategory;
   initialStoryboard?: { boardId?: string; frameId?: string };
   initialReview?: { reviewId?: string; atMs?: number; commentId?: string };
+  sendOpen?: boolean;
 }
 
 export function ProjectFilesTab({
@@ -57,6 +58,7 @@ export function ProjectFilesTab({
   initialCategory = "all",
   initialStoryboard,
   initialReview,
+  sendOpen = false,
 }: ProjectFilesTabProps) {
   const [category, setCategory] = useState<RoomFilesCategory>(initialCategory);
   // A draft open in review mode takes the tab: the filter, the brief and the storyboards step aside
@@ -191,6 +193,7 @@ export function ProjectFilesTab({
             canTalk={canTalk}
             initial={initialReview}
             onReviewModeChange={setReviewing}
+            {...(sendOpen ? { sendOpen: true } : {})}
           />
         </section>
       ) : null}
@@ -210,6 +213,7 @@ export function ProjectFilesTab({
             filterStatus="approved"
             finalsEmptyText={filesCopy.finalsEmpty}
             onReviewModeChange={setReviewing}
+            {...(sendOpen ? { sendOpen: true } : {})}
           />
         </section>
       ) : null}

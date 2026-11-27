@@ -18,6 +18,7 @@
 import { Fragment, useEffect, useId, useRef, useState, type FocusEvent, type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode } from "react";
 import type { StudioJobView, StudioOutputView } from "@/lib/brand-studio/contracts";
 import { creditsOf } from "@/lib/brand-studio/credits";
+import { tileModelLabel, tileModelParts } from "@/lib/brand-studio/model-label";
 import { studioModelOrLegacy, type StudioMedium } from "@/lib/brand-studio/models";
 import { canCancel, outputRatio, ratioNumber, slotRatio } from "../board";
 import { credits, fill, runFailedLine, type StudioCopy, type StudioLocale } from "../copy";
@@ -86,6 +87,8 @@ export interface WallProps {
   canGenerate: boolean;
   /** Owner or editor: may like, file, save, delete and send. */
   canEdit: boolean;
+  /** Server-gated 보내기 open: external-link sharing is off for images while 보내기 handles internal sharing. */
+  sendOpen?: boolean;
   /** Owner or editor: may stop their team's waiting runs. */
   canStop?: boolean;
   stopping?: string | null;
@@ -205,14 +208,18 @@ export function tileMenuKeys(input: {
   inMenu?: { select?: boolean; like?: boolean; reference?: boolean };
   /** A preset workflow run (`StudioJobView.preset`): its text is never shown, so it is not made again from here. */
   preset?: boolean;
+  /** A LayerEditor save (`StudioJobView.edited`): no generation settings to rerun or reuse. */
+  edited?: boolean;
   /** Brand project spine open + canCreate: shows "프로젝트로 옮기기" right after "폴더에 담기" (§4.6). */
   canMoveProject?: boolean;
+  /** 보내기 open for this organization: hides external-link share on images while video keeps it. */
+  sendOpen?: boolean;
 }): TileMenuKey[] {
-  const { canGenerate, canEdit, kind, image, sized, saved, copyable = false, inMenu = {}, preset = false, canMoveProject = false } = input;
+  const { canGenerate, canEdit, kind, image, sized, saved, copyable = false, inMenu = {}, preset = false, edited = false, canMoveProject = false, sendOpen = false } = input;
   const keys: TileMenuKey[] = ["open"];
   if (inMenu.select) keys.push("select");
   if (canGenerate && kind === "region_edit") keys.push("reuse");
-  else if (canGenerate && kind !== "video_final" && !preset) keys.push("rerun", "reuse");
+  else if (canGenerate && kind !== "video_final" && !preset && !edited) keys.push("rerun", "reuse");
   if (copyable) keys.push("copy-prompt");
   if (canGenerate && image) keys.push("region");
   if (canEdit && image && sized) keys.push("decorate");
@@ -221,7 +228,8 @@ export function tileMenuKeys(input: {
   if (canEdit) keys.push("folder");
   if (canEdit && canMoveProject) keys.push("project-move");
   if (canEdit && inMenu.like) keys.push("like");
-  if (canEdit) keys.push("review", "campaign");
+  if (canEdit && !(image && sendOpen)) keys.push("review");
+  if (canEdit) keys.push("campaign");
   if (canEdit && !saved) keys.push("save");
   keys.push("download");
   if (canEdit) keys.push("delete");
@@ -648,16 +656,43 @@ function VersionBadge({ n, copy, extra }: { n: number | undefined; copy: StudioC
   );
 }
 
+const isImageJob = (job: StudioJobView) => job.kind === "image" || job.kind === "region_edit";
+
+function ModelChipContent({
+  model,
+  edited,
+  editedMark,
+}: {
+  model: string | null | undefined;
+  edited: boolean;
+  editedMark: string;
+}) {
+  const parts = tileModelParts({ model, edited, editedMark });
+  if (!parts) return null;
+  if (parts.name && parts.edited) {
+    return (
+      <>
+        <span className="bs-tile-model-name">{parts.name}</span>
+        <span className="bs-tile-model-sep" aria-hidden="true">{" · "}</span>
+        <span className="bs-tile-model-mark">{parts.edited}</span>
+      </>
+    );
+  }
+  return <>{parts.name ?? parts.edited}</>;
+}
+
 /**
- * The model of a run made with others in one request, on its place in the wall (nothing for a lone run).
+ * The model of an image run or a run made with others in one request, on its place in the wall.
  * `inline`: in the flow of a failed tile's centred column, so it never sits on its "다시" button.
  */
-function GroupModelBadge({ job, inline = false }: { job: StudioJobView; inline?: boolean }) {
-  const model = job.group ? studioModelOrLegacy(job.model) : null;
-  if (!model) return null;
+function GroupModelBadge({ job, editedMark, inline = false }: { job: StudioJobView; editedMark: string; inline?: boolean }) {
+  const show = Boolean(job.group) || isImageJob(job);
+  const parts = show ? tileModelParts({ model: job.model, edited: Boolean(job.edited), editedMark }) : null;
+  if (!parts) return null;
+  const split = Boolean(parts.name && parts.edited);
   return (
-    <span className="bs-tile-model" data-studio-tile-model={job.model} data-inline={inline ? "" : undefined}>
-      {model.label}
+    <span className="bs-tile-model" data-studio-tile-model={job.model} data-inline={inline ? "" : undefined} data-edited={split ? "split" : undefined}>
+      <ModelChipContent model={job.model} edited={Boolean(job.edited)} editedMark={editedMark} />
     </span>
   );
 }
@@ -668,8 +703,10 @@ function PendingTile({ entry, copy, canStop = false, stopping = null, onCancel, 
   return (
     <div className="bs-tile" data-state="pending" data-job-status={job.status} data-studio-job={job.id} style={tileStyle(entry.ratio)} role="group" aria-label={fill(copy.board.pending, { n: entry.n })} {...groupTile(job, group)}>
       <span className="bs-stage">{stage}</span>
-      <GroupModelBadge job={job} />
-      <VersionBadge n={badges.get(job.id)} copy={copy} extra={job.kind === "region_edit" ? copy.board.editBadge : null} />
+      <div className="bs-tile-foot">
+        <GroupModelBadge job={job} editedMark={copy.gallery.editedMark} />
+        <VersionBadge n={badges.get(job.id)} copy={copy} extra={job.kind === "region_edit" ? copy.board.editBadge : null} />
+      </div>
       {canStop && onCancel && canCancel(job) && entry.n === job.outputs.length + 1 && (
         <button
           type="button"
@@ -709,7 +746,7 @@ function FailedTile({ entry, copy, canGenerate, onRetry, onRemove, canRemove, se
       <span className="bs-tile-failed-icon" aria-hidden="true">
         <StudioIcon name="info" />
       </span>
-      <GroupModelBadge job={job} inline />
+      <GroupModelBadge job={job} editedMark={copy.gallery.editedMark} inline />
       <p className="bs-tile-reason">{reason}</p>
       <VersionBadge n={badges.get(job.id)} copy={copy} />
       {/* A preset workflow run is made again from the workflow, not from here (its text is never shown). */}
@@ -733,7 +770,7 @@ function ResultTile(
       moveLabel: string;
     },
 ) {
-  const { entry, n, copy, locale, canGenerate, canEdit, library, onAction, onNotice, onMoveJobs, badges, select, group, canMoveProject, moveLabel } = props;
+  const { entry, n, copy, locale, canGenerate, canEdit, sendOpen = false, library, onAction, onNotice, onMoveJobs, badges, select, group, canMoveProject, moveLabel } = props;
   const { output, job } = entry.item;
   const key = resultKey(output.id);
   const selected = select.has(key);
@@ -748,6 +785,9 @@ function ResultTile(
   const image = output.kind === "image";
   const sized = Boolean(output.width && output.height);
   const model = studioModelOrLegacy(job.model);
+  const modelParts = tileModelParts({ model: job.model, edited: Boolean(job.edited), editedMark: g.editedMark });
+  const modelLabel = tileModelLabel({ model: job.model, edited: Boolean(job.edited), editedMark: g.editedMark });
+  const splitChip = Boolean(modelParts?.name && modelParts.edited);
   const usage = job.estimateKrw > 0 && job.outputs.length > 0 ? Math.ceil(creditsOf(job.estimateKrw) / Math.max(1, job.countedOutputs ?? job.outputs.length)) : 0;
   const open = () => onAction("open", entry.item);
 
@@ -818,7 +858,9 @@ function ResultTile(
     copyable: Boolean(promptText),
     inMenu: { select: !fit.check, like: canEdit && !fit.like, reference: canGenerate && (phone || fit.tools < wanted) },
     preset: Boolean(job.preset),
+    edited: Boolean(job.edited),
     ...(canMoveProject ? { canMoveProject: true } : {}),
+    ...(sendOpen ? { sendOpen: true } : {}),
   }).map((key) => ({ key, ...item[key] }));
 
   return (
@@ -884,15 +926,17 @@ function ResultTile(
             }
           />
         )}
-        {job.group && model && (
-          // Made with other models in one request: which model this one is, without hovering.
-          <span className="bs-tile-model" data-studio-tile-model={job.model} aria-hidden="true">
-            {model.label}
+        {(image || job.group) && modelParts && (
+          // Every image result (and any tile made together with other models) shows its model bottom-left at rest.
+          <span className="bs-tile-model" data-studio-tile-model={job.model} data-edited={splitChip ? "split" : undefined} aria-hidden="true">
+            <ModelChipContent model={job.model} edited={Boolean(job.edited)} editedMark={g.editedMark} />
           </span>
         )}
-        {(model || usage > 0) && (
+        {(job.edited ? modelLabel : model || usage > 0) && (
           <span className="bs-tile-info">
-            {model && <span className="bs-tile-info-name">{model.label}</span>}
+            {(job.edited ? modelLabel : model?.label) && (
+              <span className="bs-tile-info-name">{job.edited ? modelLabel : model!.label}</span>
+            )}
             {usage > 0 && <span className="bs-tile-info-credits bs-num">{credits(copy.credits.amount, usage, locale)}</span>}
           </span>
         )}

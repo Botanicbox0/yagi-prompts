@@ -200,8 +200,16 @@ export interface LayerEditorProps {
    */
   onFillSource?(assetId: string, jobIds?: readonly string[]): void;
   /** Stores the exported PNG as a new asset. `transient` marks "빈 곳 채우기"'s source: its role is not read. */
-  upload(file: File, options?: { transient?: boolean }): Promise<{ ok: true; asset: StudioAssetView } | StudioFailure>;
+  upload(file: File, options?: { transient?: boolean }): Promise<{ ok: true; asset: StudioAssetView } | (StudioFailure & { projectGone?: boolean })>;
   onSaved(asset: StudioAssetView): void;
+  /** When `BRAND_STUDIO_EDIT_TO_WALL` is open, saves the flattened image directly to the studio wall. */
+  saveEdited?(
+    file: File,
+    options?: { requestId?: string },
+  ): Promise<{ ok: true; job: StudioJobView } | (StudioFailure & { projectGone?: boolean })>;
+  onSavedToWall?(job: StudioJobView): void;
+  /** Maps server failure codes (storage quota, upload policy limits, gone open project) into customer text. */
+  errorText?(failure: StudioFailure & { projectGone?: boolean }): string;
   onClose(): void;
 }
 

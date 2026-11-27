@@ -114,7 +114,7 @@ describe("library rail", () => {
     expect(html).toContain('aria-selected="true" aria-controls');
     expect(html).toContain("data-studio-upload");
     expect(html.match(/draggable="true"/g)).toHaveLength(3);
-    expect(html).toContain(`aria-label="Bottle 1 참조로 넣기"`);
+    expect(html).toContain(`aria-label="Bottle 1 레퍼런스에 추가"`);
     expect(html).toContain(">0:06<");
     expect(html).toContain(">1:15<");
     expect(html).toContain("jingle.mp3");

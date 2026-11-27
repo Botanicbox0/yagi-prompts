@@ -130,6 +130,7 @@ export interface ProjectReviewTabProps {
   finalsEmptyText?: string;
   /** Told when a draft opens in review mode (the stage takes the page) and when it closes back to the list. */
   onReviewModeChange?: (open: boolean) => void;
+  sendOpen?: boolean;
 }
 
 /** The share button + dialog for one storyboard or one review item. */
@@ -139,6 +140,10 @@ export interface ShareButtonProps {
   locale: RoomLocale;
   copy: Dictionary["roomsReview"];
   canEdit: boolean;
+  manageOnly?: boolean;
+  hidden?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  onSharesChanged?: (liveCount: number) => void;
 }
 
 /* --------------------------------------------------------------- overview (H) */

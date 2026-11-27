@@ -5,7 +5,7 @@ import { acceptBrandInvitation, cancelBrandInvitation } from '@/lib/brands/works
 import { runStudioOperation } from '@/lib/brand-studio/service';
 import { sendInviteAcceptHooks } from '@/lib/brand-rooms/send-invite';
 import type { SendInboxPage, SendPosted, SendThreadPage } from '@/lib/brand-rooms/send-contracts';
-import { as, closeWorld, code, imageResult, libraryPicture, ok, openSend, selfProject, sendWorld, type SendWorld } from '../send/helpers';
+import { as, closeWorld, code, libraryVideo, ok, openSend, selfProject, sendWorld, videoResult, type SendWorld } from '../send/helpers';
 import { invitation, openInvites, person, recording, tokenOf, waiting } from './helpers';
 
 /**
@@ -26,7 +26,7 @@ beforeEach(async () => {
   w = await sendWorld();
   openSend(w.f.orgId);
   openInvites();
-  file = (await imageResult(w, w.f.projectId)).outputId;
+  file = (await videoResult(w, w.f.projectId)).outputId;
 });
 afterEach(async () => {
   vi.restoreAllMocks();
@@ -60,7 +60,7 @@ describe('accepting delivers the waiting lines (decision 7)', () => {
   it('names the new member on every waiting line, tells them once by 4a’s rule, puts the threads in their 알림함 unread, and clears the rows', async () => {
     const first = await sendInviting(editor(), 'new@example.com');
     // A second line (an unfiled library entry, by the owner) waits for the same invitation.
-    const asset = await libraryPicture(w);
+    const asset = await libraryVideo(w);
     const second = await ok<SendPosted>(w, owner(), 'send.post', { requestId: randomUUID(), file: { kind: 'asset', assetId: asset }, body: 'And this one', invites: ['new@example.com'] });
     expect(second.invited![0]!.result).toBe('reused');
     const invitee = await person(w.f.sql, 'new@example.com');

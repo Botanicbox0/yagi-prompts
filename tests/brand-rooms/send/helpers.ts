@@ -14,7 +14,7 @@ import { resetSpineProbe } from '@/lib/brand-studio/brand-projects';
 import type { StudioBrandProject } from '@/lib/brand-studio/contracts';
 import { studioEnv } from '@/lib/brand-studio/env';
 import { runStudioOperation } from '@/lib/brand-studio/service';
-import { requestId, seedImageAsset, studioDeps, studioFixture, viewerOf, type StudioFixture } from '../../brand-studio/server/helpers';
+import { requestId, seedImageAsset, seedVideoAsset, studioDeps, studioFixture, viewerOf, type StudioFixture } from '../../brand-studio/server/helpers';
 import { seedRun } from '../../brand-studio/server/revision-helpers';
 
 export const STUDIO_ENV = { BRAND_STUDIO_PROVIDER: 'fake', BRAND_STUDIO_DEFAULT_LANE: 'sunra_api' };
@@ -86,6 +86,20 @@ export async function imageResult(w: SendWorld, projectId: string | null = null,
 /** A ready library picture; filed in `projectId` when given. */
 export async function libraryPicture(w: SendWorld, projectId: string | null = null, organizationId = w.f.orgId): Promise<string> {
   const id = await seedImageAsset(w.deps, organizationId, w.f.ids.owner);
+  if (projectId) await w.f.sql.query('update brand_studio_assets set brand_project_id = $2 where id = $1', [id, projectId]);
+  return id;
+}
+
+/** A video run with one ready result; filed in `projectId` when given. */
+export async function videoResult(w: SendWorld, projectId: string | null = null, organizationId = w.f.orgId): Promise<{ jobId: string; outputId: string }> {
+  const run = await seedRun(w.deps, organizationId, w.f.ids.owner, { kind: 'video' });
+  if (projectId) await w.f.sql.query('update brand_studio_jobs set brand_project_id = $2 where id = $1', [run.jobId, projectId]);
+  return { jobId: run.jobId, outputId: run.outputId };
+}
+
+/** A ready library video; filed in `projectId` when given. */
+export async function libraryVideo(w: SendWorld, projectId: string | null = null, organizationId = w.f.orgId): Promise<string> {
+  const id = await seedVideoAsset(w.deps, organizationId, w.f.ids.owner);
   if (projectId) await w.f.sql.query('update brand_studio_assets set brand_project_id = $2 where id = $1', [id, projectId]);
   return id;
 }

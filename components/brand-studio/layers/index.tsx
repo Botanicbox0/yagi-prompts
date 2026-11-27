@@ -32,6 +32,7 @@ import {
 import { STUDIO_UPLOAD_MIMES, type RegionBox, type StudioAssetView } from "@/lib/brand-studio/contracts";
 import type { Dictionary } from "@/lib/i18n/dictionaries";
 import { useModal } from "../modal";
+import { newRequestId } from "../copy";
 import { trayItemFromAsset, type RefSource, type TrayItem } from "../refs";
 import { qualityOf, regionCredits } from "../dock-model";
 import { nudgeBox } from "../region-math";
@@ -271,6 +272,8 @@ export default function LayerEditor(
   const [uploading, setUploading] = useState<string[]>([]);
   const [step, setStep] = useState<ExportStep | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
+  const savingRef = useRef(false);
+  const saveAttemptRef = useRef<{ doc: LayerDoc; requestId: string } | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [sheet, setSheet] = useState<Sheet | null>(props.initialTool === "marquee" && props.region ? "region" : null);
   // The size panel; while it is open the stage shows canvas handles. Never on a blank canvas.
@@ -1052,7 +1055,8 @@ export default function LayerEditor(
   };
 
   const save = async () => {
-    if (step) return;
+    if (savingRef.current || step) return;
+    savingRef.current = true;
     if (editingId) stopEdit();
     dispatchResult({ type: "dismiss" });
     setExportError(null);
@@ -1069,9 +1073,28 @@ export default function LayerEditor(
       }
       setStep("saving");
       const file = new File([result.blob], exportFileName(base.name ?? copy.export.fallbackName, copy.export.fileSuffix, result.mime), { type: result.mime });
+      if (props.saveEdited) {
+        const requestId =
+          saveAttemptRef.current && saveAttemptRef.current.doc === current
+            ? saveAttemptRef.current.requestId
+            : (saveAttemptRef.current = { doc: current, requestId: newRequestId() }).requestId;
+        const saved = await props.saveEdited(file, { requestId });
+        if (!saved.ok) {
+          setExportError(props.errorText ? props.errorText(saved) : copy.export.failUpload);
+          setStep(null);
+          return;
+        }
+        saveAttemptRef.current = null;
+        savedRef.current = current;
+        saveDraft(storage, baseKey, current);
+        closingRef.current = true;
+        props.onSavedToWall?.(saved.job);
+        props.onClose();
+        return;
+      }
       const uploaded = await props.upload(file);
       if (!uploaded.ok) {
-        setExportError(copy.export.failUpload);
+        setExportError(props.errorText ? props.errorText(uploaded) : copy.export.failUpload);
         setStep(null);
         return;
       }
@@ -1083,6 +1106,8 @@ export default function LayerEditor(
     } catch {
       setExportError(copy.export.failUpload);
       setStep(null);
+    } finally {
+      savingRef.current = false;
     }
   };
 

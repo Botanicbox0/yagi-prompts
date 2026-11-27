@@ -733,7 +733,7 @@ describe('Studio Pro Suite v5 Track B — 4. 3-Height Elastic Sequence Rail, Flo
     expect(compactHtml).toContain('자르기');
     expect(compactHtml).toContain('컷 자동 인식');
     expect(compactHtml).toContain('레퍼런스 색보정');
-    expect(compactHtml).toContain('@ 레퍼런스로 넣기');
+    expect(compactHtml).toContain('레퍼런스에 추가');
     expect(compactHtml).toContain('이 구간 음악 생성');
     expect(compactHtml).toContain('업스케일');
     expect(compactHtml).toContain('삭제');

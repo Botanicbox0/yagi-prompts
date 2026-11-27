@@ -366,7 +366,9 @@ describe('gallery — a preset run is never made again from the gallery', () => 
     // Copy prompt stays and copies the short visible line.
     expect(html).toContain('data-copy-prompt');
     expect(promptToCopy(presetRun())).toBe('영상화용 캐릭터 시트 · 소라');
-    expect(html).not.toMatch(/gpt-image|sunburst/i);
+    const modelLine = '<p class="bs-label" data-studio-viewer-model="gpt-image-2.6-sunburst">GPT Image 2.6 Sunburst</p>';
+    expect(html.split(modelLine)).toHaveLength(2);
+    expect(html.replace(modelLine, '')).not.toMatch(/gpt-image|sunburst|openai/i);
 
     // An ordinary image run keeps all of them.
     const usual = viewer(job(1, { outputs: [output(1)] }));

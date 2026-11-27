@@ -597,8 +597,13 @@ describe('Viewer send integration, roles, external link, layout, and Escape laye
       job: job(5, { kind: 'video', model: 'compose-1080p', outputs: [vidOut] }),
     };
 
-    // Owner with send: has data-action="send", no data-action="review", has data-action="external-link"
-    for (const item of [picItem, vidItem, sndItem, assetItem]) {
+    // Owner with send: has data-action="send", no data-action="review"; external-link shown ONLY on video/audio (omitted on images)
+    for (const [item, keepsExternalLink] of [
+      [picItem, false],
+      [assetItem, false],
+      [vidItem, true],
+      [sndItem, true],
+    ] as const) {
       const ownerHtml = renderToStaticMarkup(
         <Viewer
           items={[item]}
@@ -618,8 +623,13 @@ describe('Viewer send integration, roles, external link, layout, and Escape laye
       );
       expect(ownerHtml).toContain('data-action="send"');
       expect(ownerHtml).not.toContain('data-action="review"');
-      expect(ownerHtml).toContain('data-action="external-link"');
-      expect(ownerHtml).toContain(KO.externalLink);
+      if (keepsExternalLink) {
+        expect(ownerHtml).toContain('data-action="external-link"');
+        expect(ownerHtml).toContain(KO.externalLink);
+      } else {
+        expect(ownerHtml).not.toContain('data-action="external-link"');
+        expect(ownerHtml).not.toContain(KO.externalLink);
+      }
     }
 
     // Viewer role (canCreate: false): sees data-action="send", NEVER sees data-action="external-link"
@@ -643,8 +653,11 @@ describe('Viewer send integration, roles, external link, layout, and Escape laye
     expect(viewerHtml).toContain('data-action="send"');
     expect(viewerHtml).not.toContain('data-action="external-link"');
 
-    // Fill strip & compose export: hide 보내기, keep 외부 링크 만들기 for owner
-    for (const unsendable of [fillItem, composeItem]) {
+    // Fill strip (image -> no external-link) & compose export (video -> keeps external-link for owner): hide 보내기
+    for (const [unsendable, keepsExternalLink] of [
+      [fillItem, false],
+      [composeItem, true],
+    ] as const) {
       const html = renderToStaticMarkup(
         <Viewer
           items={[unsendable]}
@@ -663,7 +676,8 @@ describe('Viewer send integration, roles, external link, layout, and Escape laye
         />,
       );
       expect(html).not.toContain('data-action="send"');
-      expect(html).toContain('data-action="external-link"');
+      if (keepsExternalLink) expect(html).toContain('data-action="external-link"');
+      else expect(html).not.toContain('data-action="external-link"');
     }
   });
 
@@ -700,10 +714,49 @@ describe('Viewer send integration, roles, external link, layout, and Escape laye
     expect(bodyBefore.getAttribute('data-region')).toBeNull();
     expect(bodyBefore.getAttribute('data-talk')).toBeNull();
 
-    // External link action invokes actions.review(item)
+    // Image hides external-link; video keeps external-link -> invokes actions.review(item)
+    expect(mounted.query('[data-action="external-link"]')).toBeNull();
+    const vidOut = output(9, { kind: 'video', url: '/clip.mp4' });
+    const vidItem: ViewerItem = { type: 'output', output: vidOut, job: job(9, { kind: 'video', outputs: [vidOut] }) };
+    await mounted.rerender(
+      <Viewer
+        items={[vidItem]}
+        index={0}
+        copy={copyFor('ko')}
+        locale="ko"
+        canCreate
+        canGenerate
+        busy={null}
+        notice={null}
+        parentOf={() => null}
+        onIndex={noop}
+        onClose={onClose}
+        actions={{ ...baseActions, review: reviewSpy }}
+        send={{ organizationId: ORG, copy: KO, transport }}
+      />,
+    );
     await mounted.click('[data-action="external-link"]');
     expect(reviewSpy).toHaveBeenCalledTimes(1);
-    expect(reviewSpy).toHaveBeenCalledWith(picItem);
+    expect(reviewSpy).toHaveBeenCalledWith(vidItem);
+
+    await mounted.rerender(
+      <Viewer
+        items={[picItem]}
+        index={0}
+        copy={copyFor('ko')}
+        locale="ko"
+        canCreate
+        canGenerate
+        busy={null}
+        notice={null}
+        parentOf={() => null}
+        onIndex={noop}
+        onClose={onClose}
+        actions={{ ...baseActions, review: reviewSpy }}
+        send={{ organizationId: ORG, copy: KO, transport }}
+      />,
+    );
+    await flush();
 
     // Click 보내기 opens SendPanel inside .bs-viewer-side; body columns attributes unchanged
     const sendBtn = mounted.query('[data-action="send"]')!;

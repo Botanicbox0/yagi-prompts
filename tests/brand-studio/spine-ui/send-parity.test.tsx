@@ -544,6 +544,7 @@ describe('Slice 4b §2 parity snapshots (without send prop)', () => {
         <HubDetail
           entry={outEntry}
           copy={KO_DICT.studioLibrary}
+          editedMark={KO_DICT.brandStudio.gallery.editedMark}
           name={KO_DICT.studioLibrary.item.image}
           liked={false}
           main={ownerActs.main}
@@ -561,6 +562,7 @@ describe('Slice 4b §2 parity snapshots (without send prop)', () => {
         <HubDetail
           entry={assetEntry}
           copy={KO_DICT.studioLibrary}
+          editedMark={KO_DICT.brandStudio.gallery.editedMark}
           name="Serum bottle"
           liked
           main={viewerActs.main}
@@ -578,6 +580,7 @@ describe('Slice 4b §2 parity snapshots (without send prop)', () => {
         <HubDetail
           entry={audioEntry}
           copy={KO_DICT.studioLibrary}
+          editedMark={KO_DICT.brandStudio.gallery.editedMark}
           name={KO_DICT.studioLibrary.item.audio}
           liked={false}
           main={audioActs.main}

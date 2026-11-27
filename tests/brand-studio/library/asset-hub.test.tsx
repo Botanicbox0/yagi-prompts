@@ -402,6 +402,7 @@ describe("unified BrandAssetHub & similarity lens", () => {
       <HubDetail
         entry={upload}
         copy={dict.studioLibrary}
+        editedMark={dict.brandStudio.gallery.editedMark}
         name={dict.studioLibrary.item.image}
         liked={false}
         {...hubActions(upload, { organizationId: ORG, copy: actionCopy("ko"), ...open })}

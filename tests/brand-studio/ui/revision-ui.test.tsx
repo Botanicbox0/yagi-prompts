@@ -65,7 +65,7 @@ describe("the wall with clip versions", () => {
 
   it("leaves pictures and single clips exactly as before", () => {
     const html = wall([clip(7), job(8, { outputs: [output(8)] })], { mode: "image" });
-    expect(html.match(/data-studio-tile/g)).toHaveLength(2);
+    expect(html.match(/data-studio-tile="true"/g)).toHaveLength(2);
     expect(html).not.toContain("data-revision-badge");
   });
 });

@@ -329,17 +329,32 @@ export function brandProjectSpineFor(
  * secret to sign with (lib/brand-studio/prompt-shield/shield.ts `videoPromptShieldActive`). Closed means every
  * answer is exactly as before.
  */
-export function videoPromptShieldOpenFor(
+function orgListSwitchOpen(
+  flagValue: string | undefined,
+  orgsRaw: string | undefined,
   organizationId: string | null | undefined,
-  env: Record<string, string | undefined> = process.env,
 ): boolean {
-  if (env.BRAND_STUDIO_VIDEO_PROMPT_SHIELD !== 'on' || !organizationId) return false;
-  const orgs = (env.BRAND_STUDIO_VIDEO_PROMPT_SHIELD_ORGS ?? '')
+  if (flagValue !== 'on' || !organizationId) return false;
+  const orgs = (orgsRaw ?? '')
     .split(',')
     .map((entry) => entry.trim().toLowerCase())
     .filter((entry) => entry !== '');
   if (orgs.length === 0 || orgs.some((entry) => entry === '*' || entry === 'all')) return true;
   return orgs.includes(organizationId.toLowerCase());
+}
+
+export function videoPromptShieldOpenFor(
+  organizationId: string | null | undefined,
+  env: Record<string, string | undefined> = process.env,
+): boolean {
+  return orgListSwitchOpen(env.BRAND_STUDIO_VIDEO_PROMPT_SHIELD, env.BRAND_STUDIO_VIDEO_PROMPT_SHIELD_ORGS, organizationId);
+}
+
+export function brandStudioEditToWallOpenFor(
+  organizationId: string | null | undefined,
+  env: Record<string, string | undefined> = process.env,
+): boolean {
+  return orgListSwitchOpen(env.BRAND_STUDIO_EDIT_TO_WALL, env.BRAND_STUDIO_EDIT_TO_WALL_ORGS, organizationId);
 }
 
 /**

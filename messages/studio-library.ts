@@ -14,7 +14,7 @@ export const studioLibraryEn = {
   loadFailed: "We couldn't load your assets.",
   retry: 'Try again',
   item: {
-    attach: 'Add {name} to the prompt',
+    attach: 'Add {name} to references',
     view: 'Open {name}',
     open: 'Open',
     regionEdit: 'Edit part',
@@ -213,7 +213,7 @@ export const studioLibraryKo: typeof studioLibraryEn = {
   loadFailed: '에셋을 불러오지 못했어요.',
   retry: '다시 불러오기',
   item: {
-    attach: '{name} 참조로 넣기',
+    attach: '{name} 레퍼런스에 추가',
     view: '{name} 크게 보기',
     open: '크게 보기',
     regionEdit: '부분 수정',

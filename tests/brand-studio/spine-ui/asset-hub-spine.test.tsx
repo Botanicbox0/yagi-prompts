@@ -130,7 +130,7 @@ function stubLibrary(patch: Partial<StudioLibrary> = {}): StudioLibrary {
   };
 }
 
-function renderTestScopeTile(libraryCopy: ReturnType<typeof getDictionary>["studioLibrary"]) {
+function renderTestScopeTile(libraryCopy: ReturnType<typeof getDictionary>["studioLibrary"], editedMark: string) {
   return (
     entry: ReturnType<typeof buildHubEntries>[number],
     _scopeKey: string,
@@ -140,6 +140,7 @@ function renderTestScopeTile(libraryCopy: ReturnType<typeof getDictionary>["stud
       key={entry.key}
       entry={entry}
       copy={libraryCopy}
+      editedMark={editedMark}
       name={entry.label ?? libraryCopy.item[entry.kind]}
       liked={false}
       soundMarker={entry.kind === "audio" && entry.origin === "generated"}
@@ -518,7 +519,7 @@ describe("BrandAssetHub with spine prop (§5.2, §5.3)", () => {
         likedKeys={new Set()}
         spine={{ overview, canMove: true, copy: dict.projectSpine, filmMeta: dict.studioVideo.workspace.projects.meta }}
         allSection={null}
-        renderScopeTile={renderTestScopeTile(dict.studioLibrary)}
+        renderScopeTile={renderTestScopeTile(dict.studioLibrary, dict.brandStudio.gallery.editedMark)}
         initialQuery="데님없는봄"
       />,
     );
@@ -548,7 +549,7 @@ describe("BrandAssetHub with spine prop (§5.2, §5.3)", () => {
         likedKeys={new Set()}
         spine={{ overview, canMove: true, copy: dict.projectSpine, filmMeta: dict.studioVideo.workspace.projects.meta }}
         allSection={null}
-        renderScopeTile={renderTestScopeTile(dict.studioLibrary)}
+        renderScopeTile={renderTestScopeTile(dict.studioLibrary, dict.brandStudio.gallery.editedMark)}
         initialQuery="향수"
       />,
     );
@@ -573,7 +574,7 @@ describe("BrandAssetHub with spine prop (§5.2, §5.3)", () => {
         likedKeys={new Set()}
         spine={{ overview, canMove: true, copy: dict.projectSpine, filmMeta: dict.studioVideo.workspace.projects.meta }}
         allSection={null}
-        renderScopeTile={renderTestScopeTile(dict.studioLibrary)}
+        renderScopeTile={renderTestScopeTile(dict.studioLibrary, dict.brandStudio.gallery.editedMark)}
         initialOpenedScope={{ kind: "project", brandProjectId: P1 }}
       />,
     );
@@ -587,7 +588,7 @@ describe("BrandAssetHub with spine prop (§5.2, §5.3)", () => {
     const dict = getDictionary("ko");
     const overview = sampleOverview();
     const api = createStudioApi({ organizationId: ORG });
-    const renderTile = renderTestScopeTile(dict.studioLibrary);
+    const renderTile = renderTestScopeTile(dict.studioLibrary, dict.brandStudio.gallery.editedMark);
 
     // Own project with counts across all 5 kinds renders all 6 kind chips with overview counts and plain text title.
     const ownProject = renderToStaticMarkup(
@@ -894,7 +895,7 @@ describe("BrandAssetHub with spine prop (§5.2, §5.3)", () => {
     const ko = getDictionary("ko");
     const emptyOverview = makeOverview({ projects: [sampleOverview().projects[2]!] });
     const api = createStudioApi({ organizationId: ORG });
-    const renderTile = renderTestScopeTile(ko.studioLibrary);
+    const renderTile = renderTestScopeTile(ko.studioLibrary, ko.brandStudio.gallery.editedMark);
     const emptyPage: StudioBrandProjectFiles = {
       ok: true,
       items: [],
@@ -1081,6 +1082,7 @@ describe("BrandAssetHub with spine prop (§5.2, §5.3)", () => {
       <HubTile
         entry={soundEntry}
         copy={ko.studioLibrary}
+        editedMark={ko.brandStudio.gallery.editedMark}
         name="Warm piano"
         liked={false}
         main={null}
@@ -1098,6 +1100,7 @@ describe("BrandAssetHub with spine prop (§5.2, §5.3)", () => {
       <HubTile
         entry={soundEntry}
         copy={ko.studioLibrary}
+        editedMark={ko.brandStudio.gallery.editedMark}
         name="Warm piano"
         liked={false}
         main={null}
@@ -1148,7 +1151,7 @@ describe("BrandAssetHub with spine prop (§5.2, §5.3)", () => {
       next: null,
     };
 
-    const renderTile = renderTestScopeTile(ko.studioLibrary);
+    const renderTile = renderTestScopeTile(ko.studioLibrary, ko.brandStudio.gallery.editedMark);
 
     const editorIdle = renderToStaticMarkup(
       <ScopeView
@@ -1416,7 +1419,7 @@ describe("BrandAssetHub with spine prop (§5.2, §5.3)", () => {
         likedKeys={new Set()}
         spine={{ overview, canMove: true, copy: ko.projectSpine, filmMeta: ko.studioVideo.workspace.projects.meta }}
         allSection={null}
-        renderScopeTile={renderTestScopeTile(ko.studioLibrary)}
+        renderScopeTile={renderTestScopeTile(ko.studioLibrary, ko.brandStudio.gallery.editedMark)}
       />,
     );
     const p2Slice = teamGroupOverview.slice(
@@ -1444,7 +1447,7 @@ describe("BrandAssetHub with spine prop (§5.2, §5.3)", () => {
         deliverables={teamDeliverables}
         onBack={() => {}}
         onScopeGone={() => {}}
-        renderTile={renderTestScopeTile(ko.studioLibrary)}
+        renderTile={renderTestScopeTile(ko.studioLibrary, ko.brandStudio.gallery.editedMark)}
         initialPage={{ ok: true, items: [], assets: [], jobs: [], films: [], next: null }}
       />,
     );
@@ -1527,7 +1530,7 @@ describe("BrandAssetHub with spine prop (§5.2, §5.3)", () => {
           filmMeta: dict.studioVideo.workspace.projects.meta,
         }}
         allSection={null}
-        renderScopeTile={renderTestScopeTile(dict.studioLibrary)}
+        renderScopeTile={renderTestScopeTile(dict.studioLibrary, dict.brandStudio.gallery.editedMark)}
       />,
     );
     expect(withUnknown).not.toContain("Unknown filing");
@@ -1560,7 +1563,7 @@ describe("BrandAssetHub with spine prop (§5.2, §5.3)", () => {
         likedKeys={new Set()}
         spine={{ overview: makeOverview(), canMove: true, copy: dict.projectSpine, filmMeta: dict.studioVideo.workspace.projects.meta }}
         allSection={null}
-        renderScopeTile={renderTestScopeTile(dict.studioLibrary)}
+        renderScopeTile={renderTestScopeTile(dict.studioLibrary, dict.brandStudio.gallery.editedMark)}
         emptyActions={
           <>
             <button type="button" data-asset-hub-empty-upload="">{dict.studioLibrary.hub.uploadAction}</button>
@@ -1774,6 +1777,7 @@ describe("BrandAssetHub with spine prop (§5.2, §5.3)", () => {
       <HubDetail
         entry={runEntry}
         copy={ko.studioLibrary}
+        editedMark={ko.brandStudio.gallery.editedMark}
         name={ko.studioLibrary.item.image}
         liked={false}
         {...hubActions(runEntry, {
@@ -1986,7 +1990,7 @@ describe("/brand/library page.tsx spine prop gating (§5.1)", () => {
     expect(materialsStrip).toContain("11개");
 
     // 3. ScopeView on brand_materials (only-logo case): orgLogo visible, logo role chip visible, no materialsEmpty, no select button.
-    const renderTile = renderTestScopeTile(ko.studioLibrary);
+    const renderTile = renderTestScopeTile(ko.studioLibrary, ko.brandStudio.gallery.editedMark);
     const onlyLogoScope = renderToStaticMarkup(
       <ScopeView
         organizationId={ORG}

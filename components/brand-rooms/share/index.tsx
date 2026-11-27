@@ -25,32 +25,68 @@ function day(iso: string, locale: "ko" | "en"): string {
   return f.format(new Date(iso));
 }
 
-export function ShareButton({ organizationId, target, locale, copy, canEdit }: ShareButtonProps) {
+export function ShareButton({
+  organizationId,
+  target,
+  locale,
+  copy,
+  canEdit,
+  manageOnly = false,
+  hidden = false,
+  onOpenChange,
+  onSharesChanged,
+}: ShareButtonProps) {
   const [open, setOpen] = useState(false);
+  const setOpenState = useCallback(
+    (next: boolean) => {
+      setOpen(next);
+      onOpenChange?.(next);
+    },
+    [onOpenChange],
+  );
   // docs/BRAND-ROOMS-FEEDBACK.md §12: with invitations on, the room provides this and the dialog gains the
   // people section and the two link modes. Without it (the switch off, or outside a room) it is today's.
   const invites = useRoomShareInvites();
   if (!canEdit) return null;
+  if (hidden && !open) return null;
   return (
     <>
-      <button type="button" className="brh-open" onClick={() => setOpen(true)} data-share-open={target.kind} aria-haspopup="dialog">
-        <svg className="brh-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-          <path d="M12 15V4M7.5 8.5 12 4l4.5 4.5M5 13v5.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V13" />
-        </svg>
-        {copy.share.open}
-      </button>
+      {!hidden && (
+        <button type="button" className="brh-open" onClick={() => setOpenState(true)} data-share-open={target.kind} aria-haspopup="dialog">
+          <svg className="brh-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M12 15V4M7.5 8.5 12 4l4.5 4.5M5 13v5.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V13" />
+          </svg>
+          {copy.share.open}
+        </button>
+      )}
       {open &&
-        (invites && invites.organizationId === organizationId ? (
-          <InviteShareDialog invites={invites} target={target} shareCopy={copy.share} onClose={() => setOpen(false)} />
+        (invites && invites.organizationId === organizationId && !manageOnly ? (
+          <InviteShareDialog invites={invites} target={target} shareCopy={copy.share} onClose={() => setOpenState(false)} />
         ) : (
-          <ShareDialog organizationId={organizationId} target={target} locale={locale} copy={copy} onClose={() => setOpen(false)} />
+          <ShareDialog
+            organizationId={organizationId}
+            target={target}
+            locale={locale}
+            copy={copy}
+            {...(manageOnly ? { manageOnly: true } : {})}
+            {...(onSharesChanged ? { onSharesChanged } : {})}
+            onClose={() => setOpenState(false)}
+          />
         ))}
     </>
   );
 }
 
 /** Today's link-only dialog; kept as it was for every share button without invitations (exported for its tests). */
-export function ShareDialog({ organizationId, target, locale, copy, onClose }: Omit<ShareButtonProps, "canEdit"> & { onClose(): void }) {
+export function ShareDialog({
+  organizationId,
+  target,
+  locale,
+  copy,
+  manageOnly = false,
+  onSharesChanged,
+  onClose,
+}: Omit<ShareButtonProps, "canEdit" | "hidden" | "onOpenChange"> & { onClose(): void }) {
   const s = copy.share;
   const id = useId();
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -69,9 +105,13 @@ export function ShareDialog({ organizationId, target, locale, copy, onClose }: O
 
   const reload = useCallback(async () => {
     const result = await fetchShares(organizationId, target.kind, target.id);
-    if (result.ok) setLinks(result.shares);
-    else setError(errorText(result.code));
-  }, [organizationId, target.kind, target.id, errorText]);
+    if (result.ok) {
+      setLinks(result.shares);
+      onSharesChanged?.(result.shares.filter((item) => item.state === "live").length);
+    } else {
+      setError(errorText(result.code));
+    }
+  }, [organizationId, target.kind, target.id, errorText, onSharesChanged]);
 
   // A native modal: the page behind is inert, Esc closes, focus returns to the button.
   useEffect(() => {
@@ -121,7 +161,7 @@ export function ShareDialog({ organizationId, target, locale, copy, onClose }: O
   }
 
   async function revoke(link: ShareLink) {
-    if (typeof window !== "undefined" && !window.confirm(s.revokeConfirm)) return;
+    if (typeof window !== "undefined" && typeof window.confirm === "function" && !window.confirm(s.revokeConfirm)) return;
     setError(null);
     const result = await revokeShareLink(organizationId, link.id);
     if (!result.ok) setError(errorText(result.code));
@@ -140,9 +180,10 @@ export function ShareDialog({ organizationId, target, locale, copy, onClose }: O
           </svg>
         </button>
       </div>
-      <p className="brh-lede">{target.kind === "storyboard" ? s.ledeStoryboard : s.lede}</p>
+      {!manageOnly && <p className="brh-lede">{target.kind === "storyboard" ? s.ledeStoryboard : s.lede}</p>}
 
-      <form
+      {!manageOnly && (
+        <form
         className="brh-form"
         onSubmit={(e) => {
           e.preventDefault();
@@ -191,8 +232,9 @@ export function ShareDialog({ organizationId, target, locale, copy, onClose }: O
           </button>
         </div>
       </form>
+      )}
 
-      {made && (
+      {!manageOnly && made && (
         <section className="brh-made" aria-labelledby={`${id}-made`} data-share-made>
           <h3 id={`${id}-made`} className="brh-subtitle">
             {s.createdTitle}

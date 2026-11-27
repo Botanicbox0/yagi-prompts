@@ -23,7 +23,7 @@ import type { RoomPulseStamp } from "@/lib/brand-rooms/pulse";
 import type { ProjectReviewTabProps } from "../seams";
 import { ShareButton } from "../share";
 import { readPulse, roomPulseUrl, usePulse } from "../pulse";
-import { fetchRoomReview, fetchRoomReviews, postRoomReview } from "./api";
+import { fetchRoomReview, fetchRoomReviews, fetchShares, postRoomReview } from "./api";
 
 /**
  * Members seated in the room may save a cut once it is approved; drafts stay watch-only until the founder
@@ -61,6 +61,7 @@ export function ProjectReviewTab({
   filterStatus,
   finalsEmptyText,
   onReviewModeChange,
+  sendOpen = false,
 }: ProjectReviewTabProps) {
   const t = copy.tab;
   const [stacks, setStacks] = useState<ReviewStack[] | null>(null);
@@ -73,6 +74,8 @@ export function ProjectReviewTab({
   const [picking, setPicking] = useState<null | "new" | "version">(null);
   const [arrivalMs] = useState<number | null>(initial?.atMs ?? null);
   const [arrivalCommentId] = useState<string | null>(initial?.commentId ?? null);
+  const [liveSharesByReview, setLiveSharesByReview] = useState<Record<string, number>>({});
+  const [manageOpenFor, setManageOpenFor] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   // Opening review mode brings the stage to the top of the window once its draft is on screen.
   const scrollOnOpen = useRef<ScrollBehavior | null>(initial?.reviewId ? "auto" : null);
@@ -81,6 +84,26 @@ export function ProjectReviewTab({
     () => (stacks === null ? null : filterStatus ? stacks.filter((s) => s.versions[0]?.status === filterStatus) : stacks),
     [stacks, filterStatus],
   );
+
+  const activeDetailId = detail?.review.id ?? null;
+  const activeDetailKind = detail?.review.kind ?? null;
+  const activeDetailLiveShareCount = detail?.review.liveShareCount;
+  const knownImageShareCount = activeDetailId
+    ? (liveSharesByReview[activeDetailId] ?? activeDetailLiveShareCount)
+    : undefined;
+
+  useEffect(() => {
+    if (!sendOpen || !rights.canEdit || !activeDetailId || activeDetailKind !== "image" || knownImageShareCount !== undefined) return;
+    let cancelled = false;
+    void fetchShares(organizationId, "review", activeDetailId).then((res) => {
+      if (cancelled) return;
+      const liveCount = res.ok ? res.shares.filter((item) => item.state === "live").length : 0;
+      setLiveSharesByReview((prev) => ({ ...prev, [activeDetailId]: liveCount }));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [sendOpen, rights.canEdit, activeDetailId, activeDetailKind, knownImageShareCount, organizationId]);
 
   useEffect(() => {
     onReviewModeChange?.(reviewMode);
@@ -252,7 +275,28 @@ export function ProjectReviewTab({
               linkFor={(ms) => roomReviewHref(organizationId, projectId, detail.review.id, ms)}
               downloadUrl={download?.url ?? null}
               downloadName={download?.name ?? null}
-              share={rights.canEdit ? <ShareButton organizationId={organizationId} target={{ kind: "review", id: detail.review.id }} locale={locale} copy={copy} canEdit={rights.canEdit} /> : null}
+              share={(() => {
+                if (!rights.canEdit) return null;
+                const blockedImage = Boolean(sendOpen && detail.review.kind === "image");
+                if (!blockedImage) {
+                  return <ShareButton organizationId={organizationId} target={{ kind: "review", id: detail.review.id }} locale={locale} copy={copy} canEdit={rights.canEdit} />;
+                }
+                const liveCount = liveSharesByReview[detail.review.id] ?? detail.review.liveShareCount ?? 0;
+                if (liveCount === 0 && manageOpenFor !== detail.review.id) return null;
+                return (
+                  <ShareButton
+                    organizationId={organizationId}
+                    target={{ kind: "review", id: detail.review.id }}
+                    locale={locale}
+                    copy={copy}
+                    canEdit={rights.canEdit}
+                    manageOnly
+                    hidden={liveCount === 0}
+                    onOpenChange={(isOpen) => setManageOpenFor(isOpen ? detail.review.id : null)}
+                    onSharesChanged={(count) => setLiveSharesByReview((prev) => ({ ...prev, [detail.review.id]: count }))}
+                  />
+                );
+              })()}
               // "새 버전 올리기" is a tool: it folds into the head's "⋯" menu (docs/BRAND-ROOMS-FEEDBACK.md §11).
               moreActions={rights.canEdit && latestOfStack ? [{ key: "new-version", label: t.newVersion, run: () => setPicking("version") }] : undefined}
             />

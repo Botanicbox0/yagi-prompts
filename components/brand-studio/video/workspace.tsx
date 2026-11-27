@@ -2117,6 +2117,7 @@ export function VideoStudioWorkspace({
               locale={locale}
               canGenerate={dockOpen}
               canEdit={canCreate}
+              {...(send ? { sendOpen: true } : {})}
               canStop={canCreate}
               stopping={stopping}
               notes={jobNotes}
@@ -2345,6 +2346,7 @@ export function VideoStudioWorkspace({
         <ShareReviewDialog
           target={shareTarget}
           locale={locale}
+          {...(send ? { sendOpen: true } : {})}
           onClose={() => setShareTarget(null)}
         />
       )}
