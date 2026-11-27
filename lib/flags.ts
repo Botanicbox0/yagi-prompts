@@ -329,17 +329,38 @@ export function brandProjectSpineFor(
  * secret to sign with (lib/brand-studio/prompt-shield/shield.ts `videoPromptShieldActive`). Closed means every
  * answer is exactly as before.
  */
-export function videoPromptShieldOpenFor(
+function orgSwitchOpenFor(
+  flagValue: string | undefined,
+  orgsValue: string | undefined,
   organizationId: string | null | undefined,
-  env: Record<string, string | undefined> = process.env,
 ): boolean {
-  if (env.BRAND_STUDIO_VIDEO_PROMPT_SHIELD !== 'on' || !organizationId) return false;
-  const orgs = (env.BRAND_STUDIO_VIDEO_PROMPT_SHIELD_ORGS ?? '')
+  if (flagValue !== 'on' || !organizationId?.trim()) return false;
+  const orgs = (orgsValue ?? '')
     .split(',')
     .map((entry) => entry.trim().toLowerCase())
     .filter((entry) => entry !== '');
   if (orgs.length === 0 || orgs.some((entry) => entry === '*' || entry === 'all')) return true;
-  return orgs.includes(organizationId.toLowerCase());
+  return orgs.includes(organizationId.trim().toLowerCase());
+}
+
+export function videoPromptShieldOpenFor(
+  organizationId: string | null | undefined,
+  env: Record<string, string | undefined> = process.env,
+): boolean {
+  return orgSwitchOpenFor(env.BRAND_STUDIO_VIDEO_PROMPT_SHIELD, env.BRAND_STUDIO_VIDEO_PROMPT_SHIELD_ORGS, organizationId);
+}
+
+/**
+ * Campaign ops C1: the "캠페인 운영" mode with `/brand/campaigns` and `/brand/production`.
+ * Default OFF: open only when `BRAND_CAMPAIGN_OPS=on` and the organization matches `BRAND_CAMPAIGN_OPS_ORGS`
+ * (empty, `*`, or `all` = every organization; otherwise comma-separated organization ids). Only has an effect
+ * where the rail has modes (rooms open for the brand).
+ */
+export function brandCampaignOpsOpenFor(
+  organizationId: string | null | undefined,
+  env: Record<string, string | undefined> = process.env,
+): boolean {
+  return orgSwitchOpenFor(env.BRAND_CAMPAIGN_OPS, env.BRAND_CAMPAIGN_OPS_ORGS, organizationId);
 }
 
 /**

@@ -11,6 +11,7 @@ import { roomsChatEn } from './rooms-chat';
 import { roomsStoryboardEn } from './rooms-storyboard';
 import { roomsReviewEn } from './rooms-review';
 import { roomsShellEn } from './rooms-shell';
+import { campaignOpsEn } from './campaign-ops';
 import { roomsNoticesEn } from './rooms-notices';
 import { roomsShareEn } from './rooms-share';
 import { intakeBriefEn } from './intake-brief';
@@ -66,6 +67,7 @@ export const en = {
   roomsStoryboard: roomsStoryboardEn,
   roomsReview: roomsReviewEn,
   roomsShell: roomsShellEn,
+  campaignOps: campaignOpsEn,
   roomsNotices: roomsNoticesEn,
   roomsShare: roomsShareEn,
   intakeBrief: intakeBriefEn,

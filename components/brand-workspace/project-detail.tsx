@@ -27,7 +27,8 @@ import { AmbientBleed } from './ambient-bleed';
 import { IntakeBriefSummary } from './intake-brief-summary';
 import { BRAND_ATTACHMENT_LIMITS } from '@/lib/brands/workspace/schemas';
 import type { BrandUsageView } from "@/lib/brands/usage/types";
-import type { ReactNode } from "react";
+import { CampaignOpsTrackMarker } from "./campaign-ops/track-context";
+import type { ReactElement, ReactNode } from "react";
 
 /** With a cover, its main colour glows softly behind the masthead (brand host only, see workspace.css). */
 function Masthead({ cover, children }: { cover: boolean; children: ReactNode }) {
@@ -117,6 +118,7 @@ export function ProjectDetail({
   formatTitle = null,
   staffTools = null,
   roomEntry = null,
+  opsTrack = null,
   prototypeLayer = null,
 }: {
   project: BrandProjectDetail;
@@ -151,6 +153,8 @@ export function ProjectDetail({
    * null keeps the header exactly as before.
    */
   roomEntry?: ReactNode;
+  /** Verified campaign-ops track passed only when Campaign Ops C1 is open for the viewer. */
+  opsTrack?: string | null;
   /** Server-rendered prototype panels (`BRAND_WORKSPACE_PROTOTYPE_LAYER=on`); null/omitted by default. */
   prototypeLayer?: ProjectPrototypeSlots | null;
 }) {
@@ -166,7 +170,7 @@ export function ProjectDetail({
     newest.set(c.slotKey, Math.max(newest.get(c.slotKey) ?? 0, c.version));
   // Decided by state and role (release review): a requested or empty campaign never asks for results.
   const next = projectNextAction(p, studio ? "studio" : writable ? "approver" : "reader", b);
-  return (
+  const tree = (
     <div data-brand-project={p.id}>
       <Masthead cover={Boolean(p.coverUrl)}>
       {p.coverUrl && (
@@ -621,6 +625,13 @@ export function ProjectDetail({
       <CampaignContracts project={p} b={b} locale={locale} studio={studio}/>
       {usage && <SecondaryUsage view={usage} projectId={p.id} b={b} locale={locale} project={p} />}
       </ProjectTabs>
+    </div>
+  );
+  if (studio || !opsTrack) return tree;
+  return (
+    <div data-brand-project={p.id}>
+      <CampaignOpsTrackMarker track={opsTrack} />
+      {(tree as ReactElement<{ children?: ReactNode }>).props.children}
     </div>
   );
 }

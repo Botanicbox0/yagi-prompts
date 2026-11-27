@@ -55,15 +55,27 @@ export function isAdminPath(pathname: string): boolean {
   return pathname === '/admin' || pathname.startsWith('/admin/');
 }
 
+const BASE_BRAND_PATH =
+  /^\/brand\/(?:projects|members|invite|settings|billing|library|studio|usage|creators|identity|rooms|inbox|home|start)(?:\/|$)/;
+const OPS_BRAND_PATH = /^\/brand\/(?:campaigns|production)(?:\/|$)/;
+
 /** Public logo files share /brand, but are not authenticated workspace routes. */
-export function isBrandPath(pathname: string): boolean {
+export function isBrandPath(
+  pathname: string,
+  env: Record<string, string | undefined> = process.env,
+): boolean {
   // `usage`: the payment provider's return page for secondary usage (docs/SECONDARY-USAGE.md).
   // `creators`: the creator pool (docs/PLATFORM-2.0.md §17.3).
   // `identity`: the fixed brand identity layer, memory, and looks (docs/BRAND-PRODUCT.md §5).
   // `rooms`: messages and project rooms (docs/BRAND-ROOMS.md §3); each page gates itself.
   // `inbox`: the workspace 알림함 (docs/BRAND-PROJECT-SPINE.md §8; slice 4b); gates itself.
   // `home`: the workspace home; `start`: the default landing that picks it or `/brand` (docs/BRAND-STUDIO-V3.md §12).
-  return pathname === '/brand' || /^\/brand\/(?:projects|members|invite|settings|billing|library|studio|usage|creators|identity|rooms|inbox|home|start)(?:\/|$)/.test(pathname);
+  // `campaigns` / `production`: campaign ops C1 pages, allow-listed only when BRAND_CAMPAIGN_OPS=on.
+  return (
+    pathname === '/brand' ||
+    BASE_BRAND_PATH.test(pathname) ||
+    (env.BRAND_CAMPAIGN_OPS === 'on' && OPS_BRAND_PATH.test(pathname))
+  );
 }
 
 const AUTH_METHODS: Record<string, readonly string[]> = {

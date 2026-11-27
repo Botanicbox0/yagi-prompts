@@ -30,6 +30,7 @@ import { homeChecklistDismissCookieName, readChecklistDismissedFromCookie } from
 import { loadBrandWorkspace } from '@/lib/brands/workspace/service';
 import { billingChecklistLinkVisible, scopedHref } from '@/lib/brands/workspace/selection';
 import { brandRoomsOpen, brandSoundStudioOpen, brandStudioV2Open } from '@/lib/flags';
+import { campaignOpsOpenForViewer } from '@/lib/brands/workspace/campaign-ops';
 import { soundStudioVisible } from '@/lib/brand-studio/visibility';
 
 /**
@@ -227,6 +228,7 @@ export default async function BrandWorkspaceHome({
     billingCustomer: dict.brandBilling.customer,
     ...(news ? { brandNews: dict.brandNews } : {}),
   };
+  const campaignOpsOpen = campaignOpsOpenForViewer(choice);
   const sharedProps = {
     organizationId: choice.id,
     organizationName: choice.name,
@@ -244,6 +246,7 @@ export default async function BrandWorkspaceHome({
     canOpenBilling: billingChecklistLinkVisible(choice, viewer.isAdmin),
     planCatalogue: billingPlanCatalogue(),
     ...(news ? { news } : {}),
+    ...(campaignOpsOpen ? { teamModeLabel: dict.campaignOps.mode.label } : {}),
   };
 
   return spineHome ? (

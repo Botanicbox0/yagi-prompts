@@ -1,0 +1,875 @@
+/* Shared process stage (campaign ops C1 §2.4 + walk design pass). Tokens only, zero color literals, zero JS timers. */
+
+.root {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  color: var(--ys-ink);
+}
+
+.rootDialog {
+  gap: 12px;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 356px;
+  min-height: 340px;
+  max-height: 380px;
+  padding: 24px 32px;
+  border: 1px solid var(--ys-hairline);
+  border-radius: var(--ys-r-panel);
+  background: var(--ys-surface);
+  overflow: hidden;
+}
+
+.stageDialog {
+  height: 344px;
+  min-height: 336px;
+  max-height: 360px;
+  padding: 20px 26px;
+}
+
+.exampleCaption {
+  position: absolute;
+  right: 16px;
+  bottom: 14px;
+  padding: 4px 10px;
+  border: 1px solid var(--ys-hairline);
+  border-radius: var(--ys-r-pill);
+  background: var(--ys-panel);
+  color: var(--ys-ink-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.segments {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.segmentItem {
+  min-width: 0;
+}
+
+.segment {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 4px 2px;
+  border: 0;
+  border-radius: var(--ys-r-sm);
+  background: transparent;
+  color: var(--ys-ink-secondary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: color var(--ys-dur) var(--ys-ease);
+}
+
+.segment:hover {
+  color: var(--ys-ink);
+}
+
+.segment:focus-visible {
+  outline: 2px solid var(--ys-focus);
+  outline-offset: 2px;
+}
+
+.segmentActive {
+  color: var(--ys-ink);
+}
+
+.barTrack {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 3px;
+  overflow: hidden;
+  border-radius: var(--ys-r-pill);
+  background: var(--ys-hairline);
+}
+
+@keyframes fillBar {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.barFill {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--ys-ink);
+  transform-origin: left center;
+  animation: fillBar 5s linear forwards;
+}
+
+.root:hover .barFill,
+.root:focus-within .barFill,
+.root[data-paused='true'] .barFill {
+  animation-play-state: paused;
+}
+
+.segmentTitle {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.segmentActive .segmentTitle {
+  font-weight: 600;
+}
+
+.stepNum {
+  flex: none;
+  color: var(--ys-ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.segmentActive .stepNum {
+  color: var(--ys-ink);
+}
+
+.stepLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.body {
+  margin: 0;
+  min-height: 22px;
+  color: var(--ys-ink);
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.5;
+  letter-spacing: -0.015em;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+/* ------------------------------------------------------------ step illustrations (HTML + CSS only, ~70% stage width) */
+
+.picWrap {
+  display: grid;
+  place-items: center;
+  width: min(74%, 820px);
+  max-width: 100%;
+}
+
+.picSplitMain {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
+  align-items: stretch;
+  gap: 16px;
+  width: 100%;
+}
+
+.picTemplateStage {
+  display: grid;
+  grid-template-columns: 138px minmax(0, 1fr);
+  align-items: center;
+  gap: 18px;
+  width: 100%;
+}
+
+.picPostStage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  width: 100%;
+}
+
+.picCard,
+.picWideCard,
+.picSideCard,
+.picNoteBubble,
+.picComparePane {
+  display: grid;
+  align-content: space-between;
+  gap: 14px;
+  padding: 18px 20px;
+  border: 1px solid var(--ys-line-strong);
+  border-radius: var(--ys-r-card);
+  background: var(--ys-panel);
+  box-shadow: var(--ys-card);
+}
+
+.picWideCard {
+  width: 100%;
+  padding: 20px 22px;
+  gap: 16px;
+}
+
+.picSideCard {
+  justify-items: start;
+  align-content: space-between;
+  background: var(--ys-raised);
+}
+
+.picNoteBubble {
+  justify-items: start;
+  align-content: center;
+  gap: 14px;
+  background: var(--ys-raised);
+}
+
+.picNoteLines {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+}
+
+.picNoteLine {
+  display: block;
+  width: 100%;
+  height: 9px;
+  border-radius: var(--ys-r-pill);
+  background: var(--ys-line-strong);
+}
+
+.picDraftCard {
+  overflow: visible;
+}
+
+.picPlayerWrap {
+  position: relative;
+  width: 100%;
+}
+
+.picHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.picTitle {
+  color: var(--ys-ink);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.picDot {
+  width: 9px;
+  height: 9px;
+  flex: none;
+  border-radius: var(--ys-r-pill);
+  background: var(--ys-line-strong);
+}
+
+.picFieldList,
+.picSkeletonStack,
+.picBars {
+  display: grid;
+  gap: 11px;
+}
+
+.picFieldRow,
+.picBarRow {
+  display: grid;
+  grid-template-columns: 82px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+
+.picFieldLabel {
+  color: var(--ys-ink);
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.picLine,
+.picLineMid,
+.picLineShort,
+.picBarGrow,
+.picBarGrowMid,
+.picBarGrowShort {
+  display: block;
+  height: 9px;
+  border-radius: var(--ys-r-pill);
+  background: var(--ys-hover);
+}
+
+.picLine,
+.picBarGrow {
+  width: 100%;
+}
+
+.picLineMid,
+.picBarGrowMid {
+  width: 74%;
+}
+
+.picLineShort,
+.picBarGrowShort {
+  width: 48%;
+}
+
+.picBarGrow {
+  transform-origin: left center;
+  animation: fillBar 420ms var(--ys-ease) 90ms both;
+}
+
+.picOutlineRow,
+.picOutlineRowAccent {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--ys-hairline);
+  border-radius: var(--ys-r-sm);
+  background: var(--ys-surface);
+}
+
+.picOutlineRowAccent {
+  border-color: var(--ys-accent);
+}
+
+.picSidePreview,
+.picVerticalFrame,
+.picDoneMedia {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  border: 1px solid var(--ys-line-strong);
+  border-radius: var(--ys-r-media);
+  background: var(--ys-surface);
+  color: var(--ys-ink);
+  overflow: hidden;
+}
+
+.picSidePreview {
+  aspect-ratio: 16 / 9;
+}
+
+.picVerticalFrame {
+  aspect-ratio: 9 / 16;
+  background: var(--ys-panel);
+  box-shadow: var(--ys-card);
+}
+
+.picDoneMedia {
+  width: 100%;
+  max-width: 356px;
+  aspect-ratio: 16 / 9;
+}
+
+.picDoneSplit {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 18px;
+  width: 100%;
+}
+
+.picDoneMeta {
+  display: grid;
+  justify-items: start;
+  gap: 16px;
+}
+
+.picStillImg,
+.picStillImgMuted {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.picStillTop {
+  object-position: center top;
+}
+
+.picStillDoneSubject {
+  object-position: center 24%;
+}
+
+.picStillImg {
+  opacity: 0.78;
+}
+
+.picStillImgMuted {
+  opacity: 0.48;
+  filter: grayscale(0.85);
+}
+
+.picPlayCircle {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: var(--ys-r-pill);
+  border: 1px solid var(--ys-line-strong);
+  background: var(--ys-glass);
+  color: var(--ys-ink);
+}
+
+.picActionRow {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.picPill,
+.picPillBright,
+.picPillAccent {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 0 12px;
+  border-radius: var(--ys-r-pill);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.picPill {
+  border: 1px solid var(--ys-line-strong);
+  background: var(--ys-hover);
+  color: var(--ys-ink);
+}
+
+.picPillBright {
+  border: 1px solid var(--ys-ink);
+  background: var(--ys-active-bg);
+  color: var(--ys-active-fg);
+}
+
+.picPillAccent {
+  background: var(--ys-accent);
+  color: var(--ys-on-accent);
+}
+
+.picGlyph {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.picPlay {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}
+
+.picCircleGrid {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.picCircleLg {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--ys-line-strong);
+  border-radius: var(--ys-r-pill);
+  background: var(--ys-hover);
+  color: var(--ys-ink);
+}
+
+.picCirclePicked {
+  border: 2px solid var(--ys-accent);
+  background: var(--ys-accent);
+  color: var(--ys-on-accent);
+}
+
+.picRecruitRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.picRecruitCircles {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.picCircleSlot {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border: 1px solid var(--ys-hairline);
+  border-radius: var(--ys-r-pill);
+  background: var(--ys-surface);
+}
+
+.picCircleBrightFill {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  border: 1px solid var(--ys-ink);
+  background: var(--ys-active-bg);
+}
+
+.picPickFooter {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.picPhone {
+  display: grid;
+  width: 140px;
+  flex: none;
+  padding: 8px;
+  border: 1px solid var(--ys-line-strong);
+  border-radius: var(--ys-r-card);
+  background: var(--ys-panel);
+  box-shadow: var(--ys-card);
+}
+
+.picPhoneScreen {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  aspect-ratio: 9 / 16;
+  border: 1px solid var(--ys-hairline);
+  border-radius: var(--ys-r-media);
+  background: var(--ys-surface);
+  color: var(--ys-ink);
+  overflow: hidden;
+}
+
+.picPostAside {
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+  width: 184px;
+  max-width: 100%;
+}
+
+.picPhoneFoot {
+  display: grid;
+  gap: 7px;
+  width: 100%;
+}
+
+.picMetricTrack {
+  position: relative;
+  display: block;
+  height: 11px;
+  border: 1px solid var(--ys-hairline);
+  border-radius: var(--ys-r-pill);
+  background: var(--ys-surface);
+  overflow: hidden;
+}
+
+.picMetricFillAccent,
+.picMetricFillPrimary {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  transform-origin: left center;
+}
+
+.picMetricFillAccent {
+  width: 82%;
+  background: var(--ys-accent);
+}
+
+.picMetricFillPrimary {
+  width: 60%;
+  background: var(--ys-ink);
+}
+
+.picGrowBar {
+  animation: fillBar 480ms var(--ys-ease) 100ms both;
+}
+
+.picMiniRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.picMiniThumb {
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border: 1px solid var(--ys-line-strong);
+  border-radius: var(--ys-r-sm);
+  background: var(--ys-surface);
+}
+
+.picCutGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.picCutTile {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--ys-hairline);
+  border-radius: var(--ys-r-control);
+  background: var(--ys-surface);
+}
+
+.picCutFrame {
+  position: relative;
+  display: block;
+  aspect-ratio: 16 / 9;
+  border: 1px solid var(--ys-line-strong);
+  border-radius: var(--ys-r-sm);
+  background: var(--ys-hover);
+  overflow: hidden;
+}
+
+.picPlayerBox {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  padding: 12px;
+  border: 1px solid var(--ys-line-strong);
+  border-radius: var(--ys-r-media);
+  background: var(--ys-surface);
+  color: var(--ys-ink);
+  overflow: hidden;
+}
+
+.picPinDot {
+  position: absolute;
+  z-index: 3;
+  top: 32%;
+  right: 24%;
+  width: 12px;
+  height: 12px;
+  border-radius: var(--ys-r-pill);
+  background: var(--ys-accent);
+  box-shadow: 0 0 0 3px var(--ys-panel);
+}
+
+.picPinConnector {
+  position: absolute;
+  z-index: 2;
+  top: calc(32% + 6px);
+  left: calc(76% - 4px);
+  width: calc(24% + 41px);
+  height: 1px;
+  background: var(--ys-line-strong);
+  pointer-events: none;
+}
+
+.picScrubber {
+  position: absolute;
+  z-index: 2;
+  right: 12px;
+  bottom: 12px;
+  left: 12px;
+  height: 5px;
+  border-radius: var(--ys-r-pill);
+  background: var(--ys-hairline);
+  overflow: hidden;
+}
+
+.picScrubberFill {
+  display: block;
+  width: 52%;
+  height: 100%;
+  background: var(--ys-ink);
+}
+
+.picCompareGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  width: 100%;
+}
+
+.picComparePaneBright {
+  border-color: var(--ys-ink);
+}
+
+.picCompareScreen,
+.picCompareScreenMuted {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border: 1px solid var(--ys-hairline);
+  border-radius: var(--ys-r-media);
+  background: var(--ys-surface);
+  color: var(--ys-ink);
+  overflow: hidden;
+}
+
+.picCompareScreenMuted {
+  color: var(--ys-ink-muted);
+}
+
+/* ------------------------------------------------------------ picture entrance animations (300-600ms, single activation) */
+
+@keyframes picSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes picArriveRight {
+  from {
+    opacity: 0;
+    transform: translateX(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes picPop {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.picSlideIn {
+  animation: picSlideIn 380ms var(--ys-ease) both;
+}
+
+.picArriveRight {
+  animation: picArriveRight 440ms var(--ys-ease) 70ms both;
+}
+
+.picPop {
+  animation: picPop 340ms var(--ys-ease) 140ms both;
+}
+
+.picDotStagger1 {
+  animation: picPop 340ms var(--ys-ease) 40ms both;
+}
+
+.picDotStagger2 {
+  animation: picPop 340ms var(--ys-ease) 90ms both;
+}
+
+.picDotStagger3 {
+  animation: picPop 340ms var(--ys-ease) 140ms both;
+}
+
+.picDotStagger4 {
+  animation: picPop 340ms var(--ys-ease) 190ms both;
+}
+
+.picDotStagger5 {
+  animation: picPop 340ms var(--ys-ease) 240ms both;
+}
+
+.picDotStagger6 {
+  animation: picPop 340ms var(--ys-ease) 290ms both;
+}
+
+@media (max-width: 1023px) {
+  .segments {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .picWrap {
+    width: 92%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .segment {
+    transition: none;
+  }
+  .barFill,
+  .picBarGrow,
+  .picGrowBar,
+  .picSlideIn,
+  .picArriveRight,
+  .picPop,
+  .picDotStagger1,
+  .picDotStagger2,
+  .picDotStagger3,
+  .picDotStagger4,
+  .picDotStagger5,
+  .picDotStagger6 {
+    animation: none;
+    transform: none;
+    opacity: 1;
+  }
+}
+
+.root[data-reduced-motion='true'] .barFill,
+.root[data-reduced-motion='true'] .picBarGrow,
+.root[data-reduced-motion='true'] .picGrowBar,
+.root[data-reduced-motion='true'] .picSlideIn,
+.root[data-reduced-motion='true'] .picArriveRight,
+.root[data-reduced-motion='true'] .picPop,
+.root[data-reduced-motion='true'] .picDotStagger1,
+.root[data-reduced-motion='true'] .picDotStagger2,
+.root[data-reduced-motion='true'] .picDotStagger3,
+.root[data-reduced-motion='true'] .picDotStagger4,
+.root[data-reduced-motion='true'] .picDotStagger5,
+.root[data-reduced-motion='true'] .picDotStagger6 {
+  animation: none;
+  transform: none;
+  opacity: 1;
+}

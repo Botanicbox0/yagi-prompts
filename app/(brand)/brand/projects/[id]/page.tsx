@@ -25,9 +25,10 @@ import { StudioCoverForm } from "@/components/brand-workspace/studio-cover-forms
 import { loadFeaturePolicy } from "@/lib/brands/entitlements";
 import { featureDenied, isSandboxedClientOrganization } from "@/lib/brands/features";
 import { brandRoomsOpen } from "@/lib/flags";
+import { campaignOpsOpenForViewer } from "@/lib/brands/workspace/campaign-ops";
 import { RoomEntry } from "@/components/brand-rooms/room/room-entry";
 import { roomHref, roomsOpenFor } from "@/components/brand-rooms/room/visibility";
-import { roomUnreadCounts } from "@/lib/brand-rooms/overview";
+import { roomTrack, roomUnreadCounts } from "@/lib/brand-rooms/overview";
 export default async function BrandProject({
   params,
   searchParams,
@@ -78,6 +79,7 @@ export default async function BrandProject({
   const requested = project.campaignTerms?.format.kind === "template" ? await loadPromptBySlug(sql, project.campaignTerms.format.slug).catch(() => null) : null;
   const formatTitle = requested ? (locale === "ko" && requested.titleKo ? requested.titleKo : requested.title) : null;
   const prototypeLayer = await buildProjectPrototypeLayer({ project, locale, generativeMediaAllowed });
+  const opsOpen = campaignOpsOpenForViewer({ id: project.organizationId, name: project.organizationName, denied: policy.denied, role: project.role });
   // `studio` here is the TWINGS team's read-only view (never the customer's seat): no approve, upload or comment.
   return (
     <ProjectDetail
@@ -89,6 +91,7 @@ export default async function BrandProject({
       prototypeLayer={prototypeLayer}
       usage={usage}
       formatTitle={formatTitle}
+      {...(opsOpen ? { opsTrack: roomTrack(project) } : {})}
       {...(roomEntry ? { roomEntry } : {})}
       staffManageHref={project.role === "studio" && viewer.isAdmin ? adminProjectHref(project.id, brandHost) : null}
       staffTools={studioTools ? (

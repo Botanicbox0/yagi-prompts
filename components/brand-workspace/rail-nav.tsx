@@ -25,6 +25,7 @@ import {
   type ReactNode,
 } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
+import { useCampaignOpsTrack } from './campaign-ops/track-context';
 import { interpolate } from '@/lib/i18n/format';
 import type { StudioShellCopy } from '@/messages/studio-shell';
 import type { RoomsShellCopy } from '@/messages/rooms-shell';
@@ -117,6 +118,9 @@ export interface RailNavigationProps {
    * sign-out row (rail.css hides those three); a phone keeps them in its top bar.
    */
   workspace?: RailWorkspace;
+  /** Campaign ops C1: replaces 프로젝트 with 캠페인 · 제작 의뢰 and renames 야기 팀과 to 캠페인 운영. */
+  campaignOps?: boolean;
+  campaignOpsCopy?: { modeLabel: string; campaigns: string; production: string };
 }
 
 /** The switch's two sides: a pen for making it yourself, two people for working with the team. */
@@ -171,6 +175,16 @@ function writeExpanded(expanded: boolean): void {
 type Tip = { text: string; top: number; left: number };
 
 export function RailNavigation(props: RailNavigationProps) {
+  const ops = Boolean(props.rooms && props.roomsCopy && props.campaignOps && props.campaignOpsCopy);
+  return ops ? <RailNavigationWithOpsTrack {...props} /> : <RailNavigationInner {...props} opsTrack={null} />;
+}
+
+function RailNavigationWithOpsTrack(props: RailNavigationProps) {
+  const opsTrack = useCampaignOpsTrack();
+  return <RailNavigationInner {...props} opsTrack={opsTrack} />;
+}
+
+function RailNavigationInner({ opsTrack, ...props }: RailNavigationProps & { opsTrack: string | null }) {
   const { copy, scope, studio, canCreate, locale } = props;
   const path = usePathname() ?? '/brand';
   const router = useRouter();
@@ -210,10 +224,12 @@ export function RailNavigation(props: RailNavigationProps) {
   const modeButtons = useRef<Partial<Record<RailMode, HTMLButtonElement | null>>>({});
 
   const nav = props.rooms && props.roomsCopy ? props.roomsCopy : null;
+  const ops = Boolean(nav && props.campaignOps && props.campaignOpsCopy);
   const bellCtx = useBell();
+  const activeOptions = ops ? { campaignOps: true, track: opsTrack } : undefined;
 
   /* ---------------------------------------------------------- the two modes (rail-mode.ts) */
-  const modeInput = { studio, studioShowroom: props.studioShowroom, rooms: nav !== null };
+  const modeInput = { studio, studioShowroom: props.studioShowroom, rooms: nav !== null, campaignOps: ops };
   const modes = railModes(modeInput);
   const [modeMemory, setModeMemory] = useState<Readonly<Record<string, RailMode>>>(props.modeMemory ?? {});
   const remembered = rememberedRailMode(modeMemory, props.organizationId);
@@ -256,6 +272,7 @@ export function RailNavigation(props: RailNavigationProps) {
     identity: props.identity,
     rooms: nav !== null,
     sound: props.sound,
+    campaignOps: ops,
   });
   // With rooms, the saved order applies inside each group and never moves an item across groups.
   const groups = nav ? groupItems(visibleItems, order, { makeInbox: hasBell }) : null;
@@ -293,6 +310,8 @@ export function RailNavigation(props: RailNavigationProps) {
   const items = groups && mode ? railModeItems(groups, mode) : orderItems(visibleItems, order);
   const label = (id: RailItemId): string => {
     if (id === 'messages') return copy.rail.messages || nav?.messages || '';
+    if (id === 'opsCampaigns') return props.campaignOpsCopy?.campaigns ?? '';
+    if (id === 'production') return props.campaignOpsCopy?.production ?? '';
     if (id === 'campaigns' && nav) return copy.rail.campaigns || nav.commissions;
     return copy.rail[id];
   };
@@ -459,7 +478,7 @@ export function RailNavigation(props: RailNavigationProps) {
   /** The same three, as the workspace menu's first group. */
   const workspaceLinks = utilities
     .filter((u) => u.shown)
-    .map((u) => ({ key: u.key, path: u.href, href: scope(u.href), label: copy.rail[u.key], icon: RAIL_ICON[u.key], current: railActive(u.href, path) }));
+    .map((u) => ({ key: u.key, path: u.href, href: scope(u.href), label: copy.rail[u.key], icon: RAIL_ICON[u.key], current: railActive(u.href, path, activeOptions) }));
   /** The meter leads to 플랜 및 청구 for a role that may open it. */
   const creditsHref = props.billing ? scope('/brand/billing') : undefined;
 
@@ -478,7 +497,7 @@ export function RailNavigation(props: RailNavigationProps) {
         data-rail-item={id}
         data-rail-inbox={hasBell && id === 'messages' ? '' : undefined}
         data-rail-tip={tipCount ? `${tipBase} · ${tipCount}` : tipBase}
-        aria-current={railActive(href, path) ? 'page' : undefined}
+        aria-current={railActive(href, path, activeOptions) ? 'page' : undefined}
         draggable
         onDragStart={(event) => onDragStart(event, id)}
         onDragOver={(event) => {
@@ -559,7 +578,8 @@ export function RailNavigation(props: RailNavigationProps) {
   };
 
   /* ---------------------------------------------------------- the switch */
-  const modeName = (m: RailMode) => (nav ? (m === 'make' ? nav.groupMake : nav.groupTeam) : '');
+  const modeName = (m: RailMode) =>
+    nav ? (m === 'make' ? nav.groupMake : ops && props.campaignOpsCopy ? props.campaignOpsCopy.modeLabel : nav.groupTeam) : '';
   const running = activity.counts.image + activity.counts.video + activity.counts.sound;
   /** Something waiting on the side the person is not on: unread notices for 야기 팀과, runs in progress for 직접 만들기. */
   const waiting = (m: RailMode): { count: number; text: string; short: string } | null => {
@@ -590,7 +610,7 @@ export function RailNavigation(props: RailNavigationProps) {
     }
     // The side's first page is its rail's first row: rows above the divider come before the ones under it,
     // whatever an older saved order put first.
-    const effect = railModeSwitchEffect({ path, next, items: railShownOrder(railModeItems(groups, next), next), hrefOf: (id) => scope(RAIL_HREF[id]), pageFollowsMode });
+    const effect = railModeSwitchEffect({ path, next, items: railShownOrder(railModeItems(groups, next), next), hrefOf: (id) => scope(RAIL_HREF[id]), pageFollowsMode, campaignOps: ops });
     // Same page, new content: the server tree is fetched again with the cookie just written. The rail and
     // the switch stay mounted, so focus stays where it is.
     if (effect.kind === 'refresh') router.refresh();
@@ -691,7 +711,7 @@ export function RailNavigation(props: RailNavigationProps) {
                 data-nav-group="home"
                 data-rail-item="home"
                 data-rail-tip={props.home}
-                aria-current={railActive(BRAND_HOME_PATH, path) ? 'page' : undefined}
+                aria-current={railActive(BRAND_HOME_PATH, path, activeOptions) ? 'page' : undefined}
               >
                 <Icon d={HOME_ICON} />
                 <span className="bw-rail-label">{props.home}</span>
@@ -770,7 +790,7 @@ export function RailNavigation(props: RailNavigationProps) {
                       data-nav-item={u.href}
                       data-nav-group="utility"
                       data-rail-tip={copy.rail[u.key]}
-                      aria-current={railActive(u.href, path) ? 'page' : undefined}
+                      aria-current={railActive(u.href, path, activeOptions) ? 'page' : undefined}
                     >
                       <Icon d={RAIL_ICON[u.key]} />
                       <span className="bw-rail-label">{copy.rail[u.key]}</span>
@@ -806,7 +826,7 @@ export function RailNavigation(props: RailNavigationProps) {
             const count = badge(id);
             return (
               <li key={id}>
-                <a href={scope(RAIL_HREF[id])} data-rail-tab={id} aria-current={railActive(RAIL_HREF[id], path) ? 'page' : undefined}>
+                <a href={scope(RAIL_HREF[id])} data-rail-tab={id} aria-current={railActive(RAIL_HREF[id], path, activeOptions) ? 'page' : undefined}>
                   <Icon d={RAIL_ICON[id]} />
                   <span>{label(id)}</span>
                   {count > 0 ? (
@@ -877,7 +897,7 @@ export function RailNavigation(props: RailNavigationProps) {
             {props.home ? (
               <ul className="bw-rail-sheet-list" data-rail-sheet-home>
                 <li>
-                  <a href={scope(BRAND_HOME_PATH)} aria-current={railActive(BRAND_HOME_PATH, path) ? 'page' : undefined}>
+                  <a href={scope(BRAND_HOME_PATH)} aria-current={railActive(BRAND_HOME_PATH, path, activeOptions) ? 'page' : undefined}>
                     <Icon d={HOME_ICON} />
                     <span>{props.home}</span>
                   </a>
@@ -889,7 +909,7 @@ export function RailNavigation(props: RailNavigationProps) {
                 const sheetHref = railItemHref(id, { makeInbox: hasBell, sendInbox });
                 return (
                   <li key={id}>
-                    <a href={scope(sheetHref)} aria-current={railActive(sheetHref, path) ? 'page' : undefined}>
+                    <a href={scope(sheetHref)} aria-current={railActive(sheetHref, path, activeOptions) ? 'page' : undefined}>
                       <Icon d={RAIL_ICON[id]} />
                       <span>{label(id)}</span>
                     </a>
@@ -900,7 +920,7 @@ export function RailNavigation(props: RailNavigationProps) {
                 .filter((u) => u.shown)
                 .map((u) => (
                   <li key={u.key}>
-                    <a href={scope(u.href)} aria-current={railActive(u.href, path) ? 'page' : undefined}>
+                    <a href={scope(u.href)} aria-current={railActive(u.href, path, activeOptions) ? 'page' : undefined}>
                       <Icon d={RAIL_ICON[u.key]} />
                       <span>{copy.rail[u.key]}</span>
                     </a>

@@ -11,6 +11,17 @@ import { z } from 'zod';
 export const INTAKE_TRACK_IDS = ['template_build', 'creator_campaign', 'studio_film', 'other'] as const;
 export type IntakeTrackId = (typeof INTAKE_TRACK_IDS)[number];
 
+/** Validates an incoming `?track=` param against the tracks this viewer may pick. */
+export function parseAllowedIntakeTrack(
+  raw: string | string[] | undefined,
+  allowTemplate: boolean,
+): IntakeTrackId | null {
+  if (typeof raw !== 'string') return null;
+  if (raw === 'template_build') return allowTemplate ? 'template_build' : null;
+  if (raw === 'creator_campaign' || raw === 'studio_film' || raw === 'other') return raw;
+  return null;
+}
+
 /**
  * Configurable budget bands (founder question Q6 pending; kept in one table so adjusting ranges
  * updates validation, auto-fill, wizard options and admin summaries together).

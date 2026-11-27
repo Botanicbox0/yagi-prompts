@@ -393,6 +393,12 @@ class FakeElement extends FakeNode {
 }
 
 class FakeInputElement extends FakeElement {
+  override get type(): string {
+    return this.attributes.type || 'text';
+  }
+  override set type(v: string) {
+    this.attributes.type = String(v ?? '');
+  }
   override get value(): string {
     return this._value;
   }

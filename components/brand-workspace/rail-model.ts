@@ -15,6 +15,8 @@ export type RailItemId =
   | 'workflows'
   | 'review'
   | 'campaigns'
+  | 'opsCampaigns'
+  | 'production'
   | 'creators'
   | 'assets'
   | 'brandKit'
@@ -34,6 +36,8 @@ export const RAIL_GROUP: Readonly<Record<RailItemId, RailGroupId>> = {
   assets: 'make',
   brandKit: 'make',
   campaigns: 'team',
+  opsCampaigns: 'team',
+  production: 'team',
   messages: 'team',
   review: 'team',
   creators: 'team',
@@ -85,6 +89,8 @@ export const RAIL_HREF: Readonly<Record<RailItemId, string>> = {
   workflows: '/brand/studio/workflows',
   review: '/brand/studio/review',
   campaigns: '/brand',
+  opsCampaigns: '/brand/campaigns',
+  production: '/brand/production',
   creators: '/brand/creators',
   assets: '/brand/library',
   brandKit: '/brand/identity',
@@ -114,6 +120,8 @@ export const RAIL_ICON: Readonly<Record<RailItemId | 'team' | 'billing' | 'setti
   sound: 'M4 8.5v3 M7 6v8 M10 4v12 M13 6.5v7 M16 8.5v3',
   review: 'M4 4.5h12v8.5H9l-3.5 3v-3H4z M7 8h6M7 10.5h4',
   campaigns: 'M3.5 3.5h13v13h-13z M3.5 8h13M8 8v8.5',
+  opsCampaigns: 'M3.5 11.5v-3l7-3v9l-7-3z M10.5 6.8c2-.7 3.5-1.4 5-2.3v11c-1.5-.9-3-1.6-5-2.3 M5.5 12.2l1 4.3h2l-.8-3.5',
+  production: 'M4 4.5h9.5l2.5 2.5v8.5H4z M7 9h6M7 12h4 M13.5 4.5V7H16',
   creators: 'M7 8a3 3 0 1 0 0-.01M2.5 16.5v-.5a4.5 4.5 0 0 1 9 0v.5M13.5 6a2.5 2.5 0 1 1 0 5M14.5 13a4 4 0 0 1 3 3.5',
   assets: 'M3 6h14v10.5H3z M6 3.5h8 M6 13l3-3.5 3 2.6 2-1.8 3 3.2',
   brandKit: 'M4 3.5h12v13H4z M7 7h6M7 10h6M7 13h3.5',
@@ -139,6 +147,8 @@ export interface RailVisibility {
    * denied, `BRAND_SOUND_STUDIO=on`. Only with `studio`: a project-only brand's showroom has no sound door.
    */
   sound?: boolean;
+  /** Campaign ops C1: replaces 프로젝트 with 캠페인 and 제작 의뢰 when rooms are open. */
+  campaignOps?: boolean;
 }
 
 /**
@@ -154,6 +164,7 @@ export function railItems(visible: RailVisibility): RailItemId[] {
   if (visible.rooms) {
     // A project-only brand used to get 프로젝트 · 알림함 first; the two-mode rail (rail-mode.ts) now opens it
     // on 야기 팀과 instead, so every brand lists its items in the same order.
+    const ops = Boolean(visible.campaignOps);
     const grouped: Array<[RailItemId, boolean]> = [
       ['image', showStudio],
       ['video', showStudio],
@@ -161,7 +172,9 @@ export function railItems(visible: RailVisibility): RailItemId[] {
       ['compose', showStudio],
       ['workflows', showStudio],
       ['assets', true],
-      ['campaigns', true],
+      ['opsCampaigns', ops],
+      ['production', ops],
+      ['campaigns', !ops],
       ['messages', true],
     ];
     return grouped.filter(([, shown]) => shown).map(([id]) => id);
@@ -181,11 +194,33 @@ export function railItems(visible: RailVisibility): RailItemId[] {
 
 const under = (path: string, base: string) => path === base || path.startsWith(`${base}/`);
 
+export interface RailActiveOptions {
+  campaignOps?: boolean;
+  track?: string | null;
+}
+
+function campaignOpsProjectItem(track?: string | null): '/brand/campaigns' | '/brand/production' {
+  if (track === 'template_build' || track === 'studio_film' || track === 'other') return '/brand/production';
+  return '/brand/campaigns';
+}
+
 /**
  * Whether `href` is the current section. `/brand/studio` (images) is not current on
  * `/brand/studio/video`, `/brand/studio/compose`, `/brand/studio/workflows`, or `/brand/studio/review`; campaigns own `/brand` and every campaign page.
  */
-export function railActive(href: string, path: string): boolean {
+export function railActive(href: string, path: string, options?: RailActiveOptions): boolean {
+  if (options?.campaignOps) {
+    if (href === '/brand') return false;
+    if (href === '/brand/campaigns' || href === '/brand/production') {
+      if (under(path, '/brand/campaigns')) return href === '/brand/campaigns';
+      if (under(path, '/brand/production')) return href === '/brand/production';
+      if (path === '/brand' || path === '/brand/') return false;
+      if (under(path, '/brand/projects') || /^\/brand\/rooms\/[^/]+/.test(path)) {
+        return options.track ? href === campaignOpsProjectItem(options.track) : false;
+      }
+      return false;
+    }
+  }
   // A project's room (`/brand/rooms/<id>`) is part of that commission: 의뢰 is current there, and
   // 메시지 only on the inbox itself.
   if (href === '/brand') return path === '/brand' || under(path, '/brand/projects') || /^\/brand\/rooms\/[^/]+/.test(path);
