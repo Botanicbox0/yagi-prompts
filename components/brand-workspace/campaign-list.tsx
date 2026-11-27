@@ -37,6 +37,52 @@ export interface CampaignListRooms {
   list?: RoomsShellCopy['space']['list'];
 }
 
+export function BrandProjectCard({
+  project: p,
+  href,
+  b,
+  locale,
+  rooms = null,
+  trackLabel,
+}: {
+  project: BrandProjectSummary;
+  href: string;
+  b: BrandCopy;
+  locale: string;
+  rooms?: CampaignListRooms | null;
+  trackLabel?: string;
+}) {
+  const d = b.dashboard;
+  const needsAction = p.status === 'active' && (p.overview?.pending ?? 0) > 0;
+  const shortDate = (date: string) => new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric', timeZone: 'UTC' }).format(new Date(date));
+  /** Factual per status: never "to be agreed" on an active, completed or cancelled campaign. */
+  const line = campaignDateLine(p);
+  const dateText = !line ? null : line.kind === 'pending' ? d.noDate : `${b.endsOn} · ${shortDate(line.date)}`;
+  const activityText =
+    p.status === 'active' && p.overview?.pending
+      ? interpolate(d.reviewCount, { count: p.overview.pending })
+      : p.overview?.published
+        ? interpolate(d.publishedCount, { count: p.overview.published })
+        : d.allClear;
+  return (
+    <li>
+      <a className="bw-campaign-card" href={href}>
+        <div className="bw-campaign-art">
+          <WorkspacePreview cover={p.coverUrl} content={p.overview?.contents.find(c => c.mime?.startsWith('image/')) ?? p.overview?.contents[0]} b={b} title={p.organizationName}/>
+          <span className="bw-status" data-state={p.status}>{b.status[p.status]}</span>
+        </div>
+        <div className="bw-card-copy">
+          <p>{p.organizationName}{trackLabel ? <span data-project-track-label> · {trackLabel}</span> : null}{p.clientVisible===false&&<small className="bw-private-label" data-campaign-unshared>{b.managed.prepared}</small>}</p>
+          <h2>{p.title}</h2>
+          {line && <span data-campaign-date={line.kind}>{dateText}</span>}
+          <footer><strong className={needsAction ? 'bw-action-needed' : ''}>{activityText}</strong><span aria-hidden="true">↗</span></footer>
+        </div>
+      </a>
+      {rooms && p.clientVisible !== false ? <RoomEntry href={roomHref(p.id, rooms.organizationId)} unread={rooms.unread[p.id] ?? 0} copy={rooms.copy} variant="card"/> : null}
+    </li>
+  );
+}
+
 export function CampaignList({ projects, b, locale, studio = false, rooms = null }: { projects: BrandProjectSummary[]; b: BrandCopy; locale: string; studio?: boolean; rooms?: CampaignListRooms | null }) {
   const [{ query, status }, setFilters] = useState<CampaignFilters>({ query: '', status: 'all' });
   const [returnLocation, setReturnLocation] = useState<string | null>(null);
@@ -98,10 +144,7 @@ export function CampaignList({ projects, b, locale, studio = false, rooms = null
       {!sorted.length ? <p className="bw-board-empty" role="status">{words.noMatch}</p> : studio ? <div className="bw-ops-list">
         <div className="bw-ops-labels" aria-hidden="true"><span>{d.campaign}</span><span>{d.activity}</span><span>{d.schedule}</span></div>
         {sorted.map(p => <a className="bw-ops-row" key={p.id} href={link(p)}><div className="bw-ops-name"><WorkspacePreview cover={p.coverUrl} content={p.overview?.contents.find(c => c.mime?.startsWith('image/')) ?? p.overview?.contents[0]} b={b} title={p.organizationName}/><div><small>{p.organizationName}</small><h3>{p.title}</h3><span className="bw-status" data-state={p.status}>{b.status[p.status]}</span>{p.clientVisible===false&&<small className="bw-private-label">{b.managed.prepared}</small>}</div></div><span className={needsAction(p) ? 'bw-action-needed' : 'bw-muted'}>{activity(p)}</span><span className="bw-ops-date" data-campaign-date={campaignDateLine(p)?.kind ?? 'none'}>{dateLine(p, false) ?? '—'}<span aria-hidden="true">↗</span></span></a>)}
-      </div> : <ul className="bw-campaign-grid">{sorted.map(p => <li key={p.id}><a className="bw-campaign-card" href={link(p)}>
-        <div className="bw-campaign-art"><WorkspacePreview cover={p.coverUrl} content={p.overview?.contents.find(c => c.mime?.startsWith('image/')) ?? p.overview?.contents[0]} b={b} title={p.organizationName}/><span className="bw-status" data-state={p.status}>{b.status[p.status]}</span></div>
-        <div className="bw-card-copy"><p>{p.organizationName}{p.clientVisible===false&&<small className="bw-private-label" data-campaign-unshared>{b.managed.prepared}</small>}</p><h2>{p.title}</h2>{campaignDateLine(p) && <span data-campaign-date={campaignDateLine(p)!.kind}>{dateLine(p)}</span>}<footer><strong className={needsAction(p) ? 'bw-action-needed' : ''}>{activity(p)}</strong><span aria-hidden="true">↗</span></footer></div>
-      </a>{rooms && p.clientVisible !== false ? <RoomEntry href={roomHref(p.id, rooms.organizationId)} unread={rooms.unread[p.id] ?? 0} copy={rooms.copy} variant="card"/> : null}</li>)}</ul>}
+      </div> : <ul className="bw-campaign-grid">{sorted.map(p => <BrandProjectCard key={p.id} project={p} href={link(p)} b={b} locale={locale} rooms={rooms} />)}</ul>}
     </section>
     {/* Rooms open: the old content versions are always empty for room-era projects, so nothing shows. */}
     {!studio && !(rooms && latest.length === 0) && <section className="bw-recent" data-home-recent><header><h2>{d.recent}</h2><p>{d.recentNote}</p></header>{latest.length ? <div className="bw-content-grid">{latest.map(({ p, content }) => <a key={content.id} href={`${link(p)}#review`} className="bw-content-card"><WorkspacePreview content={content} poster={p.coverUrl} b={b} title={p.organizationName}/><div><span className="bw-status" data-state={content.decision}>{b.decisionStates[content.decision]}</span><h3>{content.title}</h3><p>{p.title}</p><small>{interpolate(b.version, { number: content.version })}</small></div></a>)}</div> : <p className="bw-board-empty">{d.noRecent}</p>}</section>}

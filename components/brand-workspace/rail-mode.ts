@@ -36,6 +36,8 @@ export interface RailModeInput {
   studioShowroom?: boolean;
   /** Project rooms are open (the team side exists). */
   rooms: boolean;
+  /** Campaign ops C1 is open for this brand (`/brand/campaigns` and `/brand/production` belong to `team`). */
+  campaignOps?: boolean;
 }
 
 /** The sides this brand has, in switch order. Empty without rooms: no modes at all. */
@@ -55,10 +57,17 @@ const under = (path: string, base: string) => path === base || path.startsWith(`
  * The side a page belongs to, or null for a page both sides share (home, assets, team, settings, usage,
  * an invitation). `/brand` is the project list.
  */
-export function pathRailMode(path: string): RailMode | null {
+export function pathRailMode(path: string, options?: { campaignOps?: boolean }): RailMode | null {
   const clean = path.split(/[?#]/)[0] ?? path;
   if (under(clean, '/brand/studio') || under(clean, '/brand/identity')) return 'make';
-  if (clean === '/brand' || clean === '/brand/' || under(clean, '/brand/projects') || under(clean, '/brand/rooms') || under(clean, '/brand/creators')) {
+  if (
+    clean === '/brand' ||
+    clean === '/brand/' ||
+    under(clean, '/brand/projects') ||
+    under(clean, '/brand/rooms') ||
+    under(clean, '/brand/creators') ||
+    (options?.campaignOps === true && (under(clean, '/brand/campaigns') || under(clean, '/brand/production')))
+  ) {
     return 'team';
   }
   return null;
@@ -75,7 +84,7 @@ export function resolveRailMode(input: ResolveRailModeInput): RailMode | null {
   const modes = railModes(input);
   if (modes.length === 0) return null;
   if (modes.length === 1) return modes[0]!;
-  const fromPath = pathRailMode(input.path);
+  const fromPath = pathRailMode(input.path, { campaignOps: input.campaignOps });
   if (fromPath && modes.includes(fromPath)) return fromPath;
   if (input.remembered && modes.includes(input.remembered)) return input.remembered;
   return defaultRailMode(input);
@@ -139,8 +148,14 @@ export function railModeGuest(id: RailItemId, mode: RailMode): boolean {
  * rail changes; on a page of the other side, the new side's first item (its saved order) opens, so nobody
  * sits on a page their rail does not list.
  */
-export function railModeSwitchTarget(path: string, next: RailMode, items: readonly RailItemId[], hrefOf: (id: RailItemId) => string): string | null {
-  const side = pathRailMode(path);
+export function railModeSwitchTarget(
+  path: string,
+  next: RailMode,
+  items: readonly RailItemId[],
+  hrefOf: (id: RailItemId) => string,
+  options?: { campaignOps?: boolean },
+): string | null {
+  const side = pathRailMode(path, options);
   if (side === null || side === next) return null;
   const first = items.find((id) => !railModeGuest(id, next)) ?? items[0];
   return first ? hrefOf(first) : null;
@@ -163,8 +178,9 @@ export function railModeSwitchEffect(input: {
   items: readonly RailItemId[];
   hrefOf: (id: RailItemId) => string;
   pageFollowsMode: boolean;
+  campaignOps?: boolean;
 }): RailModeSwitchEffect {
-  const href = railModeSwitchTarget(input.path, input.next, input.items, input.hrefOf);
+  const href = railModeSwitchTarget(input.path, input.next, input.items, input.hrefOf, { campaignOps: input.campaignOps });
   if (href) return { kind: 'navigate', href };
   return input.pageFollowsMode ? { kind: 'refresh' } : { kind: 'none' };
 }

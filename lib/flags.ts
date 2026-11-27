@@ -579,3 +579,18 @@ export function promptGuardMode(
 export function brandSeedanceRulesV2Open(env: Record<string, string | undefined> = process.env): boolean {
   return env.BRAND_SEEDANCE_RULES_V2 === 'on';
 }
+
+/**
+ * Campaign ops C1: the "캠페인 운영" mode with `/brand/campaigns` and `/brand/production`.
+ * Default OFF: open only when `BRAND_CAMPAIGN_OPS=on` and the organization matches `BRAND_CAMPAIGN_OPS_ORGS`
+ * (empty, `*`, or `all` = every organization; otherwise comma-separated organization ids). Only has an effect
+ * where the rail has modes (rooms open for the brand).
+ */
+export function brandCampaignOpsOpenFor(
+  organizationId: string | null | undefined,
+  env: Record<string, string | undefined> = process.env,
+): boolean {
+  // A blank organization id never opens it (the shared helper only rejects a missing one).
+  if (!organizationId?.trim()) return false;
+  return orgListSwitchOpen(env.BRAND_CAMPAIGN_OPS, env.BRAND_CAMPAIGN_OPS_ORGS, organizationId);
+}

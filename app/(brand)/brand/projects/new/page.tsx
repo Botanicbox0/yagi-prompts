@@ -1,3 +1,4 @@
+import type { ReactElement, ReactNode } from "react";
 import { brandContext } from "@/components/brand-workspace/context";
 import { ActionForm } from "@/components/brand-workspace/action-form";
 import { brandScope, membershipOf } from "@/components/brand-workspace/scope";
@@ -5,6 +6,9 @@ import { BrandUnavailable } from "@/components/brand-workspace/brand-unavailable
 import { scopedHref } from "@/lib/brands/workspace/selection";
 import { CampaignWizard, type WizardFormat } from "@/components/brand-workspace/campaign-wizard";
 import { ProjectIntakeWizard } from "@/components/brand-workspace/project-intake-wizard";
+import { parseAllowedIntakeTrack } from "@/lib/brands/workspace/intake-brief";
+import { campaignOpsOpenForViewer } from "@/lib/brands/workspace/campaign-ops";
+import { CampaignOpsTrackMarker } from "@/components/brand-workspace/campaign-ops/track-context";
 import { roomsOpenFor } from "@/components/brand-rooms/room/visibility";
 import { brandRoomsOpen } from "@/lib/flags";
 import { featureDenied, isSandboxedClientOrganization } from "@/lib/brands/features";
@@ -14,9 +18,9 @@ import { intakeBriefEn, intakeBriefKo } from "@/messages/intake-brief";
 export default async function NewBrandProject({
   searchParams,
 }: {
-  searchParams: Promise<{ organizationId?: string | string[]; track?: string | string[] }>;
+  searchParams: Promise<{ organizationId?: string | string[]; track?: string | string[]; start?: string | string[] }>;
 }) {
-  const [{ organizationId, track }, { sql, viewer, verifiedEmail, b, dict, locale }] = await Promise.all([searchParams, brandContext()]);
+  const [{ organizationId, track, start }, { sql, viewer, verifiedEmail, b, dict, locale }] = await Promise.all([searchParams, brandContext()]);
   if (!sql) return <p role="alert">{b.unavailable}</p>;
   const { selection, choice, choices } = await brandScope({ sql, verifiedEmail }, viewer, organizationId);
   if (selection.state === "unavailable") return <BrandUnavailable b={b} />;
@@ -35,7 +39,10 @@ export default async function NewBrandProject({
     choice && (isSandboxedClientOrganization(choice) || featureDenied(choice.denied, "generative_media")),
   );
   const useIntakeBrief = Boolean(choice && roomsOpenFor(choice, brandRoomsOpen()));
+  const opsOpen = campaignOpsOpenForViewer(choice);
+  const opsStart = opsOpen && start === "ops";
   const selfStudioClosed = Boolean(choice && featureDenied(choice.denied, "self_studio"));
+  const validatedTrack = opsOpen ? parseAllowedIntakeTrack(track, !selfStudioClosed) : null;
   const intakeCopy = dict?.intakeBrief ?? (locale === "en" ? intakeBriefEn : intakeBriefKo);
   // In the project space (rooms open) the way back is to 프로젝트, not the campaign list.
   const backLabel = useIntakeBrief ? (dict?.roomsShell?.room.back ?? b.back) : b.back;
@@ -43,7 +50,7 @@ export default async function NewBrandProject({
     slug: card.slug, title: locale === "ko" && card.titleKo ? card.titleKo : card.title, source: card.source,
     authorHandle: card.source === "community" ? card.authorHandle : null, poster: card.poster, video: card.video,
   }));
-  return (
+  const tree = (
     <div data-brand-new-project>
       <div className="bw-heading">
         <div>
@@ -83,8 +90,9 @@ export default async function NewBrandProject({
         <ProjectIntakeWizard
           copy={intakeCopy}
           organizations={organizations.map(({ id, name }) => ({ id, name }))}
-          initialTrack={typeof track === "string" ? track : undefined}
+          initialTrack={opsOpen ? (validatedTrack ?? undefined) : (typeof track === "string" ? track : undefined)}
           selfStudioClosed={selfStudioClosed}
+          {...(opsStart ? { opsStart: true } : {})}
         />
       ) : (
         <CampaignWizard
@@ -96,6 +104,13 @@ export default async function NewBrandProject({
           initialTrack={typeof track === "string" ? track : undefined}
         />
       )}
+    </div>
+  );
+  if (!opsOpen || organizations.length === 0 || studioPrep) return tree;
+  return (
+    <div data-brand-new-project>
+      <CampaignOpsTrackMarker track={validatedTrack ?? "creator_campaign"} />
+      {(tree as ReactElement<{ children?: ReactNode }>).props.children}
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { featureDenied, isSandboxedClientOrganization } from '@/lib/brands/featu
 import { billingVisible, poolVisible, scopedHref, sectionVisibility, selectedChoice, switchHref, type BrandWorkspaceScope } from '@/lib/brands/workspace/selection';
 import type { BrandRole } from '@/lib/brands/workspace/types';
 import { soundStudioVisible, studioShowroomVisible, studioV2Visible } from '@/lib/brand-studio/visibility';
+import { campaignOpsEligible } from '@/lib/brands/workspace/campaign-ops-policy';
 import { brandHomeVisible } from '@/lib/brands/workspace/home';
 import type { StudioShellCopy } from '@/messages/studio-shell';
 import type { RoomsShellCopy } from '@/messages/rooms-shell';
@@ -291,9 +292,13 @@ type RailInputs = {
    * shows; none is studio copy. Given by the layout; without it the rail keeps its rows.
    */
   workspaceMenu?: { identity: IdentityCopy; roles: Record<BrandRole, string>; language: string; signOut: string };
+  /** Organization ids with BRAND_CAMPAIGN_OPS open (passed by app/(brand)/layout.tsx). */
+  campaignOpsOrgs?: readonly string[];
+  /** Customer copy for campaign ops C1 (only provided when at least one org has it open). */
+  campaignOpsCopy?: { modeLabel: string; campaigns: string; production: string };
 };
 
-function Scoped({ scope, studioV2 = false, shell, locale = 'ko', railExpanded = false, rooms = false, roomsCopy, homeLabel, railModes, soundStudio = false, workspaceMenu, ...labels }: Labels & RailInputs & { scope: BrandWorkspaceScope }) {
+function Scoped({ scope, studioV2 = false, shell, locale = 'ko', railExpanded = false, rooms = false, roomsCopy, homeLabel, railModes, soundStudio = false, workspaceMenu, campaignOpsOrgs, campaignOpsCopy, ...labels }: Labels & RailInputs & { scope: BrandWorkspaceScope }) {
   const { pathname, selection } = useWorkspaceSelection(scope);
   const choice = selectedChoice(selection);
   const isMorphic = Boolean(
@@ -308,6 +313,12 @@ function Scoped({ scope, studioV2 = false, shell, locale = 'ko', railExpanded = 
       choice && choice.role !== 'guest' && choice.role !== 'studio' && studioShowroomVisible(choice, true),
     );
     const roomsActive = Boolean(rooms && roomsCopy && choice && choice.role !== 'studio');
+    const campaignOpsActive = Boolean(
+      roomsActive &&
+        campaignOpsEligible(choice) &&
+        campaignOpsCopy &&
+        campaignOpsOrgs?.some((id) => id.toLowerCase() === choice?.id.toLowerCase()),
+    );
     return (
       <RailNavigation
         organizationId={choice?.id ?? null}
@@ -329,6 +340,8 @@ function Scoped({ scope, studioV2 = false, shell, locale = 'ko', railExpanded = 
         roomsCopy={roomsCopy}
         home={homeLabel && brandHomeVisible(choice, true) ? homeLabel : undefined}
         modeMemory={roomsActive ? railModes : undefined}
+        campaignOps={campaignOpsActive}
+        campaignOpsCopy={campaignOpsActive ? campaignOpsCopy : undefined}
         workspace={
           workspaceMenu
             ? {
@@ -389,10 +402,12 @@ export function WorkspaceNavigation({
   railModes,
   soundStudio,
   workspaceMenu,
+  campaignOpsOrgs,
+  campaignOpsCopy,
   ...labels
 }: Labels & RailInputs & { scope?: BrandWorkspaceScope | null; pendingShare?: boolean }) {
   if (!scope || (scope.choices.length === 0 && !pendingShare)) return <NoTabs />;
   return (
-    <Scoped scope={scope} studioV2={studioV2} shell={shell} locale={locale} railExpanded={railExpanded} rooms={rooms} roomsCopy={roomsCopy} homeLabel={homeLabel} railModes={railModes} soundStudio={soundStudio} workspaceMenu={workspaceMenu} {...labels} />
+    <Scoped scope={scope} studioV2={studioV2} shell={shell} locale={locale} railExpanded={railExpanded} rooms={rooms} roomsCopy={roomsCopy} homeLabel={homeLabel} railModes={railModes} soundStudio={soundStudio} workspaceMenu={workspaceMenu} campaignOpsOrgs={campaignOpsOrgs} campaignOpsCopy={campaignOpsCopy} {...labels} />
   );
 }

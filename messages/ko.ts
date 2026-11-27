@@ -11,6 +11,7 @@ import { roomsChatKo } from './rooms-chat';
 import { roomsStoryboardKo } from './rooms-storyboard';
 import { roomsReviewKo } from './rooms-review';
 import { roomsShellKo } from './rooms-shell';
+import { campaignOpsKo } from './campaign-ops';
 import { roomsNoticesKo } from './rooms-notices';
 import { roomsShareKo } from './rooms-share';
 import { intakeBriefKo } from './intake-brief';
@@ -75,6 +76,7 @@ export const ko: Dictionary = {
   roomsStoryboard: roomsStoryboardKo,
   roomsReview: roomsReviewKo,
   roomsShell: roomsShellKo,
+  campaignOps: campaignOpsKo,
   roomsNotices: roomsNoticesKo,
   roomsShare: roomsShareKo,
   intakeBrief: intakeBriefKo,

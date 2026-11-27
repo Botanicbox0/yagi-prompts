@@ -78,6 +78,8 @@ type WorkspaceHomeBaseProps = {
   planCatalogue?: readonly BillingPlanCatalogueItem[];
   /** Live announcement for the home's news line (slice 3b); omitted when closed or absent. */
   news?: HomeAnnouncement | null;
+  /** Campaign ops C1 mode label override when switch is open for this brand. */
+  teamModeLabel?: string;
 };
 
 export type WorkspaceHomeProps =
@@ -210,7 +212,7 @@ export function WorkspaceHome(props: WorkspaceHomeProps) {
           ) : null}
           <div className={s.lineGroup} data-home-team={layout.team.key}>
             <h2 className={s.lineLabel}>
-              <span>{copy.roomsNav.groupTeam}</span>
+              <span>{props.teamModeLabel ?? copy.roomsNav.groupTeam}</span>
             </h2>
             <div className={s.teamRow}>
               {teamFact ? (

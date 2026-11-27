@@ -13,6 +13,7 @@ import {
   extractTextFromBriefFile,
   normalizeClientHttpsUrl,
   objectiveFromIntakeBrief,
+  parseAllowedIntakeTrack,
   productionModeForIntakeTrack,
   type IntakeAspectRatio,
   type IntakeBudgetBand,
@@ -99,11 +100,7 @@ function initialDraft(defaultTrack: IntakeTrackId): DraftState {
 }
 
 function resolveInitialTrack(raw: string | undefined, allowTemplate: boolean): IntakeTrackId {
-  if (raw === 'template_build' && allowTemplate) return 'template_build';
-  if (raw === 'creator_campaign') return 'creator_campaign';
-  if (raw === 'studio_film') return 'studio_film';
-  if (raw === 'other') return 'other';
-  return 'creator_campaign';
+  return parseAllowedIntakeTrack(raw, allowTemplate) ?? 'creator_campaign';
 }
 
 function ratioText(copy: IntakeBriefCopy, ratio: IntakeAspectRatio): string {
@@ -161,6 +158,7 @@ export function ProjectIntakeWizard({
   organizations,
   initialTrack,
   selfStudioClosed = false,
+  opsStart = false,
   initialAssets,
 }: {
   copy: IntakeBriefCopy;
@@ -168,6 +166,8 @@ export function ProjectIntakeWizard({
   initialTrack?: string;
   /** True for non-subscribing commissioned clients (`self_studio` denied): hides `template_build`. */
   selfStudioClosed?: boolean;
+  /** True only on `&start=ops` when Campaign Ops C1 is open for the selected org. */
+  opsStart?: boolean;
   initialAssets?: StudioAssetPick[];
 }) {
   const router = useRouter();
@@ -176,6 +176,7 @@ export function ProjectIntakeWizard({
     () => INTAKE_TRACK_IDS.filter((t) => (selfStudioClosed ? t !== 'template_build' : true)),
     [selfStudioClosed],
   );
+  const opsRequestedTrack = opsStart ? parseAllowedIntakeTrack(initialTrack, !selfStudioClosed) : null;
   const defaultTrack = resolveInitialTrack(initialTrack, !selfStudioClosed);
   const [draft, setDraft] = useState<DraftState>(() => initialDraft(defaultTrack));
   const [files, setFiles] = useState<File[]>([]);
@@ -190,32 +191,80 @@ export function ProjectIntakeWizard({
   const requestIdRef = useRef<string | null>(null);
 
   const storageKey = `${INTAKE_DRAFT_KEY_PREFIX}${organizationId}`;
+  const [activeStorageKey, setActiveStorageKey] = useState<string>(storageKey);
+  const activeKeyRef = useRef<string>(storageKey);
+
+  const clearOpsDrafts = useCallback(() => {
+    if (!organizationId || typeof window === 'undefined') return;
+    for (const trackId of INTAKE_TRACK_IDS) {
+      try {
+        window.localStorage.removeItem(`${storageKey}:ops:${trackId}`);
+      } catch {}
+    }
+  }, [organizationId, storageKey]);
 
   // Restore saved browser draft for this organization on mount / org switch.
   useEffect(() => {
     if (!organizationId || typeof window === 'undefined') return;
     try {
       const raw = window.localStorage.getItem(storageKey);
-      if (!raw) {
+      const parsed = raw ? (JSON.parse(raw) as Partial<DraftState>) : null;
+      const savedTrack =
+        parsed && typeof parsed === 'object' && parsed.track && availableTracks.includes(parsed.track)
+          ? parsed.track
+          : null;
+
+      if (opsStart && opsRequestedTrack) {
+        const opsKey = `${storageKey}:ops:${opsRequestedTrack}`;
+        if (savedTrack === opsRequestedTrack && parsed && typeof parsed === 'object') {
+          try {
+            window.localStorage.removeItem(opsKey);
+          } catch {}
+          activeKeyRef.current = storageKey;
+          setActiveStorageKey(storageKey);
+          setDraft((prev) => ({
+            ...prev,
+            ...parsed,
+            track: savedTrack,
+          }));
+          setHasSavedDraft(true);
+          return;
+        }
+        // Main draft is absent or a different track: isolate this ops request under :ops:<track>.
+        activeKeyRef.current = opsKey;
+        setActiveStorageKey(opsKey);
+        const opsRaw = window.localStorage.getItem(opsKey);
+        const opsParsed = opsRaw ? (JSON.parse(opsRaw) as Partial<DraftState>) : null;
+        if (opsParsed && typeof opsParsed === 'object') {
+          setDraft({
+            ...initialDraft(opsRequestedTrack),
+            ...opsParsed,
+            track: opsRequestedTrack,
+          });
+          setHasSavedDraft(true);
+        } else {
+          setDraft(initialDraft(opsRequestedTrack));
+          setHasSavedDraft(false);
+        }
+        return;
+      }
+
+      activeKeyRef.current = storageKey;
+      setActiveStorageKey(storageKey);
+      if (!raw || !parsed || typeof parsed !== 'object') {
         setHasSavedDraft(false);
         return;
       }
-      const parsed = JSON.parse(raw) as Partial<DraftState>;
-      if (parsed && typeof parsed === 'object') {
-        setDraft((prev) => ({
-          ...prev,
-          ...parsed,
-          track:
-            parsed.track && availableTracks.includes(parsed.track)
-              ? parsed.track
-              : prev.track,
-        }));
-        setHasSavedDraft(true);
-      }
+      setDraft((prev) => ({
+        ...prev,
+        ...parsed,
+        track: savedTrack ?? prev.track,
+      }));
+      setHasSavedDraft(true);
     } catch {
       // Ignore corrupt storage entries.
     }
-  }, [organizationId, storageKey, availableTracks]);
+  }, [organizationId, storageKey, availableTracks, opsStart, opsRequestedTrack]);
 
   // Persist draft edits automatically.
   useEffect(() => {
@@ -228,13 +277,14 @@ export function ProjectIntakeWizard({
         draft.contactValue.trim(),
     );
     if (!meaningful) return;
+    const targetKey = activeKeyRef.current || activeStorageKey;
     try {
-      window.localStorage.setItem(storageKey, JSON.stringify(draft));
+      window.localStorage.setItem(targetKey, JSON.stringify(draft));
       setHasSavedDraft(true);
     } catch {
       // Ignore storage quota errors.
     }
-  }, [draft, organizationId, storageKey]);
+  }, [draft, organizationId, activeStorageKey]);
 
   // Load Brand Asset Hub items so the client can pick existing packshots/logos in Step 2.
   useEffect(() => {
@@ -262,12 +312,14 @@ export function ProjectIntakeWizard({
   }, []);
 
   const clearSavedDraft = () => {
+    const targetKey = activeKeyRef.current || activeStorageKey;
     if (typeof window !== 'undefined') {
       try {
-        window.localStorage.removeItem(storageKey);
+        window.localStorage.removeItem(targetKey);
+        if (targetKey === storageKey) clearOpsDrafts();
       } catch {}
     }
-    setDraft(initialDraft(defaultTrack));
+    setDraft(initialDraft(opsStart && opsRequestedTrack ? opsRequestedTrack : defaultTrack));
     setFiles([]);
     setExtractedFileTexts({});
     setHasSavedDraft(false);
@@ -479,8 +531,10 @@ export function ProjectIntakeWizard({
       }
 
       if (typeof window !== 'undefined') {
+        const targetKey = activeKeyRef.current || activeStorageKey;
         try {
-          window.localStorage.removeItem(storageKey);
+          window.localStorage.removeItem(targetKey);
+          if (targetKey === storageKey) clearOpsDrafts();
         } catch {}
       }
       router.push(`/brand/rooms/${projectId}?organizationId=${encodeURIComponent(organizationId)}`);

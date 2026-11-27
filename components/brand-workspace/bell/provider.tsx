@@ -10,6 +10,7 @@ import { brandTransport, loadRoomBell, loadSendBell, sendTransport } from '@/com
 import { ROOM_ACTIVITY } from '@/components/brand-rooms/seams';
 import type { SendInboxView } from '@/lib/brand-rooms/send-contracts';
 import { studioShowroomVisible, studioV2Visible } from '@/lib/brand-studio/visibility';
+import { campaignOpsEligible } from '@/lib/brands/workspace/campaign-ops-policy';
 import { sectionVisibility, selectedChoice, type BrandWorkspaceScope } from '@/lib/brands/workspace/selection';
 import { useWorkspaceSelection } from '../identity';
 import {
@@ -75,6 +76,7 @@ export interface BellProviderProps {
   locale?: StudioLocale;
   send?: BellSendConfig;
   sendCopy?: BellSendCopy;
+  campaignOpsOrgs?: readonly string[];
   children: ReactNode;
 }
 
@@ -132,6 +134,7 @@ function ActiveBellProvider({
   locale = 'ko',
   send,
   sendCopy,
+  campaignOpsOrgs,
   children,
 }: BellProviderProps) {
   const { pathname, selection } = useWorkspaceSelection(scope);
@@ -155,11 +158,17 @@ function ActiveBellProvider({
     choice && choice.role !== 'guest' && choice.role !== 'studio' && studioShowroomVisible(choice, true),
   );
   const roomsActive = Boolean(rooms && choice && choice.role !== 'studio');
+  const campaignOpsActive = Boolean(
+    roomsActive &&
+      campaignOpsEligible(choice) &&
+      campaignOpsOrgs?.some((id) => id.toLowerCase() === choice?.id.toLowerCase()),
+  );
   const remembered = rememberedRailMode(cookieModes ?? railModes ?? {}, selectedOrgId);
   const mode = resolveRailMode({
     studio,
     studioShowroom,
     rooms: roomsActive,
+    campaignOps: campaignOpsActive,
     path: pathname,
     remembered,
   });

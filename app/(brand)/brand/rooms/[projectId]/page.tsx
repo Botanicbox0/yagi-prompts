@@ -21,11 +21,13 @@ import { PROJECT_ONLY_RETENTION_DAYS } from "@/lib/brands/plans";
 import { loadOrganizationStorageSummary } from "@/lib/brands/storage-quota";
 import { scopedHref } from "@/lib/brands/workspace/selection";
 import { brandRoomInvitesOpen, brandStudioV2Open } from "@/lib/flags";
+import { campaignOpsOpenForViewer } from "@/lib/brands/workspace/campaign-ops";
 import { brandSendOpenFor, brandSendSwitchesOn } from "@/lib/brand-rooms/members-channel";
 import { memberSeesBrandProjects } from "@/lib/brand-studio/brand-projects";
 import { canTalkIn, roomSeat } from "@/lib/brand-rooms/access";
 import { RoomShareInvitesProvider, type RoomShareInvites } from "@/components/brand-rooms/share/invites-context";
 import { ProjectShareButton } from "@/components/brand-rooms/share/invite-dialog";
+import { CampaignOpsTrackMarker } from "@/components/brand-workspace/campaign-ops/track-context";
 
 /**
  * `/brand/rooms/[projectId]` — one project's room (docs/BRAND-ROOMS.md §3, §7, slice H).
@@ -112,6 +114,7 @@ export default async function ProjectRoomPage({
     tab === "storyboard" || boardId ? "storyboard" : tab === "review" || reviewId ? "drafts" : briefCategory ? "brief" : "all";
   // The retention note matters once the work is delivered: a project-only room shows it only when completed.
   const retentionNotice = isProjectOnlyOrg && project.status === "completed";
+  const opsOpen = campaignOpsOpenForViewer(choice);
   const sendOpen =
     canEdit &&
     brandSendSwitchesOn() &&
@@ -120,8 +123,7 @@ export default async function ProjectRoomPage({
     memberSeesBrandProjects({ staff: false, role: choice.role }) &&
     (await brandSendOpenFor(sql, choice.id).catch(() => false));
 
-  return (
-    <RoomShareInvitesProvider value={invites}>
+  const roomNode = (
     <div className="brr-room" data-project-room={project.id} data-room-tab-current={activeTab}>
       <RoomHeader
         project={project}
@@ -190,6 +192,18 @@ export default async function ProjectRoomPage({
         )}
       </section>
     </div>
+  );
+
+  return (
+    <RoomShareInvitesProvider value={invites}>
+      {opsOpen ? (
+        <>
+          <CampaignOpsTrackMarker track={project.track} />
+          {roomNode}
+        </>
+      ) : (
+        roomNode
+      )}
     </RoomShareInvitesProvider>
   );
 }
