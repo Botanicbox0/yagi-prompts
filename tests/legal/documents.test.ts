@@ -27,13 +27,36 @@ describe('legal documents', () => {
   });
 
   it('states the owner-approved campaign service receipt and quote policy separately from template rendering',()=>{
-    expect(LEGAL_EFFECTIVE).toBe('2026-11-18');
+    expect(LEGAL_EFFECTIVE).toBe('2026-11-27');
     const ko=legalDocument('terms','ko').body,en=legalDocument('terms','en').body;
     expect(ko).toContain('TWINGS 자체 서비스 대금');expect(ko).toContain('총액, 세금 기준, 제공 범위, 시작 조건과 환불 조건');expect(ko).toContain('입금 확인');expect(ko).toContain('자동 실행하지 않습니다');
     expect(en).toContain("TWINGS's own service fees");expect(en).toContain('total, tax basis, scope, start conditions and refund conditions');expect(en).toContain('does not automatically');
     expect(legalDocument('refund','ko').body).toContain('## 8. 브랜드 캠페인 서비스 대금');expect(legalDocument('refund','en').body).toContain('## 8. Brand campaign service payments');
     // Payment policy approval does not publish pending delegated-likeness or messaging-analysis amendments.
     expect(ko).not.toContain('대리 등록·제작을 검토');expect(ko).not.toContain('위험 분석');
+  });
+  it('says who selects campaign creators: the company, or the brand itself when the campaign says so (owner decision 2026-11-27)', () => {
+    const ko = legalDocument('terms', 'ko').body;
+    const en = legalDocument('terms', 'en').body;
+    // The old sentence said the service alone recruits AND selects.
+    expect(ko).not.toContain('크리에이터를 모집·선정하고');
+    expect(ko).toContain('참여할 크리에이터는 회사가 선정하거나, 캠페인에 따라 브랜드가 직접 선정합니다(제8조).');
+    expect(ko).toContain('6. 참여할 크리에이터는 회사가 선정하거나, 캠페인에 따라 해당 브랜드가 직접 선정합니다.');
+    expect(ko).toContain('브랜드가 직접 선정하는 캠페인은 캠페인 페이지에 그 사실을 표시합니다.');
+    // Review and payout confirmation stay with the company whoever selects.
+    expect(ko).toContain('게시물 검수와 원고료 지급 확정은 어느 경우에도 회사가 합니다.');
+    expect(en).toContain('Participating creators are selected by the Company or, depending on the campaign, by the brand itself (section 8).');
+    expect(en).toContain('A campaign in which the brand selects says so on its campaign page.');
+    expect(en).toContain('Post review and confirmation of fee payment are done by the Company in every case.');
+    // Payment still selects nobody.
+    expect(ko).toContain('참여자 선정');
+    expect(en).toContain('does not automatically');
+    // An applicant's details reach the brand before selection only in a brand-selected campaign, with consent on applying.
+    const pko = legalDocument('privacy', 'ko').body;
+    const pen = legalDocument('privacy', 'en').body;
+    expect(pko).toContain('캠페인에 선정된 크리에이터의 활동명·SNS 주소·게시물 링크를 해당 캠페인의 브랜드에 전달하는 경우(지원 시 동의)');
+    expect(pko).toContain('브랜드가 직접 선정하는 캠페인에 지원한 크리에이터의 활동명·SNS 주소·지원 시 적은 내용을, 선정을 위해 해당 캠페인의 브랜드에 전달하는 경우(지원 시 동의)');
+    expect(pen).toContain("in a campaign where the brand selects, an applicant's display name, SNS link and what they wrote when applying are passed to that campaign's brand for selection (agreed on applying);");
   });
   it('has all three documents in both locales, with a title and a body', () => {
     expect(LEGAL_DOCS).toEqual(['terms', 'refund', 'privacy']);
