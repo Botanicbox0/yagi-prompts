@@ -1395,6 +1395,20 @@ async function sweepLandingTemplates(): Promise<void> {
   expectEqual('/library still works for anyone who has the URL', (await get('/library')).status, 307);
 }
 
+async function sweepDirectPage(): Promise<void> {
+  console.log('\n/{locale}/direct — direct scene & template page');
+  for (const locale of ['ko', 'en']) {
+    const path = `/${locale}/direct`;
+    const page = await get(path);
+    expectEqual(`${path} renders 200`, page.status, 200);
+    expectPresent(`${path} hero marker`, page.body, 'data-direct-hero');
+    expectPresent(`${path} hero media marker`, page.body, 'data-direct-hero-media');
+    expectEqual(`${path} has exactly one h1`, (page.body.match(/<h1\b/g) ?? []).length, 1);
+    expectPresent(`${path} primary workspace CTA marker`, page.body, 'data-direct-workspace-cta');
+    expectPresent(`${path} primary workspace CTA`, page.body, 'href="/creators/workspace/formats/new"');
+  }
+}
+
 /**
  * docs/PLATFORM-2.0.md §7.5·§14.1 — the header names (개인 | 브랜드), the two origin rails and the
  * public maker page. The local snapshot carries published community fixtures (maker origin) and one
@@ -2180,6 +2194,7 @@ async function main(): Promise<void> {
   await sweepTemplateRedirects(prompts);
   await sweepPromptMedia(prompts);
   await sweepLandingTemplates();
+  await sweepDirectPage();
   await sweepPricingTemplates();
   await sweepMakers();
   await sweepCastCategories();

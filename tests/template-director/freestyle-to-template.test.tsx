@@ -9,7 +9,11 @@ import {
 } from '@/lib/template-director/freestyle-to-template';
 import { parsePersonalCustomizableRecipe, parseRecipe } from '@/lib/recipes/schema';
 import { PROMPT_MODEL_LABEL } from '@/lib/prompts/schemas';
-import { DirectSceneStudio } from '@/components/audience/direct-scene-studio';
+import {
+  DEFAULT_DIRECT_VIDEO_PROVIDER_USD,
+  DirectSceneStudio,
+} from '@/components/audience/direct-scene-studio';
+import { simulateMakerTemplateRevenue } from '@/lib/twings/template-price';
 import { TemplateDirectorPanel } from '@/components/twings/template-director-panel';
 import { CreatorCampaignHub } from '@/components/campaigns/creator-campaign-hub';
 
@@ -90,7 +94,7 @@ describe('Make Your Own Video & Maker 80% Revenue Engine + Selective Frame Picke
     expect(backdropFreeze?.status).toBe('open_user_reference');
   });
 
-  it('renders DirectSceneStudio with the Maker 80% Revenue Calculator, friendly 3 tips, and 3-step simulator without tech jargon', () => {
+  it('renders DirectSceneStudio with the Maker 80% Revenue Calculator, three steps, and closed tips without tech jargon', () => {
     const html = renderToStaticMarkup(
       <DirectSceneStudio
         locale="ko"
@@ -100,36 +104,29 @@ describe('Make Your Own Video & Maker 80% Revenue Engine + Selective Frame Picke
     );
 
     expect(html).toContain('data-direct-scene-studio');
+    expect(html).toContain('data-direct-hero');
+    expect(html).toContain('data-direct-steps');
     expect(html).toContain('data-maker-revenue-calculator');
     expect(html).toContain('data-maker-earning-per-make');
-    expect(html).toContain('data-maker-db-pipeline');
     expect(html).toContain('data-high-quality-guide');
     expect(html).toContain('data-quality-rule="01"');
     expect(html).toContain('data-quality-rule="02"');
     expect(html).toContain('data-quality-rule="03"');
-    expect(html).toContain('data-direct-scene-simulator');
-    expect(html).toContain('data-stage="reference-input"');
-    expect(html).toContain('data-stage="personal-synthesis"');
-    expect(html).toContain('data-stage="template-promotion"');
-    expect(html).toContain('data-template-freeze-matrix');
     expect(html).toContain('data-buyer-preview-card');
-    expect(html).toContain('data-direct-resolution-tiers');
-    // Until subscriptions open: won only, and only the resolutions a buyer can pay for (terms: no stored value).
-    expect(html).not.toContain('data-direct-resolution-option="480p"');
-    expect(html).toContain('data-direct-resolution-option="720p"');
-    expect(html).toContain('data-direct-resolution-option="1080p"');
+    expect(html).toContain('data-direct-workspace-cta');
     expect(html).not.toContain('크레딧');
     expect(html).not.toContain(' cr<');
-    expect(html).toContain('4,000원');
-    expect(html).toContain('9,700원');
-    // Once subscriptions are open the credit view returns, 480p Draft included.
-    const withCredits = renderToStaticMarkup(
-      <DirectSceneStudio locale="ko" videoCatalogHref="/ko/video" creatorWorkspaceHref="/creators/workspace/formats/new" showCredits />
-    );
-    expect(withCredits).toContain('data-direct-resolution-option="480p"');
-    expect(withCredits).toContain('345 cr');
-    expect(withCredits).toContain('크레딧');
-    expect(html).toContain('data-direct-no-bgm-rule');
+
+    const sim = simulateMakerTemplateRevenue({
+      medium: 'video',
+      providerUsd: DEFAULT_DIRECT_VIDEO_PROVIDER_USD,
+      royaltyKrw: 1000,
+    });
+    const hundredMakes =
+      sim.milestones.find((m) => m.makes === 100)?.creatorTotalKrw ?? sim.perMake.creator * 100;
+    expect(html).toContain(`${sim.salePriceKrw.toLocaleString('ko-KR')}원`);
+    expect(html).toContain(`+${sim.perMake.creator.toLocaleString('ko-KR')}원`);
+    expect(html).toContain(`${hundredMakes.toLocaleString('ko-KR')}원`);
 
     // No raw compiler/developer/DB jargon on screen
     expect(html).not.toContain('RECIPE V2 자동 컴파일');

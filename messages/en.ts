@@ -662,23 +662,76 @@ export const en = {
     "directScene": {
       "metaTitle": "Earn with your videos | TWINGS",
       "metaDescription": "Accumulate estimated earnings by creating your own templates and sharing your scenes.",
-      "heroEyebrow": "Maker",
+      "heroEyebrow": cap(T.maker),
       "heroHeading": "Create your own scenes,\npublish as a template,\nand earn rewards",
-      "heroSubcopy": "Have a saved video clip you love? Upload it with one front selfie to star in your own scene. Publish templates and accumulate estimated earnings every time someone uses them.",
-      "rationaleBadge": "Make Your Own Video · Estimated Earnings (Payout Setup Pending)",
-      "step3CardLabel": "Step 3 · Accrue on every make",
-      "step3CardTitle": "Earn Rewards",
-      "step3CardSub": "Earnings are automatically accumulated whenever your template is used",
-      "simBadge": "Estimated Earnings · Payout Setup Pending",
+      "heroSubcopy": "Upload a saved video clip and one front selfie to make your own scene, then publish it as a template to accumulate estimated earnings.",
+      "heroStatus": "Make your own video · Estimated earnings (payout setup pending)",
+      "primaryCta": "Publish my template and earn →",
+      "secondaryCta": "Browse templates ↗",
+      "stepsAriaLabel": "How creating and earning works",
+      "step1Title": "Make your video",
+      "step1Body": "Create with a saved video and your front photo. Your selfie stays private.",
+      "step2Title": "Publish as a template",
+      "step2Body": "Only the finished video appears as the public preview, and the framing stays locked.",
+      "step3Title": "Earn on every make",
+      "step3Body": "Estimated earnings accrue automatically whenever your template is used.",
+      "step3TileLabel": "Example at +₩{amount}",
+      "simBadge": "Estimated earnings · Payout setup pending",
       "simHeading": "Every time someone makes a video with your template, estimated earnings accrue",
-      "simBody": "Set an optional creator bonus (+0 to +3,000 KRW) on top of the base price. Estimated earnings after VAT, payment fee, and generation cost are recorded in your workspace.",
+      "simRaiseGroupLabel": "Optional creator bonus",
+      "simBaseChip": "Base price (+₩0)",
+      "simRaiseChipPattern": "+₩{amount}",
+      "simDisclosure": "You can add a ₩0–₩3,000 creator bonus on top of the base price; earnings reflect the estimated amount left after VAT, payment fees, and generation cost.",
+      "simSalePriceLabel": "Template sale price",
+      "simSalePricePattern": "₩{price}",
       "simPerMakeLabel": "Earnings per creation",
-      "simMilestonesLabel": "2. Estimated Cumulative Earnings by Makes",
-      "simMilestoneSub": "Estimated earnings upon milestone",
-      "simLedgerTitle": "Connected directly to your Maker Profile (@handle): ",
-      "simLedgerNote": "Your @handle appears on the public card, and accumulated earnings will be available for withdrawal once settlement terms are finalized.",
-      "stage3PayoutBadge": "Estimated Earnings (Payout Pending)",
-      "buyerPreviewEarningPattern": "Whenever someone creates with this template (₩{salePrice}), +₩{perMake} in estimated earnings is recorded in your workspace (payout setup pending)."
+      "simPerMakePattern": "+₩{amount}",
+      "simHundredMakesPattern": "At 100 makes, estimated cumulative earnings reach ₩{amount}.",
+      "simSettlementNote": "Payout setup pending · Accumulated earnings will be available for withdrawal once settlement terms are finalized.",
+      "tipsHeading": "How to get the most natural face and mood on your first try",
+      "tipsGoodLabel": "Recommended",
+      "tipsAvoidLabel": "Better to avoid",
+      "tips": [
+        {
+          "title": "What kind of reference video works best?",
+          "summary": "Pick a 4–10 second clip with one clear protagonist and good lighting.",
+          "good": [
+            "A natural 4–10 second clip of one person walking or turning toward the camera",
+            "A clip where the face is clearly visible from the front or three-quarter angle",
+            "A clip with a clear mood, such as a street interview, runway walk, or cafe moment"
+          ],
+          "avoid": [
+            "Rapid cuts every second or heavy camera shake",
+            "Faces continuously covered by sunglasses, masks, or hands",
+            "Crowded scenes where it is unclear who the main subject is"
+          ]
+        },
+        {
+          "title": "How should I upload my photo and outfit?",
+          "summary": "Use one unfiltered front selfie. Want a different outfit? Upload a photo of the outfit directly.",
+          "good": [
+            "Your face: one bright, clear front photo taken with the standard camera",
+            "Desired outfit: attach a store screenshot or garment photo directly",
+            "Dark lighting clips: pick the more natural likeness from the two preview stills"
+          ],
+          "avoid": [
+            "Selfies heavily retouched with face-reshaping filters",
+            "Long text descriptions of outfits without attaching a reference photo"
+          ]
+        },
+        {
+          "title": "One simple sentence is all you need",
+          "summary": "Your video already sets the mood — just write one line on what to keep or swap.",
+          "good": [
+            "“Keep the night street mood, and swap in my face and the attached black coat.”",
+            "“Keep the natural smile from the clip and make the background feel warmer and sunnier.”"
+          ],
+          "avoid": [
+            "Vague requests like “just make it cooler and more cinematic” without saying what to change"
+          ]
+        }
+      ],
+      "closingBody": "Others can create right away with one front photo, or upload their own photos to outfit and background slots you leave open."
     }
   },
   brandLanding: {
