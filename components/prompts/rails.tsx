@@ -29,6 +29,8 @@ export function PromptRail({
   now,
   topClassName = 'mt-16 first:mt-0 lg:mt-24',
   hideHeading = false,
+  linkAuthor,
+  anchorOffset = false,
 }: {
   id: string;
   heading: string;
@@ -49,6 +51,10 @@ export function PromptRail({
   topClassName?: string;
   /** The catalog already has a visible page title and introduction. Keep its rail label accessible. */
   hideHeading?: boolean;
+  /** Passed to PromptCardView when a surface should suppress author links (e.g., own profile). */
+  linkAuthor?: boolean;
+  /** The heading is an in-page anchor target under the fixed header (the profile tabs). Off = the markup every other page has always had. */
+  anchorOffset?: boolean;
 }) {
   // docs/PERSONAL-STUDIO.md §3.4.10 — with the switch on, every card says who it is written for (`data-look`) and the
   // rail carries the "다른 스타일도 보기" button the style island shows when the viewer's style alone empties it. With
@@ -61,7 +67,7 @@ export function PromptRail({
             than the same one at a smaller size (globals.css does the 0.85× on top). */}
         <h2
           id={`rail-${id}`}
-          className="font-display text-[clamp(1.6rem,3.4vw,2.75rem)] leading-[0.92] font-black tracking-tight uppercase"
+          className={`${anchorOffset ? 'scroll-mt-24 ' : ''}font-display text-[clamp(1.6rem,3.4vw,2.75rem)] leading-[0.92] font-black tracking-tight uppercase`}
         >
           {heading}
         </h2>
@@ -97,6 +103,7 @@ export function PromptRail({
                     labels={labels}
                     useCaseLabels={useCaseLabels}
                     {...(now === undefined ? {} : { now })}
+                    {...(linkAuthor === undefined ? {} : { linkAuthor })}
                   />
                 </li>
               );

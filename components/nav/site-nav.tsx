@@ -10,6 +10,8 @@ import type { Audience } from '@/lib/navigation/audience';
 import { isPublicNavCurrent } from '@/lib/navigation/public-state';
 import { CreatorAccountView, useCreatorSession, type CreatorAccountLabels } from './creator-account';
 import { IDENTITY_SELFIE_PATH } from '@/lib/identity/links';
+import { CREATOR_WORKSPACE_PATH } from '@/lib/creator-platform/links';
+import { postEditorHref } from '@/lib/posts/links';
 
 /**
  * The fixed 64px audience navigation stays white so both public experiences have one stable door.
@@ -310,6 +312,8 @@ export function SiteNav({
                 <li><a href={IDENTITY_SELFIE_PATH} data-creator-selfie onClick={() => setOpen(false)} className="inline-flex min-h-11 items-center text-lg font-medium">{accountLabels.selfie}</a></li>
                 <li><a href="/renders" onClick={() => setOpen(false)} className="inline-flex min-h-11 items-center text-lg font-medium">{accountLabels.renders}</a></li>
                 <li><a href="/campaigns/mine" onClick={() => setOpen(false)} className="inline-flex min-h-11 items-center text-lg font-medium">{accountLabels.campaigns}</a></li>
+                {accountLabels.makerStudio && <li><a href={CREATOR_WORKSPACE_PATH} data-creator-studio onClick={() => setOpen(false)} className="inline-flex min-h-11 items-center text-lg font-medium">{accountLabels.makerStudio}</a></li>}
+                {accountLabels.writePost && creatorSession.maker?.active && <li><a href={postEditorHref('new')} data-creator-write-post onClick={() => setOpen(false)} className="inline-flex min-h-11 items-center text-lg font-medium">{accountLabels.writePost}</a></li>}
                 <li><form method="post" action="/auth/signout"><button type="submit" className="min-h-11 text-sm opacity-60">{accountLabels.signOut}</button></form></li>
               </>}
               {audience === 'brand' && primary && <li><a onClick={() => setOpen(false)} href={primary.href} className="inline-flex min-h-12 items-center rounded-full bg-black px-6 text-sm font-medium text-white">{primary.label} ↗</a></li>}

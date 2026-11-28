@@ -2,11 +2,23 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { IDENTITY_SELFIE_PATH } from '@/lib/identity/links';
+import { CREATOR_WORKSPACE_PATH } from '@/lib/creator-platform/links';
+import { postEditorHref } from '@/lib/posts/links';
 import { ANONYMOUS_SESSION, observeCreatorSession, type CreatorSession } from '@/lib/auth/observe-creator-session';
+import { publishMakerSession } from '@/lib/makers/session-store';
 import { publishLookSession } from '@/lib/template-look/store';
 
 export interface CreatorAccountLabels {
-  signIn: string; profile: string; selfie: string; renders: string; campaigns: string; signOut: string; menu: string; fallbackName: string;
+  signIn: string;
+  profile: string;
+  selfie: string;
+  renders: string;
+  campaigns: string;
+  signOut: string;
+  menu: string;
+  fallbackName: string;
+  makerStudio?: string;
+  writePost?: string;
 }
 
 export function CreatorAccountView({ session, labels, signInHref }: { session: CreatorSession; labels: CreatorAccountLabels; signInHref: string }) {
@@ -36,6 +48,8 @@ export function CreatorAccountView({ session, labels, signInHref }: { session: C
         <a href={IDENTITY_SELFIE_PATH} data-creator-selfie className="flex min-h-11 items-center rounded-xl px-3 hover:bg-black/5">{labels.selfie}</a>
         <a href="/renders" className="flex min-h-11 items-center rounded-xl px-3 hover:bg-black/5">{labels.renders}</a>
         <a href="/campaigns/mine" className="flex min-h-11 items-center rounded-xl px-3 hover:bg-black/5">{labels.campaigns}</a>
+        {labels.makerStudio && <a href={CREATOR_WORKSPACE_PATH} data-creator-studio className="flex min-h-11 items-center rounded-xl px-3 hover:bg-black/5">{labels.makerStudio}</a>}
+        {labels.writePost && session.maker?.active && <a href={postEditorHref('new')} data-creator-write-post className="flex min-h-11 items-center rounded-xl px-3 hover:bg-black/5">{labels.writePost}</a>}
         <form method="post" action="/auth/signout" className="mt-1 border-t border-hairline pt-1"><button type="submit" className="flex min-h-11 w-full items-center rounded-xl px-3 text-left opacity-65 hover:bg-black/5">{labels.signOut}</button></form>
       </div>
     </details>
@@ -53,6 +67,7 @@ export function useCreatorSession(enabled: boolean) {
       setSession(next);
       // docs/PERSONAL-STUDIO.md §3.4.10: the template style islands read this answer instead of asking again.
       publishLookSession(next);
+      publishMakerSession(next);
     });
   }, [enabled]);
   return session;

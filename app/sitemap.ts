@@ -27,10 +27,11 @@ import { cachedSitemapMakerPosts } from '@/lib/posts/cached-public';
 export const revalidate = 3600;
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const blogOpen = makerBlogOpen();
   const [catalog, templates, makerPosts] = await Promise.all([
     getPublicCatalog(),
     getPromptCatalog(),
-    makerBlogOpen() ? cachedSitemapMakerPosts() : Promise.resolve([]),
+    blogOpen ? cachedSitemapMakerPosts() : Promise.resolve([]),
   ]);
   return buildSitemap({
     origin: siteUrl(),
@@ -38,6 +39,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     templates: [...templates.video, ...templates.image],
     makers: templates.makers ?? [],
     makerPosts,
+    includeBlogHub: blogOpen,
     pageModifiedAt: { '/brands': '2026-10-08T00:00:00+09:00' },
     includeCreatorProgram: creatorProgramOpen(),
   });

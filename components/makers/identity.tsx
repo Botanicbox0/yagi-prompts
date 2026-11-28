@@ -7,6 +7,12 @@ import { countryName, linkLabel } from '@/lib/makers/fields';
  * state, no script — the two interactive bits (email, share) are islands in ./islands.tsx.
  */
 
+/** Shared quiet cover wash for profiles and directory cards without a custom banner. */
+export const MAKER_COVER_FALLBACK = [
+  'radial-gradient(120% 160% at 10% 0%, color-mix(in oklab, var(--accent) 16%, var(--surface)) 0%, transparent 62%)',
+  'linear-gradient(135deg, color-mix(in oklab, var(--on-surface) 3%, var(--surface)), color-mix(in oklab, var(--on-surface) 9%, var(--surface)))',
+].join(', ');
+
 export function CreativeAvatar({ handle, name, src, size = 96, className = '', eager = false }: { handle: string; name: string | null; src: string | null; size?: number; className?: string; eager?: boolean }) {
   const initial = [...(name ?? handle).trim()][0]?.toUpperCase() ?? '@';
   return (

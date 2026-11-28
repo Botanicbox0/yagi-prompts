@@ -30,6 +30,9 @@ import { WaitBrowse, pickWaitCards } from '@/components/renders/wait-browse';
 import { ShareResult } from '@/components/renders/share-result';
 import { TextSwap } from '@/components/ui/text-swap';
 import { NotifyChoice } from '@/components/notify/notify-choice';
+import { approvedCreator } from '@/lib/creator-platform/service';
+import { makerBlogOpen } from '@/lib/posts/flag';
+import { postEditorHref } from '@/lib/posts/links';
 
 /**
  * `/renders/[id]` — the owner's result page. Queued or running: three named stages with a
@@ -97,6 +100,11 @@ export default async function RenderPage({ params, searchParams }: { params: Pro
   const ready = job.status === 'succeeded' && job.resultMime !== null;
   // A set (an image recipe with several pictures) shows them all; one result is shown as before.
   const frames = ready ? await loadRenderFrames(sql, job) : [];
+  const showWritePost =
+    ready &&
+    makerBlogOpen() &&
+    Boolean(viewer.userId) &&
+    (await approvedCreator(sql, viewer.userId!).catch(() => false));
   const set = frames.length > 1;
   // The share card's frame comes from the owner's browser (no ffmpeg on the server): once, quietly.
   const captureFrame = ready && job.resultMime!.startsWith('video/') && shareUrl !== null && extras?.ready === true && extras.posterKey === null;
@@ -153,6 +161,17 @@ export default async function RenderPage({ params, searchParams }: { params: Pro
                   {r.oneMore}
                 </a>
               </div>
+              {showWritePost && (
+                <p className="mt-3 text-xs text-black/65">
+                  <a
+                    href={postEditorHref('new')}
+                    data-result-write-post
+                    className="inline-flex min-h-9 items-center underline underline-offset-4 transition-colors hover:text-black"
+                  >
+                    {r.writePost} →
+                  </a>
+                </p>
+              )}
               <h1 className="mt-6 text-[1.35rem] leading-tight font-bold break-keep">{title}</h1>
               <p className="mt-1 font-mono text-[0.75rem] text-black/70">
                 {set ? interpolate(r.frames.count, { n: frames.length }) : dict.nav[job.medium]} · {job.aspect} · {formatDate(job.finishedAt ?? job.createdAt, locale) ?? ''}

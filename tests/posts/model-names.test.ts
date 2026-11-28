@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
@@ -9,6 +11,21 @@ vi.mock('next/cache', () => ({
 
 import { postGuide } from '@/lib/mcp/server';
 import { parsePostSaveInput, type PostSaveInput } from '@/lib/posts/schema';
+import { en } from '@/messages/en';
+import { ko } from '@/messages/ko';
+
+const FORBIDDEN_ENGINE_PATTERN =
+  /\b(?:seedance|seedream|kling|nano\s*banana|midjourney|comfyui|gpt\s*image|higgsfield|sunra|sora|veo|runway)\b/i;
+
+function flattenLeaves(value: unknown, prefix = ''): Array<[string, string]> {
+  if (typeof value === 'string') return [[prefix, value]];
+  if (value && typeof value === 'object') {
+    return Object.entries(value as Record<string, unknown>).flatMap(([key, child]) =>
+      flattenLeaves(child, prefix ? `${prefix}.${key}` : key),
+    );
+  }
+  return [];
+}
 
 describe('blog posts allow model and tool names', () => {
   it('passes model and tool names unchanged through the post schema', () => {
@@ -59,5 +76,45 @@ describe('blog posts allow model and tool names', () => {
     expect(typeof guide.naming).toBe('string');
     expect(guide.naming).toMatch(/models/i);
     expect(guide.naming).toMatch(/tools/i);
+  });
+
+  it('keeps customer copy free of 메이커, Maker Studio, and engine/provider names outside post bodies', () => {
+    const sections: Array<[string, unknown, unknown]> = [
+      ['nav.blog', ko.nav.blog, en.nav.blog],
+      ['appShell.tabs.maker', ko.appShell.tabs.maker, en.appShell.tabs.maker],
+      ['renders.writePost', ko.renders.writePost, en.renders.writePost],
+      ['creatorProgram.payoutStatusAccruing', ko.creatorProgram.payoutStatusAccruing, en.creatorProgram.payoutStatusAccruing],
+      ['creatorProgram.openMaker', ko.creatorProgram.openMaker, en.creatorProgram.openMaker],
+      ['makers', ko.makers, en.makers],
+      ['makerBlog', ko.makerBlog, en.makerBlog],
+    ];
+
+    for (const [name, koVal, enVal] of sections) {
+      for (const [key, text] of flattenLeaves(koVal, name)) {
+        expect(text, `ko.${key}`).not.toContain('메이커');
+        expect(text, `ko.${key}`).not.toMatch(/maker studio/i);
+        if (!key.endsWith('fieldPromptMetaPlaceholder')) {
+          expect(text, `ko.${key}`).not.toMatch(FORBIDDEN_ENGINE_PATTERN);
+        }
+      }
+      for (const [key, text] of flattenLeaves(enVal, name)) {
+        expect(text, `en.${key}`).not.toMatch(/maker studio/i);
+        if (!key.endsWith('fieldPromptMetaPlaceholder')) {
+          expect(text, `en.${key}`).not.toMatch(FORBIDDEN_ENGINE_PATTERN);
+        }
+      }
+    }
+
+    const openMakerCard = readFileSync(join(process.cwd(), 'components', 'creators', 'open-maker-card.tsx'), 'utf8');
+    expect(openMakerCard).not.toContain('메이커');
+    expect(openMakerCard).not.toMatch(/Maker Studio/);
+
+    const workspaceComp = readFileSync(join(process.cwd(), 'components', 'creators', 'workspace.tsx'), 'utf8');
+    expect(workspaceComp).not.toContain('예상 수익 적립');
+    expect(workspaceComp).not.toContain('Estimated revenue accruing');
+
+    const bottomTabs = readFileSync(join(process.cwd(), 'components', 'app', 'bottom-tabs.tsx'), 'utf8');
+    expect(bottomTabs).not.toContain("'스튜디오'");
+    expect(bottomTabs).not.toContain("'Maker'");
   });
 });

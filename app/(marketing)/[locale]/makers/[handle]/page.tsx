@@ -19,14 +19,18 @@ import { MarketingFooter, MarketingNav } from '@/components/marketing/chrome';
 import { PersonalIdentity } from '@/components/audience/personal-identity';
 import { PromptRail } from '@/components/prompts/rails';
 import { promptLabels, useCaseLabel } from '@/components/prompts/labels';
-import { CreativeAvatar, CreativeLinks, placeOf } from '@/components/makers/identity';
+import { CreativeAvatar, CreativeLinks, MAKER_COVER_FALLBACK, placeOf } from '@/components/makers/identity';
 import { RevealEmail, ShareProfile } from '@/components/makers/islands';
 import { WorksGallery } from '@/components/makers/works-gallery';
 import { MakerRecipeHub } from '@/components/makers/recipe-hub';
 import { templateLookOpen } from '@/lib/flags';
 import { TemplateLookIsland } from '@/components/template-look/look-island';
 import { makerBlogOpen } from '@/lib/posts/flag';
-import { cachedPublicPostCount } from '@/lib/posts/cached-public';
+import { cachedPublicPostsByHandle } from '@/lib/posts/cached-public';
+import { makerBlogListHref, postEditorHref } from '@/lib/posts/links';
+import { CREATOR_WORKSPACE_PATH } from '@/lib/creator-platform/links';
+import { MakerProfileOwnerActions } from '@/components/makers/owner-actions';
+import { ProfilePostCard } from '@/components/posts/post-cards';
 import { ProfileTabs } from '@/components/posts/profile-tabs';
 
 /**
@@ -44,11 +48,7 @@ import { ProfileTabs } from '@/components/posts/profile-tabs';
  * banner — 2:1 edge to edge on a phone, 3:1 rounded from `sm` — with the photo over its lower edge,
  * then who and where, the links, the bio; then the recipe line, the templates, the works.
  */
-/** No cover yet: a quiet wash from the page's own tokens, so the banner keeps its shape (TASTE.md: one blue, no red). */
-const COVER_FALLBACK = [
-  'radial-gradient(120% 160% at 10% 0%, color-mix(in oklab, var(--accent) 16%, var(--surface)) 0%, transparent 62%)',
-  'linear-gradient(135deg, color-mix(in oklab, var(--on-surface) 3%, var(--surface)), color-mix(in oklab, var(--on-surface) 9%, var(--surface)))',
-].join(', ');
+/** Uses the shared MAKER_COVER_FALLBACK wash from identity tokens when no banner photo exists. */
 
 /** Must stay equal to CATALOG_TTL_SECONDS — Next requires a literal here (tests pin the pair). */
 export const revalidate = 3600;
@@ -134,10 +134,11 @@ export default async function MakerPage({ params }: RouteParams) {
   const useCaseLabels = Object.fromEntries(USE_CASES.map((value) => [value, useCaseLabel(dict, value)]));
   const { maker, cards } = found;
   const blogEnabled = makerBlogOpen();
-  const [works, postCount] = await Promise.all([
+  const [works, posts] = await Promise.all([
     cachedPublicWorks(maker.handle),
-    blogEnabled ? cachedPublicPostCount(maker.handle) : Promise.resolve(0),
+    blogEnabled ? cachedPublicPostsByHandle(maker.handle) : Promise.resolve([]),
   ]);
+  const postCount = posts.length;
   const place = placeOf(maker.country, maker.city, locale);
   const origin = siteUrl();
   const shortUrl = `${origin}${makerShortPath(maker.handle)}`;
@@ -157,7 +158,7 @@ export default async function MakerPage({ params }: RouteParams) {
             <div
               data-creative-cover={maker.cover ? 'photo' : 'none'}
               className="relative -mx-[var(--spacing-gutter)] aspect-[2/1] overflow-hidden sm:mx-0 sm:aspect-[3/1] sm:rounded-[1.75rem] sm:ring-1 sm:ring-black/[0.06]"
-              style={maker.cover ? undefined : { background: COVER_FALLBACK }}
+              style={maker.cover ? undefined : { background: MAKER_COVER_FALLBACK }}
             >
               {/* Decoration: the name under it is the heading, so the picture carries no text of its own. */}
               {/* eslint-disable-next-line @next/next/no-img-element -- gateway-served, already cropped and sized */}
@@ -192,6 +193,14 @@ export default async function MakerPage({ params }: RouteParams) {
                 {maker.links.length > 0 && <CreativeLinks links={maker.links} className="mt-5" />}
               </div>
               <div className="flex flex-wrap items-center gap-2.5 sm:justify-end sm:self-start sm:pt-5">
+                {blogEnabled ? (
+                  <MakerProfileOwnerActions
+                    handle={maker.handle}
+                    writeHref={postEditorHref('new')}
+                    editHref={`${CREATOR_WORKSPACE_PATH}#profile`}
+                    labels={{ writePost: t.ownerWritePost, editProfile: t.ownerEditProfile }}
+                  />
+                ) : null}
                 {maker.publicEmail && <RevealEmail reversed={[...maker.publicEmail].reverse().join('')} labels={{ show: t.showEmail, copy: t.copyEmail, copied: t.copied }} />}
                 <ShareProfile url={shortUrl} title={name} labels={{ share: t.share, shared: t.shared }} />
               </div>
@@ -218,7 +227,7 @@ export default async function MakerPage({ params }: RouteParams) {
             <MakerRecipeHub handle={maker.handle} openRecipes={maker.openRecipeCount ?? 0} copy={t} />
           </div>
 
-          {blogEnabled && postCount > 0 ? (
+          {blogEnabled ? (
             <ProfileTabs
               locale={locale}
               handle={maker.handle}
@@ -234,7 +243,13 @@ export default async function MakerPage({ params }: RouteParams) {
           ) : null}
 
           {cards.length === 0 ? (
-            <p data-maker-empty className="mt-14 border-t border-hairline pt-8 text-sm text-black/60">{t.empty}</p>
+            <p
+              {...(blogEnabled ? { id: 'rail-maker' } : {})}
+              data-maker-empty
+              className={blogEnabled ? 'mt-14 scroll-mt-24 border-t border-hairline pt-8 text-sm text-black/60' : 'mt-14 border-t border-hairline pt-8 text-sm text-black/60'}
+            >
+              {t.empty}
+            </p>
           ) : (
             <PromptRail
               id="maker"
@@ -247,14 +262,43 @@ export default async function MakerPage({ params }: RouteParams) {
               emptyLabel={t.empty}
               filteredEmptyLabel={dict.prompts.filterEmpty}
               topClassName="mt-14"
+              linkAuthor={false}
+              anchorOffset={blogEnabled}
             />
+          )}
+
+          {blogEnabled && posts.length > 0 && (
+            <section data-maker-profile-blog className="mt-16">
+              <div className="flex items-baseline justify-between gap-4 border-b border-hairline pb-4">
+                <h2 className="font-display text-2xl font-semibold tracking-[-0.02em] text-black">
+                  {dict.makerBlog.tabBlog}
+                </h2>
+                <a
+                  href={makerBlogListHref(locale, maker.handle)}
+                  className="text-sm font-medium text-[#CC1573] transition-colors hover:underline"
+                >
+                  {dict.makerBlog.viewAll}
+                </a>
+              </div>
+              <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                {posts.slice(0, 3).map((post) => (
+                  <ProfilePostCard
+                    key={post.slug}
+                    post={post}
+                    handle={maker.handle}
+                    locale={locale}
+                    readTimeTemplate={dict.makerBlog.readTime}
+                  />
+                ))}
+              </div>
+            </section>
           )}
 
           {works.length > 0 && (
             <section
-              {...(blogEnabled && postCount > 0 ? { id: 'works' } : {})}
+              {...(blogEnabled ? { id: 'works' } : {})}
               data-creative-works-section
-              className={blogEnabled && postCount > 0 ? 'mt-16 scroll-mt-24' : 'mt-16'}
+              className={blogEnabled ? 'mt-16 scroll-mt-24' : 'mt-16'}
             >
               <div className="mb-6 flex items-baseline justify-between gap-4">
                 <h2 className="font-display text-[clamp(1.4rem,2.6vw,2rem)] leading-[0.95] font-black uppercase">{t.worksHeading}</h2>

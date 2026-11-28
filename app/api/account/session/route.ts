@@ -6,6 +6,8 @@ import { displayNameOf, loadCreatorProfile } from '@/lib/creators/profile';
 import { resolveSurface } from '@/lib/routing/surfaces';
 import { CONCIERGE_UID_COOKIE, conciergeUserScopeKey } from '@/lib/support/concierge-scope';
 import { templateLookOpen } from '@/lib/flags';
+import { makerBlogOpen } from '@/lib/posts/flag';
+import { makerHandleOf } from '@/lib/makers/profile';
 import type { TemplateLook } from '@/lib/template-look/look';
 import { requestHasLookCookie, syncLookCookie, writeLookCookie } from '@/lib/template-look/cookie';
 import { loadViewerLook, templateLookSchemaReady } from '@/lib/template-look/repo';
@@ -44,6 +46,25 @@ async function viewerLookField(userId: string): Promise<{ look?: TemplateLook | 
   }
 }
 
+async function viewerMakerField(userId: string): Promise<{ maker?: { active: true; handle: string | null } }> {
+  if (!makerBlogOpen()) return {};
+  try {
+    const sql = await getSqlRunner();
+    if (sql === null) return {};
+    const { rows } = await sql.query<{ handle: string | null }>(
+      `select to_jsonb(c.*)->>'handle' as handle
+         from platform_creators c
+        where c.user_id = $1 and c.active
+        limit 1`,
+      [userId],
+    );
+    if (!rows.length) return {};
+    return { maker: { active: true, handle: makerHandleOf(rows[0]!.handle) } };
+  } catch {
+    return {};
+  }
+}
+
 /** A private client island can personalize the nav without putting identity in cached HTML. */
 export async function GET(request: Request): Promise<Response> {
   if (resolveSurface(new URL(request.url), request.headers) !== 'consumer') return new Response(null, { status: 404, headers });
@@ -65,8 +86,11 @@ export async function GET(request: Request): Promise<Response> {
     if (!user) return anonSessionResponse(request);
     // An unavailable profile store must not make a valid Google/Kakao session look signed out.
   }
-  const lookField = await viewerLookField(userId);
-  const response = NextResponse.json({ signedIn: true, displayName, ...lookField }, { headers });
+  const [lookField, makerField] = await Promise.all([
+    viewerLookField(userId),
+    viewerMakerField(userId),
+  ]);
+  const response = NextResponse.json({ signedIn: true, displayName, ...lookField, ...makerField }, { headers });
   response.cookies.set(CONCIERGE_UID_COOKIE, conciergeUserScopeKey(userId), {
     path: '/',
     sameSite: 'lax',
