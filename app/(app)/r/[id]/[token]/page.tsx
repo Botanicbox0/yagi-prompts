@@ -6,6 +6,7 @@ import { getDictionary } from '@/lib/i18n/dictionaries';
 import { formatDate, interpolate } from '@/lib/i18n/format';
 import { signInHref } from '@/lib/billing/links';
 import { templateHref } from '@/lib/prompts/links';
+import { cachedPromptCardsBySlugs } from '@/lib/prompts/cached-by-slugs';
 import { getPromptCatalog } from '@/lib/prompts/public-catalog';
 import { loadSharedRender, type RenderView } from '@/lib/renders/service';
 import { loadRenderExtras } from '@/lib/renders/extras';
@@ -57,7 +58,11 @@ function titleOf(view: RenderView): string {
 /** The template's own poster — the closest honest frame for a film whose owner has not sent one. */
 async function templatePoster(slug: string): Promise<string | null> {
   const catalog = await getPromptCatalog().catch(() => null);
-  const card = catalog ? [...(catalog.video ?? []), ...(catalog.image ?? [])].find((item) => item.slug === slug) : undefined;
+  let card = catalog ? [...(catalog.video ?? []), ...(catalog.image ?? [])].find((item) => item.slug === slug) : undefined;
+  if (!card) {
+    const unlisted = await cachedPromptCardsBySlugs([slug]).catch(() => []);
+    card = unlisted[0];
+  }
   return card?.poster ? absoluteUrl(card.poster.src) : null;
 }
 

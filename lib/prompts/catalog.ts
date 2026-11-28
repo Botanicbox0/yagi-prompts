@@ -1,7 +1,12 @@
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import { publicContentUrl } from '@/lib/content/asset-url';
 import { shapePromptMedia, type ShapedPromptMedia } from './shape';
-import { loadPublishedPrompts, type PromptRow } from './repo';
+import {
+  loadMakerPublishedPrompts,
+  loadPublishedPrompts,
+  loadPublishedPromptsBySlugs,
+  type PromptRow,
+} from './repo';
 import { PROMPT_MODEL_LABEL, promptModelLabel, type PromptSource, type TemplateCast, type TemplateMedium } from './schemas';
 import { promptLock, type PromptLock } from './lock';
 import { loadPublicMakerRows } from '@/lib/makers/profile';
@@ -427,4 +432,41 @@ export function landingPromptCards(
   max = LANDING_PROMPTS_MAX,
 ): PromptCard[] {
   return catalog.yagi.filter((card) => cardCast(card) === 'solo').slice(0, max);
+}
+
+/** Resolves specific published public templates by slug, including unlisted (`catalog_listed = false`) blog/link formats. */
+export async function loadPromptCardsBySlugs(
+  sql: SqlRunner,
+  slugs: readonly string[],
+  options: PromptCatalogOptions = {},
+): Promise<PromptCard[]> {
+  if (slugs.length === 0) return [];
+  const rows = await loadPublishedPromptsBySlugs(sql, slugs);
+  if (rows.length === 0) return [];
+  const [makerRows, openRecipes, stylingRecipes] = await Promise.all([
+    loadPublicMakerRows(sql),
+    loadOpenRecipeIds(sql),
+    loadStylingRecipes(sql),
+  ]);
+  const makerHandles = new Map(makerRows.map((maker) => [maker.userId, maker.handle]));
+  return rows
+    .filter((row) => (row.cast !== 'couple' || options.coupleOpen === true) && (row.cast !== 'pet' || options.petOpen === true))
+    .map((row) => toPromptCard(row, options, makerHandles, openRecipes, stylingRecipes));
+}
+
+/** Resolves all published public templates owned by `userId` (listed + unlisted) for the blog editor picker. */
+export async function loadMakerPublishedCards(
+  sql: SqlRunner,
+  userId: string,
+  options: PromptCatalogOptions = {},
+): Promise<PromptCard[]> {
+  const rows = await loadMakerPublishedPrompts(sql, userId);
+  if (rows.length === 0) return [];
+  const [makerRows, openRecipes, stylingRecipes] = await Promise.all([
+    loadPublicMakerRows(sql),
+    loadOpenRecipeIds(sql),
+    loadStylingRecipes(sql),
+  ]);
+  const makerHandles = new Map(makerRows.map((maker) => [maker.userId, maker.handle]));
+  return rows.map((row) => toPromptCard(row, options, makerHandles, openRecipes, stylingRecipes));
 }

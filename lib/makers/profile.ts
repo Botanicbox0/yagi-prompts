@@ -17,7 +17,7 @@ import {
 export const MAKER_HANDLE_PATTERN = /^[a-z0-9_]{3,20}$/;
 export const MAKER_BIO_MAX = 200;
 
-/** Names that would read as the studio speaking. Not a moderation list — just no impersonation. */
+/** Names that would read as the studio speaking. Not a moderation list — just no impersonation (`@yagi` remains reserved and editable only by its existing owner). */
 const RESERVED_HANDLES = new Set(['admin', 'administrator', 'twings', 'yagi', 'yagiworkshop', 'studio', 'official', 'support', 'help', 'staff', 'makers', 'maker', 'creative', 'creatives']);
 
 export type MakerProfileErrorCode =
@@ -179,8 +179,14 @@ export async function saveMakerProfile(sql: SqlRunner, userId: string, input: Ma
   if (!(await makerProfilesReady(sql))) throw new MakerProfileError('unavailable');
   const rawHandle = typeof input.handle === 'string' ? input.handle.trim() : '';
   const handle = rawHandle === '' ? null : makerHandleOf(rawHandle);
-  if (rawHandle !== '' && handle === null) throw new MakerProfileError('invalid_handle');
-  if (handle !== null && isReservedMakerHandle(handle)) throw new MakerProfileError('reserved_handle');
+  if (rawHandle !== '' && handle !== null) {
+    if (isReservedMakerHandle(handle)) {
+      const existing = (await sql.query<{ handle: string | null }>('select handle from platform_creators where user_id = $1', [userId])).rows[0];
+      if (existing?.handle !== handle) throw new MakerProfileError('reserved_handle');
+    }
+  } else if (rawHandle !== '') {
+    throw new MakerProfileError('invalid_handle');
+  }
   const bio = makerBioOf(input.bio);
   if (!bio.ok) throw new MakerProfileError('invalid_bio');
   const publicProfile = input.publicProfile === true;

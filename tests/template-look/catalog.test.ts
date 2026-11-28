@@ -71,7 +71,7 @@ describe('PromptCard.look', () => {
   });
 
   it('the cache key moved, and the switch is part of it', () => {
-    expect(PROMPT_CATALOG_CACHE_VERSION).toBe('v18-edits-closed');
+    expect(PROMPT_CATALOG_CACHE_VERSION).toBe('v19-catalog-listed');
     expect(promptCatalogCacheKey()).toContain('look-off');
     vi.stubEnv('TWINGS_TEMPLATE_LOOK', 'on');
     expect(promptCatalogCacheKey()).toContain('look-on');

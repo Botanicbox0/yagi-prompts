@@ -13,6 +13,7 @@ import { RecipePricingError, isRoyalty, quoteRecipeBase, ROYALTY_DEFAULT_KRW } f
 import { parseDisclosure, parsePresentation, recipeSchemaReady, type Disclosure, type Presentation } from './repo';
 import { MAX_RECIPE_BYTES, parseRecipe, recipeCast, recipeMedium, type Recipe, type RecipeIssue, type RecipeMedium } from './schema';
 import { selfPublishFormat, selfPublishOpen } from './self-publish';
+import { makerBlogOpen } from '@/lib/posts/flag';
 import { parseVideoKeyframes, type VideoKeyframe } from '@/lib/prompts/keyframes';
 import { imageTestRecipe } from './test-render';
 
@@ -55,7 +56,7 @@ export const MakerActionInput = z.discriminatedUnion('action', [
   MakerSaveInput,
   z.object({ action: z.literal('submit'), id: z.uuid(), rights: z.literal(true) }).strict(),
   // §20.6: the creative publishes it themself — no studio review, the machine checks instead.
-  z.object({ action: z.literal('publish'), id: z.uuid(), rights: z.literal(true) }).strict(),
+  z.object({ action: z.literal('publish'), id: z.uuid(), rights: z.literal(true), catalogListed: z.boolean().optional() }).strict(),
   z.object({ action: z.literal('test'), id: z.uuid(), selfieId: z.uuid().optional() }).strict(),
   z.object({ action: z.literal('deleteFile'), id: z.uuid(), file: z.string().regex(/^ast_[0-9a-f]{32}$/) }).strict(),
 ]);
@@ -160,6 +161,9 @@ export async function makerAction(deps: { sql: SqlRunner; store: RenderStore; st
 
   if (input.action === 'publish') {
     demand(selfPublishOpen(), 'not_open');
+    if (input.catalogListed === false) {
+      demand(makerBlogOpen(), 'not_open');
+    }
     const storage = deps.storage;
     demand(storage, 'unavailable');
     return deps.sql.transaction(async (tx) => {
@@ -171,7 +175,9 @@ export async function makerAction(deps: { sql: SqlRunner; store: RenderStore; st
       }
       demand(row.status === 'draft' || row.status === 'submitted', 'conflict');
       const { recipe } = await checkedRecipe(tx, row);
-      return selfPublishFormat(tx, { store: deps.store, storage }, userId, row, recipe);
+      return selfPublishFormat(tx, { store: deps.store, storage }, userId, row, recipe, {
+        ...(input.catalogListed !== undefined ? { catalogListed: input.catalogListed } : {}),
+      });
     });
   }
 
