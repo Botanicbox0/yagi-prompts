@@ -16,6 +16,7 @@ import type {
   StudioReference,
 } from './contracts';
 import { finalPrice } from './final-price';
+import { isV2MusicJob } from './sound/music-jobs';
 import { cleanPeaks } from './sound/waveform';
 import type { StudioMediaStore } from './media-store';
 import { studioModel } from './models';
@@ -112,13 +113,34 @@ export function sentTextOf(row: Pick<JobRow, 'enhance' | 'work' | 'params' | 'fi
   return row.enhance || row.work?.blockRetry?.source === 'model' || row.params?.reviewedPrompt ? row.final_prompt : null;
 }
 
-function jobViewWithLyricsDraftFailure(row: JobRow, outputs: OutputRow[], media: StudioMediaStore): StudioJobView {
-  const { lyricsDraftFailed, ...restWork } = row.work;
-  return { ...jobView({ ...row, work: restWork }, outputs, media), lyricsDraftFailed };
+function v2MusicJobView(row: JobRow, outputs: OutputRow[], media: StudioMediaStore): StudioJobView {
+  const m = row.params?.music;
+  const baseParams = m
+    ? {
+        ...row.params,
+        music: {
+          mode: m.mode,
+          vocal: m.vocal,
+          language: m.language,
+          title: m.title,
+          careful: m.careful,
+          ...(m.lyrics !== undefined ? { lyrics: m.lyrics } : {}),
+          ...(m.targetSeconds !== undefined ? { targetSeconds: m.targetSeconds } : {}),
+          made: m.made,
+        },
+      }
+    : row.params;
+  const { lyricsDraftFailed, minimaxDraft: _minimaxDraft, ...restWork } = row.work ?? {};
+  const base = jobView({ ...row, model: 'suno-v6', params: baseParams, work: restWork }, outputs, media);
+  return {
+    ...base,
+    model: row.model,
+    ...(lyricsDraftFailed ? { lyricsDraftFailed } : {}),
+  };
 }
 
 export function jobView(row: JobRow, outputs: OutputRow[], media: StudioMediaStore): StudioJobView {
-  if (row.kind === 'music' && row.work?.lyricsDraftFailed) return jobViewWithLyricsDraftFailure(row, outputs, media);
+  if (isV2MusicJob(row)) return v2MusicJobView(row, outputs, media);
   const p = row.params ?? ({} as JobRow['params']);
   // A finished clip on a model with drafts: its drafts carry what their 1080p final takes, priced by the
   // same function `planFinal` reserves with (lib/brand-studio/final-price.ts).

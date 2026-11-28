@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parseRequestedSeconds } from '@/lib/brand-studio/sound/requested-seconds';
 
-describe('parseRequestedSeconds (Korean and English explicit durations, false-positives & ambiguity -> null)', () => {
+describe('parseRequestedSeconds (explicit Korean/English units only, upper-bound ranges, bare s rejected)', () => {
   const CASES: ReadonlyArray<{ label: string; input: string; expected: number | null }> = [
     // Positive Korean forms
     { label: 'Korean compact seconds (30초)', input: '30초', expected: 30 },
@@ -17,16 +17,38 @@ describe('parseRequestedSeconds (Korean and English explicit durations, false-po
     { label: 'Korean compound 1분 30초', input: '1분 30초 감성 브랜드 필름 음악', expected: 90 },
     { label: 'Korean compound compact 1분30초', input: '1분30초짜리 오프닝 테마', expected: 90 },
     { label: 'Korean compound spaced 2 분 15 초', input: '약 2 분 15 초 분량의 잔잔한 기타', expected: 135 },
-    { label: 'Korean range 10~15초 -> upper bound 15', input: '10~15초 스킨케어 숏폼 광고', expected: 15 },
-    { label: 'Korean range 15-30초 -> upper bound 30', input: '15-30초 브랜드 릴스 배경음', expected: 30 },
-    { label: 'Korean minutes range 1~1.5분 -> upper bound 90', input: '1~1.5분 브랜드 필름 음악', expected: 90 },
     { label: 'Korean boundary 1초', input: '1초 효과음 같은 짧은 스팅', expected: 1 },
+    { label: 'Korean boundary 600초', input: '600초 매장 배경음', expected: 600 },
     { label: 'Korean boundary 10분 (600s)', input: '10분 매장 배경 음악', expected: 600 },
+    { label: 'Korean year + real duration (2026년 30초)', input: '2026년 30초 신제품 캠페인 음악', expected: 30 },
+    { label: 'Korean quarter + real duration (4분기 30초 광고)', input: '4분기 30초 광고 배경음', expected: 30 },
+    { label: 'Product model + real duration (Galaxy S24 광고 15초)', input: 'Galaxy S24 광고 15초', expected: 15 },
+    { label: 'iPhone 6s + real Korean duration (15초)', input: 'iPhone 6s 리뷰 15초 광고', expected: 15 },
+    { label: 'Same duration stated twice (1분 30초짜리, 총 90초)', input: '1분 30초짜리, 총 90초', expected: 90 },
+    { label: 'Same duration stated in Korean and English (30초 / 30 seconds)', input: '30초 광고 음악 (30 seconds)', expected: 30 },
 
-    // Positive English forms
-    { label: 'English 15s compact (non-multiple of 10)', input: '15s', expected: 15 },
-    { label: 'English 45s compact (non-multiple of 10)', input: '45s warm acoustic jingle', expected: 45 },
-    { label: 'English 15 s spaced', input: ' upbeat synth pop 15 s ', expected: 15 },
+    // Positive ranges (unit on both sides, unit on right, unit on left) -> upper bound
+    { label: 'Range both-sides hyphen (15초-30초)', input: '15초-30초', expected: 30 },
+    { label: 'Range both-sides hyphen in sentence (15초-30초 사이)', input: '15초-30초 사이 길이의 브랜드 송', expected: 30 },
+    { label: 'Range both-sides tilde (15초~30초)', input: '15초~30초', expected: 30 },
+    { label: 'Range both-sides en-dash (15초–30초)', input: '15초–30초 신나는 릴스 음악', expected: 30 },
+    { label: 'Range both-sides Korean 에서 (15초에서 30초)', input: '15초에서 30초', expected: 30 },
+    { label: 'Range both-sides English to (15 sec to 30 sec)', input: '15 sec to 30 sec', expected: 30 },
+    { label: 'Range both-sides minutes (1분~2분)', input: '1분~2분 잔잔한 배경음악', expected: 120 },
+    { label: 'Range both-sides minute to compound (1분~1분 30초)', input: '1분~1분 30초', expected: 90 },
+    { label: 'Range both-sides seconds to minute (30초~1분)', input: '30초~1분 브랜드 필름 음악', expected: 60 },
+    { label: 'Range right-unit hyphen (10-15초)', input: '10-15초', expected: 15 },
+    { label: 'Range right-unit tilde (10~15초)', input: '10~15초 스킨케어 숏폼 광고', expected: 15 },
+    { label: 'Range right-unit minutes (2-3분)', input: '2-3분 매장 앰비언트', expected: 180 },
+    { label: 'Range right-unit decimal minutes (1~1.5분)', input: '1~1.5분 브랜드 필름 음악', expected: 90 },
+    { label: 'Range right-unit English hyphen (10-15 sec)', input: '10-15 sec tech launch cue', expected: 15 },
+    { label: 'Range right-unit English tilde (15~30 seconds)', input: '15~30 seconds upbeat spot', expected: 30 },
+    { label: 'Range right-unit English to (5 to 10 seconds)', input: '5 to 10 seconds clean sting', expected: 10 },
+    { label: 'Range right-unit English minutes (1-2 min)', input: '1-2 min ambient underscore', expected: 120 },
+    { label: 'Range left-unit Korean 에서 bare upper (15초에서 30)', input: '15초에서 30 사이 광고 음악', expected: 30 },
+    { label: 'Range left-unit English to bare upper (15 sec to 30)', input: '15 sec to 30 upbeat cue', expected: 30 },
+
+    // Positive English explicit forms
     { label: 'English 30 sec at start of brief', input: '30 sec sunlit coffee commercial, upbeat indie pop vocals', expected: 30 },
     { label: 'English 15 sec', input: '15 sec product reveal cue', expected: 15 },
     { label: 'English 45 secs', input: 'Warm Rhodes groove, 45 secs.', expected: 45 },
@@ -39,45 +61,54 @@ describe('parseRequestedSeconds (Korean and English explicit durations, false-po
     { label: 'English 2 minutes', input: 'Upbeat dance pop, 2 minutes', expected: 120 },
     { label: 'English decimal minutes 1.5 min', input: '1.5 min chill lo-fi beat', expected: 90 },
     { label: 'English decimal minutes 2.5 minutes', input: '2.5 minutes warm indie underscore', expected: 150 },
-    { label: 'English compound 1m 30s', input: '1m 30s launch film underscore', expected: 90 },
     { label: 'English compound 1 min 30 sec', input: '1 min 30 sec warm indie track', expected: 90 },
     { label: 'English compound 1 minute and 15 seconds', input: 'Run for 1 minute and 15 seconds with soft strings', expected: 75 },
-    { label: 'English range 10-15 sec -> upper bound 15', input: '10-15 sec tech launch cue', expected: 15 },
-    { label: 'English range 15~30 seconds -> upper bound 30', input: '15~30 seconds upbeat spot', expected: 30 },
-    { label: 'English range 10~15s -> upper bound 15', input: '10~15s social bumper', expected: 15 },
-    { label: 'English minutes range 1-2 min -> upper bound 120', input: '1-2 min ambient underscore', expected: 120 },
     { label: 'Decade ignored alongside real Korean duration', input: '80s synthwave 스타일 30초 광고 음악', expected: 30 },
     { label: 'Age group ignored alongside real English duration', input: 'Gen Z 20s 타깃 15 sec 숏폼', expected: 15 },
-    { label: 'Same duration repeated in two ways (single distinct value)', input: '30초 광고 음악 (30 seconds)', expected: 30 },
 
-    // Negative: bare `s` multiples of 10 (decades, ages, reverb tails) -> null
+    // Negative: ALL bare `s` forms (Coordinator Round 2 decision: bare `s` is never a duration) -> null
+    { label: 'bare 15s -> null', input: '15s', expected: null },
+    { label: 'bare 45s -> null', input: '45s', expected: null },
+    { label: 'spaced 15 s -> null', input: 'upbeat synth pop 15 s', expected: null },
+    { label: 'bare 25s -> null', input: '25s upbeat jingle', expected: null },
+    { label: 'bare-s range 15s-25s -> null', input: '15s-25s', expected: null },
+    { label: 'bare-s range 10 ~ 15s -> null', input: '10 ~ 15s', expected: null },
+    { label: 'bare-m/s 1m 30s -> null', input: '1m 30s launch film underscore', expected: null },
+    { label: 'product name iPhone 6s', input: 'iPhone 6s', expected: null },
+    { label: 'product brief iPhone 6s 리뷰 광고', input: 'iPhone 6s 리뷰 광고', expected: null },
+    { label: 'rank TOP 3s', input: 'TOP 3s', expected: null },
     { label: 'bare 10s', input: '10s', expected: null },
     { label: '10s of reverb tail', input: '10s of reverb tail', expected: null },
     { label: 'bare 20s', input: '20s', expected: null },
     { label: 'Gen Z 20s 타깃', input: 'Gen Z 20s 타깃', expected: null },
     { label: 'bare 30s', input: '30s', expected: null },
+    { label: 'bare 50s', input: '50s', expected: null },
     { label: 'age range 20-30s', input: '20-30s 직장인 타깃 광고 음악', expected: null },
     { label: 'bare 70s', input: '70s', expected: null },
     { label: 'late 70s', input: 'late 70s', expected: null },
     { label: 'late 70s funk', input: 'late 70s funk', expected: null },
+    { label: '80s', input: '80s', expected: null },
     { label: '80s synthwave', input: '80s synthwave', expected: null },
     { label: '90s hip hop 느낌', input: '90s hip hop 느낌', expected: null },
-    { label: "apostrophe decade ('80s)", input: "Warm '80s synthwave with gated reverb snare", expected: null },
+    { label: "apostrophe decade (90's)", input: "90's boom bap groove", expected: null },
+    { label: "leading apostrophe decade ('80s)", input: "Warm '80s synthwave with gated reverb snare", expected: null },
     { label: 'hyphenated decade (late-80s)', input: 'late-80s gated snare, chorus-washed guitars', expected: null },
     { label: 'four-digit decade (1980s)', input: '1980s Japanese city pop groove', expected: null },
 
     // Negative: Korean fractions and time signatures (`분` + `의` + digit) -> null
     { label: 'Korean fraction 3분의 1', input: '3분의 1', expected: null },
+    { label: 'Korean compact fraction 3분의1', input: '3분의1 지점', expected: null },
     { label: '곡의 3분의 1 지점에서 드롭', input: '곡의 3분의 1 지점에서 드롭', expected: null },
     { label: 'Korean time signature 4분의 3박자', input: '4분의 3박자 따뜻한 왈츠', expected: null },
 
-    // Negative: multi-duration ambiguity (> 1 distinct duration) -> null
+    // Negative: multi-duration ambiguity (> 1 distinct duration, including range + separate duration) -> null
     { label: 'ambiguous intro + total (15초 인트로가 있는 1분짜리 곡)', input: '15초 인트로가 있는 1분짜리 곡', expected: null },
+    { label: 'ambiguous countdown + ad (5 sec countdown in a 30 sec ad)', input: '5 sec countdown in a 30 sec ad', expected: null },
+    { label: 'ambiguous range + separate duration (15초-30초 인트로, 총 1분 곡)', input: '15초-30초 인트로, 총 1분 곡', expected: null },
     { label: 'ambiguous total + cue point (30초 ... 10초 지점에 드롭)', input: '30초 스킨케어 광고 음악, 10초 지점에 드롭', expected: null },
     { label: 'ambiguous compound + intro (1분 30초 ... 첫 15초는)', input: '1분 30초 브랜드 필름, 첫 15초는 피아노 솔로', expected: null },
-    { label: 'ambiguous English two durations', input: '15 sec intro leading into a 60 sec main theme', expected: null },
 
-    // Negative: non-duration numbers, spelled-out words, zero, negative, > 600 -> null
+    // Negative: non-duration numbers, invalid compounds/ranges, zero, negative, > 600 -> null
     { label: 'empty string', input: '', expected: null },
     { label: 'whitespace only', input: '   \n\t  ', expected: null },
     { label: 'year 2026', input: '2026 봄/여름 컬렉션 캠페인 음악', expected: null },
@@ -97,9 +128,11 @@ describe('parseRequestedSeconds (Korean and English explicit durations, false-po
     { label: 'aspect ratio 9:16 and 16:9', input: '9:16 릴스와 16:9 가로 영상 겸용 배경음', expected: null },
     { label: 'sample rate & bit depth (44.1kHz 16-bit)', input: 'Clean studio mix 44.1kHz 16-bit', expected: null },
     { label: 'English s-words & min-words', input: '3 songs, 2 synths, 4 stems, 3 minimal pads in 1 minor key', expected: null },
-    { label: 'decimal seconds (15.5s)', input: 'Cut at 15.5s mark', expected: null },
+    { label: 'decimal Korean seconds (1.5초)', input: '1.5초 짧은 전환음', expected: null },
+    { label: 'decimal English seconds (15.5 sec)', input: 'Cut at 15.5 sec mark', expected: null },
+    { label: 'invalid compound seconds >= 60 (1분 60초)', input: '1분 60초 배경음', expected: null },
+    { label: 'inverted range (30초-15초)', input: '30초-15초 배경음', expected: null },
     { label: 'zero Korean seconds (0초)', input: '0초', expected: null },
-    { label: 'zero seconds in sentence (0초 / 0s)', input: '0초 대기 없이 0s 시작', expected: null },
     { label: 'negative Korean seconds (-15초)', input: '-15초', expected: null },
     { label: 'negative English seconds (-15 sec)', input: '-15 sec', expected: null },
     { label: 'unicode minus Korean seconds (−15초)', input: '−15초', expected: null },
@@ -108,8 +141,8 @@ describe('parseRequestedSeconds (Korean and English explicit durations, false-po
     { label: 'over 10-minute ceiling in minutes (11분)', input: '11분 매장 배경음', expected: null },
   ];
 
-  it(`covers ${CASES.length} positive, decade/age/fraction false-positive, range, decimal-minute, and ambiguity cases`, () => {
-    expect(CASES.length).toBeGreaterThanOrEqual(40);
+  it(`covers ${CASES.length} explicit-unit, range, bare-s rejection, false-positive, and ambiguity cases`, () => {
+    expect(CASES.length).toBeGreaterThanOrEqual(60);
   });
 
   it.each(CASES)('$label: $input -> $expected', ({ input, expected }) => {

@@ -23,14 +23,14 @@ import type { Viewer } from '@/lib/auth/identity';
 import { assertBrandFeature, BrandFeatureDenied } from '@/lib/brands/entitlements';
 import { brandSoundComposerV2For } from '@/lib/flags';
 import { lockOrganization, requireCreate, StudioDenied, studioSeat } from '../access';
-import { STUDIO_LIMITS, type StudioFailure, type StudioJobCreated } from '../contracts';
+import { STUDIO_LIMITS, type StudioFailure, type StudioJobCreated, type StudioJobKind } from '../contracts';
 import { routeJob } from '../lanes';
 import { failure, guarded } from '../outcome';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import { FREE_INTEL_LIMITS, takeFreeIntelSlot } from '../jobs';
 import { jobView, openJobCount } from '../repo';
 import { brandProjectFiling, brandProjectForNew, fileStudioJob, hasBrandProjectField, withoutBrandProjectField } from '../brand-projects';
-import type { JobRow, OutputRow, StudioDeps, StudioJobParams } from '../types';
+import type { JobRow, OutputRow, StudioDeps, StudioJobParams, StudioJobWork } from '../types';
 import { usageKrw } from '../usage-rate';
 import { loadAllowance, reserveAllowance } from '../usage';
 import { musicEngine, musicEngineOfModel, type MusicEngine, type MusicModelId, type MusicRequest } from './engine';
@@ -283,8 +283,7 @@ export async function createMusicJob(deps: StudioDeps, viewer: Viewer, raw: unkn
   // `brandProjectId` stays in and is refused like any unknown field (today's answer); open, it is taken off here
   // and judged after the seat. Anyone the seat refuses while carrying it gets today's answer (`invalid`), so a
   // request tells nobody outside the workspace whether the spine is open.
-  const rawOrgId = (raw as { organizationId?: unknown } | null)?.organizationId;
-  const filing = await brandProjectFiling(deps.sql, rawOrgId, raw);
+  const filing = await brandProjectFiling(deps.sql, (raw as { organizationId?: unknown } | null)?.organizationId, raw);
   const carried = filing.open && hasBrandProjectField(raw);
   const parsed = MusicJobCreateSchema.safeParse(filing.open ? withoutBrandProjectField(raw) : raw);
   if (!parsed.success) return failure('invalid');
@@ -344,7 +343,7 @@ export async function createMusicJob(deps: StudioDeps, viewer: Viewer, raw: unkn
         video = await videoFitOf(sql, { organizationId: org, assetId: asked.videoAssetId, locale, now });
         if (!video) throw new StudioDenied('invalid');
       }
-      const strictInput = strict ? { ...asked, architect: true, designed: undefined } : asked;
+      const strictInput: MusicJobCreate = strict ? { ...asked, architect: true, designed: undefined } : asked;
       const v = video ? { ...strictInput, video, targetSeconds: videoTargetSeconds(video), structure: strictInput.structure ?? videoStructure(video) } : strictInput;
       let plan: MusicPlan;
       try {
@@ -416,11 +415,6 @@ export async function createMusicJob(deps: StudioDeps, viewer: Viewer, raw: unkn
         stick: null,
         place: null,
       });
-      const initialWork = plan.prepared
-        ? { prepared: true, enhancer: designMeta(plan.design) }
-        : plan.design.source === 'reviewed'
-          ? { enhancer: designMeta(plan.design) }
-          : {};
       const job = (
         await sql.query<JobRow>(
           `insert into brand_studio_jobs (organization_id, created_by, request_id, kind, status, lane, model, prompt, final_prompt, enhance, params, refs,
@@ -438,7 +432,7 @@ export async function createMusicJob(deps: StudioDeps, viewer: Viewer, raw: unkn
             JSON.stringify(plan.params),
             Math.round(plan.estimateUsd * 10_000) / 10_000,
             plan.estimateKrw,
-            JSON.stringify(initialWork),
+            JSON.stringify(plan.prepared ? { prepared: true, enhancer: designMeta(plan.design) } : {}),
             // "보낸 문장 보기" shows what went whenever the Architect took part (designed here or in the dock).
             v.architect !== false,
           ],
@@ -476,6 +470,31 @@ function isV2MusicJobRequest(raw: unknown): boolean {
   if (!raw || typeof raw !== 'object') return false;
   const orgId = (raw as { organizationId?: unknown }).organizationId;
   return typeof orgId === 'string' && brandSoundComposerV2For(orgId, process.env) && hasV2MusicFields(raw);
+}
+
+export interface MusicJobLike {
+  kind?: StudioJobKind;
+  model: string;
+  params?: Pick<StudioJobParams, 'music'> | null;
+  work?: Pick<StudioJobWork, 'lyricsDraftFailed' | 'minimaxDraft'> | null;
+}
+
+/**
+ * Single shared predicate for whether a stored `JobRow` or `StudioRequestInput` belongs to Sound Studio composer v2.
+ * Used across `prepareMusic`, `requestInputOf`, `musicRequestOf`, and `jobView`.
+ */
+export function isV2MusicJob(job: MusicJobLike): boolean {
+  if (job.kind !== undefined && job.kind !== 'music') return false;
+  const m = job.params?.music;
+  return (
+    job.model !== 'suno-v6' ||
+    m?.composerMode !== undefined ||
+    m?.titleSource !== undefined ||
+    m?.durationSeconds !== undefined ||
+    m?.durationSource !== undefined ||
+    Boolean(job.work?.lyricsDraftFailed) ||
+    Boolean(job.work?.minimaxDraft)
+  );
 }
 
 /**
@@ -762,6 +781,11 @@ export function planMusicV2(
   };
 }
 
+/**
+ * Mirrors `createMusicJob` above (gates, idempotency, block pause, name/lyrics checks, allowance reservation, and
+ * job/output insert) for v2 requests so the closed `createMusicJob` body stays untouched. Keep gate, idempotency,
+ * and reservation changes in sync with `createMusicJob`.
+ */
 async function createMusicJobV2(
   deps: StudioDeps,
   viewer: Viewer,

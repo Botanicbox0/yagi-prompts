@@ -21,6 +21,7 @@ import { claimJobs, releaseJob, saveJob, tokenOf, failPendingOutputs } from './j
 import { closeLane, failoverLane, heartbeatFresh, lanesUp, loadLaneClosures, loadLaneHeartbeats, routeJob } from './lanes';
 import { studioModel, type StudioLane, type StudioModel } from './models';
 import { MUSIC_WAIT_CEILING_MS, musicEngineOfModel } from './sound/engine';
+import { isV2MusicJob } from './sound/music-jobs';
 import { minimaxLyricsFailureReason } from './sound/prepare-music';
 import { PrepareFailure, prepareJob, providerUrl, sendPrompt } from './prepare';
 import { buildStudioRequest, StudioRequestError, type StudioRequestInput } from './provider/requests';
@@ -42,7 +43,7 @@ function laneModelOf(id: string): Pick<StudioModel, 'mcp'> | null {
   return studioModel(id) ?? musicEngineOfModel(id)?.model ?? null;
 }
 
-function minimaxRequestInputOf(deps: Pick<StudioDeps, 'media' | 'env'>, job: JobRow): StudioRequestInput {
+function musicV2RequestInputOf(deps: Pick<StudioDeps, 'media' | 'env'>, job: JobRow): StudioRequestInput {
   const inputs = job.work.inputs ?? [];
   const region = job.work.region;
   const draftedLyrics =
@@ -65,7 +66,7 @@ function minimaxRequestInputOf(deps: Pick<StudioDeps, 'media' | 'env'>, job: Job
 }
 
 export function requestInputOf(deps: Pick<StudioDeps, 'media' | 'env'>, job: JobRow): StudioRequestInput {
-  if (job.kind === 'music' && job.model === 'minimax-music-3') return minimaxRequestInputOf(deps, job);
+  if (isV2MusicJob(job)) return musicV2RequestInputOf(deps, job);
   const inputs = job.work.inputs ?? [];
   const region = job.work.region;
   return {

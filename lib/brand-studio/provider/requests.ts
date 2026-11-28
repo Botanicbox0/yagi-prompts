@@ -19,6 +19,7 @@ import type { StudioProviderRequest } from './types';
 import { musicEngineOfModel, type MusicEngine } from '../sound/engine';
 import { markMinimaxLyrics } from '../sound/architect';
 import { markLyrics, ownLyrics } from '../sound/lyrics';
+import { isV2MusicJob } from '../sound/music-jobs';
 
 export interface StudioRequestInput {
   kind: StudioJobKind;
@@ -333,7 +334,7 @@ function musicRequestV2Of(input: StudioRequestInput): StudioProviderRequest {
  * the row names, the sentence in `final_prompt`, the choices in `params.music`.
  */
 function musicRequestOf(input: StudioRequestInput): StudioProviderRequest {
-  if (input.model !== 'suno-v6' || input.params.music?.titleSource === 'customer') return musicRequestV2Of(input);
+  if (isV2MusicJob(input)) return musicRequestV2Of(input);
   const engine = musicEngineOfModel(input.model);
   const music = input.params.music;
   if (!engine || !music) throw new StudioRequestError(`not a music run: ${input.model}`);

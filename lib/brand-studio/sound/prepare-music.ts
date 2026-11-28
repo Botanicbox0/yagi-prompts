@@ -40,6 +40,7 @@ import {
   type WrittenLyrics,
 } from './lyrics-draft';
 import { lyricsGeminiConfig } from './lyrics-model';
+import { isV2MusicJob } from './music-jobs';
 import { namedArtist } from './names';
 import { FAKE_EXISTING, judgeExistingLyrics, logMusicBlock, type LyricsVerdict } from './warnings';
 
@@ -312,14 +313,6 @@ async function draftMinimaxLyrics(deps: StudioDeps, job: JobRow): Promise<Drafte
   }
 
   return { lyrics, rawLyrics, model: written.model, bpm: written.bpm };
-}
-
-function isV2MusicJob(job: Pick<JobRow, 'model' | 'params'>): boolean {
-  return (
-    job.model !== 'suno-v6' ||
-    job.params.music?.titleSource === 'customer' ||
-    job.params.music?.composerMode !== undefined
-  );
 }
 
 async function prepareMusicV2(deps: StudioDeps, job: JobRow): Promise<{ finalPrompt: string; work: StudioJobWork }> {

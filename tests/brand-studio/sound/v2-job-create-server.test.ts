@@ -17,7 +17,7 @@ import { audioSeconds } from '@/lib/brand-studio/sound/audio-info';
 import type { MusicModelId } from '@/lib/brand-studio/sound/engine';
 import { sunoV6Sunra } from '@/lib/brand-studio/sound/engines/suno-sunra';
 import { defaultStructure, markLyrics, musicWay, ownLyrics, withoutAddedLines } from '@/lib/brand-studio/sound/lyrics';
-import { createMusicJob, MusicJobCreateSchema, planMusic } from '@/lib/brand-studio/sound/music-jobs';
+import { createMusicJob, isV2MusicJob, MusicJobCreateSchema, planMusic } from '@/lib/brand-studio/sound/music-jobs';
 import { musicQuoteCredits, musicQuoteForModel } from '@/lib/brand-studio/sound/music-limits';
 import { resetMusicBlocks } from '@/lib/brand-studio/sound/warnings';
 import type { JobRow, OutputRow } from '@/lib/brand-studio/types';
@@ -410,6 +410,103 @@ describe('1. Gate: unlisted vs listed vs without-v2-fields vs sandboxed/blocked 
       }
     } finally {
       await f.db.close();
+    }
+  });
+
+  it('pins reservation parity between a v2 Suno v6 request (createMusicJobV2) and the same request without v2 fields (createMusicJob), and verifies shared isV2MusicJob predicate', async () => {
+    const v2Fx = await studioFixture({ capKrw: 5_000_000 });
+    const v1Fx = await studioFixture({ capKrw: 5_000_000 });
+    try {
+      vi.stubEnv('BRAND_SOUND_COMPOSER_V2_ORGS', v2Fx.orgId);
+      const fixedNow = () => new Date('2026-11-28T04:00:00.000Z');
+      const commonEnv = studioEnv({
+        BRAND_STUDIO_PROVIDER: 'fake',
+        BRAND_STUDIO_DEFAULT_LANE: 'sunra_api',
+        BRAND_SOUND_STUDIO: 'on',
+        BRAND_SOUND_MAX_MODE: 'on',
+      });
+      const v2Deps = studioDeps(v2Fx.sql, { env: commonEnv, provider: createFakeStudioProvider({ pollsBeforeDone: 1 }), now: fixedNow });
+      const v1Deps = studioDeps(v1Fx.sql, { env: commonEnv, provider: createFakeStudioProvider({ pollsBeforeDone: 1 }), now: fixedNow });
+
+      // Shared `isV2MusicJob` predicate distinguishes non-music, v1 Suno v6, and every v2 variant
+      expect(isV2MusicJob({ kind: 'image', model: 'seedream-5-lite' })).toBe(false);
+      expect(isV2MusicJob({ kind: 'music', model: 'suno-v6', params: null, work: {} })).toBe(false);
+      expect(isV2MusicJob({ kind: 'music', model: 'suno-v6-wild', params: null })).toBe(true);
+      expect(isV2MusicJob({ kind: 'music', model: 'minimax-music-3', params: null })).toBe(true);
+      expect(
+        isV2MusicJob({
+          kind: 'music',
+          model: 'suno-v6',
+          params: { music: { mode: 'describe', vocal: false, language: 'ko', title: 't', titleSource: 'customer', careful: false, made: { engine: 'suno-v6-sunra', endpoint: 'suno/suno-v6/inspire-mode', terms: 'sound-2026-11-20' } } },
+        }),
+      ).toBe(true);
+      expect(isV2MusicJob({ kind: 'music', model: 'suno-v6', work: { lyricsDraftFailed: 'draft' } })).toBe(true);
+
+      const specs = [
+        { name: 'describe', prompt: '잔잔한 어쿠스틱 기타 배경음', vocal: false, careful: false },
+        { name: 'custom', prompt: '밝은 인디 팝 브랜드 송', vocal: true, lyrics: '햇살 같은 하루\n\n같이 걸어요', careful: false },
+        { name: 'custom+careful', prompt: '밝은 인디 팝 브랜드 송', vocal: true, lyrics: '햇살 같은 하루\n\n같이 걸어요', careful: true },
+      ] as const;
+
+      for (const s of specs) {
+        const baseFields = {
+          kind: 'music' as const,
+          prompt: s.prompt,
+          vocal: s.vocal,
+          ...('lyrics' in s ? { lyrics: s.lyrics } : {}),
+          ...(s.careful ? { careful: true } : {}),
+        };
+
+        const v2Created = await runStudioOperation(v2Deps, viewerOf(v2Fx.ids.owner, 'ko'), 'job.create', {
+          ...baseFields,
+          organizationId: v2Fx.orgId,
+          requestId: requestId(),
+          model: 'suno-v6',
+        });
+        const v1Created = await runStudioOperation(v1Deps, viewerOf(v1Fx.ids.owner, 'ko'), 'job.create', {
+          ...baseFields,
+          organizationId: v1Fx.orgId,
+          requestId: requestId(),
+        });
+        if (!v2Created.ok || !('job' in v2Created) || !v1Created.ok || !('job' in v1Created)) {
+          throw new Error(`${s.name}: expected created jobs`);
+        }
+
+        const v2Row = (await v2Fx.sql.query<JobRow>('select * from brand_studio_jobs where id = $1', [v2Created.job.id])).rows[0]!;
+        const v1Row = (await v1Fx.sql.query<JobRow>('select * from brand_studio_jobs where id = $1', [v1Created.job.id])).rows[0]!;
+
+        expect(
+          {
+            kind: v2Row.kind,
+            status: v2Row.status,
+            lane: v2Row.lane,
+            model: v2Row.model,
+            enhance: v2Row.enhance,
+            estimate_usd: Number(v2Row.estimate_usd),
+            estimate_krw: v2Row.estimate_krw,
+            usage_krw: v2Row.usage_krw,
+            cost_usd: v2Row.cost_usd,
+          },
+          `${s.name} reservation fields`,
+        ).toEqual({
+          kind: v1Row.kind,
+          status: v1Row.status,
+          lane: v1Row.lane,
+          model: v1Row.model,
+          enhance: v1Row.enhance,
+          estimate_usd: Number(v1Row.estimate_usd),
+          estimate_krw: v1Row.estimate_krw,
+          usage_krw: v1Row.usage_krw,
+          cost_usd: v1Row.cost_usd,
+        });
+
+        const v2Allowance = await loadAllowance(v2Fx.sql, v2Fx.orgId, commonEnv, fixedNow());
+        const v1Allowance = await loadAllowance(v1Fx.sql, v1Fx.orgId, commonEnv, fixedNow());
+        expect(v2Allowance.usedKrw, `${s.name} reserved allowance`).toBe(v1Allowance.usedKrw);
+      }
+    } finally {
+      await v2Fx.db.close();
+      await v1Fx.db.close();
     }
   });
 });
