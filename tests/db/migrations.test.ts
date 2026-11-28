@@ -194,6 +194,7 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
       'landing_media',
       // docs/PLATFORM-2.0.md §20 (2026-10-28) — an AI creative's agent tokens and representative works.
       'maker_tokens',
+      'maker_work_uploads',
       'maker_works',
       'notification_deliveries',
       'notification_jobs',
@@ -506,6 +507,55 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
     }
     expect(glue.replace(/--[^\n]*/g, '')).not.toMatch(/\bgrant\b|create\s+policy/i);
     for (const file of ['0206_core_format_revision_txid.sql', '0207_glue_format_revision_txid.sql']) {
+      expect(readFileSync(join(MIGRATIONS_DIR, file), 'utf8').startsWith('-- 클라우드 적용 필요'), file).toBe(true);
+    }
+  });
+
+  it('0210/0211 — maker_work_uploads presign lease ledger: id/mime/bytes constraints, idempotent, server-only', async () => {
+    const db = await freshDb();
+    const user = '00000000-0000-4000-8000-000000000210';
+    await db.query('insert into auth.users (id) values ($1)', [user]);
+    await db.query(`insert into profiles (id, email, locale) values ($1, 'upl@twings.test', 'ko')`, [user]);
+
+    const validId = `upl_${'a'.repeat(32)}`;
+    await db.query(
+      `insert into maker_work_uploads (upload_id, user_id, storage_key, mime, bytes, expires_at)
+       values ($1, $2, $3, 'video/mp4', 1048576, now() + interval '5 minutes')`,
+      [validId, user, `${user}/${validId}.mp4`],
+    );
+    await expect(
+      db.query(
+        `insert into maker_work_uploads (upload_id, user_id, storage_key, mime, bytes, expires_at)
+         values ($1, $2, $3, 'video/mp4', 1024, now() + interval '5 minutes')`,
+        [`wrk_${'b'.repeat(32)}`, user, `${user}/bad1.mp4`],
+      ),
+    ).rejects.toThrow();
+    await expect(
+      db.query(
+        `insert into maker_work_uploads (upload_id, user_id, storage_key, mime, bytes, expires_at)
+         values ($1, $2, $3, 'text/plain', 1024, now() + interval '5 minutes')`,
+        [`upl_${'c'.repeat(32)}`, user, `${user}/bad2.txt`],
+      ),
+    ).rejects.toThrow();
+    await expect(
+      db.query(
+        `insert into maker_work_uploads (upload_id, user_id, storage_key, mime, bytes, expires_at)
+         values ($1, $2, $3, 'video/mp4', 52428801, now() + interval '5 minutes')`,
+        [`upl_${'d'.repeat(32)}`, user, `${user}/bad3.mp4`],
+      ),
+    ).rejects.toThrow();
+
+    await db.exec(readFileSync(join(MIGRATIONS_DIR, '0210_core_maker_work_uploads.sql'), 'utf8'));
+    expect((await db.query<{ n: number }>('select count(*)::int as n from maker_work_uploads')).rows[0]!.n).toBe(1);
+    await db.close();
+
+    const glue = readFileSync(join(MIGRATIONS_DIR, '0211_glue_maker_work_uploads.sql'), 'utf8');
+    expect(glue).toContain("'maker_work_uploads'");
+    expect(glue).toContain('enable row level security');
+    expect(glue).toContain('force row level security');
+    expect(glue).toContain('revoke all on public.%I from public, anon, authenticated');
+    expect(glue).not.toMatch(/create\s+policy/i);
+    for (const file of ['0210_core_maker_work_uploads.sql', '0211_glue_maker_work_uploads.sql']) {
       expect(readFileSync(join(MIGRATIONS_DIR, file), 'utf8').startsWith('-- 클라우드 적용 필요'), file).toBe(true);
     }
   });

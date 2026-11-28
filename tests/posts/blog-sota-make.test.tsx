@@ -26,11 +26,14 @@ import { isReservedMakerHandle, MakerProfileError, saveMakerProfile } from '@/li
 import { activateOpenMaker } from '@/lib/makers/self-activate';
 import { makerAction } from '@/lib/recipes/maker';
 import {
+  BLOG_MAKER_WORKS_MAX_BYTES,
   completeMakerWorkUpload,
   MAKER_WORK_VIDEO_MAX_BYTES,
+  makerWorkUploadsReady,
   presignMakerWorkUpload,
   resetPresignRateLimits,
   storeMakerWork,
+  sweepExpiredMakerWorkUploads,
   sweepOrphanMakerUploads,
   UPLOAD_ID,
   WORK_ID,
@@ -632,5 +635,171 @@ describe('Blog SOTA media (50MB presign) & unlisted inline selfie make-card', ()
     );
     expect(offStudioRes.status).toBe(206);
     expect((await offStudioRes.arrayBuffer()).byteLength).toBe(16);
+  });
+
+  it('enforces durable maker_work_uploads leases across instances, strict /complete consumption, scheduled sweep, and pre-0210 fallback', async () => {
+    expect(await makerWorkUploadsReady(h.sql)).toBe(true);
+    expect(BLOG_MAKER_WORKS_MAX_BYTES).toBe(500 * 1024 * 1024);
+
+    const presignStore: RenderStore = {
+      ...store,
+      name: 'r2',
+      async signedUploadUrl(key) {
+        return `https://r2.example.test/upload/${encodeURIComponent(key)}`;
+      },
+    };
+
+    // 1. Mint 10 unuploaded 1 MB leases (PRESIGN_PENDING_MAX = 10) with zero objects uploaded yet
+    const oneMb = 1024 * 1024;
+    const leases: string[] = [];
+    for (let i = 0; i < 10; i += 1) {
+      const res = await presignMakerWorkUpload(h.sql, presignStore, {
+        userId: CREATIVE.userId!,
+        mime: 'video/mp4',
+        bytes: oneMb,
+      });
+      expect(res.mode).toBe('presigned');
+      if (res.mode === 'presigned') leases.push(res.uploadId);
+    }
+    expect(leases).toHaveLength(10);
+
+    // Simulate a fresh serverless instance cold start: DB ledger still blocks the 11th unuploaded presign
+    resetPresignRateLimits();
+    await expect(
+      presignMakerWorkUpload(h.sql, presignStore, {
+        userId: CREATIVE.userId!,
+        mime: 'video/mp4',
+        bytes: oneMb,
+      }),
+    ).rejects.toMatchObject({ code: 'limit_reached' });
+
+    // 2. Failed /complete calls (before uploading or with mismatched mime) never release active lease slots
+    await expect(
+      completeMakerWorkUpload(h.sql, presignStore, {
+        userId: CREATIVE.userId!,
+        uploadId: leases[0]!,
+        mime: 'video/mp4',
+      }),
+    ).rejects.toMatchObject({ code: 'not_found' });
+    await expect(
+      completeMakerWorkUpload(h.sql, presignStore, {
+        userId: CREATIVE.userId!,
+        uploadId: leases[0]!,
+        mime: 'image/jpeg',
+      }),
+    ).rejects.toMatchObject({ code: 'bad_file' });
+    await expect(
+      presignMakerWorkUpload(h.sql, presignStore, {
+        userId: CREATIVE.userId!,
+        mime: 'video/mp4',
+        bytes: oneMb,
+      }),
+    ).rejects.toMatchObject({ code: 'limit_reached' });
+
+    // 3. Rejects unrecorded uploadId, cross-user uploadId, and byte-length mismatch
+    const unrecordedId = `upl_${'9'.repeat(32)}`;
+    await store.put(`${CREATIVE.userId!}/${unrecordedId}.mp4`, makeMp4Bytes(1024, 11), 'video/mp4');
+    await expect(
+      completeMakerWorkUpload(h.sql, presignStore, {
+        userId: CREATIVE.userId!,
+        uploadId: unrecordedId,
+        mime: 'video/mp4',
+      }),
+    ).rejects.toMatchObject({ code: 'not_found' });
+
+    const firstRawKey = `${CREATIVE.userId!}/${leases[0]!}.mp4`;
+    await store.put(firstRawKey, makeMp4Bytes(oneMb + 512, 12), 'video/mp4');
+    await expect(
+      completeMakerWorkUpload(h.sql, presignStore, {
+        userId: CREATIVE.userId!,
+        uploadId: leases[0]!,
+        mime: 'video/mp4',
+      }),
+    ).rejects.toMatchObject({ code: 'bad_file' });
+    expect(await store.head!(firstRawKey)).toBeNull();
+
+    // Upload exact leased byte length: other creative is rejected, owner consumes lease once
+    await store.put(firstRawKey, makeMp4Bytes(oneMb, 13), 'video/mp4');
+    await expect(
+      completeMakerWorkUpload(h.sql, presignStore, {
+        userId: OTHER_CREATIVE.userId!,
+        uploadId: leases[0]!,
+        mime: 'video/mp4',
+      }),
+    ).rejects.toMatchObject({ code: 'not_found' });
+
+    const done = await completeMakerWorkUpload(h.sql, presignStore, {
+      userId: CREATIVE.userId!,
+      uploadId: leases[0]!,
+      mime: 'video/mp4',
+      title: 'Leased 1MB Clip',
+    });
+    expect(WORK_ID.test(done.work.id)).toBe(true);
+    expect(await store.head!(firstRawKey)).toBeNull();
+
+    // Second /complete on the same uploadId is rejected even if bytes are re-uploaded
+    await store.put(firstRawKey, makeMp4Bytes(oneMb, 14), 'video/mp4');
+    await expect(
+      completeMakerWorkUpload(h.sql, presignStore, {
+        userId: CREATIVE.userId!,
+        uploadId: leases[0]!,
+        mime: 'video/mp4',
+      }),
+    ).rejects.toMatchObject({ code: 'not_found' });
+
+    // 4. Scheduled user-independent sweep cleans both abandoned uncompleted upl_* AND post-/complete replay PUTs
+    const abandonedKey = `${CREATIVE.userId!}/${leases[1]!}.mp4`;
+    await store.put(abandonedKey, makeMp4Bytes(2048, 15), 'video/mp4');
+    await h.sql.query(`update maker_work_uploads set expires_at = now() - interval '10 minutes'`);
+
+    const sweepRes = await sweepExpiredMakerWorkUploads(h.sql, store, { graceSeconds: 60 });
+    expect(sweepRes).toEqual({ swept: 10, pruned: 0 });
+    expect(await store.head!(abandonedKey)).toBeNull();
+    expect(await store.head!(firstRawKey)).toBeNull();
+    expect((await store.head!(`${CREATIVE.userId!}/${done.work.id}.mp4`))?.bytes).toBe(oneMb);
+
+    // Swept rows older than 7 days are pruned cleanly
+    await h.sql.query(`update maker_work_uploads set created_at = now() - interval '8 days'`);
+    const pruneRes = await sweepExpiredMakerWorkUploads(h.sql, store, { graceSeconds: 60 });
+    expect(pruneRes).toEqual({ swept: 0, pruned: 10 });
+
+    // 5. Cumulative byte cap (maker_works + active unuploaded leases <= 500 MB) enforced atomically
+    const fiftyMb = 50 * 1024 * 1024;
+    for (let i = 0; i < 9; i += 1) {
+      const res = await presignMakerWorkUpload(h.sql, presignStore, {
+        userId: CREATIVE.userId!,
+        mime: 'video/mp4',
+        bytes: fiftyMb,
+      });
+      expect(res.mode).toBe('presigned');
+    }
+    // 1 MB committed + 9 * 50 MB active = 451 MB; 10th 50 MB lease (501 MB > 500 MB) is blocked despite active = 9 < 10
+    await expect(
+      presignMakerWorkUpload(h.sql, presignStore, {
+        userId: CREATIVE.userId!,
+        mime: 'video/mp4',
+        bytes: fiftyMb,
+      }),
+    ).rejects.toMatchObject({ code: 'limit_reached' });
+
+    // 6. Pre-0210 fallback continues working if maker_work_uploads has not been applied yet
+    await h.sql.query('drop table public.maker_work_uploads');
+    expect(await makerWorkUploadsReady(h.sql)).toBe(false);
+    expect(await sweepExpiredMakerWorkUploads(h.sql, store)).toEqual({ swept: 0, pruned: 0 });
+    const fallbackPresign = await presignMakerWorkUpload(h.sql, presignStore, {
+      userId: OTHER_CREATIVE.userId!,
+      mime: 'video/mp4',
+      bytes: 1024,
+    });
+    expect(fallbackPresign.mode).toBe('presigned');
+    if (fallbackPresign.mode === 'presigned') {
+      await store.put(`${OTHER_CREATIVE.userId!}/${fallbackPresign.uploadId}.mp4`, makeMp4Bytes(1024, 21), 'video/mp4');
+      const fallbackComplete = await completeMakerWorkUpload(h.sql, presignStore, {
+        userId: OTHER_CREATIVE.userId!,
+        uploadId: fallbackPresign.uploadId,
+        mime: 'video/mp4',
+      });
+      expect(WORK_ID.test(fallbackComplete.work.id)).toBe(true);
+    }
   });
 });

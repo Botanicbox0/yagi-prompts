@@ -58,7 +58,9 @@ describe('brand usage edge boundary', () => {
     mocks.reconcile.mockResolvedValue({ checked: 3 });
     const r = await tick(new Request('https://twings.app/api/renders/tick'));
     expect(mocks.reconcile).toHaveBeenCalledTimes(1);
-    expect((await r.json()).brandUsage).toEqual({ checked: 3 });
+    const body = await r.json();
+    expect(body.brandUsage).toEqual({ checked: 3 });
+    expect(body.uploadSweep).toEqual({ swept: 0, pruned: 0 });
     vi.unstubAllEnvs();
   });
   it('usage code never touches render billing, the render queue or the public render flag', () => {

@@ -10,6 +10,8 @@ import { reconcileBrandUsagePayments } from '@/lib/brands/usage/payment';
 import { runLiveFxThresholdAlertCheck, type FxThresholdAlertPassReport } from '@/lib/twings/fx-rate-alert';
 import { deletionPassGate, runDeletionPass, type DeletionPassReport } from '@/lib/account/deletion';
 import { liveDeletionDeps } from '@/lib/account/deletion-runtime';
+import { sweepExpiredMakerWorkUploads } from '@/lib/makers/works';
+import { getRenderStore } from '@/lib/renders/store';
 
 /**
  * `GET|POST /api/renders/tick` — one pass of the render queue (docs/TEMPLATES-IA.md §8).
@@ -54,6 +56,10 @@ async function tick(request: Request): Promise<NextResponse> {
   let fxAlert: FxThresholdAlertPassReport | null = null;
   try { fxAlert = await runLiveFxThresholdAlertCheck(); }
   catch { console.warn('[fx-alert] USD/KRW threshold check failed'); }
+  // Abandoned presigned maker work uploads (`upl_*`, 0210): swept across all users independently of new presigns.
+  let uploadSweep: { swept: number; pruned: number } | null = null;
+  try { uploadSweep = await sweepExpiredMakerWorkUploads(sql, await getRenderStore()); }
+  catch { console.warn('[maker-works] upload sweep failed'); }
   // Account deletion (docs/RUNBOOK-deletion.md): requests past their grace period, and cleanups left over.
   // After the render and payment passes on purpose, so an order they just settled no longer holds an account —
   // and not at all when that pass threw (a refund it owed may not have been sent) or when this tick is not
@@ -71,7 +77,7 @@ async function tick(request: Request): Promise<NextResponse> {
   const { errors, ...counts } = report;
   // Presence only, never a value: which engines this deployment can actually reach.
   const config = { openai: openAiConfigFromEnv() !== null, ark: arkConfigFromEnv() !== null, arkAssets: arkAssetsConfigFromEnv() !== null };
-  return NextResponse.json({ ok: true, summary: formatPassReport(report), report: counts, errorCount: errors.length, config, brandUsage, fxAlert, accountDeletion, accountDeletionSkipped }, { headers: HEADERS });
+  return NextResponse.json({ ok: true, summary: formatPassReport(report), report: counts, errorCount: errors.length, config, brandUsage, fxAlert, uploadSweep, accountDeletion, accountDeletionSkipped }, { headers: HEADERS });
 }
 
 export const GET = tick;
