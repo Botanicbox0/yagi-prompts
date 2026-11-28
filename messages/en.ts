@@ -25,6 +25,7 @@ import { studioComposeEn } from './studio-compose';
 import { studioSoundEn } from './studio-sound';
 import { studioEditorEn } from './studio-editor';
 import { studioEditorChatEn } from './studio-editor-chat';
+import { studioEditorTracksEn } from './studio-editor-tracks';
 import { studioWorkflowsEn } from './studio-workflows';
 import { studioShareDialogEn } from './studio-share-dialog';
 import { adminConsoleEn } from './admin-console';
@@ -83,6 +84,7 @@ export const en = {
   studioSound: studioSoundEn,
   studioEditor: studioEditorEn,
   studioEditorChat: studioEditorChatEn,
+  studioEditorTracks: studioEditorTracksEn,
   studioWorkflows: studioWorkflowsEn,
   adminConsole: adminConsoleEn,
   brandHome: brandHomeEn,

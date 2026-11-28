@@ -5,6 +5,8 @@ import {
   SHORTCUT_ACTIONS,
   SHORTCUT_DEFAULTS,
   SHORTCUT_SETS,
+  TRACKS_ONLY_ACTIONS,
+  UNBOUND_BY_DEFAULT_ACTIONS,
   actionFor,
   assignBinding,
   bindingFromEvent,
@@ -58,10 +60,12 @@ describe('the two ready-made sets', () => {
   for (const set of SHORTCUT_SETS) {
     const map = effectiveBindings({ ...DEFAULT_SHORTCUT_PREFS, set });
 
-    it(`${set}: every action has one or two valid keys`, () => {
+    it(`${set}: every action has valid keys (one or two by default; unbound-by-default actions start empty)`, () => {
       for (const action of SHORTCUT_ACTIONS) {
-        expect(map[action].length, action).toBeGreaterThanOrEqual(1);
+        const min = UNBOUND_BY_DEFAULT_ACTIONS.has(action) ? 0 : 1;
+        expect(map[action].length, action).toBeGreaterThanOrEqual(min);
         expect(map[action].length, action).toBeLessThanOrEqual(MAX_BINDINGS_PER_ACTION);
+        if (UNBOUND_BY_DEFAULT_ACTIONS.has(action)) expect(map[action], action).toEqual([]);
         for (const key of map[action]) expect(isBinding(key), `${action}: ${key}`).toBe(true);
       }
     });
@@ -77,16 +81,29 @@ describe('the two ready-made sets', () => {
     });
   }
 
-  it('everyday splits with Ctrl/⌘+B and with S', () => {
-    expect(SHORTCUT_DEFAULTS.everyday.split).toEqual(['Mod+KeyB', 'KeyS']);
+  it('everyday splits with Ctrl/⌘+B, leaves bare S reserved, adds Alt+X next to Esc for deselect, and keeps a customer stored S override on split', () => {
+    expect(SHORTCUT_DEFAULTS.everyday.split).toEqual(['Mod+KeyB']);
+    expect(SHORTCUT_DEFAULTS.everyday.deselect).toEqual(['Escape', 'Alt+KeyX']);
     const map = effectiveBindings(DEFAULT_SHORTCUT_PREFS);
     expect(actionFor('Mod+KeyB', map)).toBe('split');
-    expect(actionFor('KeyS', map)).toBe('split');
+    expect(actionFor('KeyS', map)).toBeNull();
+    expect(actionFor('Alt+KeyX', map)).toBe('deselect');
+
+    // SMALL: a customer who previously bound bare `KeyS` onto `split` keeps it after the default change.
+    const storedCustomer = parseShortcutPrefs({
+      set: 'everyday',
+      overrides: { everyday: { split: ['Mod+KeyB', 'KeyS'] } },
+    });
+    const customerMap = effectiveBindings(storedCustomer);
+    expect(customerMap.split).toEqual(['Mod+KeyB', 'KeyS']);
+    expect(actionFor('KeyS', customerMap)).toBe('split');
   });
 
-  it('pro splits with Ctrl/⌘+K and uses S for the magnet', () => {
+  it('pro splits with Ctrl/⌘+K, uses S for the magnet, and inherits splitAll and Alt+X deselect', () => {
     const map = effectiveBindings(switchSet(DEFAULT_SHORTCUT_PREFS, 'pro'));
     expect(map.split).toEqual(['Mod+KeyK']);
+    expect(map.splitAll).toEqual(['Mod+Shift+KeyB']);
+    expect(map.deselect).toEqual(['Escape', 'Alt+KeyX']);
     expect(actionFor('Mod+KeyK', map)).toBe('split');
     expect(actionFor('KeyS', map)).toBe('magnet');
     expect(actionFor('Mod+KeyB', map)).toBeNull();
@@ -95,6 +112,28 @@ describe('the two ready-made sets', () => {
   it('starts on everyday', () => {
     expect(DEFAULT_SHORTCUT_PREFS.set).toBe('everyday');
     expect(isCustomised(DEFAULT_SHORTCUT_PREFS)).toBe(false);
+  });
+
+  it('keeps tracks defaults aligned with E-T T1 addendum and leaves reserved keys untaken by new commands', () => {
+    const held = (...parts: string[]) => parts.join('+');
+    const reservedForFuture = new Set(['KeyP', 'KeyS', held('Mod', 'KeyG'), held('Mod', 'Shift', 'KeyG'), held('Mod', 'Shift', 'KeyS'), 'KeyM']);
+    for (const set of SHORTCUT_SETS) {
+      const defaults = SHORTCUT_DEFAULTS[set];
+      expect(defaults.toggleLinkage).toEqual(['Backquote']);
+      expect(defaults.moveTrackUp).toEqual([]);
+      expect(defaults.moveTrackDown).toEqual([]);
+      for (const action of TRACKS_ONLY_ACTIONS) {
+        for (const key of defaults[action]) {
+          expect(reservedForFuture.has(key), `${set}.${action}: ${key}`).toBe(false);
+        }
+      }
+    }
+    expect(SHORTCUT_DEFAULTS.everyday.magnet).toEqual(['KeyN']);
+    expect(SHORTCUT_DEFAULTS.everyday.splitAll).toEqual(['Mod+Shift+KeyB']);
+    expect(SHORTCUT_DEFAULTS.pro.splitAll).toEqual(['Mod+Shift+KeyB']);
+    // Unbound actions remain user-rebindable.
+    const rebound = assigned(assignBinding(DEFAULT_SHORTCUT_PREFS, 'moveTrackUp', 0, 'Alt+BracketRight'));
+    expect(effectiveBindings(rebound).moveTrackUp).toEqual(['Alt+BracketRight']);
   });
 });
 
@@ -128,10 +167,10 @@ describe('bindingFromEvent', () => {
   });
 
   it('matches the physical key, so the Korean input method changes nothing', () => {
-    // With the Korean layout on, B reports `ㅠ` and S reports `ㄴ`; the code stays the same.
+    // With the Korean layout on, B reports `ㅠ` and N reports `ㅜ`; the code stays the same.
     expect(bindingFromEvent(press('KeyB', { ctrlKey: true }, 'ㅠ'), false)).toBe(bindingFromEvent(press('KeyB', { ctrlKey: true }, 'b'), false));
-    expect(bindingFromEvent(press('KeyS', {}, 'ㄴ'), false)).toBe('KeyS');
-    expect(actionFor(bindingFromEvent(press('KeyS', {}, 'ㄴ'), false), effectiveBindings(DEFAULT_SHORTCUT_PREFS))).toBe('split');
+    expect(bindingFromEvent(press('KeyN', {}, 'ㅜ'), false)).toBe('KeyN');
+    expect(actionFor(bindingFromEvent(press('KeyN', {}, 'ㅜ'), false), effectiveBindings(DEFAULT_SHORTCUT_PREFS))).toBe('magnet');
     expect(actionFor(bindingFromEvent(press('KeyB', { metaKey: true }, 'ㅠ'), true), effectiveBindings(DEFAULT_SHORTCUT_PREFS))).toBe('split');
   });
 });
@@ -238,59 +277,59 @@ describe('changing keys', () => {
   });
 
   it('refuses a key another action holds unless told to take it', () => {
-    expect(assignBinding(base, 'play', 0, 'KeyS')).toEqual({ ok: false, reason: 'taken', by: 'split' });
-    const result = assignBinding(base, 'play', 0, 'KeyS', true);
+    expect(assignBinding(base, 'play', 0, 'Mod+KeyY')).toEqual({ ok: false, reason: 'taken', by: 'redo' });
+    const result = assignBinding(base, 'play', 0, 'Mod+KeyY', true);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.took).toBe('split');
+    expect(result.took).toBe('redo');
     const map = effectiveBindings(result.prefs);
-    expect(map.play).toEqual(['KeyS']);
-    expect(map.split).toEqual(['Mod+KeyB']);
-    expect(actionFor('KeyS', map)).toBe('play');
+    expect(map.play).toEqual(['Mod+KeyY']);
+    expect(map.redo).toEqual(['Mod+Shift+KeyZ']);
+    expect(actionFor('Mod+KeyY', map)).toBe('play');
     expect(conflicts(map)).toEqual([]);
     expect(isCustomised(result.prefs, 'play')).toBe(true);
-    expect(isCustomised(result.prefs, 'split')).toBe(true);
+    expect(isCustomised(result.prefs, 'redo')).toBe(true);
     expect(isCustomised(result.prefs, 'magnet')).toBe(false);
   });
 
   it('does not double a key the action already has in another slot', () => {
-    const moved = assignBinding(base, 'split', 1, 'Mod+KeyB');
+    const moved = assignBinding(base, 'redo', 1, 'Mod+Shift+KeyZ');
     expect(moved).toMatchObject({ ok: true, took: null });
-    expect(effectiveBindings(assigned(moved)).split).toEqual(['KeyS', 'Mod+KeyB']);
-    const same = assigned(assignBinding(base, 'split', 0, 'KeyS'));
-    const keys = effectiveBindings(same).split;
-    expect(keys).toContain('KeyS');
+    expect(effectiveBindings(assigned(moved)).redo).toEqual([['Mod', 'KeyY'].join('+'), ['Mod', 'Shift', 'KeyZ'].join('+')]);
+    const same = assigned(assignBinding(base, 'redo', 0, 'Mod+KeyY'));
+    const keys = effectiveBindings(same).redo;
+    expect(keys).toContain('Mod+KeyY');
     expect(new Set(keys).size).toBe(keys.length);
     expect(keys.length).toBeLessThanOrEqual(MAX_BINDINGS_PER_ACTION);
     // Pressing the key a slot already has changes nothing.
-    const again = assigned(assignBinding(base, 'split', 0, 'Mod+KeyB'));
-    expect(effectiveBindings(again).split).toEqual(['Mod+KeyB', 'KeyS']);
+    const again = assigned(assignBinding(base, 'redo', 0, 'Mod+Shift+KeyZ'));
+    expect(effectiveBindings(again).redo).toEqual(['Mod+Shift+KeyZ', 'Mod+KeyY']);
     expect(again).toBe(base);
-    expect(assigned(assignBinding(base, 'split', 1, 'KeyS'))).toBe(base);
+    expect(assigned(assignBinding(base, 'redo', 1, 'Mod+KeyY'))).toBe(base);
   });
 
   it('clears one key', () => {
-    const cleared = clearBinding(base, 'split', 1);
+    const cleared = clearBinding(base, 'redo', 1);
     const map = effectiveBindings(cleared);
-    expect(map.split).toEqual(['Mod+KeyB']);
-    expect(actionFor('KeyS', map)).toBeNull();
-    expect(isCustomised(cleared, 'split')).toBe(true);
-    expect(effectiveBindings(clearBinding(cleared, 'split', 0)).split).toEqual([]);
+    expect(map.redo).toEqual(['Mod+Shift+KeyZ']);
+    expect(actionFor('Mod+KeyY', map)).toBeNull();
+    expect(isCustomised(cleared, 'redo')).toBe(true);
+    expect(effectiveBindings(clearBinding(cleared, 'redo', 0)).redo).toEqual([]);
   });
 
   it('resets one action and takes its key back from whoever held it', () => {
-    const taken = assigned(assignBinding(base, 'play', 0, 'KeyS', true));
-    const reset = resetAction(taken, 'split');
+    const taken = assigned(assignBinding(base, 'play', 0, 'Mod+KeyY', true));
+    const reset = resetAction(taken, 'redo');
     const map = effectiveBindings(reset);
-    expect(map.split).toEqual(['Mod+KeyB', 'KeyS']);
+    expect(map.redo).toEqual(['Mod+Shift+KeyZ', 'Mod+KeyY']);
     expect(map.play).toEqual([]);
     expect(conflicts(map)).toEqual([]);
-    expect(isCustomised(reset, 'split')).toBe(false);
+    expect(isCustomised(reset, 'redo')).toBe(false);
     expect(effectiveBindings(resetAction(reset, 'play')).play).toEqual(['Space']);
   });
 
   it('resets everything in the current set', () => {
-    let prefs = assigned(assignBinding(base, 'play', 0, 'KeyS', true));
+    let prefs = assigned(assignBinding(base, 'play', 0, 'Mod+KeyY', true));
     prefs = clearBinding(prefs, 'undo', 0);
     expect(isCustomised(prefs)).toBe(true);
     const reset = resetAll(prefs);
@@ -306,7 +345,7 @@ describe('changing keys', () => {
     const proOwn = assigned(assignBinding(pro, 'split', 0, 'KeyH'));
     const back = switchSet(proOwn, 'everyday');
     expect(effectiveBindings(back).play).toEqual(['KeyG']);
-    expect(effectiveBindings(back).split).toEqual(['Mod+KeyB', 'KeyS']);
+    expect(effectiveBindings(back).split).toEqual(['Mod+KeyB']);
     expect(effectiveBindings(switchSet(back, 'pro')).split).toEqual(['KeyH']);
     expect(switchSet(back, 'everyday')).toBe(back);
     // resetAll only clears the set in force.
@@ -389,11 +428,11 @@ describe('parseShortcutPrefs', () => {
   });
 
   it('drops a default from the action it belonged to when a stored key shadows it', () => {
-    const parsed = parseShortcutPrefs({ set: 'everyday', overrides: { everyday: { play: ['KeyS'] }, pro: { play: ['KeyS'] } } });
+    const parsed = parseShortcutPrefs({ set: 'everyday', overrides: { everyday: { play: ['Mod+KeyY'] }, pro: { play: ['KeyS'] } } });
     const map = effectiveBindings(parsed);
-    expect(map.play).toEqual(['KeyS']);
-    expect(map.split).toEqual(['Mod+KeyB']);
-    expect(actionFor('KeyS', map)).toBe('play');
+    expect(map.play).toEqual(['Mod+KeyY']);
+    expect(map.redo).toEqual(['Mod+Shift+KeyZ']);
+    expect(actionFor('Mod+KeyY', map)).toBe('play');
     expect(conflicts(map)).toEqual([]);
     const pro = effectiveBindings(switchSet(parsed, 'pro'));
     expect(pro.play).toEqual(['KeyS']);
@@ -402,7 +441,7 @@ describe('parseShortcutPrefs', () => {
   });
 
   it('reads its own output back unchanged', () => {
-    let prefs = assigned(assignBinding(DEFAULT_SHORTCUT_PREFS, 'play', 0, 'KeyS', true));
+    let prefs = assigned(assignBinding(DEFAULT_SHORTCUT_PREFS, 'play', 0, 'Mod+KeyY', true));
     prefs = clearBinding(prefs, 'undo', 0);
     prefs = switchSet(prefs, 'pro');
     prefs = assigned(assignBinding(prefs, 'zoomFit', 1, 'KeyG'));
