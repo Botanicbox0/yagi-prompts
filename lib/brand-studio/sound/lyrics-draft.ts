@@ -107,6 +107,8 @@ const SCHEMA = {
   required: ['bpm', 'stanzas'],
 } as const;
 
+export const LYRICS_SCHEMA = SCHEMA;
+
 const BAND_LABEL: Readonly<Record<TempoBand, string>> = { fast: '110 BPM and above', mid: '90 to 109 BPM', slow: 'below 90 BPM' };
 
 /** The lines each stanza needs at a tempo (a topic draft with a length; null otherwise). */
@@ -163,10 +165,10 @@ export function lyricsTask(req: LyricsRequest, problems: readonly string[] = [])
 }
 
 /** The model's stanzas as the lyrics box shows them: trimmed lines, marks and brackets dropped, blank line between. */
-export function stanzasText(answer: unknown, options?: { maxChars?: number }): string {
+export function stanzasText(answer: unknown): string {
   const stanzas = (answer as { stanzas?: unknown })?.stanzas;
   if (!Array.isArray(stanzas)) return '';
-  const joined = stanzas
+  return stanzas
     .map((stanza) =>
       (Array.isArray(stanza) ? stanza : [stanza])
         .filter((line): line is string => typeof line === 'string')
@@ -176,19 +178,12 @@ export function stanzasText(answer: unknown, options?: { maxChars?: number }): s
         .join('\n'),
     )
     .filter(Boolean)
-    .join('\n\n');
-  // When an explicit `maxChars` is provided (MiniMax server draft: 3,500), keep the full length so `draftProblems`
-  // can flag answers over `maxChars` rather than silently truncating them to 3,000.
-  return options?.maxChars !== undefined ? joined : joined.slice(0, LYRICS_LIMITS.max);
+    .join('\n\n')
+    .slice(0, LYRICS_LIMITS.max);
 }
 
 /** The checks for a drafted or polished lyric: the lines asked at the planned tempo (`bpm`), and the line length. */
-export function draftProblems(
-  req: LyricsRequest,
-  text: string,
-  bpm: number = draftBpm(req, null),
-  options?: { maxChars?: number },
-): { hard: string[]; soft: string[] } {
+export function draftProblems(req: LyricsRequest, text: string, bpm: number = draftBpm(req, null)): { hard: string[]; soft: string[] } {
   const input: LyricCheckInput = {
     lyrics: text,
     language: req.language,
@@ -198,15 +193,7 @@ export function draftProblems(
     brand: req.brand,
     mustInclude: req.mustInclude,
   };
-  const checked = checkLyrics(input);
-  const hard =
-    options?.maxChars !== undefined
-      ? checked.hard.filter((msg) => msg !== `over ${LYRICS_LIMITS.max} characters`)
-      : checked.hard;
-  const { soft } = checked;
-  if (options?.maxChars !== undefined && text.replace(/\r\n?/g, '\n').length > options.maxChars) {
-    hard.push(`over ${options.maxChars} characters`);
-  }
+  const { hard, soft } = checkLyrics(input);
   if (req.flow === 'topic' && !input.stanzaLines) {
     const count = text ? text.split(/\n\s*\n/).length : 0;
     const want = STANZAS[req.structure];
@@ -235,10 +222,9 @@ export async function writeLyrics(
   config: GeminiConfig,
   fetchImpl: typeof fetch,
   log?: (event: string, detail: Record<string, unknown>) => void,
-  options: { callMs?: number; deadline?: number; maxChars?: number; onCall?: (call: { model: string; ms: number; ok: boolean }) => void } = {},
+  options: { callMs?: number; deadline?: number; onCall?: (call: { model: string; ms: number; ok: boolean }) => void } = {},
 ): Promise<{ text: string; bpm: number } | null> {
   const deadline = options.deadline ?? Date.now() + LYRICS_TIMEOUTS.totalMs;
-  const lengthOpts = options.maxChars !== undefined ? { maxChars: options.maxChars } : undefined;
   let problems: string[] = [];
   let kept: { text: string; bpm: number } | null = null;
   for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -262,10 +248,10 @@ export async function writeLyrics(
     } finally {
       options.onCall?.({ model: config.model, ms: Date.now() - started, ok: answer !== undefined });
     }
-    const text = stanzasText(answer, lengthOpts);
+    const text = stanzasText(answer);
     // The tempo the model chose (or the request fixed) decides how many lines each stanza must have (§12.11).
     const bpm = draftBpm(req, (answer as { bpm?: unknown })?.bpm);
-    const found = draftProblems(req, text, bpm, lengthOpts);
+    const found = draftProblems(req, text, bpm);
     if (found.hard.length === 0 && (found.soft.length === 0 || attempt === 1)) return { text, bpm };
     kept = found.hard.length === 0 ? { text, bpm } : null;
     problems = [...found.hard, ...found.soft];
@@ -300,24 +286,22 @@ export async function writeLyricsWithFallback(
   fetchImpl: typeof fetch,
   log?: (event: string, detail: Record<string, unknown>) => void,
   onCall?: (call: { model: string; ms: number; ok: boolean }) => void,
-  options?: { maxChars?: number },
 ): Promise<WrittenLyrics> {
   const deadline = Date.now() + LYRICS_TIMEOUTS.totalMs;
-  const extra = options?.maxChars !== undefined ? { maxChars: options.maxChars } : {};
   const as = (written: { text: string; bpm: number } | null, model: string): WrittenLyrics => ({
     text: written?.text ?? null,
     bpm: written?.bpm ?? draftBpm(req, null),
     model,
   });
   try {
-    return as(await writeLyrics(req, config, fetchImpl, log, { callMs: LYRICS_TIMEOUTS.firstCallMs, deadline, onCall, ...extra }), config.model);
+    return as(await writeLyrics(req, config, fetchImpl, log, { callMs: LYRICS_TIMEOUTS.firstCallMs, deadline, onCall }), config.model);
   } catch (error) {
     if (config.model === LYRICS_FALLBACK_MODEL || !isTransportFailure(error)) throw error;
     // Not enough of the total left for the fast model to answer: the first failure stands.
     if (deadline - Date.now() < LYRICS_TIMEOUTS.minCallMs) throw error;
     log?.('studio_lyrics_fallback_model', { from: config.model, to: LYRICS_FALLBACK_MODEL, message: error instanceof Error ? error.message.slice(0, 120) : 'unknown' });
     const fast = { ...config, model: LYRICS_FALLBACK_MODEL };
-    return as(await writeLyrics(req, fast, fetchImpl, log, { callMs: LYRICS_TIMEOUTS.fallbackCallMs, deadline, onCall, ...extra }), LYRICS_FALLBACK_MODEL);
+    return as(await writeLyrics(req, fast, fetchImpl, log, { callMs: LYRICS_TIMEOUTS.fallbackCallMs, deadline, onCall }), LYRICS_FALLBACK_MODEL);
   }
 }
 

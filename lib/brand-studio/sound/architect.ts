@@ -18,6 +18,7 @@
 import { z } from 'zod';
 import { callGeminiJson, studioGeminiConfig } from '../enhancer/gemini';
 import { SUNO_HEADER, SUNO_PROFILE } from '../enhancer/profiles/suno';
+import { minimaxMusic3Sunra } from './engines/minimax-sunra';
 import { videoDesignLine, type MusicVideoFit } from './video-fit';
 import { formSentence, opensOnIntro, type RunPlanRecord } from './length-plan';
 import { markLyrics, musicStyle, ownLyrics, musicWay, SUPERLATIVE, type LyricStructure, type MusicWay } from './lyrics';
@@ -95,8 +96,6 @@ export interface MusicEnhanceMeta {
   lyrics?: string;
   /** Which text model drafted `lyrics` (`'local'` in fake mode without a key). */
   lyricsModel?: string | null;
-  /** MiniMax runs: optional duration in seconds suggested by the Architect when customer/sentence left duration at default. */
-  durationSeconds?: number | null;
 }
 
 export function designMeta(design: MusicDesign): MusicEnhanceMeta {
@@ -222,7 +221,6 @@ export function fallbackDesign(input: MusicDesignInput, reason?: string): MusicD
   };
 }
 
-const MINIMAX_STYLE_HARD_MAX = 2000;
 const MINIMAX_SUNG_IN: Readonly<Record<'ko' | 'en', string>> = {
   ko: 'Vocals sung in Korean.',
   en: 'Vocals sung in English.',
@@ -230,6 +228,7 @@ const MINIMAX_SUNG_IN: Readonly<Record<'ko' | 'en', string>> = {
 
 /** Deterministic fallback for MiniMax Music 3.0: up to 2,000 chars, preserves line breaks, no Suno form sentence or Suno marks. */
 export function minimaxFallbackDesign(input: MusicDesignInput, reason?: string): MusicDesign {
+  const styleMax = minimaxMusic3Sunra.capabilities.limits.style;
   const lyrics = input.vocal ? ownLyrics(input.lyrics) : '';
   const mode = musicWay({ vocal: input.vocal, lyrics, careful: false });
   const base = input.prompt.replace(/\r\n?/g, '\n').trim();
@@ -240,11 +239,11 @@ export function minimaxFallbackDesign(input: MusicDesignInput, reason?: string):
     .filter(Boolean)
     .join(' ');
   const style = suffix
-    ? `${base.slice(0, Math.max(1, MINIMAX_STYLE_HARD_MAX - suffix.length - 1)).trim()} ${suffix}`
-    : base.slice(0, MINIMAX_STYLE_HARD_MAX);
+    ? `${base.slice(0, Math.max(1, styleMax - suffix.length - 1)).trim()} ${suffix}`
+    : base.slice(0, styleMax);
   return {
     mode,
-    style: style.slice(0, MINIMAX_STYLE_HARD_MAX),
+    style: style.slice(0, styleMax),
     title: musicTitle(input.prompt),
     lyrics: lyrics ? markMinimaxLyrics(lyrics, input.structure ?? null) : '',
     notes: null,
@@ -460,21 +459,14 @@ export async function designMusic(input: MusicDesignInput, deps: DesignDeps): Pr
 }
 
 /** A design the customer read (and may have edited) in the dock, sent as it is after the same check. */
-export function reviewedDesign(
-  input: MusicDesignInput,
-  edited: { style: string; title?: string | null },
-  options?: { styleMax?: number; keepLineBreaks?: boolean },
-): MusicDesign | { problems: string[]; named: boolean } {
+export function reviewedDesign(input: MusicDesignInput, edited: { style: string; title?: string | null }): MusicDesign | { problems: string[]; named: boolean } {
   const mode = wayOf(input);
-  const styleMax = options?.styleMax ?? DESIGN_LIMITS.styleHardMax;
-  const style = options?.keepLineBreaks
-    ? edited.style.replace(/\r\n?/g, '\n').trim()
-    : edited.style.replace(/\s+/g, ' ').trim();
+  const style = edited.style.replace(/\s+/g, ' ').trim();
   const title = (edited.title ?? '').trim() || musicTitle(input.prompt);
   // The customer's own wording may be short, in Korean, or say "no X": only the hard limits and names stop it.
   const problems: string[] = [];
   if (!style) problems.push('the style is empty');
-  if (style.length > styleMax) problems.push(`the style is over ${styleMax} characters`);
+  if (style.length > DESIGN_LIMITS.styleHardMax) problems.push(`the style is over ${DESIGN_LIMITS.styleHardMax} characters`);
   if (mode === 'custom' && title.length > 80) problems.push('the title is over 80 characters');
   const named = Boolean(namedArtist(style) || namedArtist(title));
   if (named) problems.push('a real artist or song is named');
@@ -484,6 +476,36 @@ export function reviewedDesign(
     style,
     title,
     lyrics: markLyrics(input.vocal ? input.lyrics : '', input.structure ?? null, input.plan?.form ?? null),
+    notes: null,
+    source: 'reviewed',
+    profileVersion: MUSIC_PROFILE_VERSION,
+    llmModel: null,
+  };
+}
+
+/** A reviewed MiniMax Music 3.0 caption: up to `minimaxMusic3Sunra.capabilities.limits.style` (2,000), preserves line breaks, bare lyric tags. */
+export function reviewedMinimaxDesign(
+  input: MusicDesignInput,
+  edited: { style: string; title?: string | null },
+): MusicDesign | { problems: string[]; named: boolean } {
+  const lyrics = input.vocal ? ownLyrics(input.lyrics) : '';
+  const mode = musicWay({ vocal: input.vocal, lyrics, careful: false });
+  const styleMax = minimaxMusic3Sunra.capabilities.limits.style;
+  const titleMax = minimaxMusic3Sunra.capabilities.limits.title;
+  const style = edited.style.replace(/\r\n?/g, '\n').trim();
+  const title = (edited.title ?? '').trim() || musicTitle(input.prompt);
+  const problems: string[] = [];
+  if (!style) problems.push('the style is empty');
+  if (style.length > styleMax) problems.push(`the style is over ${styleMax} characters`);
+  if (mode === 'custom' && title.length > titleMax) problems.push(`the title is over ${titleMax} characters`);
+  const named = Boolean(namedArtist(style) || namedArtist(title));
+  if (named) problems.push('a real artist or song is named');
+  if (problems.length) return { problems, named };
+  return {
+    mode,
+    style,
+    title,
+    lyrics: lyrics ? markMinimaxLyrics(lyrics, input.structure ?? null) : '',
     notes: null,
     source: 'reviewed',
     profileVersion: MUSIC_PROFILE_VERSION,

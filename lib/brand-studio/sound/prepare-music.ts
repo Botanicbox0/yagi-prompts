@@ -6,7 +6,9 @@
  * Local mode without a text-model key (`BRAND_STUDIO_PROVIDER=fake`) uses a fixed local design instead of the
  * fallback, so a laptop can see the whole designed path without a paid call.
  */
-import { studioGeminiConfig } from '../enhancer/gemini';
+import type { LyricsDraftFailureReason } from '../contracts';
+import { callGeminiJson, studioGeminiConfig, type GeminiConfig } from '../enhancer/gemini';
+import { saveJob, tokenOf } from '../job-store';
 import { brandSummary, PrepareFailure } from '../prepare';
 import type { JobRow, StudioDeps, StudioJobWork } from '../types';
 import {
@@ -19,15 +21,44 @@ import {
   type MusicDesignInput,
   type MusicEnhanceMeta,
 } from './architect';
+import { minimaxMusic3Sunra } from './engines/minimax-sunra';
 import { cleanBpm } from './length-plan';
-import { defaultStructure, markLyrics, musicWay, ownLyrics } from './lyrics';
-import { localBpm, localLyrics, writeLyricsWithFallback, type LyricsRequest } from './lyrics-draft';
+import { checkLyrics, defaultStructure, LYRICS_LIMITS, markLyrics, musicWay, ownLyrics, type LyricCheckInput } from './lyrics';
+import {
+  askedLines,
+  draftBpm,
+  isTransportFailure,
+  localBpm,
+  localLyrics,
+  LYRICS_FALLBACK_MODEL,
+  LYRICS_SCHEMA,
+  LYRICS_SYSTEM,
+  LYRICS_TIMEOUTS,
+  lyricsTask,
+  STANZAS,
+  type LyricsRequest,
+  type WrittenLyrics,
+} from './lyrics-draft';
 import { lyricsGeminiConfig } from './lyrics-model';
 import { namedArtist } from './names';
-import { FAKE_EXISTING } from './warnings';
+import { FAKE_EXISTING, judgeExistingLyrics, logMusicBlock, type LyricsVerdict } from './warnings';
 
-const MINIMAX_LYRICS_MAX = 3500;
 export const MINIMAX_LYRICS_DRAFT_FAILED_DETAIL = 'minimax_lyrics_draft_failed';
+export const MINIMAX_LYRICS_EXISTING_DETAIL = 'minimax_lyrics_existing';
+export const MINIMAX_LYRICS_JUDGE_FAILED_DETAIL = 'minimax_lyrics_judge_failed';
+
+export function minimaxLyricsFailureReason(detail: string): LyricsDraftFailureReason | null {
+  switch (detail) {
+    case MINIMAX_LYRICS_DRAFT_FAILED_DETAIL:
+      return 'draft';
+    case MINIMAX_LYRICS_EXISTING_DETAIL:
+      return 'existing';
+    case MINIMAX_LYRICS_JUDGE_FAILED_DETAIL:
+      return 'judge_error';
+    default:
+      return null;
+  }
+}
 
 export function musicDesignInputOf(job: Pick<JobRow, 'prompt' | 'params'>, brand: MusicDesignInput['brand'] = null): MusicDesignInput {
   const m = job.params.music!;
@@ -82,17 +113,118 @@ interface DraftedMinimaxLyrics {
   bpm: number;
 }
 
+function minimaxStanzasText(answer: unknown): string {
+  const stanzas = (answer as { stanzas?: unknown })?.stanzas;
+  if (!Array.isArray(stanzas)) return '';
+  return stanzas
+    .map((stanza) =>
+      (Array.isArray(stanza) ? stanza : [stanza])
+        .filter((line): line is string => typeof line === 'string')
+        .flatMap((line) => line.split(/\r?\n|\\n/))
+        .map((line) => line.trim())
+        .filter((line) => line && !/^\[[^\]]{1,40}\]$/.test(line))
+        .join('\n'),
+    )
+    .filter(Boolean)
+    .join('\n\n');
+}
+
+function minimaxDraftProblems(req: LyricsRequest, text: string, bpm: number): { hard: string[]; soft: string[] } {
+  const maxChars = minimaxMusic3Sunra.capabilities.limits.lyrics;
+  const input: LyricCheckInput = {
+    lyrics: text,
+    language: req.language,
+    stanzaLines: askedLines(req, bpm),
+    lineLength: req.flow === 'topic',
+    tone: req.tone,
+    brand: req.brand,
+    mustInclude: req.mustInclude,
+  };
+  const checked = checkLyrics(input);
+  const hard = checked.hard.filter((msg) => msg !== `over ${LYRICS_LIMITS.max} characters`);
+  const { soft } = checked;
+  if (text.replace(/\r\n?/g, '\n').length > maxChars) {
+    hard.push(`over ${maxChars} characters`);
+  }
+  if (req.flow === 'topic' && !input.stanzaLines) {
+    const count = text ? text.split(/\n\s*\n/).length : 0;
+    const want = STANZAS[req.structure];
+    if (text && count !== want) soft.push(`${count} stanzas where ${want} were asked`);
+  }
+  if (namedArtist(text)) hard.push('names a singer, a band or a song');
+  return { hard, soft };
+}
+
+async function writeMinimaxLyrics(
+  req: LyricsRequest,
+  config: GeminiConfig,
+  fetchImpl: typeof fetch,
+  log?: (event: string, detail: Record<string, unknown>) => void,
+  options: { callMs?: number; deadline?: number } = {},
+): Promise<{ text: string; bpm: number } | null> {
+  const deadline = options.deadline ?? Date.now() + LYRICS_TIMEOUTS.totalMs;
+  let problems: string[] = [];
+  let kept: { text: string; bpm: number } | null = null;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const left = deadline - Date.now();
+    if (left < LYRICS_TIMEOUTS.minCallMs) {
+      if (attempt === 0) throw Object.assign(new Error('lyrics draft out of time'), { name: 'TimeoutError' });
+      return kept;
+    }
+    const answer = await callGeminiJson(config, fetchImpl, {
+      system: LYRICS_SYSTEM,
+      parts: [{ text: lyricsTask(req, problems) }],
+      schema: LYRICS_SCHEMA as unknown as Record<string, unknown>,
+      thinking: 'LOW',
+      timeoutMs: Math.min(options.callMs ?? LYRICS_TIMEOUTS.firstCallMs, left),
+    });
+    const text = minimaxStanzasText(answer);
+    const bpm = draftBpm(req, (answer as { bpm?: unknown })?.bpm);
+    const found = minimaxDraftProblems(req, text, bpm);
+    if (found.hard.length === 0 && (found.soft.length === 0 || attempt === 1)) return { text, bpm };
+    kept = found.hard.length === 0 ? { text, bpm } : null;
+    problems = [...found.hard, ...found.soft];
+    log?.('studio_lyrics_rule_retry', { attempt, hard: found.hard.length, soft: found.soft.length });
+  }
+  return null;
+}
+
+export async function writeMinimaxLyricsWithFallback(
+  req: LyricsRequest,
+  config: GeminiConfig,
+  fetchImpl: typeof fetch,
+  log?: (event: string, detail: Record<string, unknown>) => void,
+): Promise<WrittenLyrics> {
+  const deadline = Date.now() + LYRICS_TIMEOUTS.totalMs;
+  const as = (written: { text: string; bpm: number } | null, model: string): WrittenLyrics => ({
+    text: written?.text ?? null,
+    bpm: written?.bpm ?? draftBpm(req, null),
+    model,
+  });
+  try {
+    return as(await writeMinimaxLyrics(req, config, fetchImpl, log, { callMs: LYRICS_TIMEOUTS.firstCallMs, deadline }), config.model);
+  } catch (error) {
+    if (config.model === LYRICS_FALLBACK_MODEL || !isTransportFailure(error)) throw error;
+    if (deadline - Date.now() < LYRICS_TIMEOUTS.minCallMs) throw error;
+    log?.('studio_lyrics_fallback_model', { from: config.model, to: LYRICS_FALLBACK_MODEL, message: error instanceof Error ? error.message.slice(0, 120) : 'unknown' });
+    const fast = { ...config, model: LYRICS_FALLBACK_MODEL };
+    return as(await writeMinimaxLyrics(req, fast, fetchImpl, log, { callMs: LYRICS_TIMEOUTS.fallbackCallMs, deadline }), LYRICS_FALLBACK_MODEL);
+  }
+}
+
 /**
- * Drafts lyrics for a MiniMax Music 3.0 vocal run whose customer left `lyrics` blank (N1, N2).
+ * Drafts and judges lyrics for a MiniMax Music 3.0 vocal run whose customer left `lyrics` blank (N1, N2).
  *  - Always runs when `model === 'minimax-music-3' && vocal && !ownLyrics(lyrics)`, even if `architect` is off.
  *  - `localLyrics` is used ONLY in local/fake mode without a Gemini key (`deps.env.provider === 'fake' && !config`).
  *  - Every failure (missing key on live run, transport/model error, empty text, > 3,500 chars after trimming and
- *    marking, or artist/unusable check) throws `PrepareFailure('failed', 'minimax_lyrics_draft_failed')` so the job
- *    settles `failed` at 0 credits with zero provider submits and zero retry loops.
+ *    marking, `namedArtist`, `judgeExistingLyrics` === `'existing'`, or judgment error `'unknown'`) becomes a
+ *    `PrepareFailure` with a distinct detail so the job ends `failed` at 0 credits with zero provider submits.
  */
 async function draftMinimaxLyrics(deps: StudioDeps, job: JobRow): Promise<DraftedMinimaxLyrics> {
   const m = job.params.music!;
-  const durationSeconds = Math.min(75, Math.max(1, Math.round(m.durationSeconds ?? 60)));
+  const maxLyrics = minimaxMusic3Sunra.capabilities.limits.lyrics;
+  const range = minimaxMusic3Sunra.capabilities.lengthInput || { min: 1, max: 75 };
+  const durationSeconds = Math.min(range.max, Math.max(range.min, Math.round(m.durationSeconds ?? 60)));
   const structure = m.structure ?? defaultStructure(durationSeconds);
   const req: LyricsRequest = {
     flow: 'topic',
@@ -106,12 +238,17 @@ async function draftMinimaxLyrics(deps: StudioDeps, job: JobRow): Promise<Drafte
     mustInclude: m.words?.mustInclude ? [...m.words.mustInclude] : [],
   };
 
+  const now = deps.now?.() ?? new Date();
   const config = lyricsGeminiConfig(deps.intelDeps.env);
   if (deps.env.provider === 'fake' && !config) {
     const rawLyrics = ownLyrics(localLyrics(req));
     const lyrics = markMinimaxLyrics(rawLyrics, structure);
-    if (!lyrics || !/\S/.test(lyrics) || lyrics.length > MINIMAX_LYRICS_MAX || namedArtist(lyrics)) {
+    if (!lyrics || !/\S/.test(lyrics) || lyrics.length > maxLyrics || namedArtist(lyrics)) {
       throw new PrepareFailure('failed', MINIMAX_LYRICS_DRAFT_FAILED_DETAIL);
+    }
+    if (rawLyrics.includes(FAKE_EXISTING)) {
+      logMusicBlock(deps.log, { organizationId: job.organization_id, userId: job.created_by, field: 'lyrics', check: 'judge', lyrics: rawLyrics }, now);
+      throw new PrepareFailure('failed', MINIMAX_LYRICS_EXISTING_DETAIL);
     }
     return { lyrics, rawLyrics, model: 'local', bpm: localBpm(req) };
   }
@@ -121,9 +258,9 @@ async function draftMinimaxLyrics(deps: StudioDeps, job: JobRow): Promise<Drafte
     throw new PrepareFailure('failed', MINIMAX_LYRICS_DRAFT_FAILED_DETAIL);
   }
 
-  let written: Awaited<ReturnType<typeof writeLyricsWithFallback>>;
+  let written: WrittenLyrics;
   try {
-    written = await writeLyricsWithFallback(req, config, deps.intelDeps.fetch, deps.log, undefined, { maxChars: MINIMAX_LYRICS_MAX });
+    written = await writeMinimaxLyricsWithFallback(req, config, deps.intelDeps.fetch, deps.log);
   } catch (error) {
     deps.log?.('studio_minimax_lyrics_draft_failed', {
       jobId: job.id,
@@ -140,40 +277,93 @@ async function draftMinimaxLyrics(deps: StudioDeps, job: JobRow): Promise<Drafte
   }
 
   const lyrics = markMinimaxLyrics(rawLyrics, structure);
-  if (!lyrics || !/\S/.test(lyrics) || lyrics.length > MINIMAX_LYRICS_MAX) {
+  if (!lyrics || !/\S/.test(lyrics) || lyrics.length > maxLyrics) {
     deps.log?.('studio_minimax_lyrics_draft_failed', { jobId: job.id, reason: 'over_limit', length: lyrics.length });
     throw new PrepareFailure('failed', MINIMAX_LYRICS_DRAFT_FAILED_DETAIL);
   }
 
-  if (namedArtist(lyrics) || (deps.env.provider === 'fake' && lyrics.includes(FAKE_EXISTING))) {
+  if (namedArtist(lyrics)) {
     deps.log?.('studio_minimax_lyrics_draft_failed', { jobId: job.id, reason: 'unusable' });
     throw new PrepareFailure('failed', MINIMAX_LYRICS_DRAFT_FAILED_DETAIL);
+  }
+
+  const markedExisting = deps.env.provider === 'fake' && rawLyrics.includes(FAKE_EXISTING);
+  let verdict: LyricsVerdict;
+  if (markedExisting) {
+    verdict = 'existing';
+  } else {
+    try {
+      verdict = await judgeExistingLyrics(rawLyrics, config, deps.intelDeps.fetch, deps.log);
+    } catch {
+      verdict = 'unknown';
+    }
+  }
+  if (verdict === 'existing') {
+    logMusicBlock(
+      deps.log,
+      { organizationId: job.organization_id, userId: job.created_by, field: 'lyrics', check: 'judge', lyrics: rawLyrics },
+      now,
+    );
+    throw new PrepareFailure('failed', MINIMAX_LYRICS_EXISTING_DETAIL);
+  }
+  if (verdict !== 'original') {
+    deps.log?.('studio_minimax_lyrics_draft_failed', { jobId: job.id, reason: 'judge_error' });
+    throw new PrepareFailure('failed', MINIMAX_LYRICS_JUDGE_FAILED_DETAIL);
   }
 
   return { lyrics, rawLyrics, model: written.model, bpm: written.bpm };
 }
 
-export async function prepareMusic(deps: StudioDeps, job: JobRow): Promise<{ finalPrompt: string; work: StudioJobWork }> {
+function isV2MusicJob(job: Pick<JobRow, 'model' | 'params'>): boolean {
+  return (
+    job.model !== 'suno-v6' ||
+    job.params.music?.titleSource === 'customer' ||
+    job.params.music?.composerMode !== undefined
+  );
+}
+
+async function prepareMusicV2(deps: StudioDeps, job: JobRow): Promise<{ finalPrompt: string; work: StudioJobWork }> {
+  const m = job.params.music!;
   if (job.model === 'minimax-music-3') {
-    const m = job.params.music!;
-    const drafted = m.vocal && !ownLyrics(m.lyrics) ? await draftMinimaxLyrics(deps, job) : null;
+    let currentWork: StudioJobWork = job.work ?? {};
+    let drafted: DraftedMinimaxLyrics | null = null;
+    if (m.vocal && !ownLyrics(m.lyrics)) {
+      if (currentWork.minimaxDraft) {
+        drafted = currentWork.minimaxDraft;
+      } else {
+        drafted = await draftMinimaxLyrics(deps, job);
+        const nextWork: StudioJobWork = { ...currentWork, minimaxDraft: drafted };
+        if (job.claimed_at) {
+          const saved = await saveJob(deps.sql, job, tokenOf(job), { work: nextWork });
+          if (!saved) return { finalPrompt: job.final_prompt ?? '', work: currentWork };
+          currentWork = saved.work;
+        } else {
+          await deps.sql.query("update brand_studio_jobs set work = $2::jsonb where id = $1 and status = 'queued'", [
+            job.id,
+            JSON.stringify(nextWork),
+          ]);
+          currentWork = nextWork;
+        }
+        job.work = currentWork;
+      }
+    }
+
     const existingEnhancer =
-      job.work?.enhancer && 'profile' in job.work.enhancer && job.work.enhancer.profile === 'suno'
-        ? (job.work.enhancer as MusicEnhanceMeta)
+      currentWork.enhancer && 'profile' in currentWork.enhancer && currentWork.enhancer.profile === 'suno'
+        ? (currentWork.enhancer as MusicEnhanceMeta)
         : null;
 
-    // Architect off (`!job.enhance`) or customer-reviewed caption (`source === 'reviewed'`): keep the style
-    // already planned at creation and attach the drafted lyrics only.
     if (!job.enhance || existingEnhancer?.source === 'reviewed') {
       const baseMeta = existingEnhancer ?? designMeta(minimaxFallbackDesign(musicDesignInputOf(job), 'off'));
       const finalPrompt = job.final_prompt ?? minimaxFallbackDesign(musicDesignInputOf(job), 'off').style;
       return {
         finalPrompt,
         work: {
-          ...job.work,
+          ...currentWork,
           prepared: true,
           enhancer: {
             ...baseMeta,
+            ...(m.titleSource === 'customer' ? { title: m.title } : {}),
             ...(drafted ? { lyrics: drafted.lyrics, lyricsModel: drafted.model } : {}),
           },
         },
@@ -192,16 +382,33 @@ export async function prepareMusic(deps: StudioDeps, job: JobRow): Promise<{ fin
     return {
       finalPrompt: effective.style,
       work: {
-        ...job.work,
+        ...currentWork,
         prepared: true,
         enhancer: {
           ...designMeta(effective),
+          ...(m.titleSource === 'customer' ? { title: m.title } : {}),
           ...(drafted ? { lyrics: drafted.lyrics, lyricsModel: drafted.model } : {}),
         },
       },
     };
   }
 
+  const org = (await deps.sql.query<{ name: string }>('select name from brand_organizations where id = $1', [job.organization_id])).rows[0];
+  const brand = await brandSummary(deps, job.organization_id, org?.name ?? '');
+  const design = await designForDeps(deps, musicDesignInputOf(job, brand ? { name: brand.name ?? null, tone: brand.tone ?? null, rules: brand.rules ?? [] } : null));
+  const meta = designMeta(design);
+  return {
+    finalPrompt: design.style,
+    work: {
+      ...job.work,
+      prepared: true,
+      enhancer: m.titleSource === 'customer' ? { ...meta, title: m.title } : meta,
+    },
+  };
+}
+
+export async function prepareMusic(deps: StudioDeps, job: JobRow): Promise<{ finalPrompt: string; work: StudioJobWork }> {
+  if (isV2MusicJob(job)) return prepareMusicV2(deps, job);
   const org = (await deps.sql.query<{ name: string }>('select name from brand_organizations where id = $1', [job.organization_id])).rows[0];
   const brand = await brandSummary(deps, job.organization_id, org?.name ?? '');
   const design = await designForDeps(deps, musicDesignInputOf(job, brand ? { name: brand.name ?? null, tone: brand.tone ?? null, rules: brand.rules ?? [] } : null));

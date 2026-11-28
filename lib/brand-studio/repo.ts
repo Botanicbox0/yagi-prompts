@@ -112,7 +112,13 @@ export function sentTextOf(row: Pick<JobRow, 'enhance' | 'work' | 'params' | 'fi
   return row.enhance || row.work?.blockRetry?.source === 'model' || row.params?.reviewedPrompt ? row.final_prompt : null;
 }
 
+function jobViewWithLyricsDraftFailure(row: JobRow, outputs: OutputRow[], media: StudioMediaStore): StudioJobView {
+  const { lyricsDraftFailed, ...restWork } = row.work;
+  return { ...jobView({ ...row, work: restWork }, outputs, media), lyricsDraftFailed };
+}
+
 export function jobView(row: JobRow, outputs: OutputRow[], media: StudioMediaStore): StudioJobView {
+  if (row.kind === 'music' && row.work?.lyricsDraftFailed) return jobViewWithLyricsDraftFailure(row, outputs, media);
   const p = row.params ?? ({} as JobRow['params']);
   // A finished clip on a model with drafts: its drafts carry what their 1080p final takes, priced by the
   // same function `planFinal` reserves with (lib/brand-studio/final-price.ts).
@@ -147,7 +153,6 @@ export function jobView(row: JobRow, outputs: OutputRow[], media: StudioMediaSto
     ...(p.preset ? { finalPrompt: null, preset: p.preset.id } : {}),
     ...(p.reviewedPrompt ? { reviewed: true } : {}),
     ...(p.edited === true ? { edited: true } : {}),
-    ...(row.kind === 'music' && row.work?.lyricsDraftFailed === true ? { lyricsDraftFailed: true } : {}),
     // The video prompt shield (lib/brand-studio/prompt-shield): open for this organization, a VIDEO run's sent
     // text stays on the server; the view says whether there is one (`architect`) and how to draw it (`sent`).
     // Closed, or any other kind, adds nothing: the answer is exactly as before.

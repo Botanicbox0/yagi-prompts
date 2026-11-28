@@ -17,10 +17,8 @@ import { pixelSize, studioModel, type StudioImageModel, type StudioModel, type S
 import type { StudioJobParams, StudioMusicParams } from '../types';
 import type { StudioProviderRequest } from './types';
 import { musicEngineOfModel, type MusicEngine } from '../sound/engine';
-import { markMinimaxLyrics, MINIMAX_BARE_TAGS } from '../sound/architect';
+import { markMinimaxLyrics } from '../sound/architect';
 import { markLyrics, ownLyrics } from '../sound/lyrics';
-
-export { markMinimaxLyrics, MINIMAX_BARE_TAGS };
 
 export interface StudioRequestInput {
   kind: StudioJobKind;
@@ -40,8 +38,6 @@ export interface StudioRequestInput {
   designedTitle?: string | null;
   /** Music on MiniMax with blank customer lyrics: the lyrics drafted during prepare (bare section tags). */
   draftedLyrics?: string | null;
-  /** Music on MiniMax: optional duration suggested by the Architect when neither customer nor sentence set one. */
-  designedDuration?: number | null;
 }
 
 export class StudioRequestError extends Error {
@@ -287,20 +283,15 @@ export function buildStudioRequest(input: StudioRequestInput): StudioProviderReq
 /**
  * Dedicated MiniMax Music 3.0 request builder (`minimax/minimax-music3/text-to-music`).
  * Never calls Suno's `markLyrics` or `formLyrics` (no `[Instrumental Break]`, `[End]`, or length-plan padding).
- * Duration precedence (N3): (1) explicit customer `durationSeconds` (`durationSource === 'customer'`),
- * else (2) sentence duration (`durationSource === 'sentence'`), else (3) Architect's `designedDuration` ?? 60,
- * clamped to integer 1..75.
+ * `music.durationSeconds` was resolved by N3 in `planMusicV2` (`customer` > `video` > `sentence` > `default` 60)
+ * and is never overridden by the Architect.
  */
 export function minimaxMusicRequestOf(
   engine: MusicEngine,
   input: StudioRequestInput,
   music: StudioMusicParams,
 ): StudioProviderRequest {
-  const rawDuration =
-    music.durationSource === 'customer' || music.durationSource === 'sentence'
-      ? (music.durationSeconds ?? 60)
-      : (input.designedDuration ?? music.durationSeconds ?? 60);
-  const durationSeconds = Math.min(75, Math.max(1, Math.round(rawDuration)));
+  const durationSeconds = Math.min(75, Math.max(1, Math.round(music.durationSeconds ?? 60)));
   const own = music.vocal ? ownLyrics(music.lyrics) : '';
   const lyrics = music.vocal ? (own ? markMinimaxLyrics(own, music.structure ?? null) : (input.draftedLyrics ?? '')) : undefined;
   try {
@@ -317,15 +308,35 @@ export function minimaxMusicRequestOf(
   }
 }
 
+function musicRequestV2Of(input: StudioRequestInput): StudioProviderRequest {
+  const engine = musicEngineOfModel(input.model);
+  const music = input.params.music;
+  if (!engine || !music) throw new StudioRequestError(`not a music run: ${input.model}`);
+  if (engine.model.id === 'minimax-music-3') return minimaxMusicRequestOf(engine, input, music);
+  const title = music.titleSource === 'customer' ? music.title : (input.designedTitle || music.title);
+  try {
+    return engine.request({
+      mode: music.mode,
+      prompt: input.prompt,
+      vocal: music.vocal,
+      ...(music.mode === 'custom'
+        ? { title, lyrics: markLyrics(music.lyrics ?? '', music.structure ?? null, music.plan?.form ?? null), careful: music.careful }
+        : {}),
+    });
+  } catch (error) {
+    throw new StudioRequestError(error instanceof Error ? error.message : 'music request');
+  }
+}
+
 /**
  * A music run goes out exactly as its engine adapter shapes it (docs/BRAND-SOUND-STUDIO.md §7.1): the engine
  * the row names, the sentence in `final_prompt`, the choices in `params.music`.
  */
 function musicRequestOf(input: StudioRequestInput): StudioProviderRequest {
+  if (input.model !== 'suno-v6' || input.params.music?.titleSource === 'customer') return musicRequestV2Of(input);
   const engine = musicEngineOfModel(input.model);
   const music = input.params.music;
   if (!engine || !music) throw new StudioRequestError(`not a music run: ${input.model}`);
-  if (engine.model.id === 'minimax-music-3') return minimaxMusicRequestOf(engine, input, music);
   try {
     return engine.request({
       mode: music.mode,
