@@ -95,6 +95,8 @@ export function playForward(video: HTMLVideoElement, latest: { readonly current:
     const end = totalFrames(current);
     const active = cursor < end ? frameStateAt(current, cursor).active : null;
     if (!active) {
+      if (!video.muted) video.muted = true;
+      if (!video.paused) video.pause();
       latest.current.seek(end - 1);
       latest.current.setRate(0);
       return;
@@ -127,7 +129,7 @@ export function playForward(video: HTMLVideoElement, latest: { readonly current:
       video.dataset.src = playing.srcUrl;
       video.src = playing.srcUrl;
       seekTo = active.seekSec;
-    } else if (expectedId !== playing.id && Math.abs(video.currentTime - active.seekSec) > 0.5 / playing.sourceFps) {
+    } else if (expectedId !== playing.id && (video.ended || Math.abs(video.currentTime - active.seekSec) > 0.5 / playing.sourceFps)) {
       seekTo = active.seekSec;
     }
     expectedId = playing.id;
@@ -142,30 +144,33 @@ export function playForward(video: HTMLVideoElement, latest: { readonly current:
       const startMedia = curveStartMedia(playing.speedCurve);
       const totalSpan = curveTotalSpanMedia(playing.speedCurve);
       const u = (mediaPos - startMedia) / Math.max(1e-6, totalSpan);
-      if (u >= 1 || video.ended) {
+      const clampedU = Math.max(0, u);
+      const offset = u >= 1 ? playing.frames : Math.floor(curveTimeAt(playing.speedCurve, clampedU));
+      if (u >= 1 || offset >= playing.frames || video.ended) {
         hear();
         cursor = span.end;
       } else {
-        const clampedU = Math.max(0, u);
         const instSpeed = curveSpeedAt(playing.speedCurve, clampedU);
         disablePitchPreservation(video);
         video.playbackRate = Math.max(0.0625, Math.min(16, instSpeed * rate));
         hear();
         if (video.paused) play();
-        const offset = Math.floor(curveTimeAt(playing.speedCurve, clampedU));
-        if (offset >= playing.frames) cursor = span.end;
-        else if (offset >= 0) cursor = Math.max(cursor, span.start + offset);
+        if (offset >= 0) cursor = Math.max(cursor, span.start + offset);
       }
     } else {
-      disablePitchPreservation(video);
-      video.playbackRate = Math.max(0.0625, Math.min(16, (playing.speedNum / playing.speedDen) * rate));
-      hear();
-      if (video.paused) play();
       // The film-grid frame the video is on, then back through the cut's speed to a timeline frame.
       const mediaFrame = Math.floor(video.currentTime * current.fps + 1e-6);
       const offset = Math.floor(((mediaFrame - playing.inFrame) * playing.speedDen - playing.phase) / playing.speedNum);
-      if (offset >= playing.frames || video.ended) cursor = span.end;
-      else if (offset >= 0) cursor = Math.max(cursor, span.start + offset);
+      if (offset >= playing.frames || video.ended) {
+        hear();
+        cursor = span.end;
+      } else {
+        disablePitchPreservation(video);
+        video.playbackRate = Math.max(0.0625, Math.min(16, (playing.speedNum / playing.speedDen) * rate));
+        hear();
+        if (video.paused) play();
+        if (offset >= 0) cursor = Math.max(cursor, span.start + offset);
+      }
     }
     if (now - lastPush > 40 && cursor < end) {
       lastPush = now;
