@@ -263,6 +263,26 @@ export function brandSoundMaxModeShown(env: Record<string, string | undefined> =
 }
 
 /**
+ * Sound Studio composer v2: organization-scoped rollout switch. Reads `BRAND_SOUND_COMPOSER_V2_ORGS`
+ * (comma- and/or whitespace-separated organization ids) and opens only when `orgId` (trimmed,
+ * case-insensitive) is one of the listed ids. Unset, empty, whitespace-only, or a blank `orgId` is
+ * closed; `*` and `all` are ordinary tokens, never wildcards. Sandbox and feature-entitlement gates
+ * stay at their call sites and always run first.
+ */
+export function brandSoundComposerV2For(
+  orgId: string | null | undefined,
+  env: Record<string, string | undefined> = process.env,
+): boolean {
+  const target = orgId?.trim().toLowerCase();
+  if (!target) return false;
+  return (env.BRAND_SOUND_COMPOSER_V2_ORGS ?? '')
+    .split(/[,\s]+/)
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean)
+    .includes(target);
+}
+
+/**
  * A studio run can belong to a project (docs/BRAND-STUDIO-V6-PLAN.md §7 C, migration 0091): the image
  * studio gets the video studio's project switcher, new runs carry the chosen project, and the assets page
  * can put an existing run in a project. Default OFF: open only when the server environment says exactly
