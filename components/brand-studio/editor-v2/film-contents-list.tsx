@@ -3,6 +3,7 @@
 import { fill } from '@/components/brand-studio/copy';
 import { gradeName, type FilmContents, type GradeNames } from '@/lib/brand-studio/editor-v2/film-contents';
 import type { StudioEditorCopy } from '@/messages/studio-editor';
+import { studioEditorTracksEn, studioEditorTracksKo, type StudioEditorTracksCopy } from '@/messages/studio-editor-tracks';
 import styles from './editor-v2.module.css';
 
 /**
@@ -14,16 +15,26 @@ export function FilmContentsList({
   contents,
   copy,
   gradeNames,
+  tracksCopy = null,
+  locale = 'ko',
   withCuts,
 }: {
   contents: FilmContents;
   copy: StudioEditorCopy;
   gradeNames: GradeNames | null | undefined;
+  tracksCopy?: StudioEditorTracksCopy | null;
+  locale?: 'ko' | 'en';
   withCuts: boolean;
 }) {
   const c = copy.export.contents;
   const rows: Array<{ key: string; text: string; quiet?: boolean }> = [];
   if (withCuts) rows.push({ key: 'cuts', text: fill(c.cuts, { count: contents.cuts }) });
+  if (contents.overlays > 0) {
+    const label =
+      tracksCopy?.export.contentsOverlays ??
+      (locale === 'ko' ? studioEditorTracksKo.export.contentsOverlays : studioEditorTracksEn.export.contentsOverlays);
+    rows.push({ key: 'overlays', text: fill(label, { count: contents.overlays }) });
+  }
   if (contents.captions > 0) rows.push({ key: 'captions', text: fill(c.captions, { count: contents.captions }) });
   if (contents.grade) rows.push({ key: 'grade', text: fill(c.grade, { name: gradeName(contents.grade, gradeNames, c.gradeCustom) }) });
   if (contents.music) rows.push({ key: 'music', text: `${fill(c.music, { name: contents.music })} · ${c.notHeard}`, quiet: true });

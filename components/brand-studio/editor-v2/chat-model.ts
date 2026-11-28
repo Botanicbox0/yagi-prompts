@@ -11,10 +11,12 @@ import {
   type AssistRecentTurn,
 } from '@/lib/brand-studio/editor-v2/assist-project';
 import {
+  filmFrames,
   formatTimecode,
   frameStateAt,
   removeClips as removeClipsFromSequence,
   setAspect as setSequenceAspect,
+  totalFrames,
   trimClipEdge,
   type FrameSequence,
 } from '@/lib/brand-studio/editor-v2/frames';
@@ -22,6 +24,8 @@ import { interpretUtterance, type AssistIntent } from '@/lib/brand-studio/editor
 import { realAssistAllowed } from '@/lib/brand-studio/editor-v2/real';
 import type { StudioEditorCopy } from '@/messages/studio-editor';
 import type { StudioEditorChatCopy } from '@/messages/studio-editor-chat';
+import type { StudioEditorTracksCopy } from '@/messages/studio-editor-tracks';
+import { reconcileLinkedOverlays } from '@/lib/brand-studio/editor-v2/tracks';
 import type { StoredChatChipSummary, StoredChatEntry } from './chat-store';
 
 export const EDITOR_CHAT_MAX_CHARS = ASSIST_MESSAGE_MAX_CHARS;
@@ -402,7 +406,34 @@ export function evaluateBatch1Utterance(
   context: ChatContextPayload,
   copy: StudioEditorCopy,
   chatCopy: StudioEditorChatCopy,
+  options?: { linkage?: boolean; tracksCopy?: StudioEditorTracksCopy | null },
 ): Batch1SampleResult {
+  const withOverlaySummary = (
+    baseLines: string[],
+    nextRaw: FrameSequence,
+    affectsFilmLength = false,
+  ): Batch1SampleResult => {
+    const linkageOn = options?.linkage ?? false;
+    const reconciled = reconcileLinkedOverlays(sequence, nextRaw, linkageOn);
+    const outLines = [...baseLines];
+    if (options?.tracksCopy) {
+      if (reconciled.movedCount > 0) outLines.push(fill(options.tracksCopy.chat.overlaysMoved, { n: reconciled.movedCount }));
+      if (reconciled.deletedCount > 0) outLines.push(fill(options.tracksCopy.chat.overlaysDeleted, { n: reconciled.deletedCount }));
+      if (affectsFilmLength) {
+        const afterMain = totalFrames(reconciled.sequence);
+        const afterFilm = filmFrames(reconciled.sequence);
+        if (afterFilm > afterMain) {
+          outLines.push(
+            fill(options.tracksCopy.chat.overlaysExtendPastMain, {
+              time: formatTimecode(afterFilm, sequence.fps > 0 ? Math.round(sequence.fps) : 30),
+            }),
+          );
+        }
+      }
+    }
+    // B1: return the UNADJUSTED `nextRaw` so `withSequence` is the single place that reconciles linked overlays.
+    return { kind: 'proposal', lines: outLines, baseSequence: sequence, nextSequence: nextRaw };
+  };
   const trimmed = utterance.trim();
   if (trimmed.length > EDITOR_CHAT_MAX_CHARS) {
     return { kind: 'note', text: fill(chatCopy.noteTooLongMessage, { max: EDITOR_CHAT_MAX_CHARS }) };
@@ -420,12 +451,10 @@ export function evaluateBatch1Utterance(
           return { kind: 'note', text: copy.assist.nothing };
         }
         const nextSequence = setSequenceAspect(sequence, intent.aspect);
-        return {
-          kind: 'proposal',
-          lines: [fill(lines.aspect, { aspect: copy.aspectNames[ASPECT_COPY_KEYS[intent.aspect]] })],
-          baseSequence: sequence,
+        return withOverlaySummary(
+          [fill(lines.aspect, { aspect: copy.aspectNames[ASPECT_COPY_KEYS[intent.aspect]] })],
           nextSequence,
-        };
+        );
       }
       case 'trim': {
         const clip = sequence.clips[intent.clipNumber - 1];
@@ -437,12 +466,7 @@ export function evaluateBatch1Utterance(
         if (result.applied === 0) {
           return { kind: 'note', text: copy.assist.nothing };
         }
-        return {
-          kind: 'proposal',
-          lines: [fill(lines.trim, { number: intent.clipNumber, seconds: intent.seconds })],
-          baseSequence: sequence,
-          nextSequence: result.seq,
-        };
+        return withOverlaySummary([fill(lines.trim, { number: intent.clipNumber, seconds: intent.seconds })], result.seq);
       }
       case 'remove_last': {
         if (sequence.clips.length < 2) {
@@ -450,12 +474,7 @@ export function evaluateBatch1Utterance(
         }
         const last = sequence.clips[sequence.clips.length - 1]!;
         const nextSequence = removeClipsFromSequence(sequence, [last.id]);
-        return {
-          kind: 'proposal',
-          lines: [fill(lines.removeLast, { number: sequence.clips.length })],
-          baseSequence: sequence,
-          nextSequence,
-        };
+        return withOverlaySummary([fill(lines.removeLast, { number: sequence.clips.length })], nextSequence);
       }
       default:
         return { kind: 'note', text: copy.real.assistNotReady, showExamples: true };
@@ -483,7 +502,7 @@ export function evaluateBatch1Utterance(
     if (changeLines.length === 0) {
       return { kind: 'note', text: copy.assist.nothing };
     }
-    return { kind: 'proposal', lines: changeLines, baseSequence: sequence, nextSequence: working };
+    return withOverlaySummary(changeLines, working);
   }
 
   if (isChipScopedDelete(trimmed)) {
@@ -497,7 +516,7 @@ export function evaluateBatch1Utterance(
     const ids = targets.map((index) => sequence.clips[index]!.id);
     const nextSequence = removeClipsFromSequence(sequence, ids);
     const changeLines = targets.map((index) => fill(lines.removeLast, { number: index + 1 }));
-    return { kind: 'proposal', lines: changeLines, baseSequence: sequence, nextSequence };
+    return withOverlaySummary(changeLines, nextSequence);
   }
 
   return { kind: 'note', text: copy.real.assistUnknown, showExamples: true };

@@ -30,10 +30,11 @@ const USER = '11111111-1111-4111-8111-111111111111';
 const STEP0 = {
   studioEditorTs: { sha256: 'dda9c96b853e2ace528b0683f75f9f111b139b4e9d93f49e634a1c573971e356', length: 37344 },
   prepaintScriptBar: { sha256: 'a1073f292f1e1d12350cadf12908959c7f78356cf742afdc3c6d92247695e0aa', length: 1971 },
-  sampleKo: { sha256: '9a4e53c120f6d8ff3495a7c7ece64ed434c714bc9b1f37318c5b756d700e1b49', length: 42680 },
-  realKo: { sha256: '8a10557cd9693639f08166d9d59b5f7ecabdb39868d395d0401c993940dc159a', length: 14049 },
-  sampleEn: { sha256: 'b59965ce85e20c2b28f36effea070dbca00df57377df59e081d2f3a502653c87', length: 43644 },
-  realEn: { sha256: 'c08b13c6d454d239ce0641f6db0e4883beaed01ad4a5706f5068e6c80dddc11b', length: 14781 },
+  // Updated in E-T Fix Round 1 after removing bare `KeyS` from `EVERYDAY.split` (exact -24 bytes = 2 × `<kbd>S</kbd>` across all 4 surfaces).
+  sampleKo: { sha256: 'ed6950728a1f944e60d871b0779549f8f311e2b5935a6a3f6e75097e21fda3d2', length: 42656 },
+  realKo: { sha256: '91353a4872e7ebf88aa7559547cd8291948f665b328323bd12f53b8ac30ac457', length: 14025 },
+  sampleEn: { sha256: 'd51bac60293211795a706bba28657268e40fd2b4b1e6890a0f53f72454d7bcc2', length: 43620 },
+  realEn: { sha256: '580b0edc2aa8e05bca776a24098e9bc43d60fd8a7676e533e7b37b507cfc34c2', length: 14757 },
   pageSamplePropsNoCopy: { sha256: '13635d4d52f27db308d83b021a9f1d99c9b5d0568b44570579e0cc13354898c9', length: 293 },
   pageRealPropsNoCopy: { sha256: '19aa57fd5e64fbbb088c69e5e23a611f58b2a84b8c97f3ca763a020ebf61dc58', length: 1618 },
 } as const;
@@ -183,10 +184,17 @@ describe('Step 0 closed-switch parity & open-switch page gate', () => {
       }),
     );
 
-    expect({ sha256: sha(sampleKo), length: sampleKo.length }).toEqual(STEP0.sampleKo);
-    expect({ sha256: sha(realKo), length: realKo.length }).toEqual(STEP0.realKo);
-    expect({ sha256: sha(sampleEn), length: sampleEn.length }).toEqual(STEP0.sampleEn);
-    expect({ sha256: sha(realEn), length: realEn.length }).toEqual(STEP0.realEn);
+    expect({
+      sampleKo: { sha256: sha(sampleKo), length: sampleKo.length },
+      realKo: { sha256: sha(realKo), length: realKo.length },
+      sampleEn: { sha256: sha(sampleEn), length: sampleEn.length },
+      realEn: { sha256: sha(realEn), length: realEn.length },
+    }).toEqual({
+      sampleKo: STEP0.sampleKo,
+      realKo: STEP0.realKo,
+      sampleEn: STEP0.sampleEn,
+      realEn: STEP0.realEn,
+    });
 
     // Closed-org SSR WITH a CSP nonce emits the exact 1,971-char 5b0a84aa pre-paint script (B1)
     // and ZERO Batch 3 attachment controls or draggable material attributes.

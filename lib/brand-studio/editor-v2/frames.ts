@@ -39,6 +39,9 @@ import {
 } from './speed-curve';
 
 export type { SpeedCurve, SpeedPoint };
+export type { OverlayClip, OverlayLink, OverlayTrack } from './tracks';
+import { filmFrames, overlayTrackViolations, type OverlayTrack } from './tracks';
+export { filmFrames };
 
 export interface FrameClip {
   id: string;
@@ -82,6 +85,8 @@ export interface FrameSequence {
   aspect: ComposeAspect;
   clips: FrameClip[];
   captions: FrameCaption[];
+  /** Parallel video overlay tracks above main (slice E-T; omitted when empty). */
+  overlayTracks?: OverlayTrack[];
 }
 
 export interface FrameSpan {
@@ -173,7 +178,7 @@ export interface FrameState {
 
 /** The film at one frame. `frame` is brought onto a real frame of the film first. */
 export function frameStateAt(seq: FrameSequence, frame: number): FrameState {
-  const total = totalFrames(seq);
+  const total = filmFrames(seq);
   const at = clamp(Math.round(frame), 0, Math.max(0, total - 1));
   let active: FrameState['active'] = null;
   for (const span of spansOf(seq)) {
@@ -193,7 +198,7 @@ export function frameStateAt(seq: FrameSequence, frame: number): FrameState {
  * whole (v2 does not own them) and one past the end is hidden until the film is long enough again.
  */
 export function visibleCaptions(seq: FrameSequence): FrameCaption[] {
-  const total = totalFrames(seq);
+  const total = filmFrames(seq);
   return seq.captions.filter((caption) => caption.start < total).map((caption) => (caption.end > total ? { ...caption, end: total } : caption));
 }
 
@@ -202,7 +207,7 @@ export function visibleCaptions(seq: FrameSequence): FrameCaption[] {
 const withClips = (seq: FrameSequence, clips: FrameClip[]): FrameSequence => fitCaptions({ ...seq, clips });
 
 function fitCaptions(seq: FrameSequence): FrameSequence {
-  const total = totalFrames(seq);
+  const total = filmFrames(seq);
   const captions = seq.captions
     .filter((caption) => caption.start < total)
     .map((caption) => (caption.end > total ? { ...caption, end: total } : caption));
@@ -479,7 +484,7 @@ export function setAspect(seq: FrameSequence, aspect: ComposeAspect): FrameSeque
 export const MAX_FRAME_CAPTIONS = 32;
 
 export function addCaption(seq: FrameSequence, caption: FrameCaption): FrameSequence {
-  const total = totalFrames(seq);
+  const total = filmFrames(seq);
   const text = caption.text.trim().slice(0, 120);
   if (!text || total === 0 || seq.captions.length >= MAX_FRAME_CAPTIONS) return seq;
   const start = clamp(Math.round(caption.start), 0, total - 1);
@@ -532,11 +537,14 @@ export function wholeFrameViolations(seq: FrameSequence): string[] {
     }
     if (isWhole(seq.fps) && clip.frames > clipMaxFrames(clip, seq.fps)) out.push(`cut ${index + 1} runs past its footage`);
   });
-  const total = totalFrames(seq);
+  const total = filmFrames(seq);
   seq.captions.forEach((caption, index) => {
     if (!isWhole(caption.start) || !isWhole(caption.end)) out.push(`caption ${index + 1} ${caption.start}–${caption.end}`);
     if (caption.start < 0 || caption.end <= caption.start || caption.end > total) out.push(`caption ${index + 1} out of range`);
   });
+  if (seq.overlayTracks && seq.overlayTracks.length > 0) {
+    out.push(...overlayTrackViolations(seq));
+  }
   return out;
 }
 
@@ -624,7 +632,7 @@ export function snapFrame(frame: number, candidates: readonly number[], pxPerFra
 /** The cut edge before or after a frame, for stepping from cut to cut. */
 export function neighbourCut(seq: FrameSequence, frame: number, direction: -1 | 1): number {
   const edges = spansOf(seq).map((span) => span.start);
-  const last = Math.max(0, totalFrames(seq) - 1);
+  const last = Math.max(0, filmFrames(seq) - 1);
   if (direction === 1) return edges.find((edge) => edge > frame) ?? last;
   return [...edges].reverse().find((edge) => edge < frame) ?? 0;
 }

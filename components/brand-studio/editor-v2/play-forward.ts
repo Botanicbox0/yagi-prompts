@@ -1,6 +1,6 @@
 'use client';
 
-import { frameStateAt, spansOf, totalFrames, type FrameSequence } from '@/lib/brand-studio/editor-v2/frames';
+import { filmFrames, frameStateAt, spansOf, totalFrames, type FrameSequence } from '@/lib/brand-studio/editor-v2/frames';
 import { frameGaps, previewSound, soundLeftSec, soundMarginSec, type PreviewSound } from '@/lib/brand-studio/editor-v2/preview-sound';
 import { curveSpeedAt, curveStartMedia, curveTimeAt, curveTotalSpanMedia } from '@/lib/brand-studio/editor-v2/speed-curve';
 
@@ -76,8 +76,10 @@ export function playForward(video: HTMLVideoElement, latest: { readonly current:
   let wasHidden = false;
   let refused = false;
   let hold: { src: string; until: number } | null = options.resumed ? { src: video.dataset.src ?? '', until: video.currentTime } : null;
-  const startTotal = totalFrames(latest.current.sequence);
+  const startHasOverlays = Boolean(latest.current.sequence.overlayTracks?.length);
+  const startTotal = startHasOverlays ? filmFrames(latest.current.sequence) : totalFrames(latest.current.sequence);
   let cursor = latest.current.playhead >= startTotal - 1 ? 0 : latest.current.playhead;
+  let trailingAccFrames = 0;
   const play = () => {
     const withSound = !video.muted;
     void video.play().catch((error: unknown) => {
@@ -88,19 +90,45 @@ export function playForward(video: HTMLVideoElement, latest: { readonly current:
   };
   const tick = (now: number) => {
     // A gap the page spent hidden is not a long frame: the margin does not grow from it.
-    if (lastFrameAt !== null && !wasHidden) gaps.add(now, Math.max(0, now - lastFrameAt));
+    const frameDeltaMs = lastFrameAt !== null && !wasHidden ? Math.max(0, now - lastFrameAt) : 0;
+    if (lastFrameAt !== null && !wasHidden) gaps.add(now, frameDeltaMs);
     lastFrameAt = now;
     wasHidden = false;
     const current = latest.current.sequence;
-    const end = totalFrames(current);
-    const active = cursor < end ? frameStateAt(current, cursor).active : null;
+    const hasOverlays = Boolean(current.overlayTracks?.length);
+    const mainEnd = totalFrames(current);
+    const end = hasOverlays ? filmFrames(current) : mainEnd;
+    const active = cursor < mainEnd ? frameStateAt(current, cursor).active : null;
     if (!active) {
+      if (hasOverlays && cursor < end) {
+        // Past the main track into a trailing overlay clip: keep main silent/paused and advance playhead at film fps.
+        video.muted = true;
+        if (!video.paused) video.pause();
+        trailingAccFrames += (frameDeltaMs / 1000) * current.fps * rate;
+        const step = Math.floor(trailingAccFrames);
+        if (step >= 1) {
+          trailingAccFrames -= step;
+          cursor = Math.min(end, cursor + step);
+        }
+        if (cursor >= end) {
+          latest.current.seek(Math.max(0, end - 1));
+          latest.current.setRate(0);
+          return;
+        }
+        if (now - lastPush > 40) {
+          lastPush = now;
+          latest.current.seek(cursor);
+        }
+        raf = requestAnimationFrame(tick);
+        return;
+      }
       if (!video.muted) video.muted = true;
       if (!video.paused) video.pause();
       latest.current.seek(end - 1);
       latest.current.setRate(0);
       return;
     }
+    trailingAccFrames = 0;
     const { clip: playing } = active;
     const span = spansOf(current)[active.index]!;
     const hear = () => {

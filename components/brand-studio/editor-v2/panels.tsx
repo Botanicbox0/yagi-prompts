@@ -15,6 +15,8 @@ import {
 } from '@/lib/brand-studio/editor-v2/fixture';
 import { filmContents } from '@/lib/brand-studio/editor-v2/film-contents';
 import { clipFrameAt, formatTimecode, type FrameCaption } from '@/lib/brand-studio/editor-v2/frames';
+import { canMoveClipUpOneTrack, findOverlayClip, hasOwnedOverlays } from '@/lib/brand-studio/editor-v2/tracks';
+import { studioEditorTracksEn, studioEditorTracksKo } from '@/messages/studio-editor-tracks';
 import { sourceSeconds } from '@/lib/brand-studio/editor-v2/sources';
 import { everyCutMissing } from '@/lib/brand-studio/editor-v2/sources';
 import { filmHasSpeedTheOldEditorChanges } from '@/lib/brand-studio/editor-v2/stored';
@@ -270,6 +272,14 @@ function LockedPanel({ api, classicHref }: { api: EditorApi; classicHref?: strin
               {copy.real.locked.classicSpeed}
             </p>
           )}
+          {(hasOwnedOverlays(api.sequence) || api.storedHasOwnedOverlays) && (
+            <p className={styles.note} data-editor-classic-overlays>
+              {api.tracksCopy?.classic.overlaysNote ??
+                (api.locale === 'ko'
+                  ? studioEditorTracksKo.classic.overlaysNote
+                  : studioEditorTracksEn.classic.overlaysNote)}
+            </p>
+          )}
           <a className={styles.sampleLink} href={classicHref} data-editor-classic-link={workspace}>
             {copy.notice.current}
           </a>
@@ -519,12 +529,41 @@ export function ActionPanel({ api, classicHref }: { api: EditorApi; classicHref?
  */
 function StoredContents({ api }: { api: EditorApi }) {
   const contents = filmContents(api.sequence, api.filmView?.film ?? null, api.filmView?.anchor ?? null);
-  if (!contents.captions && !contents.grade && !contents.music && !contents.effects && !contents.stills) return null;
+  const hasLegacyContents = Boolean(contents.captions || contents.grade || contents.music || contents.effects || contents.stills);
+  const hasOwnedOverlaysRow = api.tracksOpen && contents.overlays > 0;
+  if (!hasLegacyContents && !hasOwnedOverlaysRow) return null;
+  const overlaysLabel =
+    api.tracksCopy?.export.contentsOverlays ??
+    (api.locale === 'ko' ? studioEditorTracksKo.export.contentsOverlays : studioEditorTracksEn.export.contentsOverlays);
+  const overlaysBlockedNote =
+    api.tracksCopy?.export.blocked ??
+    (api.locale === 'ko' ? studioEditorTracksKo.export.blocked : studioEditorTracksEn.export.blocked);
   return (
     <Section title={api.copy.real.contents.heading}>
       <div data-editor-film-contents>
-        <FilmContentsList contents={contents} copy={api.copy} gradeNames={api.gradeNames} withCuts={false} />
-        <p className={styles.note}>{api.copy.real.contents.note}</p>
+        {hasLegacyContents && (
+          <>
+            <FilmContentsList
+              contents={{ ...contents, overlays: 0 }}
+              copy={api.copy}
+              gradeNames={api.gradeNames}
+              withCuts={false}
+            />
+            <p className={styles.note}>{api.copy.real.contents.note}</p>
+          </>
+        )}
+        {hasOwnedOverlaysRow && (
+          <>
+            <ul className={styles.filmContents} data-editor-contents-owned="overlays">
+              <li data-editor-contents-row="overlays">
+                {fill(overlaysLabel, { count: contents.overlays })}
+              </li>
+            </ul>
+            <p className={styles.note} data-editor-contents-overlays-note>
+              {overlaysBlockedNote}
+            </p>
+          </>
+        )}
       </div>
     </Section>
   );
@@ -649,12 +688,115 @@ function CutPanel({ api }: { api: EditorApi }) {
             {/* A real film's cut is heard in the preview while it plays; the sample footage has no sound. */}
             {!api.real && <p className={styles.note} data-editor-cut-sound-note>{copy.sound.listen.unavailable}</p>}
           </Section>
+          {api.tracksOpen && api.tracksCopy && (
+            <div className={styles.trackMoveRow}>
+              <button
+                type="button"
+                className={styles.quietBtn}
+                onClick={() => api.moveSelectedUp()}
+                disabled={
+                  api.readOnly ||
+                  !canMoveClipUpOneTrack(sequence, clip.id, {
+                    linkage: api.effectiveOverlayLinkage,
+                    maxOwnedOverlays: api.maxOwnedOverlays,
+                  })
+                }
+                data-editor-move-track-up
+              >
+                <EditorIcon name="arrowUp" />
+                {api.tracksCopy.actions.moveUp}
+              </button>
+            </div>
+          )}
           <button type="button" className={styles.quietBtn} onClick={() => api.removeClips([clip.id])} disabled={api.readOnly}>
             <EditorIcon name="trash" />
             {c.clip.remove}
           </button>
         </>
       );
+    }
+    if (api.tracksOpen && api.tracksCopy) {
+      const ov = findOverlayClip(sequence, api.selection[0]!);
+      if (ov) {
+        const { clip, trackIndex, clipIndex } = ov;
+        const outFrame = clipFrameAt(clip, clip.frames - 1, fps).mediaFrame + 1;
+        return (
+          <>
+            <PanelHead
+              title={fill(api.tracksCopy.lanes.overlayCut, { track: trackIndex + 1, number: clipIndex + 1 })}
+              meta={formatTimecode(clip.frames, fps)}
+            />
+            <Section title={c.clip.length}>
+              <p className={styles.readout} data-editor-clip-readout>
+                <span>{formatTimecode(clip.inFrame, fps)}</span>
+                <i aria-hidden="true" />
+                <span>{formatTimecode(outFrame, fps)}</span>
+              </p>
+              <p className={styles.note}>
+                {fill(c.clip.frames, { count: clip.frames, fps })} {c.clip.lengthHint}
+              </p>
+            </Section>
+            <Section title={c.clip.speed}>
+              <SpeedPanel
+                clip={clip}
+                clipIndex={clipIndex}
+                clipStart={clip.startFrame}
+                playhead={api.playhead}
+                fps={fps}
+                readOnly={api.readOnly}
+                copy={api.copy}
+                onSetConstant={(_idx, rate, coalesce) => api.setOverlayConstantSpeed(clip.id, rate, coalesce)}
+                onSetCurve={(_idx, points, coalesce) => api.setOverlaySpeedCurve(clip.id, points, coalesce)}
+                onReset={() => api.resetOverlaySpeed(clip.id)}
+              />
+            </Section>
+            <Section title={c.clip.sound}>
+              <Range
+                label={c.clip.volume}
+                value={Math.round((clip.muted ? 0 : clip.volume) * 100)}
+                min={0}
+                max={100}
+                display={clip.muted ? c.clip.mute : `${Math.round(clip.volume * 100)}`}
+                disabled={api.readOnly}
+                onChange={(value) => api.setOverlayAudio(clip.id, value === 0 ? clip.volume : value / 100, value === 0)}
+              />
+            </Section>
+            <div className={styles.trackMoveRow}>
+              <button
+                type="button"
+                className={styles.quietBtn}
+                onClick={() => api.moveSelectedUp()}
+                disabled={
+                  api.readOnly ||
+                  !canMoveClipUpOneTrack(sequence, clip.id, {
+                    linkage: api.effectiveOverlayLinkage,
+                    maxOwnedOverlays: api.maxOwnedOverlays,
+                  })
+                }
+                data-editor-move-track-up
+              >
+                <EditorIcon name="arrowUp" />
+                {api.tracksCopy.actions.moveUp}
+              </button>
+              <button
+                type="button"
+                className={styles.quietBtn}
+                onClick={() => api.moveSelectedDown()}
+                disabled={api.readOnly}
+                title={trackIndex === 0 ? api.tracksCopy.actions.moveDownToMainTip : api.tracksCopy.actions.moveDown}
+                data-editor-move-track-down
+              >
+                <EditorIcon name="arrowDown" />
+                {api.tracksCopy.actions.moveDown}
+              </button>
+            </div>
+            <button type="button" className={styles.quietBtn} onClick={() => api.removeClips([clip.id])} disabled={api.readOnly} data-editor-remove-overlay>
+              <EditorIcon name="trash" />
+              {api.tracksCopy.actions.removeClip}
+            </button>
+          </>
+        );
+      }
     }
   }
   if (api.selection.length > 1) {

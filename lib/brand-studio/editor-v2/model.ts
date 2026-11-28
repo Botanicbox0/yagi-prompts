@@ -9,7 +9,8 @@
  * Nothing here touches the DOM, the network or storage.
  */
 import type { ComposeAspect } from '@/lib/brand-studio/compose/timeline';
-import { frameStateAt, totalFrames, type FrameCaption, type FrameSequence } from './frames';
+import { filmFrames, frameStateAt, type FrameCaption, type FrameSequence } from './frames';
+import { allOverlayClips, reconcileLinkedOverlays } from './tracks';
 
 export const EDITOR_WORKSPACES = ['cut', 'color', 'sound', 'captions'] as const;
 export type EditorWorkspace = (typeof EDITOR_WORKSPACES)[number];
@@ -131,24 +132,41 @@ export interface EditorDoc {
 
 // ── Cut ────────────────────────────────────────────────────────────────────────────────────────
 
+export interface WithSequenceOptions {
+  /** Whether linked overlay clips follow main-track edits (defaults to `p10DefaultTrackToggles().linkage`). */
+  linkage?: boolean;
+  /** Main cut ids that were lifted onto an overlay track in this edit (not deleted). */
+  liftedClipIds?: readonly string[];
+}
+
 /**
- * Puts a changed sequence into the document and keeps the per-cut extras in step: `inherit` lists new
- * cuts and the cut each came from (the right half of a split, a pasted or duplicated cut), extras of
- * removed cuts are dropped, and titles never run past the end of the film.
+ * Puts a changed sequence into the document and keeps the per-cut extras and linked overlay clips in step (C1):
+ * `inherit` lists new cuts and the cut each came from (the right half of a split, a pasted or duplicated cut),
+ * linked overlays are reconciled here in ONE place, extras of removed cuts are dropped, and titles never run
+ * past the end of the film.
  */
-export function withSequence(doc: EditorDoc, sequence: FrameSequence, inherit: ReadonlyArray<readonly [string, string]> = []): EditorDoc {
-  if (sequence === doc.sequence) return doc;
+export function withSequence(
+  doc: EditorDoc,
+  rawSequence: FrameSequence,
+  inherit: ReadonlyArray<readonly [string, string]> = [],
+  options: WithSequenceOptions = {},
+): EditorDoc {
+  if (rawSequence === doc.sequence) return doc;
+  const linkageOn = options.linkage ?? false;
+  const liftedSet = options.liftedClipIds && options.liftedClipIds.length > 0 ? new Set(options.liftedClipIds) : undefined;
+  const sequence = reconcileLinkedOverlays(doc.sequence, rawSequence, linkageOn, inherit, liftedSet).sequence;
   const looks: Record<string, ClipLook> = {};
   const reframe: Record<string, Reframe> = {};
   const origin = new Map(inherit);
-  for (const clip of sequence.clips) {
+  const allClips = [...sequence.clips, ...allOverlayClips(sequence)];
+  for (const clip of allClips) {
     const from = origin.get(clip.id) ?? clip.id;
     const look = doc.looks[from];
     const frame = doc.reframe[from];
     if (look) looks[clip.id] = look;
     if (frame) reframe[clip.id] = frame;
   }
-  const total = totalFrames(sequence);
+  const total = filmFrames(sequence);
   const titles = doc.titles
     .filter((title) => title.start < total)
     .map((title) => (title.end > total ? { ...title, end: total } : title));
@@ -163,7 +181,8 @@ export function scopeClipIds(
   playheadFrame: number,
 ): string[] {
   if (mode === 'selected') {
-    const picked = sequence.clips.filter((clip) => selection.includes(clip.id)).map((clip) => clip.id);
+    const allIds = [...sequence.clips.map((c) => c.id), ...allOverlayClips(sequence).map((c) => c.id)];
+    const picked = allIds.filter((id) => selection.includes(id));
     if (picked.length > 0) return picked;
   }
   if (mode === 'current') {
@@ -179,7 +198,11 @@ export function settleScope(
   mode: ScopeMode,
   selection: readonly string[],
 ): { mode: ScopeMode; selection: string[] } {
-  const alive = selection.filter((id) => sequence.clips.some((clip) => clip.id === id));
+  const validIds = new Set<string>([
+    ...sequence.clips.map((clip) => clip.id),
+    ...allOverlayClips(sequence).map((clip) => clip.id),
+  ]);
+  const alive = selection.filter((id) => validIds.has(id));
   return { mode: mode === 'selected' && alive.length === 0 ? 'all' : mode, selection: alive };
 }
 

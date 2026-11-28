@@ -12,7 +12,7 @@
 
 export const SHORTCUT_GROUPS = [
   { id: 'move', actions: ['play', 'stepBack', 'stepForward', 'stepBack10', 'stepForward10', 'prevCut', 'nextCut', 'toStart', 'toEnd', 'shuttleBack', 'shuttleStop', 'shuttleForward'] },
-  { id: 'cut', actions: ['split', 'trimStart', 'trimEnd', 'remove', 'magnet'] },
+  { id: 'cut', actions: ['split', 'splitAll', 'trimStart', 'trimEnd', 'remove', 'magnet', 'toggleLinkage', 'moveTrackUp', 'moveTrackDown'] },
   { id: 'edit', actions: ['undo', 'redo', 'copy', 'cut', 'paste', 'duplicate', 'selectAll', 'deselect'] },
   { id: 'view', actions: ['zoomIn', 'zoomOut', 'zoomFit', 'zoomFrames', 'workspaceCut', 'workspaceColor', 'workspaceSound', 'workspaceCaptions', 'focusChat', 'shortcuts'] },
 ] as const;
@@ -20,6 +20,20 @@ export const SHORTCUT_GROUPS = [
 export type ShortcutGroupId = (typeof SHORTCUT_GROUPS)[number]['id'];
 export type ShortcutAction = (typeof SHORTCUT_GROUPS)[number]['actions'][number];
 export const SHORTCUT_ACTIONS: readonly ShortcutAction[] = SHORTCUT_GROUPS.flatMap((group) => [...group.actions]);
+
+/** Actions only visible and active when `BRAND_STUDIO_EDITOR_V2_TRACKS` is open (C6). */
+export const TRACKS_ONLY_ACTIONS: ReadonlySet<ShortcutAction> = new Set([
+  'splitAll',
+  'toggleLinkage',
+  'moveTrackUp',
+  'moveTrackDown',
+]);
+
+/** Actions intentionally shipped without a default key binding (buttons + user-rebindable only). */
+export const UNBOUND_BY_DEFAULT_ACTIONS: ReadonlySet<ShortcutAction> = new Set([
+  'moveTrackUp',
+  'moveTrackDown',
+]);
 
 export const SHORTCUT_SETS = ['everyday', 'pro'] as const;
 export type ShortcutSetId = (typeof SHORTCUT_SETS)[number];
@@ -41,11 +55,15 @@ const EVERYDAY: Record<ShortcutAction, Binding[]> = {
   shuttleBack: ['KeyJ'],
   shuttleStop: ['KeyK'],
   shuttleForward: ['KeyL'],
-  split: ['Mod+KeyB', 'KeyS'],
+  split: ['Mod+KeyB'],
+  splitAll: ['Mod+Shift+KeyB'],
   trimStart: ['KeyQ'],
   trimEnd: ['KeyW'],
   remove: ['Delete', 'Backspace'],
   magnet: ['KeyN'],
+  toggleLinkage: ['Backquote'],
+  moveTrackUp: [],
+  moveTrackDown: [],
   undo: ['Mod+KeyZ'],
   redo: ['Mod+Shift+KeyZ', 'Mod+KeyY'],
   copy: ['Mod+KeyC'],
@@ -53,7 +71,7 @@ const EVERYDAY: Record<ShortcutAction, Binding[]> = {
   paste: ['Mod+KeyV'],
   duplicate: ['Mod+KeyD'],
   selectAll: ['Mod+KeyA'],
-  deselect: ['Escape'],
+  deselect: ['Escape', 'Alt+KeyX'],
   zoomIn: ['Mod+Equal', 'Equal'],
   zoomOut: ['Mod+Minus', 'Minus'],
   zoomFit: ['Shift+KeyZ'],

@@ -1,18 +1,28 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { fill } from '@/components/brand-studio/copy';
 import { materialBySrc } from '@/lib/brand-studio/editor-v2/fixture';
 import { cssFilterForColorGrade } from '@/lib/brand-studio/compose/color-grade';
 import { COMPOSE_DIMENSIONS, activeColorGradeForFrame, toColorGradeSpec } from '@/lib/brand-studio/compose/timeline';
 import { imageOverlaysAt, soundShiftSec, storedCutFor } from '@/lib/brand-studio/editor-v2/export-plan';
 import { CURRENT_EXPORT_BACKGROUND, currentExportFrame } from '@/lib/brand-studio/editor-v2/framing';
-import { formatTimecode } from '@/lib/brand-studio/editor-v2/frames';
+import { clipFrameAt, clipSpeedAt, formatTimecode } from '@/lib/brand-studio/editor-v2/frames';
 import { DEFAULT_REFRAME, gradeMatrix, isNeutral } from '@/lib/brand-studio/editor-v2/model';
+import { previewSound } from '@/lib/brand-studio/editor-v2/preview-sound';
 import { formatBinding } from '@/lib/brand-studio/editor-v2/shortcuts';
 import { everyCutMissing } from '@/lib/brand-studio/editor-v2/sources';
+import {
+  EMPTY_OVERLAY_TRACKS,
+  activeOverlaysAt,
+  overlayTrackNearFrame,
+  overlayTracksOf,
+  p9DefaultOverlayFraming,
+  type ActiveOverlayLayer,
+  type OverlayClip,
+} from '@/lib/brand-studio/editor-v2/tracks';
 import { EditorIcon } from './icons';
-import { playForward } from './play-forward';
+import { disablePitchPreservation, playForward, setElementSound } from './play-forward';
 import type { EditorApi } from './use-editor';
 import styles from './editor-v2.module.css';
 
@@ -33,6 +43,267 @@ const SAFE_ZONES = {
   tiktok: { top: 10, bottom: 23, side: 15 },
 } as const;
 
+/** Maximum inter-layer drift (seconds) at 1× before a playing overlay `<video>` re-seeks to match the main clock (C7). */
+export const OVERLAY_PLAY_DRIFT_SEC = 0.08;
+
+/** Rate-scaled inter-layer drift tolerance so 2×/4× shuttle does not constantly re-seek (S4). */
+export function overlayDriftLimitSec(rate: number): number {
+  return OVERLAY_PLAY_DRIFT_SEC * Math.max(1, Math.abs(rate));
+}
+
+/** Unique settle key per overlay video frame (track + src + seek time, S4). */
+export function overlaySettleKey(src: string, seekSec: number): string {
+  return `${src}@${seekSec.toFixed(4)}`;
+}
+
+function releaseVideoElement(video: HTMLVideoElement): void {
+  video.muted = true;
+  video.pause();
+  video.removeAttribute('src');
+  delete video.dataset.src;
+  if (typeof video.load === 'function') video.load();
+}
+
+const EMPTY_ACTIVE_OVERLAYS: readonly ActiveOverlayLayer[] = [];
+const EMPTY_MOUNTED_OVERLAYS: ReadonlyArray<{
+  trackId: string;
+  trackIndex: number;
+  nearClip: OverlayClip;
+  activeLayer: ActiveOverlayLayer | null;
+}> = [];
+
+/**
+ * One stacked `<video>` element for an overlay track with a clip at or near the playhead (C7, S4, S3).
+ * No `crossOrigin`, no Web Audio: native element audio + best-effort play sync, exact paused/step settle,
+ * resource release on src change/unmount, pre-roll before start, rate-scaled drift, muted retry without
+ * per-tick unmute loops, and synchronous gesture-path unmute via "소리 켜기".
+ */
+function OverlayVideoLayer({
+  trackId,
+  trackIndex,
+  nearClip,
+  activeLayer,
+  fps,
+  rate,
+  unmuteHandlersRef,
+  onSettled,
+  onSoundBlocked,
+}: {
+  trackId: string;
+  trackIndex: number;
+  nearClip: OverlayClip;
+  activeLayer: ActiveOverlayLayer | null;
+  fps: number;
+  rate: number;
+  unmuteHandlersRef: MutableRefObject<Map<string, () => void>>;
+  onSettled: (trackId: string, key: string | null) => void;
+  onSoundBlocked: (trackId: string, blocked: boolean) => void;
+}) {
+  const ref = useRef<HTMLVideoElement | null>(null);
+  const soundRefusedRef = useRef(false);
+  const framing = p9DefaultOverlayFraming();
+  const activeClip = activeLayer?.clip ?? null;
+  const activeClipId = activeClip?.id ?? null;
+  const activeSrc = activeClip?.srcUrl ?? null;
+  const activeSeekSec = activeLayer?.seekSec ?? 0;
+  const activeOffset = activeLayer?.offset ?? 0;
+  const activeVolume = activeClip?.volume ?? 1;
+  const activeMuted = activeClip?.muted ?? false;
+  const activeClipRef = useRef(activeClip);
+  activeClipRef.current = activeClip;
+  const rateRef = useRef(rate);
+  rateRef.current = rate;
+
+  const nearSrc = nearClip.srcUrl;
+  const nearEntrySec = clipFrameAt(nearClip, 0, fps).seekSec;
+  const src = activeSrc ?? nearSrc;
+  const seekSec = activeLayer ? activeSeekSec : nearEntrySec;
+  const isActive = activeLayer !== null;
+  const targetSettleKey = isActive ? overlaySettleKey(src, seekSec) : null;
+
+  const ensureSrc = (video: HTMLVideoElement, nextSrc: string) => {
+    if (video.dataset.src === nextSrc) return;
+    if (video.dataset.src) {
+      releaseVideoElement(video);
+    }
+    video.dataset.src = nextSrc;
+    video.src = nextSrc;
+  };
+
+  // S3: register synchronous gesture-path unmute handler called directly by the "소리 켜기" button's onClick.
+  useEffect(() => {
+    const handlers = unmuteHandlersRef.current;
+    handlers.set(trackId, () => {
+      soundRefusedRef.current = false;
+      onSoundBlocked(trackId, false);
+      const video = ref.current;
+      const clipNow = activeClipRef.current;
+      if (!video || rateRef.current <= 0 || !clipNow || clipNow.muted || clipNow.volume <= 0) return;
+      video.muted = false;
+      video.volume = Math.max(0, Math.min(1, clipNow.volume));
+      const p = video.play();
+      if (p && typeof p.catch === 'function') {
+        void p.catch(() => {
+          soundRefusedRef.current = true;
+          video.muted = true;
+          onSoundBlocked(trackId, true);
+          const retry = video.play();
+          if (retry && typeof retry.catch === 'function') void retry.catch(() => {});
+        });
+      }
+    });
+    return () => {
+      handlers.delete(trackId);
+    };
+  }, [trackId, unmuteHandlersRef, onSoundBlocked]);
+
+  // Paused / stepping: exact frame seek + report settled key (track + src + seek time, S4).
+  useEffect(() => {
+    if (rate > 0) {
+      onSettled(trackId, null);
+      return;
+    }
+    soundRefusedRef.current = false;
+    const video = ref.current;
+    if (!video) return;
+    ensureSrc(video, src);
+    video.muted = true;
+    video.pause();
+    onSoundBlocked(trackId, false);
+    if (!isActive || !targetSettleKey) {
+      onSettled(trackId, null);
+      return;
+    }
+    onSettled(trackId, null);
+    let alive = true;
+    const landed = () => {
+      if (alive && !video.seeking && Math.abs(video.currentTime - seekSec) < 0.002) {
+        onSettled(trackId, targetSettleKey);
+      }
+    };
+    const apply = () => {
+      if (Math.abs(video.currentTime - seekSec) > 0.0005) video.currentTime = seekSec;
+      else if (video.readyState >= 2) landed();
+    };
+    video.addEventListener('seeked', landed);
+    video.addEventListener('loadeddata', landed);
+    if (video.readyState >= 1) apply();
+    else video.addEventListener('loadedmetadata', apply, { once: true });
+    return () => {
+      alive = false;
+      video.removeEventListener('seeked', landed);
+      video.removeEventListener('loadeddata', landed);
+      video.removeEventListener('loadedmetadata', apply);
+    };
+  }, [rate, src, seekSec, isActive, targetSettleKey, trackId, onSettled, onSoundBlocked]);
+
+  // Playing forward: preload upcoming clip shortly before start, follow pushed playhead with rate-scaled drift (S4, S3).
+  useEffect(() => {
+    if (rate <= 0) return;
+    const video = ref.current;
+    if (!video) return;
+    const clipNow = activeClipRef.current;
+    if (!clipNow || !activeSrc) {
+      // S4: preload upcoming overlay at its entry frame so playback starts immediately without late decode.
+      ensureSrc(video, nearSrc);
+      video.muted = true;
+      if (!video.paused) video.pause();
+      if (video.readyState >= 1 && Math.abs(video.currentTime - nearEntrySec) > 0.02) {
+        video.currentTime = nearEntrySec;
+      }
+      onSoundBlocked(trackId, false);
+      return;
+    }
+    ensureSrc(video, activeSrc);
+    const clipRate = clipSpeedAt(clipNow, activeOffset);
+    disablePitchPreservation(video);
+    video.playbackRate = Math.max(0.0625, Math.min(16, clipRate * rate));
+    const driftLimit = overlayDriftLimitSec(rate);
+    if (video.readyState >= 1 && Math.abs(video.currentTime - activeSeekSec) > driftLimit) {
+      video.currentTime = activeSeekSec;
+    }
+    const hidden = typeof document !== 'undefined' && document.visibilityState === 'hidden';
+    // S3: pass remembered `soundRefusedRef.current` so a refused browser stays muted across ticks without stuttering.
+    setElementSound(
+      video,
+      previewSound({
+        playing: true,
+        gesture: true,
+        refused: soundRefusedRef.current,
+        hidden,
+        seeking: video.seeking,
+        replay: false,
+        cutChange: false,
+        volume: activeVolume,
+        muted: activeMuted,
+        shifted: false,
+        rate: video.playbackRate,
+        soundTrack: null,
+      }),
+    );
+    if (video.paused) {
+      const wantedSound = !video.muted;
+      const playPromise = video.play();
+      if (playPromise && typeof playPromise.catch === 'function') {
+        void playPromise.catch(() => {
+          // S3 + S4: remember refusal, retry muted once, and surface "소리 켜기" until clicked.
+          if (wantedSound) {
+            soundRefusedRef.current = true;
+            onSoundBlocked(trackId, true);
+          }
+          video.muted = true;
+          const retry = video.play();
+          if (retry && typeof retry.catch === 'function') void retry.catch(() => {});
+        });
+      }
+    }
+  }, [
+    rate,
+    activeClipId,
+    activeSrc,
+    activeSeekSec,
+    activeOffset,
+    activeVolume,
+    activeMuted,
+    nearSrc,
+    nearEntrySec,
+    trackId,
+    onSoundBlocked,
+  ]);
+
+  // Release `<video>` resources on unmount (S4): capture the element before React clears `ref.current`.
+  useEffect(() => {
+    const video = ref.current;
+    return () => {
+      soundRefusedRef.current = false;
+      if (video) releaseVideoElement(video);
+      onSettled(trackId, null);
+      onSoundBlocked(trackId, false);
+    };
+  }, [trackId, onSettled, onSoundBlocked]);
+
+  return (
+    <video
+      ref={ref}
+      className={styles.overlayVideo}
+      muted
+      playsInline
+      preload="auto"
+      poster={(activeLayer?.clip ?? nearClip).thumbUrl ?? undefined}
+      style={{
+        objectFit: framing.fit === 'fit' ? 'contain' : 'cover',
+        objectPosition: '50% 50%',
+        backgroundColor: 'transparent',
+        opacity: isActive ? framing.opacity : 0,
+        visibility: isActive ? 'visible' : 'hidden',
+      }}
+      data-overlay-video={trackIndex}
+      data-overlay-clip-id={activeLayer?.clip.id ?? undefined}
+      data-overlay-source-frame={activeLayer ? activeLayer.sourceFrame : undefined}
+    />
+  );
+}
+
 export function Preview({ api }: { api: EditorApi }) {
   const { copy, doc, sequence, frame, activeClip, rate, workspace, fps, playhead } = api;
   // A film never measured whose cuts are all confirmed missing reads no rate next time: it says why instead (review item 6).
@@ -43,6 +314,15 @@ export function Preview({ api }: { api: EditorApi }) {
   const frameRef = useRef<HTMLDivElement | null>(null);
   const [split, setSplit] = useState(50);
   const [shown, setShown] = useState<{ src: string; sourceFrame: number } | null>(null);
+  const [overlaySettled, setOverlaySettled] = useState<Record<string, string | null>>({});
+  const handleOverlaySettled = useCallback((trackId: string, key: string | null) => {
+    setOverlaySettled((prev) => (prev[trackId] === key ? prev : { ...prev, [trackId]: key }));
+  }, []);
+  const [overlaySoundBlocked, setOverlaySoundBlocked] = useState<Record<string, boolean>>({});
+  const handleOverlaySoundBlocked = useCallback((trackId: string, blocked: boolean) => {
+    setOverlaySoundBlocked((prev) => (Boolean(prev[trackId]) === blocked ? prev : { ...prev, [trackId]: blocked }));
+  }, []);
+  const overlayUnmuteHandlersRef = useRef<Map<string, () => void>>(new Map());
   /** The picture's own size, once the video knows it: a real film is framed by it (framing.ts). */
   const [natural, setNatural] = useState<{ src: string; width: number; height: number } | null>(null);
 
@@ -209,7 +489,34 @@ export function Preview({ api }: { api: EditorApi }) {
     const binding = api.shortcutMap[action][0];
     return binding ? formatBinding(binding, api.mac) : [];
   };
-  const settledOnFrame = rate === 0 && !!shown && shown.src === src && shown.sourceFrame === sourceFrame;
+  const overlayTracks = api.tracksOpen ? overlayTracksOf(sequence) : EMPTY_OVERLAY_TRACKS;
+  const hasAnyOverlays = overlayTracks.length > 0;
+  const activeOverlays = useMemo(
+    () => (hasAnyOverlays ? activeOverlaysAt(sequence, playhead) : EMPTY_ACTIVE_OVERLAYS),
+    [hasAnyOverlays, sequence, playhead],
+  );
+  const mountedOverlayTracks = useMemo(() => {
+    if (!hasAnyOverlays) return EMPTY_MOUNTED_OVERLAYS;
+    const byTrack = new Map(activeOverlays.map((layer) => [layer.trackId, layer]));
+    const margin = Math.max(1, Math.round(fps * 1.5));
+    const list: Array<{ trackId: string; trackIndex: number; nearClip: OverlayClip; activeLayer: ActiveOverlayLayer | null }> = [];
+    overlayTracks.forEach((track, trackIndex) => {
+      const activeLayer = byTrack.get(track.id) ?? null;
+      const nearClip = activeLayer?.clip ?? overlayTrackNearFrame(track, playhead, margin);
+      if (nearClip) list.push({ trackId: track.id, trackIndex, nearClip, activeLayer });
+    });
+    return list;
+  }, [hasAnyOverlays, overlayTracks, activeOverlays, playhead, fps]);
+
+  // W1: closed switch or zero active overlays uses exact `main` (`7165e399`) settle condition.
+  const settledOnFrame =
+    !api.tracksOpen || activeOverlays.length === 0
+      ? rate === 0 && !!shown && shown.src === src && shown.sourceFrame === sourceFrame
+      : rate === 0 &&
+        (!src || (!!shown && shown.src === src && shown.sourceFrame === sourceFrame)) &&
+        activeOverlays.every((layer) => overlaySettled[layer.trackId] === overlaySettleKey(layer.clip.srcUrl, layer.seekSec));
+  const anyOverlaySoundBlocked =
+    api.tracksOpen && rate > 0 && activeOverlays.some((layer) => Boolean(overlaySoundBlocked[layer.trackId]));
   // A real film is framed exactly as the current editor's file frames it (and v2's export does): cover,
   // or fit inside on the exporter's background when the shapes are far apart (review round 1, item 5).
   const dims = COMPOSE_DIMENSIONS[sequence.aspect];
@@ -274,6 +581,33 @@ export function Preview({ api }: { api: EditorApi }) {
             data-editor-framing={framed ? framed.fit : undefined}
             data-editor-grade={gradeOnPicture ? gradeFilter : undefined}
           />
+          {mountedOverlayTracks.map((entry) => (
+            <OverlayVideoLayer
+              key={entry.trackId}
+              trackId={entry.trackId}
+              trackIndex={entry.trackIndex}
+              nearClip={entry.nearClip}
+              activeLayer={entry.activeLayer}
+              fps={fps}
+              rate={rate}
+              unmuteHandlersRef={overlayUnmuteHandlersRef}
+              onSettled={handleOverlaySettled}
+              onSoundBlocked={handleOverlaySoundBlocked}
+            />
+          ))}
+          {anyOverlaySoundBlocked && (
+            <button
+              type="button"
+              className={styles.overlayUnmuteBtn}
+              onClick={() => {
+                setOverlaySoundBlocked({});
+                overlayUnmuteHandlersRef.current.forEach((unmute) => unmute());
+              }}
+              data-editor-overlay-unmute
+            >
+              {api.tracksCopy?.preview.unmuteOverlay ?? '소리 켜기'}
+            </button>
+          )}
           {gradeRegion && (
             <div
               className={styles.gradeRegion}
