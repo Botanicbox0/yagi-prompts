@@ -1,3 +1,4 @@
+import { SANDBOXED_CLIENT_ORG_IDS } from '@/lib/brands/features';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { soundMusicCreateInput } from '@/components/brand-studio/sound/sound-studio';
 import type { ComposerInput } from '@/components/brand-studio/sound/composer';
@@ -26,7 +27,8 @@ import type { SqlRunner } from '@/lib/db/sql-runner';
 import { requestId, studioDeps, studioFixture, viewerOf } from '../server/helpers';
 
 const OTHER_ORG = '00000000-0000-4000-8000-0000000000b1';
-const MORPHIC_HARDCODED_ID = 'd425c3b1-4066-4970-8a3b-93c52b3eef70';
+/** A sandboxed client organization id, taken from the source list (never written out here). */
+const SANDBOXED_ORG_ID = [...SANDBOXED_CLIENT_ORG_IDS][0]!;
 const BARE_TAG_LINE = new RegExp(`^\\[(${MINIMAX_BARE_TAGS.join('|')})\\]$`);
 
 const GOOD_SUNO_STYLE =
@@ -336,8 +338,8 @@ describe('1. Gate: unlisted vs listed vs without-v2-fields vs sandboxed/blocked 
   });
 
   it('keeps sandboxed and generation-blocked organizations at 404 even when listed in BRAND_SOUND_COMPOSER_V2_ORGS', async () => {
-    const morphicById = await studioFixture({ orgId: MORPHIC_HARDCODED_ID, orgName: 'Neutral Client Name' });
-    const morphicByName = await studioFixture({ orgName: 'Morphic Korea' });
+    const sandboxedById = await studioFixture({ orgId: SANDBOXED_ORG_ID, orgName: 'Neutral Client Name' });
+    const sandboxedByName = await studioFixture({ orgName: 'Morphic Korea' });
     const blockedMedia = await studioFixture();
     const blockedSound = await studioFixture();
     try {
@@ -352,10 +354,10 @@ describe('1. Gate: unlisted vs listed vs without-v2-fields vs sandboxed/blocked 
 
       vi.stubEnv(
         'BRAND_SOUND_COMPOSER_V2_ORGS',
-        [morphicById.orgId, morphicByName.orgId, blockedMedia.orgId, blockedSound.orgId].join(','),
+        [sandboxedById.orgId, sandboxedByName.orgId, blockedMedia.orgId, blockedSound.orgId].join(','),
       );
 
-      for (const fx of [morphicById, morphicByName, blockedMedia, blockedSound]) {
+      for (const fx of [sandboxedById, sandboxedByName, blockedMedia, blockedSound]) {
         const deps = studioDeps(fx.sql, {
           env: studioEnv({ BRAND_STUDIO_PROVIDER: 'fake', BRAND_STUDIO_DEFAULT_LANE: 'sunra_api', BRAND_SOUND_STUDIO: 'on' }),
         });
@@ -376,8 +378,8 @@ describe('1. Gate: unlisted vs listed vs without-v2-fields vs sandboxed/blocked 
         if (!viaDirect.ok) expect(studioStatus(viaDirect.code)).toBe(404);
       }
     } finally {
-      await morphicById.db.close();
-      await morphicByName.db.close();
+      await sandboxedById.db.close();
+      await sandboxedByName.db.close();
       await blockedMedia.db.close();
       await blockedSound.db.close();
     }

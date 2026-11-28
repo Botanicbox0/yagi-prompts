@@ -1,3 +1,4 @@
+import { SANDBOXED_CLIENT_ORG_IDS } from '@/lib/brands/features';
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, unlinkSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -65,7 +66,8 @@ import {
 import { requestId, studioDeps, studioFixture, viewerOf } from '../server/helpers';
 
 const ROOT = process.cwd();
-const MORPHIC_HARDCODED_ID = 'd425c3b1-4066-4970-8a3b-93c52b3eef70';
+/** A sandboxed client organization id, taken from the source list (never written out here). */
+const SANDBOXED_ORG_ID = [...SANDBOXED_CLIENT_ORG_IDS][0]!;
 
 /**
  * Exact pre-B3 `SUNO_PROFILE` string from `lib/brand-studio/enhancer/profiles/suno.ts` (`2026-11-21.2`),
@@ -1230,9 +1232,9 @@ describe('4. v2 wiring in music.design, real per-model profile ids in prepareMus
 
     const listedFx = await studioFixture({ capKrw: 5_000_000 });
     const unlistedFx = await studioFixture({ capKrw: 5_000_000 });
-    const morphicFx = await studioFixture({ orgId: MORPHIC_HARDCODED_ID, orgName: 'Neutral Name' });
+    const sandboxedFx = await studioFixture({ orgId: SANDBOXED_ORG_ID, orgName: 'Neutral Name' });
     try {
-      vi.stubEnv('BRAND_SOUND_COMPOSER_V2_ORGS', `${listedFx.orgId},${morphicFx.orgId}`);
+      vi.stubEnv('BRAND_SOUND_COMPOSER_V2_ORGS', `${listedFx.orgId},${sandboxedFx.orgId}`);
 
       const provider = wrapRecordingProvider(createFakeStudioProvider({ pollsBeforeDone: 1 }));
       const stub = geminiStub(
@@ -1264,7 +1266,7 @@ describe('4. v2 wiring in music.design, real per-model profile ids in prepareMus
         intelDeps: { fetch: stub.fetchStub, env: { GEMINI_API_KEY: 'k' } },
       });
       const unlistedDeps = studioDeps(unlistedFx.sql, { env: liveEnv, provider });
-      const morphicDeps = studioDeps(morphicFx.sql, { env: liveEnv, provider });
+      const sandboxedDeps = studioDeps(sandboxedFx.sql, { env: liveEnv, provider });
 
       expect(
         await runStudioOperation(unlistedDeps, viewerOf(unlistedFx.ids.owner, 'ko'), 'music.design', {
@@ -1276,8 +1278,8 @@ describe('4. v2 wiring in music.design, real per-model profile ids in prepareMus
       ).toEqual({ ok: false, code: 'invalid' });
 
       expect(
-        await runStudioOperation(morphicDeps, viewerOf(morphicFx.ids.owner, 'ko'), 'music.design', {
-          organizationId: morphicFx.orgId,
+        await runStudioOperation(sandboxedDeps, viewerOf(sandboxedFx.ids.owner, 'ko'), 'music.design', {
+          organizationId: sandboxedFx.orgId,
           model: 'minimax-music-3',
           prompt: '차분한 피아노',
           vocal: false,
@@ -1444,7 +1446,7 @@ describe('4. v2 wiring in music.design, real per-model profile ids in prepareMus
     } finally {
       await listedFx.db.close();
       await unlistedFx.db.close();
-      await morphicFx.db.close();
+      await sandboxedFx.db.close();
     }
   });
 });
