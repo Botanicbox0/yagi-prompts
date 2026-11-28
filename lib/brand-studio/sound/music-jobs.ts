@@ -472,30 +472,7 @@ function isV2MusicJobRequest(raw: unknown): boolean {
   return typeof orgId === 'string' && brandSoundComposerV2For(orgId, process.env) && hasV2MusicFields(raw);
 }
 
-export interface MusicJobLike {
-  kind?: StudioJobKind;
-  model: string;
-  params?: Pick<StudioJobParams, 'music'> | null;
-  work?: Pick<StudioJobWork, 'lyricsDraftFailed' | 'minimaxDraft'> | null;
-}
-
-/**
- * Single shared predicate for whether a stored `JobRow` or `StudioRequestInput` belongs to Sound Studio composer v2.
- * Used across `prepareMusic`, `requestInputOf`, `musicRequestOf`, and `jobView`.
- */
-export function isV2MusicJob(job: MusicJobLike): boolean {
-  if (job.kind !== undefined && job.kind !== 'music') return false;
-  const m = job.params?.music;
-  return (
-    job.model !== 'suno-v6' ||
-    m?.composerMode !== undefined ||
-    m?.titleSource !== undefined ||
-    m?.durationSeconds !== undefined ||
-    m?.durationSource !== undefined ||
-    Boolean(job.work?.lyricsDraftFailed) ||
-    Boolean(job.work?.minimaxDraft)
-  );
-}
+export { isV2MusicJob, type MusicJobLike } from './v2-job';
 
 /**
  * `job.create` (`kind: 'music'`) for organizations listed in `BRAND_SOUND_COMPOSER_V2_ORGS`, used ONLY when the

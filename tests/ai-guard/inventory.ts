@@ -54,7 +54,10 @@ export const INVENTORY: readonly InventoryEntry[] = [
   { file: 'lib/brand-studio/edit-assist/service.ts', kind: 'gemini-json', count: 1, audit: '#12', status: 'not-yet', by: 'S2' },
   { file: 'lib/brand-studio/compose/service.ts', kind: 'gemini-json', count: 1, audit: '#13', status: 'not-yet', by: 'S1' },
   { file: 'lib/brand-studio/continuity/planner.ts', kind: 'gemini-json', count: 1, audit: '#14', status: 'not-yet', by: 'S2 (proposed)' },
-  { file: 'lib/brand-studio/sound/architect.ts', kind: 'gemini-json', count: 1, audit: '#15', status: 'not-yet', by: 'S2' },
+  // count 2 since composer v2 (2026-11-28): the per-model design call of `designMusicForModel` sits next to today's `designMusic`.
+  { file: 'lib/brand-studio/sound/architect.ts', kind: 'gemini-json', count: 2, audit: '#15 (+1 composer v2, after the audit)', status: 'not-yet', by: 'S2' },
+  // New with composer v2 (2026-11-28), not in AUDIT.md: the lyric draft for a MiniMax vocal run with blank lyrics.
+  { file: 'lib/brand-studio/sound/prepare-music.ts', kind: 'gemini-json', count: 1, audit: 'after the audit (composer v2)', status: 'not-yet', by: 'S2' },
   { file: 'lib/brand-studio/sound/lyrics-draft.ts', kind: 'gemini-json', count: 1, audit: '#16', status: 'not-yet', by: 'S2' },
   { file: 'lib/brand-studio/sound/warnings.ts', kind: 'gemini-json', count: 1, audit: '#17 (no leak path)', status: 'not-yet', by: 'S1 (request side only)' },
   { file: 'lib/brand-studio/workflows/ai-builder.ts', kind: 'gemini-json', count: 1, audit: '#18', status: 'not-yet', by: 'S2' },

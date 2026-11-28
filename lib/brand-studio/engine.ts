@@ -21,7 +21,7 @@ import { claimJobs, releaseJob, saveJob, tokenOf, failPendingOutputs } from './j
 import { closeLane, failoverLane, heartbeatFresh, lanesUp, loadLaneClosures, loadLaneHeartbeats, routeJob } from './lanes';
 import { studioModel, type StudioLane, type StudioModel } from './models';
 import { MUSIC_WAIT_CEILING_MS, musicEngineOfModel } from './sound/engine';
-import { isV2MusicJob } from './sound/music-jobs';
+import { isV2MusicJob } from './sound/v2-job';
 import { minimaxLyricsFailureReason } from './sound/prepare-music';
 import { PrepareFailure, prepareJob, providerUrl, sendPrompt } from './prepare';
 import { buildStudioRequest, StudioRequestError, type StudioRequestInput } from './provider/requests';

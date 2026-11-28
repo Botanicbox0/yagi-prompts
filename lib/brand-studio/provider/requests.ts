@@ -19,7 +19,7 @@ import type { StudioProviderRequest } from './types';
 import { musicEngineOfModel, type MusicEngine } from '../sound/engine';
 import { markMinimaxLyrics, resolveMinimaxDurationSeconds } from '../sound/architect';
 import { markLyrics, ownLyrics } from '../sound/lyrics';
-import { isV2MusicJob } from '../sound/music-jobs';
+import { isV2MusicJob } from '../sound/v2-job';
 
 export interface StudioRequestInput {
   kind: StudioJobKind;

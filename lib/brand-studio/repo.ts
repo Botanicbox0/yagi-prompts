@@ -16,7 +16,7 @@ import type {
   StudioReference,
 } from './contracts';
 import { finalPrice } from './final-price';
-import { isV2MusicJob } from './sound/music-jobs';
+import { isV2MusicJob } from './sound/v2-job';
 import { cleanPeaks } from './sound/waveform';
 import type { StudioMediaStore } from './media-store';
 import { studioModel } from './models';

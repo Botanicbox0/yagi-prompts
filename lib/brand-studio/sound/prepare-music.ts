@@ -49,7 +49,7 @@ import {
   type WrittenLyrics,
 } from './lyrics-draft';
 import { lyricsGeminiConfig } from './lyrics-model';
-import { isV2MusicJob } from './music-jobs';
+import { isV2MusicJob } from './v2-job';
 import { namedArtist } from './names';
 import { FAKE_EXISTING, judgeExistingLyrics, logMusicBlock, type LyricsVerdict } from './warnings';
 

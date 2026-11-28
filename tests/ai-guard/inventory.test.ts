@@ -74,9 +74,10 @@ describe('every model call in product code is adopted or listed', () => {
     }
   });
 
-  it('counts 36 audit sites plus the generator the grep found and video.understand', () => {
+  it('counts 36 audit sites plus the generator the grep found, video.understand and the two sound composer v2 calls', () => {
     const sites = INVENTORY.filter((e) => e.status !== 'wrapper').reduce((n, e) => n + e.count, 0);
-    // 36 in AUDIT.md §1.2 (#36 is two lines: generations and edits), lib/images/seedream.ts, and lib/brand-studio/video/understand.ts.
-    expect(sites).toBe(36 + 1 + 1 + 1);
+    // 36 in AUDIT.md §1.2 (#36 is two lines: generations and edits), lib/images/seedream.ts, lib/brand-studio/video/understand.ts,
+    // and the two calls the sound composer v2 added (the per-model design in sound/architect.ts, the MiniMax lyric draft in sound/prepare-music.ts).
+    expect(sites).toBe(36 + 1 + 1 + 1 + 2);
   });
 });
