@@ -80,7 +80,7 @@ export function bottomTabItems({
           {
             id: 'maker' as const,
             href: signedIn ? MAKER_HREF : chooseProviderHref(MAKER_HREF, locale),
-            label: makerLabel ?? (locale === 'ko' ? '스튜디오' : 'Maker'),
+            label: makerLabel ?? labels.maker,
             current: under(path, MAKER_HREF),
           },
         ]
@@ -185,7 +185,7 @@ function usePageHidesTabs(active: boolean): boolean {
   return hidden;
 }
 
-export function BottomTabs({ locale, labels }: { locale: Locale; labels: Labels }) {
+export function BottomTabs({ locale, labels, includeMaker = false }: { locale: Locale; labels: Labels; includeMaker?: boolean }) {
   const standalone = useStandaloneDisplay();
   const pathname = usePathname();
   const session = useCreatorSession(standalone === true);
@@ -199,5 +199,16 @@ export function BottomTabs({ locale, labels }: { locale: Locale; labels: Labels 
   }, [visible]);
 
   if (!visible) return null;
-  return <BottomTabsBar items={bottomTabItems({ locale, pathname, signedIn: session.signedIn, labels })} label={labels.nav} />;
+  return (
+    <BottomTabsBar
+      items={bottomTabItems({
+        locale,
+        pathname,
+        signedIn: session.signedIn,
+        labels,
+        includeMaker: includeMaker || (session.signedIn && Boolean(session.maker?.active)),
+      })}
+      label={labels.nav}
+    />
+  );
 }

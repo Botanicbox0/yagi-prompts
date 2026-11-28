@@ -53,6 +53,8 @@ export interface SitemapInput {
   makers?: PublicMaker[];
   /** Published maker blog posts (Batch 3, only when `TWINGS_MAKER_BLOG` is on). */
   makerPosts?: SitemapPostEntry[];
+  /** Include `/blog` and `/makers` hub indexes (only when `TWINGS_MAKER_BLOG` is on). */
+  includeBlogHub?: boolean;
   /** Real editorial dates only, keyed by locale-independent path. Omit when unknown. */
   pageModifiedAt?: Partial<Record<string, string>>;
 }
@@ -69,7 +71,7 @@ function absoluteAlternates(origin: string, rest: string): Record<string, string
 }
 
 export function buildSitemap(input: SitemapInput): MetadataRoute.Sitemap {
-  const { origin, cards, templates = [], pageModifiedAt = {}, includeCreatorProgram = false, makers = [], makerPosts = [] } = input;
+  const { origin, cards, templates = [], pageModifiedAt = {}, includeCreatorProgram = false, makers = [], makerPosts = [], includeBlogHub = false } = input;
   const entries: MetadataRoute.Sitemap = [];
 
   const marketing: Array<{
@@ -92,6 +94,10 @@ export function buildSitemap(input: SitemapInput): MetadataRoute.Sitemap {
     // docs/RUNBOOK-deletion.md — the Google Play listing's account deletion URL: public on purpose.
     { rest: ACCOUNT_DELETION_REST, priority: 0.2, changeFrequency: 'yearly' },
     ...(includeCreatorProgram ? [{ rest: '/creators', priority: 0.6, changeFrequency: 'weekly' as const }] : []),
+    ...(includeBlogHub ? [
+      { rest: '/blog', priority: 0.7, changeFrequency: 'daily' as const },
+      { rest: '/makers', priority: 0.6, changeFrequency: 'weekly' as const },
+    ] : []),
     // The legal surface. Low priority — nobody searches for it — but LISTED, because a payment
     // provider's merchant review and 전자상거래법 §21 both expect these to be publicly reachable,
     // and a crawler that has them indexed is the cheapest evidence that they are.

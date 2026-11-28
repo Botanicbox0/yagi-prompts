@@ -7,13 +7,33 @@
  *  - Exports a real trimmed/cropped MP4 via Canvas + MediaRecorder when supported, or safely falls
  *    back to the original clip when unchanged or when browser MP4 encoding is unavailable.
  */
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import type { StudioAssetView } from "@/lib/brand-studio/contracts";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
+import type { FilmShot, StudioAssetView } from "@/lib/brand-studio/contracts";
 import type { StudioVideoCopy } from "@/messages/studio-video";
+import { FrameThumbs, THUMB_HEIGHT } from "../editor-v2/frame-thumbs";
 import { StudioIcon } from "../icons";
 import { useModal } from "../modal";
 import { corsMediaUrl } from "@/lib/brand-studio/cors-media-url";
 import { fillText } from "./reverse-model";
+import {
+  TRIM_FRAME_STEP_SECONDS,
+  TRIM_STRIP_COUNT,
+  TRIM_TEN_FRAMES_SECONDS,
+  applyPlayheadBound,
+  fixedSceneStep,
+  sceneBoundaries,
+  sceneJumpTarget,
+  stripTimestamps,
+} from "./trim-nav-model";
 import { FULL_CROP, clampCropRect, clampTrimRange, isFullFrameAndRange, type CropRect } from "./workspace-model";
 import w from "./video-workspace.module.css";
 
@@ -22,6 +42,10 @@ export interface ClipTrimModalProps {
   copy: StudioVideoCopy["workspace"]["trimModal"];
   minSeconds?: number;
   maxSeconds?: number;
+  /** Optional already-cached film shots (`studio.films[asset.id].sheet.shots`) for scene markers & jumps; never triggers a reading. */
+  shots?: readonly Pick<FilmShot, "start" | "end">[];
+  /** Optional `FrameThumbs` factory override for deterministic tests. */
+  createThumbs?(): FrameThumbs;
   onSkip(asset: StudioAssetView): void;
   onApply(result: { asset: StudioAssetView; trimmed: boolean; fallbackNotice?: string | null }): void;
   onUploadTrimmed(file: File): Promise<StudioAssetView | null>;
@@ -166,6 +190,8 @@ export function ClipTrimModal({
   copy,
   minSeconds = 4,
   maxSeconds = 30,
+  shots,
+  createThumbs,
   onSkip,
   onApply,
   onUploadTrimmed,
@@ -176,98 +202,211 @@ export function ClipTrimModal({
   const videoRef = useRef<HTMLVideoElement>(null);
   const stageBoxRef = useRef<HTMLDivElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
+  const thumbsRef = useRef<FrameThumbs | null>(null);
+  const hoverTimerRef = useRef<number | null>(null);
+  const startedInsideRangeRef = useRef(true);
 
   const [measuredTotal, setMeasuredTotal] = useState<number>(asset.seconds && asset.seconds > 0 ? asset.seconds : 8);
+  const [stripDuration, setStripDuration] = useState<number | null>(asset.seconds && asset.seconds > 0 ? asset.seconds : null);
   const total = Math.max(0.5, measuredTotal);
   const [range, setRange] = useState(() => clampTrimRange(0, Math.min(total, maxSeconds), total, minSeconds, maxSeconds));
+  const [playhead, setPlayhead] = useState(0);
   const [crop, setCrop] = useState<CropRect>(FULL_CROP);
   const [playing, setPlaying] = useState(false);
   const [processing, setProcessing] = useState(false);
-  const [frames, setFrames] = useState<string[]>([]);
+  const [clampNote, setClampNote] = useState<string | null>(null);
+  const [, setThumbTick] = useState(0);
+  const [hoverInfo, setHoverInfo] = useState<{ sec: number; pct: number; frameKey: number } | null>(null);
+
+  const mediaSrc = useMemo(() => corsMediaUrl(asset.url), [asset.url]);
+  const stripTimes = useMemo(
+    () => (stripDuration !== null ? stripTimestamps(stripDuration, TRIM_STRIP_COUNT) : []),
+    [stripDuration],
+  );
+  const boundaries = useMemo(() => sceneBoundaries(shots, total), [shots, total]);
+  const hasShots = boundaries.length > 0;
+  const fallbackStep = useMemo(() => fixedSceneStep(total), [total]);
 
   useEffect(() => {
-    const base = asset.seconds && asset.seconds > 0 ? asset.seconds : 8;
+    const known = asset.seconds && asset.seconds > 0 ? asset.seconds : null;
+    const base = known ?? 8;
     setMeasuredTotal(base);
+    setStripDuration(known);
     setRange(clampTrimRange(0, Math.min(base, maxSeconds), base, minSeconds, maxSeconds));
+    setPlayhead(0);
     setCrop(FULL_CROP);
+    setClampNote(null);
+    setHoverInfo(null);
   }, [asset.id, asset.seconds, minSeconds, maxSeconds]);
 
-  // Sample up to 8 filmstrip thumbnails in the browser when possible (graceful fallback to tick bars).
+  // Decode 16 browser filmstrip frames ONCE (keyed on stored duration; re-decodes only if metadata differs by >1 frame).
   useEffect(() => {
-    let cancelled = false;
-    setFrames([]);
-    if (typeof document === "undefined") return;
-    const probe = document.createElement("video");
-    probe.crossOrigin = "anonymous";
-    probe.muted = true;
-    probe.playsInline = true;
-    probe.preload = "metadata";
-    probe.src = corsMediaUrl(asset.url);
-
-    const thumbs: string[] = [];
-    const count = 8;
-    probe.onloadedmetadata = async () => {
-      if (cancelled) return;
-      const dur = Number.isFinite(probe.duration) && probe.duration > 0 ? probe.duration : total;
-      if (Number.isFinite(probe.duration) && probe.duration > 0) {
-        setMeasuredTotal(probe.duration);
-        setRange((cur) => clampTrimRange(cur.start, Math.min(cur.end, probe.duration), probe.duration, minSeconds, maxSeconds));
+    if (typeof document === "undefined" || stripDuration === null) return;
+    const thumbs = createThumbs ? createThumbs() : new FrameThumbs({ crossOrigin: "anonymous" });
+    thumbsRef.current = thumbs;
+    const unsub = thumbs.subscribe(() => setThumbTick((n) => n + 1));
+    thumbs.want(
+      stripTimes.map((seekSec, idx) => ({
+        src: mediaSrc,
+        sourceFrame: idx,
+        seekSec,
+        height: THUMB_HEIGHT,
+      })),
+    );
+    return () => {
+      if (hoverTimerRef.current !== null) {
+        window.clearTimeout(hoverTimerRef.current);
+        hoverTimerRef.current = null;
       }
-      const canvas = document.createElement("canvas");
-      canvas.width = 96;
-      canvas.height = 54;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-      for (let i = 0; i < count; i += 1) {
-        if (cancelled) return;
-        const target = Math.min(Math.max(0.05, ((i + 0.5) / count) * dur), Math.max(0.05, dur - 0.05));
-        const ok = await new Promise<boolean>((res) => {
-          const timer = window.setTimeout(() => res(false), 1200);
-          probe.onseeked = () => {
-            window.clearTimeout(timer);
-            res(true);
-          };
-          probe.onerror = () => {
-            window.clearTimeout(timer);
-            res(false);
-          };
-          try {
-            probe.currentTime = target;
-          } catch {
-            window.clearTimeout(timer);
-            res(false);
-          }
-        });
-        if (!ok || cancelled) break;
+      unsub();
+      thumbs.dispose();
+      if (thumbsRef.current === thumbs) thumbsRef.current = null;
+    };
+  }, [createThumbs, mediaSrc, stripDuration, stripTimes]);
+
+  const seekTo = useCallback(
+    (targetSec: number) => {
+      const clamped = Math.max(0, Math.min(total, Number.isFinite(targetSec) ? targetSec : 0));
+      startedInsideRangeRef.current = clamped >= range.start - 0.05 && clamped < range.end - 0.05;
+      setPlayhead(clamped);
+      if (videoRef.current) {
         try {
-          ctx.drawImage(probe, 0, 0, canvas.width, canvas.height);
-          thumbs.push(canvas.toDataURL("image/jpeg", 0.55));
+          videoRef.current.currentTime = clamped;
         } catch {
-          break;
+          /* ignore seek error on unloaded media */
         }
       }
-      if (!cancelled && thumbs.length > 0) setFrames(thumbs);
-      probe.removeAttribute("src");
-      probe.load();
-    };
-    return () => {
-      cancelled = true;
-      probe.removeAttribute("src");
-      probe.load();
-    };
-  }, [asset.url, minSeconds, maxSeconds, total]);
+    },
+    [range.end, range.start, total],
+  );
 
   const togglePlay = useCallback(() => {
     const el = videoRef.current;
     if (!el) return;
     if (el.paused) {
-      if (el.currentTime < range.start || el.currentTime >= range.end) el.currentTime = range.start;
+      const cur = Number.isFinite(el.currentTime) ? el.currentTime : playhead;
+      // Loop inside `[range.start, range.end]` only when playback starts inside the range;
+      // otherwise let the customer play/inspect anywhere in the full clip before placing handles.
+      const inside = cur >= range.start - 0.05 && cur < range.end - 0.05;
+      startedInsideRangeRef.current = inside;
+      if (cur >= total - 0.05) {
+        el.currentTime = 0;
+        setPlayhead(0);
+      }
       void el.play().then(() => setPlaying(true)).catch(() => setPlaying(false));
     } else {
       el.pause();
       setPlaying(false);
     }
-  }, [range.end, range.start]);
+  }, [playhead, range.end, range.start, total]);
+
+  const jumpScene = useCallback(
+    (dir: "prev" | "next") => {
+      const cur = videoRef.current && Number.isFinite(videoRef.current.currentTime) ? videoRef.current.currentTime : playhead;
+      const { target } = sceneJumpTarget(cur, shots, total, dir);
+      seekTo(target);
+    },
+    [playhead, seekTo, shots, total],
+  );
+
+  const setBoundAtPlayhead = useCallback(
+    (side: "start" | "end") => {
+      const cur = videoRef.current && Number.isFinite(videoRef.current.currentTime) ? videoRef.current.currentTime : playhead;
+      setRange((prev) => {
+        const { range: next, movedOther } = applyPlayheadBound(prev, cur, side, total, minSeconds, maxSeconds);
+        if (movedOther === "start") {
+          setClampNote(fillText(copy.clampedOtherStart, { start: next.start.toFixed(1), min: minSeconds, max: maxSeconds }));
+        } else if (movedOther === "end") {
+          setClampNote(fillText(copy.clampedOtherEnd, { end: next.end.toFixed(1), min: minSeconds, max: maxSeconds }));
+        } else {
+          setClampNote(null);
+        }
+        return next;
+      });
+    },
+    [copy.clampedOtherEnd, copy.clampedOtherStart, maxSeconds, minSeconds, playhead, total],
+  );
+
+  const onDialogKeyDown = useCallback(
+    (event: ReactKeyboardEvent<HTMLDialogElement>) => {
+      if (event.nativeEvent?.isComposing) return;
+      const target = event.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target?.isContentEditable) return;
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
+
+      if (event.key === " " || event.code === "Space") {
+        if (tag === "BUTTON") return;
+        event.preventDefault();
+        togglePlay();
+        return;
+      }
+      if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+        event.preventDefault();
+        const delta = (event.shiftKey ? TRIM_TEN_FRAMES_SECONDS : TRIM_FRAME_STEP_SECONDS) * (event.key === "ArrowLeft" ? -1 : 1);
+        const cur = videoRef.current && Number.isFinite(videoRef.current.currentTime) ? videoRef.current.currentTime : playhead;
+        seekTo(cur + delta);
+        return;
+      }
+      if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+        event.preventDefault();
+        jumpScene(event.key === "ArrowUp" ? "prev" : "next");
+        return;
+      }
+      if (event.code === "KeyI" || event.key === "i" || event.key === "I") {
+        event.preventDefault();
+        setBoundAtPlayhead("start");
+        return;
+      }
+      if (event.code === "KeyO" || event.key === "o" || event.key === "O") {
+        event.preventDefault();
+        setBoundAtPlayhead("end");
+      }
+    },
+    [jumpScene, playhead, seekTo, setBoundAtPlayhead, togglePlay],
+  );
+
+  const onStripPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement | null;
+    if (target?.closest?.("[data-side]")) return;
+    const rect = trackRef.current?.getBoundingClientRect();
+    if (!rect || rect.width <= 0) return;
+    event.preventDefault();
+    const applyFromClientX = (clientX: number) => {
+      const frac = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+      seekTo(frac * total);
+    };
+    applyFromClientX(event.clientX);
+    const move = (ev: PointerEvent) => applyFromClientX(ev.clientX);
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
+
+  const onStripPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const rect = trackRef.current?.getBoundingClientRect();
+    if (!rect || rect.width <= 0) return;
+    const frac = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+    const sec = frac * total;
+    const frameKey = 1000 + Math.round(sec * 2);
+    setHoverInfo({ sec, pct: frac * 100, frameKey });
+    if (hoverTimerRef.current !== null) window.clearTimeout(hoverTimerRef.current);
+    hoverTimerRef.current = window.setTimeout(() => {
+      hoverTimerRef.current = null;
+      thumbsRef.current?.want([{ src: mediaSrc, sourceFrame: frameKey, seekSec: Math.min(Math.max(0.05, sec), Math.max(0.05, total - 0.05)), height: THUMB_HEIGHT }]);
+    }, 80);
+  };
+
+  const onStripPointerLeave = () => {
+    if (hoverTimerRef.current !== null) {
+      window.clearTimeout(hoverTimerRef.current);
+      hoverTimerRef.current = null;
+    }
+    setHoverInfo(null);
+  };
 
   const onCropPointerDown = (dir: HandleDir) => (event: ReactPointerEvent<HTMLElement>) => {
     event.preventDefault();
@@ -325,7 +464,10 @@ export function ClipTrimModal({
         const next = which === "start"
           ? clampTrimRange(sec, cur.end, total, minSeconds, maxSeconds, "start")
           : clampTrimRange(cur.start, sec, total, minSeconds, maxSeconds, "end");
-        if (videoRef.current) videoRef.current.currentTime = which === "start" ? next.start : Math.max(next.start, next.end - 0.05);
+        const nextHead = which === "start" ? next.start : Math.max(next.start, next.end - 0.05);
+        setPlayhead(nextHead);
+        setClampNote(null);
+        if (videoRef.current) videoRef.current.currentTime = nextHead;
         return next;
       });
     };
@@ -339,6 +481,14 @@ export function ClipTrimModal({
 
   const leftPct = Math.max(0, Math.min(100, (range.start / total) * 100));
   const widthPct = Math.max(4, Math.min(100 - leftPct, ((range.end - range.start) / total) * 100));
+  const playheadPct = Math.max(0, Math.min(100, (playhead / total) * 100));
+  const decodedStrip = stripTimes.map((_, idx) => thumbsRef.current?.get(mediaSrc, idx, THUMB_HEIGHT));
+  const hasAnyThumb = decodedStrip.some(Boolean);
+  const hoverThumbUrl = hoverInfo ? thumbsRef.current?.get(mediaSrc, hoverInfo.frameKey, THUMB_HEIGHT) : undefined;
+  const prevLabel = hasShots ? copy.prevScene : fillText(copy.stepBack, { seconds: fallbackStep });
+  const nextLabel = hasShots ? copy.nextScene : fillText(copy.stepForward, { seconds: fallbackStep });
+  const prevTitle = hasShots ? copy.prevSceneTitle : fillText(copy.stepBackTitle, { seconds: fallbackStep });
+  const nextTitle = hasShots ? copy.nextSceneTitle : fillText(copy.stepForwardTitle, { seconds: fallbackStep });
   const isCropped = !(crop.x <= 0.01 && crop.y <= 0.01 && crop.w >= 0.98 && crop.h >= 0.98);
   const canSkip = total >= minSeconds && total <= maxSeconds;
   const validSelection = range.duration >= minSeconds && range.duration <= maxSeconds;
@@ -378,6 +528,7 @@ export function ClipTrimModal({
       className={w.trimDialog}
       aria-labelledby={`${id}-title`}
       data-video-trim-modal
+      onKeyDown={onDialogKeyDown}
       onCancel={(event) => {
         event.preventDefault();
         if (!processing) onClose();
@@ -415,13 +566,20 @@ export function ClipTrimModal({
               const dur = ev.currentTarget.duration;
               if (Number.isFinite(dur) && dur > 0) {
                 setMeasuredTotal(dur);
+                setStripDuration((prev) =>
+                  prev === null || Math.abs(dur - prev) > TRIM_FRAME_STEP_SECONDS ? dur : prev,
+                );
                 setRange((cur) => clampTrimRange(cur.start, Math.min(cur.end, dur), dur, minSeconds, maxSeconds));
               }
             }}
             onTimeUpdate={(ev) => {
-              if (ev.currentTarget.currentTime >= range.end) {
+              const cur = ev.currentTarget.currentTime;
+              if (playing && startedInsideRangeRef.current && cur >= range.end) {
                 ev.currentTarget.currentTime = range.start;
+                setPlayhead(range.start);
+                return;
               }
+              setPlayhead(cur);
             }}
             onPause={() => setPlaying(false)}
             onPlay={() => setPlaying(true)}
@@ -462,11 +620,59 @@ export function ClipTrimModal({
             className="bs-btn"
             data-variant="soft"
             data-size="sm"
+            title={copy.playTitle}
             onClick={togglePlay}
             data-trim-play
           >
             {playing ? copy.pause : copy.play}
           </button>
+          <button
+            type="button"
+            className="bs-btn"
+            data-variant="ghost"
+            data-size="sm"
+            title={prevTitle}
+            onClick={() => jumpScene("prev")}
+            data-trim-prev-scene
+          >
+            {prevLabel}
+          </button>
+          <button
+            type="button"
+            className="bs-btn"
+            data-variant="ghost"
+            data-size="sm"
+            title={nextTitle}
+            onClick={() => jumpScene("next")}
+            data-trim-next-scene
+          >
+            {nextLabel}
+          </button>
+          <button
+            type="button"
+            className="bs-btn"
+            data-variant="soft"
+            data-size="sm"
+            title={copy.setStartTitle}
+            onClick={() => setBoundAtPlayhead("start")}
+            data-trim-set-start
+          >
+            {copy.setStart}
+          </button>
+          <button
+            type="button"
+            className="bs-btn"
+            data-variant="soft"
+            data-size="sm"
+            title={copy.setEndTitle}
+            onClick={() => setBoundAtPlayhead("end")}
+            data-trim-set-end
+          >
+            {copy.setEnd}
+          </button>
+          <span className={`${w.trimPlayheadBadge} bs-num`} data-trim-playhead-readout>
+            {fillText(copy.playhead, { time: playhead.toFixed(1) })}
+          </span>
           <span className={`${w.trimRangeBadge} bs-num`} data-trim-range-readout>
             {fillText(copy.rangeValue, {
               start: range.start.toFixed(1),
@@ -489,38 +695,85 @@ export function ClipTrimModal({
               </button>
             )}
           </span>
+          {clampNote && (
+            <span className={w.trimClampNote} role="status" data-trim-clamp-note>
+              {clampNote}
+            </span>
+          )}
         </div>
 
-        <div ref={trackRef} className={w.filmstripWrap} data-trim-filmstrip>
-          <div className={w.filmstripCells} aria-hidden="true">
-            {frames.length > 0
-              ? frames.map((src, idx) => <img key={idx} src={src} alt="" />)
-              : Array.from({ length: 12 }, (_, idx) => <span key={idx} className={w.filmstripTick} />)}
-          </div>
-          <div className={w.filmstripShade} style={{ left: 0, width: `${leftPct}%` }} aria-hidden="true" />
+        <div className={w.filmstripOuter}>
+          {hoverInfo && (
+            <div
+              className={w.trimHoverPreview}
+              style={{ left: `${Math.max(10, Math.min(90, hoverInfo.pct))}%` }}
+              aria-hidden="true"
+              data-trim-hover-preview
+            >
+              {hoverThumbUrl && <img src={hoverThumbUrl} alt="" />}
+              <span className="bs-num">{hoverInfo.sec.toFixed(1)}s</span>
+            </div>
+          )}
           <div
-            className={w.filmstripShade}
-            style={{ left: `${leftPct + widthPct}%`, right: 0 }}
-            aria-hidden="true"
-          />
-          <div
-            className={w.filmstripWindow}
-            style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
-            data-trim-window
+            ref={trackRef}
+            className={w.filmstripWrap}
+            aria-label={copy.scrubLabel}
+            data-trim-filmstrip
+            onPointerDown={onStripPointerDown}
+            onPointerMove={onStripPointerMove}
+            onPointerLeave={onStripPointerLeave}
           >
-            <button
-              type="button"
-              className={w.trimHandle}
-              data-side="start"
-              aria-label={copy.rangeStart}
-              onPointerDown={onTrimPointerDown("start")}
+            <div className={w.filmstripCells} aria-hidden="true">
+              {hasAnyThumb
+                ? decodedStrip.map((src, idx) =>
+                    src ? (
+                      <img key={idx} src={src} alt="" data-trim-strip-thumb={idx} />
+                    ) : (
+                      <span key={idx} className={w.filmstripTick} />
+                    ),
+                  )
+                : Array.from({ length: 12 }, (_, idx) => <span key={idx} className={w.filmstripTick} />)}
+            </div>
+            {boundaries.map((t, idx) => (
+              <span
+                key={`scene-${idx}`}
+                className={w.trimSceneMarker}
+                style={{ left: `${Math.max(0, Math.min(100, (t / total) * 100))}%` }}
+                aria-hidden="true"
+                data-trim-scene-marker={t}
+              />
+            ))}
+            <div className={w.filmstripShade} style={{ left: 0, width: `${leftPct}%` }} aria-hidden="true" />
+            <div
+              className={w.filmstripShade}
+              style={{ left: `${leftPct + widthPct}%`, right: 0 }}
+              aria-hidden="true"
             />
-            <button
-              type="button"
-              className={w.trimHandle}
-              data-side="end"
-              aria-label={copy.rangeEnd}
-              onPointerDown={onTrimPointerDown("end")}
+            <div
+              className={w.filmstripWindow}
+              style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
+              data-trim-window
+            >
+              <button
+                type="button"
+                className={w.trimHandle}
+                data-side="start"
+                aria-label={copy.rangeStart}
+                onPointerDown={onTrimPointerDown("start")}
+              />
+              <button
+                type="button"
+                className={w.trimHandle}
+                data-side="end"
+                aria-label={copy.rangeEnd}
+                onPointerDown={onTrimPointerDown("end")}
+              />
+            </div>
+            <div
+              className={w.trimPlayheadLine}
+              style={{ left: `${playheadPct}%` }}
+              aria-hidden="true"
+              data-trim-playhead
             />
           </div>
         </div>

@@ -431,6 +431,26 @@ export function personalSunraFacesOpen(env: Record<string, string | undefined> =
 }
 
 /**
+ * MAGI-2 (Sand.ai) on the personal Sunra lane: default OFF. Opens only when BOTH `TWINGS_PERSONAL_MAGI2=on`
+ * AND `TWINGS_PERSONAL_SUNRA_FACES=on`, because MAGI-2 sends through the personal Sunra lane.
+ */
+export function personalMagi2Open(env: Record<string, string | undefined> = process.env): boolean {
+  return env.TWINGS_PERSONAL_MAGI2 === 'on' && personalSunraFacesOpen(env);
+}
+
+/**
+ * Whether a MAGI-2 template may be SOLD (docs/PERSONAL-STUDIO.md §6). Default OFF: open only when the server
+ * environment says exactly `TWINGS_PERSONAL_MAGI2_ORDERS=on` AND `personalMagi2Open` is true. It stays off until the
+ * order wiring (slice M2: the order passes the lane, the charge recorder and the reference URLs to the render) is
+ * merged: before that a paid MAGI-2 order could never render. Off means a MAGI-2 template offers no resolution and
+ * has no charge (lib/twings/resolution.ts), so checkout refuses it before any payment and its page shows no buy
+ * action. Every other engine ignores this switch.
+ */
+export function personalMagi2OrdersOpen(env: Record<string, string | undefined> = process.env): boolean {
+  return env.TWINGS_PERSONAL_MAGI2_ORDERS === 'on' && personalMagi2Open(env);
+}
+
+/**
  * docs/CAST-CATEGORIES.md §3 — pet templates. Default OFF: open only when the server environment says
  * exactly `TWINGS_PET_TEMPLATES=on`. Off means the same as couples off: the catalogue drops pet
  * templates, `/{locale}/pet` and their template pages answer 404, and the make and render APIs refuse.

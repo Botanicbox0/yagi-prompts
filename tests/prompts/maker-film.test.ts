@@ -1,8 +1,9 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { loadPromptCatalog } from '@/lib/prompts/catalog';
 import { buildMakerFilm, registerMakerFilm, type FilmMedia, type MakerFilm } from '@/lib/prompts/maker-film';
+import * as pricing from '@/lib/recipes/pricing';
 import { loadPromptBySlug } from '@/lib/prompts/repo';
 import { loadPublicRecipe } from '@/lib/recipes/public';
 import { loadTemplateRecipe } from '@/lib/recipes/repo';
@@ -52,6 +53,20 @@ describe('a maker film', () => {
     // 10 s 4:3 at 1080p costs 7,972원 to make; its floor is 9,800원.
     expect(buildMakerFilm({ ...FILE, price_1080_krw: 9700 }, PROMPT)).toMatchObject({ ok: false });
     expect(buildMakerFilm({ ...FILE, price_1080_krw: 9800 }, PROMPT)).toMatchObject({ ok: true });
+  });
+
+  it('returns a typed refusal instead of throwing when pricing fails', () => {
+    const spy = vi.spyOn(pricing, 'quoteRecipeBase').mockImplementationOnce(() => {
+      throw new pricing.RecipePricingError('unquotable_step', 'film', 'seedance-2.5');
+    });
+    try {
+      expect(buildMakerFilm(FILE, PROMPT)).toEqual({
+        ok: false,
+        errors: ['recipe: unquotable_step (film: seedance-2.5)'],
+      });
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
 

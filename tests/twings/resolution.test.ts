@@ -1,14 +1,21 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { costFloor, costTable, IMAGE_MIN_PRICE_KRW, imageCostFloor, imageCostTable, roundUpToHundred } from '@/lib/twings/cost-model';
 import {
   arkModelForVideo,
   chargeKrwFor,
   chooseResolution,
+  defaultCreatorResolution,
+  engineOrdersOpen,
   formatResolutionPrice,
+  is1080pOnlyTemplate,
   offeredResolutions,
   renderResolution,
   renderableResolution,
 } from '@/lib/twings/resolution';
+import { selectiveOrderKrw } from '@/lib/twings/selective-frames';
+
+/** All three MAGI-2 switches on: the only environment in which a MAGI-2 template is for sale. */
+const ORDERS_ON = { TWINGS_PERSONAL_MAGI2_ORDERS: 'on', TWINGS_PERSONAL_MAGI2: 'on', TWINGS_PERSONAL_SUNRA_FACES: 'on' };
 
 /** docs/CREATOR-RESOLUTION.md — 720p by default, 1080p only when priced, money only from the row. */
 const film = (overrides: Partial<Parameters<typeof offeredResolutions>[0]> = {}) => ({
@@ -79,6 +86,111 @@ describe('which resolutions a creator template sells', () => {
     expect(arkModelForVideo('seedance-2.0', 30)).toEqual({ model: 'seedance-2.5', seconds: 30 });
     expect(arkModelForVideo(null, 2)).toEqual({ model: 'seedance-2.0', seconds: 4 });
     expect(arkModelForVideo('seedance-2.5', 14)).toEqual({ model: 'seedance-2.5', seconds: 14 });
+  });
+
+  // M1 fix 1: MAGI-2 is sold only while TWINGS_PERSONAL_MAGI2_ORDERS is on (with both render switches). This test
+  // pins the 1080p-only rules for a sellable MAGI-2 row, so it passes that environment explicitly; the flag-off
+  // behaviour is the next test.
+  it('handles a 1080p-only engine (MAGI-2): offers only 1080p, defaults empty to 1080p, refuses 720p, charges priceKrw', () => {
+    const magi = film({ engine: 'magi-2', runtimeSeconds: 10, priceCents: 200, priceKrw: 2000, price1080Cents: 0, price1080Krw: 0 });
+    expect(is1080pOnlyTemplate(magi)).toBe(true);
+    expect(is1080pOnlyTemplate(film())).toBe(false);
+    expect(defaultCreatorResolution(magi)).toBe('1080p');
+    expect(defaultCreatorResolution(film())).toBe('720p');
+    expect(offeredResolutions(magi, ORDERS_ON)).toEqual(['1080p']);
+    expect(offeredResolutions({ ...magi, priceCents: 0 }, ORDERS_ON)).toEqual([]);
+    expect(chooseResolution(magi, '', ORDERS_ON)).toEqual({ ok: true, resolution: '1080p' });
+    expect(chooseResolution(magi, undefined, ORDERS_ON)).toEqual({ ok: true, resolution: '1080p' });
+    expect(chooseResolution(magi, null, ORDERS_ON)).toEqual({ ok: true, resolution: '1080p' });
+    expect(chooseResolution(magi, '1080p', ORDERS_ON)).toEqual({ ok: true, resolution: '1080p' });
+    expect(chooseResolution(magi, '720p', ORDERS_ON)).toEqual({ ok: false });
+    expect(renderableResolution(magi, '')).toEqual({ ok: true, resolution: '1080p' });
+    expect(renderableResolution(magi, null)).toEqual({ ok: true, resolution: '1080p' });
+    expect(renderableResolution(magi, '1080p')).toEqual({ ok: true, resolution: '1080p' });
+    expect(renderableResolution(magi, '720p')).toEqual({ ok: false });
+    expect(renderResolution(null, magi)).toBe('1080p');
+    expect(renderResolution(null, film())).toBe('720p');
+    expect(chargeKrwFor(magi, '1080p', ORDERS_ON)).toBe(2000);
+    expect(chargeKrwFor(magi, null, ORDERS_ON)).toBe(2000);
+    expect(chargeKrwFor(magi, '720p', ORDERS_ON)).toBeNull();
+    expect(formatResolutionPrice(magi, '1080p', 'ko')).toBe('2,000원');
+    expect(formatResolutionPrice(magi, '1080p', 'en')).toBe('$2');
+  });
+
+  it('M1 fix 1: an existing MAGI-2 row is not for sale while the order switch is off, whatever its price', () => {
+    const magi = film({ engine: 'magi-2', runtimeSeconds: 10, priceCents: 200, priceKrw: 2000, price1080Cents: 0, price1080Krw: 0 });
+    // Every environment short of all three switches: the render switches alone are not enough.
+    const closed: Array<Record<string, string | undefined>> = [
+      {},
+      { TWINGS_PERSONAL_MAGI2: 'on', TWINGS_PERSONAL_SUNRA_FACES: 'on' },
+      { TWINGS_PERSONAL_MAGI2_ORDERS: 'on' },
+      { TWINGS_PERSONAL_MAGI2_ORDERS: 'on', TWINGS_PERSONAL_MAGI2: 'on' },
+      { TWINGS_PERSONAL_MAGI2_ORDERS: 'on', TWINGS_PERSONAL_SUNRA_FACES: 'on' },
+      { ...ORDERS_ON, TWINGS_PERSONAL_MAGI2_ORDERS: 'ON' },
+    ];
+    for (const env of closed) {
+      const label = JSON.stringify(env);
+      expect(engineOrdersOpen(magi, env), label).toBe(false);
+      expect(offeredResolutions(magi, env), label).toEqual([]);
+      // The order route's default ('' → the engine default) is still a resolution, but nothing charges for it,
+      // so createTossOrder answers not_for_sale; a named 1080p is refused outright (bad_resolution).
+      expect(chooseResolution(magi, '', env), label).toEqual({ ok: true, resolution: '1080p' });
+      expect(chooseResolution(magi, '1080p', env), label).toEqual({ ok: false });
+      expect(chooseResolution(magi, '720p', env), label).toEqual({ ok: false });
+      for (const resolution of ['1080p', '720p', null] as const) {
+        expect(chargeKrwFor(magi, resolution, env), `${label} ${resolution}`).toBeNull();
+        // The exact call createTossOrder, confirmTossOrder and the store-credit order make.
+        expect(selectiveOrderKrw({ ...magi, media: null }, null, null, resolution), `${label} ${resolution}`).toEqual({ amountKrw: null, normalizedFrames: null });
+      }
+      // Display helpers stay total: no throw, the stored price still prints.
+      expect(formatResolutionPrice(magi, '1080p', 'ko')).toBe('2,000원');
+      expect(is1080pOnlyTemplate(magi)).toBe(true);
+    }
+    // All three switches: on sale at its one price.
+    expect(engineOrdersOpen(magi, ORDERS_ON)).toBe(true);
+    expect(offeredResolutions(magi, ORDERS_ON)).toEqual(['1080p']);
+    expect(chargeKrwFor(magi, '1080p', ORDERS_ON)).toBe(2000);
+  });
+
+  it('M1 fix 1: the order switch reads the server environment by default', () => {
+    const magi = film({ engine: 'magi-2', runtimeSeconds: 10, priceCents: 200, priceKrw: 2000, price1080Cents: 0, price1080Krw: 0 });
+    vi.stubEnv('TWINGS_PERSONAL_MAGI2_ORDERS', '');
+    vi.stubEnv('TWINGS_PERSONAL_MAGI2', 'on');
+    vi.stubEnv('TWINGS_PERSONAL_SUNRA_FACES', 'on');
+    try {
+      expect(offeredResolutions(magi)).toEqual([]);
+      expect(chargeKrwFor(magi, '1080p')).toBeNull();
+      expect(selectiveOrderKrw({ ...magi, media: null }, null, null, '1080p').amountKrw).toBeNull();
+      vi.stubEnv('TWINGS_PERSONAL_MAGI2_ORDERS', 'on');
+      expect(offeredResolutions(magi)).toEqual(['1080p']);
+      expect(chargeKrwFor(magi, '1080p')).toBe(2000);
+      expect(selectiveOrderKrw({ ...magi, media: null }, null, null, '1080p').amountKrw).toBe(2000);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it('M1 fix 1: every other engine ignores the order switch entirely (flag-off parity)', () => {
+    const rows = [
+      film(),
+      film({ price1080Krw: 0 }),
+      film({ engine: 'seedance-2.5', runtimeSeconds: 10 }),
+      film({ engine: 'kling-omni', runtimeSeconds: 10 }),
+      film({ engine: null, runtimeSeconds: 30 }),
+      image,
+    ];
+    for (const row of rows) {
+      const label = `${row.medium} ${String(row.engine)}`;
+      for (const env of [{}, ORDERS_ON, { TWINGS_PERSONAL_MAGI2_ORDERS: 'on' }]) {
+        expect(engineOrdersOpen(row, env), label).toBe(true);
+        expect(offeredResolutions(row, env), label).toEqual(offeredResolutions(row, {}));
+        for (const requested of ['', '720p', '1080p', null]) expect(chooseResolution(row, requested, env), label).toEqual(chooseResolution(row, requested, {}));
+        for (const resolution of ['720p', '1080p', null] as const) expect(chargeKrwFor(row, resolution, env), label).toEqual(chargeKrwFor(row, resolution, {}));
+      }
+    }
+    // And the values themselves are main's (the first tests of this file pin them for the default film).
+    expect(offeredResolutions(film(), ORDERS_ON)).toEqual(['720p', '1080p']);
+    expect(chargeKrwFor(film(), '1080p', ORDERS_ON)).toBe(11900);
   });
 });
 

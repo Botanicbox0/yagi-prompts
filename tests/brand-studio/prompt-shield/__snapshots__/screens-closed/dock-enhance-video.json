@@ -8,7 +8,7 @@
     "quality": "",
     "count": 1,
     "seconds": 5,
-    "audio": "native",
+    "audio": "ambient",
     "enhance": true,
     "method": "reference",
     "keep": [

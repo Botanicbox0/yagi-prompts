@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { DEFAULT_LOCALE, isLocale, type Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
-import { formatDate, interpolate } from '@/lib/i18n/format';
+import { formatPostDate, interpolate } from '@/lib/i18n/format';
 import { MarketingFooter, MarketingNav } from '@/components/marketing/chrome';
 import { PersonalIdentity } from '@/components/audience/personal-identity';
 import { CreativeAvatar, placeOf } from '@/components/makers/identity';
@@ -12,7 +12,8 @@ import { makerBioFor, makerHandleOf } from '@/lib/makers/profile';
 import { getPromptCatalog } from '@/lib/prompts/public-catalog';
 import { makerBlogOpen } from '@/lib/posts/flag';
 import { cachedPublicPostsByHandle } from '@/lib/posts/cached-public';
-import { makerBlogListRest, makerBlogPostHref } from '@/lib/posts/links';
+import { MakerBlogEmptyOwnerCta } from '@/components/makers/owner-actions';
+import { makerBlogListRest, makerBlogPostHref, postEditorHref } from '@/lib/posts/links';
 import { postListMetadata } from '@/lib/posts/seo';
 import { ProfileTabs } from '@/components/posts/profile-tabs';
 
@@ -122,33 +123,38 @@ export default async function MakerBlogListPage({ params }: RouteParams) {
             </header>
           </div>
 
-          {posts.length > 0 ? (
-            <ProfileTabs
-              locale={locale}
-              handle={maker.handle}
-              active="blog"
-              hasWorks={works.length > 0}
-              postCount={posts.length}
-              labels={{
-                templates: t.tabTemplates,
-                blog: t.tabBlog,
-                works: t.tabWorks,
-              }}
-            />
-          ) : null}
+          <ProfileTabs
+            locale={locale}
+            handle={maker.handle}
+            active="blog"
+            hasWorks={works.length > 0}
+            postCount={posts.length}
+            labels={{
+              templates: t.tabTemplates,
+              blog: t.tabBlog,
+              works: t.tabWorks,
+            }}
+          />
 
           <div className="mt-10 sm:px-8 lg:px-10">
             {posts.length === 0 ? (
-              <p
-                data-maker-blog-empty
-                className="border-t border-[#09090B]/[0.08] pt-8 text-sm break-keep text-[#52525B]"
-              >
-                {t.listEmpty}
-              </p>
+              <div className="border-t border-[#09090B]/[0.08] pt-8">
+                <p
+                  data-maker-blog-empty
+                  className="text-sm break-keep text-[#52525B]"
+                >
+                  {t.listEmpty}
+                </p>
+                <MakerBlogEmptyOwnerCta
+                  handle={maker.handle}
+                  writeHref={postEditorHref('new')}
+                  label={t.firstPostCta}
+                />
+              </div>
             ) : (
               <ul className="grid gap-5 md:grid-cols-2">
                 {posts.map((post) => {
-                  const formattedDate = formatDate(post.publishedAt ?? post.updatedAt, locale);
+                  const formattedDate = formatPostDate(post.publishedAt ?? post.updatedAt, locale);
                   return (
                     <li key={post.slug}>
                       <a

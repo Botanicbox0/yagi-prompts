@@ -1,9 +1,10 @@
 import type { PromptCard as PromptCardData } from '@/lib/prompts/catalog';
 import { templateHref } from '@/lib/prompts/links';
 import { badgeFor } from '@/lib/content/badges';
+import { makerBlogOpen } from '@/lib/posts/flag';
 import { PromptCardMedia } from './card-media';
 import { TypographicPoster } from './poster';
-import { cardAspect, cardAuthor, cardFrame, cardRatio } from './card-frame';
+import { cardAspect, cardAuthor, cardFrame, cardRatio, makerProfileRest } from './card-frame';
 import type { PromptLabels } from './labels';
 
 /**
@@ -25,6 +26,7 @@ export function PromptCardView({
   locale,
   labels,
   now,
+  linkAuthor,
 }: {
   card: PromptCardData;
   locale: string;
@@ -33,11 +35,14 @@ export function PromptCardView({
   useCaseLabels?: Record<string, string>;
   /** Injectable clock so the NEW badge is testable without waiting fourteen days. */
   now?: Date | number;
+  /** Override whether `by @handle` links to a public maker profile (defaults to `makerBlogOpen()`). */
+  linkAuthor?: boolean;
 }) {
   const title = locale === 'ko' && card.titleKo ? card.titleKo : card.title;
   const frame = cardFrame(card);
   const ratio = String(cardRatio(card));
   const author = cardAuthor(card);
+  const authorRest = (linkAuthor ?? makerBlogOpen()) ? makerProfileRest(card) : null;
   const seconds = card.medium === 'video' && card.runtimeSeconds && card.runtimeSeconds > 0 ? card.runtimeSeconds : null;
 
   const badge = badgeFor({
@@ -92,7 +97,19 @@ export function PromptCardView({
       </p>
       {author && (
         <p data-card-author className="mt-0.5 truncate text-xs text-muted">
-          {author.handle ? labels.cardAuthor.replace('{handle}', author.handle) : labels.cardAuthorAnonymous}
+          {author.handle
+            ? authorRest
+              ? (
+                  <a
+                    href={`/${locale}${authorRest}`}
+                    data-maker-profile-link={author.handle}
+                    className="relative z-10 inline-flex min-h-6 max-w-full min-w-0 items-center rounded-sm px-0.5 align-middle transition-colors hover:text-[#09090B] hover:underline underline-offset-2 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--color-blue)]"
+                  >
+                    <span className="truncate">{labels.cardAuthor.replace('{handle}', author.handle)}</span>
+                  </a>
+                )
+              : labels.cardAuthor.replace('{handle}', author.handle)
+            : labels.cardAuthorAnonymous}
         </p>
       )}
     </article>

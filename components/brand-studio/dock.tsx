@@ -78,11 +78,21 @@ import type { FilmState } from "./use-studio";
 import type { StudioVideoModesCopy } from "@/messages/studio-video-modes";
 import {
   draftAndStateAfterVideoAttach,
+  isConfirmVideoMode,
   type PendingVideoMode,
   type VideoModeOptionState,
   type VideoStudioMode,
 } from "./video/video-modes-model";
-import { VideoModeBar, VideoModeEditToggle, VideoModeUndoLine, VideoModeWell } from "./video/video-modes-ui";
+import {
+  VideoConfirmCard,
+  VideoLengthChip,
+  VideoModeInfoPopover,
+  VideoModeMenu,
+  VideoModeUndoLine,
+  VideoSoundChip,
+  VideoTrayNeedVideo,
+  type VideoConfirmUnderstandView,
+} from "./video/video-modes-ui";
 
 export interface VideoModesDockProp {
   activeMode: VideoStudioMode;
@@ -91,9 +101,20 @@ export interface VideoModesDockProp {
   copy: StudioVideoModesCopy;
   undo: boolean;
   forcedLimitMessage?: string | null;
+  confirmOpen: boolean;
+  waitingForReading: boolean;
+  queuedConfirmOnRead: boolean;
+  checking?: boolean;
+  shotsNotCarried?: boolean;
+  hasReviewed?: boolean;
+  understand?: VideoConfirmUnderstandView | null;
   onSelectMode(mode: VideoStudioMode): void;
   onUndoRemoveVideo(): void;
-  onToggleEdit(nextMethod: "edit" | "reference"): void;
+  onOpenConfirm(): void;
+  onCloseConfirm(): void;
+  onReunderstand?(): void;
+  onPickOption?(index: number): void;
+  onRetryUnderstand?(): void;
   onRetryReadFilm?(): void;
 }
 
@@ -257,6 +278,8 @@ export function Dock(props: DockProps) {
   const effectiveDraft = remix && effectiveMethod !== draft.method ? { ...draft, method: effectiveMethod } : draft;
   const resolvedVideoCopy = props.videoCopy ?? (locale === "ko" ? studioVideoKo : studioVideoEn);
   const pendingNeedVideo = mode === "video" && Boolean(props.videoModes?.pendingMode) && !remix;
+  const showNeedVideoTrayRow =
+    pendingNeedVideo && Boolean(props.videoModes) && controls.model.medium === "video";
   const unreadableBlueprint =
     mode === "video" &&
     Boolean(props.videoModes) &&
@@ -265,10 +288,22 @@ export function Dock(props: DockProps) {
     props.film?.status === "done" &&
     !props.film.sheet;
   const modeBlocked = pendingNeedVideo || unreadableBlueprint;
-  const guidanceText = pendingNeedVideo
-    ? props.videoModes!.copy.status.needVideo
-    : unreadableBlueprint
-      ? resolvedVideoCopy.remix.unreadable
+  // W5: while the compact tray row already asks for the reference video, do not repeat the sentence below.
+  const guidanceText = unreadableBlueprint
+    ? resolvedVideoCopy.remix.unreadable
+    : pendingNeedVideo && !showNeedVideoTrayRow
+      ? props.videoModes!.copy.status.needVideo
+      : null;
+  // W1: Re-Architect thumbnail reading state (reading -> read -> unreadable); no extra request.
+  const trayVideoReadState: "loading" | "read" | "unreadable" | null =
+    mode === "video" && props.videoModes && props.videoModes.activeMode === "re_architect" && remix
+      ? props.film?.status === "loading"
+        ? "loading"
+        : props.film?.status === "done"
+          ? props.film.sheet
+            ? "read"
+            : "unreadable"
+          : null
       : null;
   const fit = remix ? remixFit(effectiveDraft, tray) : null;
   const bpFit = remix ? remixBlueprintFit(effectiveDraft, tray) : null;
@@ -503,6 +538,30 @@ export function Dock(props: DockProps) {
     );
   }
 
+  const confirmModeActive = mode === "video" && Boolean(props.videoModes) && isConfirmVideoMode(props.videoModes!.activeMode);
+  const confirmCardVisible = Boolean(
+    confirmModeActive && props.videoModes?.confirmOpen && remix && !unreadableBlueprint && !blocking,
+  );
+  const modelMenuEl = (
+    <ModelMenu
+      models={controls.models}
+      value={controls.model.id}
+      draft={draft}
+      references={tray.length}
+      copy={copy}
+      locale={locale}
+      initialOpen={props.initialModelMenu}
+      onChange={(value) => (multi ? props.onModels!([value]) : onDraft(withModel(draft, value)))}
+      {...(multi
+        ? {
+            picked,
+            blockOf: (model: string) => checkBlock(draft, tray, model),
+            onToggle: (model: string) => props.onModels!(toggledPick(draft, tray, model)),
+          }
+        : {})}
+    />
+  );
+
   return (
     <form
       ref={(node) => {
@@ -511,12 +570,23 @@ export function Dock(props: DockProps) {
       className="bs-dock"
       data-studio-dock
       data-mode={mode}
+      data-confirm-open={confirmCardVisible ? "" : undefined}
       data-drop-target={dropActive ? "" : undefined}
       data-drop-ready={pageDrag && !dropActive ? "" : undefined}
       aria-label={d.label}
       aria-busy={busy}
       onSubmit={(event) => {
         event.preventDefault();
+        if (confirmModeActive && props.videoModes) {
+          if (busy || enhancing || props.videoModes.checking) return;
+          if (!blocking && !modeBlocked) {
+            if (!confirmCardVisible) props.videoModes.onOpenConfirm();
+            else props.videoModes.onReunderstand?.();
+          }
+          // B1: in video modes Enter NEVER starts a paid run; only `[data-confirm-make]` submits.
+          return;
+        }
+        // S4: closed organizations, image studio, and `기본` keep main's direct `props.onSubmit()` path.
         props.onSubmit();
       }}
       onDragEnter={dragIn}
@@ -524,30 +594,10 @@ export function Dock(props: DockProps) {
       onDragLeave={dragOut}
       onDrop={drop}
     >
-      {mode === "video" && props.videoModes ? (
-        <>
-          {props.toast && (
-            <p className="bs-dock-toast" aria-hidden="true" data-studio-toast>
-              {props.toast}
-            </p>
-          )}
-          {controls.model.medium === "video" && (
-            <VideoModeBar
-              activeMode={props.videoModes.activeMode}
-              availability={props.videoModes.availability}
-              model={controls.model as StudioVideoModel}
-              copy={props.videoModes.copy}
-              disabled={busy}
-              onSelect={props.videoModes.onSelectMode}
-            />
-          )}
-        </>
-      ) : (
-        props.toast && (
-          <p className="bs-dock-toast" aria-hidden="true" data-studio-toast>
-            {props.toast}
-          </p>
-        )
+      {props.toast && (
+        <p className="bs-dock-toast" aria-hidden="true" data-studio-toast>
+          {props.toast}
+        </p>
       )}
       <Tray
         items={tray}
@@ -563,60 +613,42 @@ export function Dock(props: DockProps) {
         onLink={setThumbKey}
         onTrimVideo={props.onTrimVideo}
         trimLabel={resolvedVideoCopy.remix.trayTrim}
+        {...(showNeedVideoTrayRow && props.videoModes?.pendingMode
+          ? {
+              needVideoSlot: (
+                <VideoTrayNeedVideo
+                  mode={props.videoModes.pendingMode}
+                  model={controls.model as StudioVideoModel}
+                  copy={props.videoModes.copy}
+                  dropActive={dropActive}
+                  disabled={busy}
+                  onFiles={props.onFiles}
+                  onBrowse={props.onBrowse}
+                />
+              ),
+            }
+          : {})}
+        {...(trayVideoReadState && props.videoModes
+          ? {
+              videoReadState: trayVideoReadState,
+              videoReadLabels: {
+                loading: props.videoModes.copy.tray.reading,
+                read: props.videoModes.copy.tray.read,
+                unreadable: props.videoModes.copy.tray.unreadable,
+              },
+            }
+          : {})}
         onUpdate={props.onTrayUpdate}
         onRemove={props.onTrayRemove}
         onMove={props.onTrayMove ?? (() => {})}
         onBrowse={props.onBrowse}
       />
       {mode === "video" && props.videoModes ? (
-        <>
-          {remix && (
-            <RemixPanel
-              draft={effectiveDraft}
-              film={props.film}
-              copy={copy}
-              disabled={busy}
-              limit={filmLimit ?? props.videoModes.forcedLimitMessage ?? null}
-              editable={fit?.editable ?? true}
-              videoSeconds={filmTrayItem?.seconds ?? null}
-              rawMaxSeconds={rawLimits?.max ?? 30}
-              videoCopy={props.videoCopy}
-              videoAssetId={filmAsset}
-              hideMethodRow
-              onTrimVideo={filmTrayItem && props.onTrimVideo ? () => props.onTrimVideo!(filmTrayItem) : undefined}
-              onChange={set}
-            />
-          )}
-          {remix &&
-            props.videoModes.activeMode === "motion_transfer" &&
-            (fit?.editable ?? true) &&
-            !blocking &&
-            !(
-              (draft.clipCount ?? 1) >= 2 ||
-              (typeof draft.targetTotalSeconds === "number" &&
-                controls.model.medium === "video" &&
-                draft.targetTotalSeconds > (controls.model as StudioVideoModel).maxSeconds)
-            ) && (
-              <VideoModeEditToggle
-                effectiveMethod={effectiveMethod}
-                copy={props.videoModes.copy.status}
-                disabled={busy}
-                onToggle={props.videoModes.onToggleEdit}
-              />
-            )}
-          {!remix && props.videoModes.pendingMode && controls.model.medium === "video" && (
-            <VideoModeWell
-              mode={props.videoModes.pendingMode}
-              model={controls.model as StudioVideoModel}
-              copy={props.videoModes.copy.well}
-              dropActive={dropActive}
-              dropReady={pageDrag || dropActive}
-              disabled={busy}
-              onFiles={props.onFiles}
-              onBrowse={props.onBrowse}
-            />
-          )}
-        </>
+        remix && (filmLimit || props.videoModes.forcedLimitMessage) ? (
+          <p className="bs-film-limit" role="status" data-studio-film-limit>
+            {filmLimit ?? props.videoModes.forcedLimitMessage}
+          </p>
+        ) : null
       ) : (
         remix && (
           <RemixPanel
@@ -767,6 +799,20 @@ export function Dock(props: DockProps) {
                     return;
                   }
                 }
+                // W4: In a video mode (Re-Architect / Motion Transfer), plain Enter (without Shift) runs the FREE
+                // understanding step (same as clicking the review button) and NEVER starts a paid run.
+                if (
+                  confirmModeActive &&
+                  props.videoModes &&
+                  event.key === "Enter" &&
+                  !event.shiftKey &&
+                  !event.ctrlKey &&
+                  !event.metaKey
+                ) {
+                  event.preventDefault();
+                  event.currentTarget.form?.requestSubmit();
+                  return;
+                }
                 if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
                   event.preventDefault();
                   event.currentTarget.form?.requestSubmit();
@@ -846,6 +892,29 @@ export function Dock(props: DockProps) {
       )}
       {mode === "video" && props.videoModes ? (
         <>
+          {confirmCardVisible && isConfirmVideoMode(props.videoModes.activeMode) && controls.model.medium === "video" && (
+            <VideoConfirmCard
+              mode={props.videoModes.activeMode}
+              draft={effectiveDraft}
+              tray={tray}
+              model={controls.model as StudioVideoModel}
+              copy={copy}
+              modesCopy={props.videoModes.copy}
+              cost={cost}
+              busy={busy}
+              disabled={enhancing || Boolean(blocking) || modeBlocked}
+              videoSeconds={filmTrayItem?.seconds ?? null}
+              shotsNotCarried={Boolean(props.videoModes.shotsNotCarried)}
+              understand={props.videoModes.understand ?? null}
+              onDraft={onDraft}
+              onTrayUpdate={props.onTrayUpdate}
+              onEditWords={() => field.current?.focus()}
+              onMake={props.onSubmit}
+              onClose={props.videoModes.onCloseConfirm}
+              onPickOption={props.videoModes.onPickOption}
+              onRetryUnderstand={props.videoModes.onRetryUnderstand}
+            />
+          )}
           {guidanceText && (
             <p
               id={message ? undefined : `${id}-message`}
@@ -885,23 +954,25 @@ export function Dock(props: DockProps) {
       )}
       <div className="bs-controls">
         <div className="bs-controls-set" data-studio-controls>
-          <ModelMenu
-            models={controls.models}
-            value={controls.model.id}
-            draft={draft}
-            references={tray.length}
-            copy={copy}
-            locale={locale}
-            initialOpen={props.initialModelMenu}
-            onChange={(value) => (multi ? props.onModels!([value]) : onDraft(withModel(draft, value)))}
-            {...(multi
-              ? {
-                  picked,
-                  blockOf: (model: string) => checkBlock(draft, tray, model),
-                  onToggle: (model: string) => props.onModels!(toggledPick(draft, tray, model)),
-                }
-              : {})}
-          />
+          {mode === "video" && props.videoModes && controls.model.medium === "video" ? (
+            <>
+              <VideoModeMenu
+                activeMode={props.videoModes.activeMode}
+                availability={props.videoModes.availability}
+                copy={props.videoModes.copy}
+                disabled={busy}
+                onSelect={props.videoModes.onSelectMode}
+              />
+              <VideoModeInfoPopover
+                activeMode={props.videoModes.activeMode}
+                model={controls.model as StudioVideoModel}
+                copy={props.videoModes.copy}
+              />
+              {modelMenuEl}
+            </>
+          ) : (
+            modelMenuEl
+          )}
           <ChipSelect
             label={d.aspect}
             value={draft.aspect}
@@ -953,6 +1024,18 @@ export function Dock(props: DockProps) {
               mono={!grouped}
               initialOpen={opens("count")}
             />
+          ) : mode === "video" && props.videoModes && remix && isConfirmVideoMode(props.videoModes.activeMode) && controls.model.medium === "video" ? (
+            <VideoLengthChip
+              mode={props.videoModes.activeMode}
+              draft={effectiveDraft}
+              tray={tray}
+              model={controls.model as StudioVideoModel}
+              copy={copy}
+              modesCopy={props.videoModes.copy}
+              videoSeconds={filmTrayItem?.seconds ?? null}
+              disabled={busy}
+              onDraft={onDraft}
+            />
           ) : (
             !(remix && (effectiveMethod === "edit" || (draft.clipCount ?? 1) >= 2)) && (
               <ChipSelect
@@ -969,16 +1052,27 @@ export function Dock(props: DockProps) {
               />
             )
           )}
-          {draft.medium === "video" && !remix && (
-            <ChipSelect
-              label={d.sound}
-              value={draft.audio}
-              options={STUDIO_AUDIO_MODES.map((m) => ({ value: m, label: copy.sound[m] }))}
-              onChange={(audio) => set({ audio: audio as DockDraft["audio"] })}
-              data="sound"
-              initialOpen={opens("sound")}
-            />
-          )}
+          {draft.medium === "video" &&
+            (mode === "video" && props.videoModes && remix ? (
+              <VideoSoundChip
+                draft={effectiveDraft}
+                copy={copy}
+                modesCopy={props.videoModes.copy}
+                disabled={busy}
+                onDraft={onDraft}
+              />
+            ) : (
+              !remix && (
+                <ChipSelect
+                  label={d.sound}
+                  value={draft.audio}
+                  options={STUDIO_AUDIO_MODES.map((m) => ({ value: m, label: copy.sound[m] }))}
+                  onChange={(audio) => set({ audio: audio as DockDraft["audio"] })}
+                  data="sound"
+                  initialOpen={opens("sound")}
+                />
+              )
+            ))}
           {!remix && (
             <span className="bs-enhance" data-studio-enhance-group>
               <button
@@ -1022,22 +1116,56 @@ export function Dock(props: DockProps) {
               <span className="bs-sr">{props.project.hint}</span>
             </span>
           )}
-          <button
-            type="submit"
-            className="bs-btn bs-submit"
-            data-variant="solid"
-            data-size="md"
-            disabled={busy || enhancing || Boolean(blocking) || modeBlocked}
-            aria-label={busy ? d.submitting : modeBlocked ? d.submit : fill(d.submitLabel, { cost })}
-            data-studio-submit
-          >
-            <span>{busy ? d.submitting : d.submit}</span>
-            {!busy && !modeBlocked && (
-              <span className="bs-submit-cost bs-num" data-studio-quote>
-                {cost}
-              </span>
-            )}
-          </button>
+          {confirmModeActive && props.videoModes ? (
+            !confirmCardVisible && (
+              <button
+                type="button"
+                className="bs-btn bs-submit"
+                data-variant="solid"
+                data-size="md"
+                disabled={busy || enhancing || Boolean(props.videoModes.checking) || Boolean(blocking) || modeBlocked}
+                aria-busy={props.videoModes.checking || props.videoModes.waitingForReading || undefined}
+                aria-label={
+                  props.videoModes.checking
+                    ? props.videoModes.copy.cta.checking
+                    : props.videoModes.waitingForReading
+                      ? props.videoModes.copy.cta.reading
+                      : props.videoModes.hasReviewed
+                        ? props.videoModes.copy.cta.reviewAgain
+                        : props.videoModes.copy.cta.review
+                }
+                onClick={props.videoModes.onOpenConfirm}
+                data-video-confirm-trigger
+              >
+                <span>
+                  {props.videoModes.checking
+                    ? props.videoModes.copy.cta.checking
+                    : props.videoModes.waitingForReading
+                      ? props.videoModes.copy.cta.reading
+                      : props.videoModes.hasReviewed
+                        ? props.videoModes.copy.cta.reviewAgain
+                        : props.videoModes.copy.cta.review}
+                </span>
+              </button>
+            )
+          ) : (
+            <button
+              type="submit"
+              className="bs-btn bs-submit"
+              data-variant="solid"
+              data-size="md"
+              disabled={busy || enhancing || Boolean(blocking) || modeBlocked}
+              aria-label={busy ? d.submitting : modeBlocked ? d.submit : fill(d.submitLabel, { cost })}
+              data-studio-submit
+            >
+              <span>{busy ? d.submitting : d.submit}</span>
+              {!busy && !modeBlocked && (
+                <span className="bs-submit-cost bs-num" data-studio-quote>
+                  {cost}
+                </span>
+              )}
+            </button>
+          )}
         </div>
       </div>
       {grouped && quotes.length > 1 && (

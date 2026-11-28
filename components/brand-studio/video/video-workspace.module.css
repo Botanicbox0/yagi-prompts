@@ -710,9 +710,9 @@
 .trimFrameWrap {
   position: relative;
   max-width: min(100%, 620px);
-  max-height: 360px;
+  max-height: 340px;
   width: auto;
-  height: 340px;
+  height: clamp(220px, 34dvh, 320px);
   user-select: none;
 }
 
@@ -802,14 +802,80 @@
   color: var(--ys-ink-secondary);
 }
 
+.trimPlayheadBadge {
+  font-size: 12px;
+  color: var(--ys-ink-secondary);
+}
+
+.trimClampNote {
+  flex: 1 0 100%;
+  font-size: 12px;
+  color: var(--ys-ink-muted);
+  word-break: keep-all;
+}
+
+.filmstripOuter {
+  position: relative;
+}
+
+.trimHoverPreview {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  z-index: 6;
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  padding: 4px;
+  border: 1px solid var(--ys-line-strong);
+  border-radius: 8px;
+  background: var(--ys-surface);
+  box-shadow: var(--ys-float);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.trimHoverPreview img {
+  display: block;
+  width: 112px;
+  height: 63px;
+  border-radius: 5px;
+  object-fit: cover;
+}
+
+.trimHoverPreview span {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ys-ink);
+}
+
 .filmstripWrap {
   position: relative;
   height: 54px;
   border-radius: 12px;
   overflow: hidden;
   background: var(--ys-stage, #111113);
+  cursor: pointer;
   user-select: none;
   touch-action: none;
+}
+
+.trimSceneMarker {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1.5px;
+  background: color-mix(in srgb, var(--ys-ink) 55%, transparent);
+  pointer-events: none;
+}
+
+.trimPlayheadLine {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--ys-accent);
+  transform: translateX(-50%);
+  pointer-events: none;
 }
 
 .filmstripCells {

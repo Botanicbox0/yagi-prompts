@@ -120,6 +120,8 @@ export default async function MakerPostEditorPage({ params }: RouteParams) {
         <PostEditor
           locale={locale}
           handle={handle}
+          publicProfile={settings?.publicProfile === true}
+          worksAvailable={settings?.extended === true}
           initialPost={post}
           works={works}
           importableTemplates={importableTemplates}

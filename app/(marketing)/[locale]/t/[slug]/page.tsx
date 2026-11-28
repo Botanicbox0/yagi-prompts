@@ -36,7 +36,7 @@ import { campaignLabels } from '@/components/campaigns/labels';
 import { TwingsStudio, type StudioStyle } from '@/components/twings/studio';
 import { TemplateLookIsland } from '@/components/template-look/look-island';
 import { LookMismatch } from '@/components/template-look/look-mismatch';
-import { formatResolutionPrice, offeredResolutions } from '@/lib/twings/resolution';
+import { engineOrdersOpen, formatResolutionPrice, offeredResolutions } from '@/lib/twings/resolution';
 import { templateSubscriptionQuote } from '@/lib/twings/subscription-plan';
 import { cachedSubscriptionAvailability } from '@/lib/creator-subscriptions/cached-availability';
 import { SubscriptionAvailabilityProvider } from '@/components/twings/subscription-availability';
@@ -231,7 +231,10 @@ export default async function TemplatePage({ params }: RouteParams) {
   const labels = promptLabels(dict);
   const useCaseLabels = Object.fromEntries(USE_CASES.map((value) => [value, useCaseLabel(dict, value)]));
   const title = locale === 'ko' && card.titleKo ? card.titleKo : card.title;
-  const subscriptionQuote = isForSale(card) ? templateSubscriptionQuote(card) : null;
+  // A priced template whose engine is not open for orders (an engine on the personal Sunra lane alone, before its
+  // order wiring) reads as not for sale: no make box, no buy action. Every other template: exactly `isForSale`.
+  const forSale = isForSale(card) && engineOrdersOpen(card);
+  const subscriptionQuote = forSale ? templateSubscriptionQuote(card) : null;
   const makeAvailabilityCopy = { makeCta: t.makeCta, makeCtaClosed: t.makeCtaClosed, makeBody: t.makeBody, makeBodyClosed: t.makeBodyClosed, makeBodySubscription: t.makeBodySubscription, makeBodySubscriptionPaused: t.makeBodySubscriptionPaused };
   const ratio = card.poster?.w && card.poster.h ? `${card.poster.w} / ${card.poster.h}` : posterRatio(card.slug);
   // §7.5·§14.1: origin decides the fallback (a maker's template is a `source='yagi'` row too); a typed handle wins on both.
@@ -243,7 +246,7 @@ export default async function TemplatePage({ params }: RouteParams) {
   const shopOpen = storefrontOpen();
   const subscriptionOpen = availability.status === 'open';
   const description = petOnly ? dict.cast.pet.templateDescription : templateDescription(dict, subscriptionOpen);
-  const resolutions = isForSale(card) ? offeredResolutions(card) : [];
+  const resolutions = forSale ? offeredResolutions(card) : [];
   // A set template (2026-10-27): one order, one example per frame it makes.
   const gallery = card.gallery ?? [];
   const setSize = gallery.length > 1 ? gallery.length : null;
@@ -268,7 +271,7 @@ export default async function TemplatePage({ params }: RouteParams) {
   const cLabels = campaignLabels(dict);
 
   const resolvedEngine = resolveEngine(card.engine, card.medium);
-  const style: StudioStyle | null = isForSale(card) && makeInputs !== null
+  const style: StudioStyle | null = forSale && makeInputs !== null
     ? {
         castInputs: { selfie: makeInputs.selfie, pet: makeInputs.pet, partner: makeInputs.partner },
         id: card.slug,

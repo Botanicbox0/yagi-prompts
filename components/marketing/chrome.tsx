@@ -11,6 +11,7 @@ import { localizedPath, type Locale } from '@/lib/i18n/config';
 import type { SectionTheme } from '@/lib/motion/geometry';
 import { audienceNavigation, type Audience } from '@/lib/navigation/audience';
 import { creatorProgramHref, creatorProgramOpen } from '@/lib/creator-platform/links';
+import { makerBlogOpen } from '@/lib/posts/flag';
 
 /**
  * §14.2 — "Nav: Prompts · Contests · Pricing". One list, built once, used by the bar and the
@@ -82,6 +83,12 @@ export function MarketingNav({
         signOut: dict.account.signOut,
         menu: dict.creatorProfile.accountMenu,
         fallbackName: dict.creatorProfile.fallbackName,
+        ...(makerBlogOpen()
+          ? {
+              makerStudio: dict.creatorProgram.workspaceTitle,
+              writePost: dict.makerBlog.navWrite,
+            }
+          : {}),
       }}
       signInNext={signInReturn(locale, rest)}
       labels={{
@@ -105,11 +112,16 @@ export function accountSigninHref(locale: Locale): string {
 export function MarketingFooter({ locale, dict, audience = 'creator' }: { locale: Locale; dict: Dictionary; audience?: Audience }) {
   const brand = audience === 'brand';
   const navigation = audienceNavigation(locale, dict, brand ? '/brands' : '/');
+  const creatorFooterLink = makerBlogOpen()
+    ? [{ href: localizedPath(locale, '/direct'), label: dict.creatorProgram.footerLink }]
+    : creatorProgramOpen()
+      ? [{ href: creatorProgramHref(locale), label: dict.creatorProgram.footerLink }]
+      : [];
   return (
     <SiteFooter
       locale={locale}
-      // The format creator program is a footer door only, and only while its public intake is open.
-      links={brand ? [...navigation.links, navigation.primary] : [...siteLinks(locale, dict), ...(creatorProgramOpen() ? [{ href: creatorProgramHref(locale), label: dict.creatorProgram.footerLink }] : [])]}
+      // When the hub is on, the AI creative footer door is always shown and sends to /{locale}/direct.
+      links={brand ? [...navigation.links, navigation.primary] : [...siteLinks(locale, dict), ...creatorFooterLink]}
       /* 전자상거래법 §21 and every payment provider's merchant review: the legal documents must be
          reachable from anywhere on the site, so they live in the footer rather than on a page a
          reviewer has to be told about. */

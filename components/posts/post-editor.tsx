@@ -12,6 +12,7 @@ import { PromptCardView } from '@/components/prompts/prompt-card';
 import { cardRatio } from '@/components/prompts/card-frame';
 import type { PromptLabels } from '@/components/prompts/labels';
 import { ClipCard } from '@/components/recipes/clip-card';
+import { CREATOR_WORKSPACE_PATH } from '@/lib/creator-platform/links';
 import { BUTTON, BUTTON_OUTLINE, FIELD, HINT, PANEL } from '@/components/creators/styles';
 import { makerBlogPostHref, postEditorHref } from '@/lib/posts/links';
 import {
@@ -19,8 +20,10 @@ import {
   createEmptyBlock,
   duplicateBlock,
   moveBlock,
+  publishChecklistItems,
   removeBlock,
   sanitizeDraftBlocks,
+  type PublishChecklistItemId,
 } from '@/lib/posts/editor-helpers';
 import {
   POST_BLOCK_TYPES,
@@ -90,6 +93,8 @@ function blockPreviewSummary(
 export function PostEditor({
   locale,
   handle,
+  publicProfile = true,
+  worksAvailable = false,
   initialPost,
   works,
   importableTemplates,
@@ -101,6 +106,8 @@ export function PostEditor({
 }: {
   locale: Locale;
   handle: string | null;
+  publicProfile?: boolean;
+  worksAvailable?: boolean;
   initialPost: MakerPost | null;
   works: readonly MakerWork[];
   importableTemplates: readonly MakerImportableTemplate[];
@@ -339,7 +346,28 @@ export function PostEditor({
     router.refresh();
   }
 
-  const publicUrl = status === 'published' && handle && slug ? makerBlogPostHref(locale, handle, slug) : null;
+  const publicUrl =
+    status === 'published' && publicProfile && handle && slug
+      ? makerBlogPostHref(locale, handle, slug)
+      : null;
+  const checklist = publishChecklistItems({
+    publicProfile,
+    handle,
+    coverWorkId,
+    hasWorks: works.length > 0,
+    profileHref: `${CREATOR_WORKSPACE_PATH}#profile`,
+    worksHref:
+      works.length > 0
+        ? '#post-cover'
+        : worksAvailable
+          ? `${CREATOR_WORKSPACE_PATH}#works`
+          : `${CREATOR_WORKSPACE_PATH}#profile`,
+  });
+  const checklistLabels: Record<PublishChecklistItemId, string> = {
+    publicProfile: blogCopy.checklistEnableProfile,
+    handle: blogCopy.checklistSetHandle,
+    cover: blogCopy.checklistPickCover,
+  };
   const coverWork = coverWorkId ? worksById.get(coverWorkId) ?? null : null;
   let previewHeadingN = 0;
   let previewPromptN = 0;
@@ -399,6 +427,24 @@ export function PostEditor({
           </button>
         </div>
       </div>
+
+      {status === 'published' && (!publicProfile || !handle) ? (
+        <div
+          role="status"
+          data-post-private-profile-notice
+          className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#09090B]/15 bg-[#F4F4F5] px-5 py-4 text-sm text-[#09090B]"
+        >
+          <p className="break-keep text-[#52525B]">{blogCopy.privateProfilePublishedNotice}</p>
+          <a
+            href={`${CREATOR_WORKSPACE_PATH}#profile`}
+            target="_blank"
+            rel="noopener"
+            className="shrink-0 text-sm font-medium text-[#CC1573] transition-colors hover:underline"
+          >
+            {blogCopy.privateProfileSettingsLink}
+          </a>
+        </div>
+      ) : null}
 
       {locked ? (
         <div
@@ -535,7 +581,7 @@ export function PostEditor({
                       className="max-w-xs"
                       style={{ '--r': cardRatio(option.card) } as CSSProperties}
                     >
-                      <PromptCardView card={option.card} locale={locale} labels={promptLabels} />
+                      <PromptCardView card={option.card} locale={locale} labels={promptLabels} linkAuthor={false} />
                     </div>
                   );
                 }
@@ -1069,6 +1115,28 @@ export function PostEditor({
           />
           <span className="break-keep">{blogCopy.rightsConfirm}</span>
         </label>
+
+        {!locked && checklist.length > 0 ? (
+          <div
+            data-post-publish-checklist
+            className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-[#09090B]/10 bg-[#F4F4F5]/80 px-4 py-3 text-xs"
+          >
+            <span className="font-semibold text-[#52525B]">{blogCopy.checklistHeading}</span>
+            {checklist.map((item) => {
+              const externalToEditor = !item.href.startsWith('#');
+              return (
+                <a
+                  key={item.id}
+                  href={item.href}
+                  {...(externalToEditor ? { target: '_blank', rel: 'noopener' } : {})}
+                  className="font-medium text-[#CC1573] transition-colors hover:underline"
+                >
+                  {checklistLabels[item.id]}
+                </a>
+              );
+            })}
+          </div>
+        ) : null}
 
         {feedback ? (
           <p

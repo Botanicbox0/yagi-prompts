@@ -8,6 +8,10 @@ import type { Locale } from '@/lib/i18n/config';
  */
 export const MAKER_REST = '/makers';
 
+export function makersDirectoryHref(locale: Locale): string {
+  return `/${locale}${MAKER_REST}`;
+}
+
 export function makerRest(handle: string): string {
   return `${MAKER_REST}/${handle}`;
 }

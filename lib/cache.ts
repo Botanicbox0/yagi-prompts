@@ -53,13 +53,14 @@ export function revalidatePrompts(): void {
  */
 export function revalidateMakerProfile(handles: readonly string[]): void {
   revalidatePrompts();
-  revalidateStaticSurfaces(['/video', '/image', ...handles.map((handle) => `/makers/${handle}`)]);
+  revalidateTag(POSTS_TAG);
+  revalidateStaticSurfaces(['/video', '/image', '/blog', '/makers', ...handles.map((handle) => `/makers/${handle}`)]);
 }
 
 /**
  * Batch 3 (`TWINGS_MAKER_BLOG`) — invalidates the blog cache tag, the maker's profile tabs,
- * blog list/post routes, linked template story sections, and the sitemap. Existing cache helpers
- * above stay untouched.
+ * blog list/post routes, the site-wide blog feed & directory, linked template story sections, and the sitemap.
+ * Existing cache helpers above stay untouched.
  */
 export const POSTS_TAG = 'maker-posts';
 
@@ -70,6 +71,8 @@ export function revalidateMakerPosts(
 ): void {
   revalidateTag(POSTS_TAG);
   revalidateStaticSurfaces([
+    '/blog',
+    '/makers',
     `/makers/${handle}`,
     `/makers/${handle}/blog`,
     ...(slug ? [`/makers/${handle}/blog/${slug}`] : []),

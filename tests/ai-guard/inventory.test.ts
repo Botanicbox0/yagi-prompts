@@ -74,9 +74,9 @@ describe('every model call in product code is adopted or listed', () => {
     }
   });
 
-  it('counts 36 audit sites plus the generator the grep found', () => {
+  it('counts 36 audit sites plus the generator the grep found and video.understand', () => {
     const sites = INVENTORY.filter((e) => e.status !== 'wrapper').reduce((n, e) => n + e.count, 0);
-    // 36 in AUDIT.md §1.2 (#36 is two lines: generations and edits) and lib/images/seedream.ts.
-    expect(sites).toBe(36 + 1 + 1);
+    // 36 in AUDIT.md §1.2 (#36 is two lines: generations and edits), lib/images/seedream.ts, and lib/brand-studio/video/understand.ts.
+    expect(sites).toBe(36 + 1 + 1 + 1);
   });
 });

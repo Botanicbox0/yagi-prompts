@@ -58,31 +58,33 @@ import type { TemplateMedium } from '@/lib/prompts/schemas';
 export const IMAGE_ENGINE_IDS = ['gpt-image-2.5-flare', 'gpt-image-2', 'gpt-image-2.5-sunburst', 'seedream-5.5', 'seedream-5.0-lite', 'nano-banana-2.1', 'nano-banana-pro'] as const;
 export type ImageEngineId = (typeof IMAGE_ENGINE_IDS)[number];
 
-export const VIDEO_ENGINE_IDS = ['seedance-2.0', 'seedance-2.5', 'kling-omni'] as const;
+export const VIDEO_ENGINE_IDS = ['seedance-2.0', 'seedance-2.5', 'kling-omni', 'magi-2'] as const;
 export type VideoEngineId = (typeof VIDEO_ENGINE_IDS)[number];
 
 export type EngineId = ImageEngineId | VideoEngineId;
 
-/** Who answers the call — the value stored on render_jobs.provider (migration 0061). */
-export type EngineProvider = 'openai' | 'modelark' | 'google' | 'kling';
+/** Who answers the call — the value stored on render_jobs.provider (migration 0061, widened in 0188). */
+export type EngineProvider = 'openai' | 'modelark' | 'google' | 'kling' | 'sunra';
 
-/** The OpenAI third of the image table, the Google engine, and the Seedream rest. */
+/** The OpenAI third of the image table, the Google engine, the Sunra engine, and the Seedream rest. */
 export type OpenAiEngineId = 'gpt-image-2.5-flare' | 'gpt-image-2.5-sunburst' | 'gpt-image-2';
 export type GoogleEngineId = 'nano-banana-2.1' | 'nano-banana-pro';
+export type SunraEngineId = 'magi-2';
 export type SeedreamEngineId = Exclude<ImageEngineId, OpenAiEngineId | GoogleEngineId>;
 
 export interface VideoEngine {
   id: VideoEngineId;
   label: string;
-  provider: 'modelark' | 'kling';
+  provider: 'modelark' | 'kling' | 'sunra';
 }
 
-/** The video engines by name. ModelArk's model table is lib/ark/models.ts; Kling's is lib/kling/models.ts. */
+/** The video engines by name. ModelArk's model table is lib/ark/models.ts; Kling's is lib/kling/models.ts; MAGI-2 is lib/sunra/magi2.ts. */
 export const VIDEO_ENGINES: Record<VideoEngineId, VideoEngine> = {
   'seedance-2.0': { id: 'seedance-2.0', label: 'SEEDANCE 2.0', provider: 'modelark' },
   'seedance-2.5': { id: 'seedance-2.5', label: 'SEEDANCE 2.5', provider: 'modelark' },
   // The label names no version on purpose: which Kling model answers is `KLING_VIDEO_MODEL`.
   'kling-omni': { id: 'kling-omni', label: 'KLING OMNI', provider: 'kling' },
+  'magi-2': { id: 'magi-2', label: 'MAGI-2', provider: 'sunra' },
 };
 
 /** The `quality` vocabulary of the OpenAI images API (2.5 added xhigh · max · auto). */
@@ -106,15 +108,24 @@ export function isGoogleEngine(value: unknown): value is GoogleEngineId {
 export function isKlingEngine(value: unknown): value is 'kling-omni' {
   return isVideoEngine(value) && VIDEO_ENGINES[value].provider === 'kling';
 }
+export function isSunraEngine(value: unknown): value is SunraEngineId {
+  return isVideoEngine(value) && VIDEO_ENGINES[value].provider === 'sunra';
+}
 
 /** The provider behind an engine — the one rule `needsIdentity` and the job row read. */
 export function engineProvider(id: EngineId): EngineProvider {
   return isImageEngine(id) ? IMAGE_ENGINES[id].provider : VIDEO_ENGINES[id].provider;
 }
 
+export interface EngineListOptions {
+  /** Include MAGI-2 when `personalMagi2Open()` is on; default false preserves flag-off parity. */
+  includeMagi2?: boolean;
+}
+
 /** The engines a template of this medium may name, first = default for a new template. */
-export function enginesForMedium(medium: TemplateMedium): readonly EngineId[] {
-  return medium === 'image' ? IMAGE_ENGINE_IDS : VIDEO_ENGINE_IDS;
+export function enginesForMedium(medium: TemplateMedium, opts: EngineListOptions = {}): readonly EngineId[] {
+  if (medium === 'image') return IMAGE_ENGINE_IDS;
+  return opts.includeMagi2 ? VIDEO_ENGINE_IDS : VIDEO_ENGINE_IDS.filter((id) => id !== 'magi-2');
 }
 
 /**

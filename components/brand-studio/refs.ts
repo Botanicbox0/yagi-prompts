@@ -76,6 +76,11 @@ export function withRecognisedRoles(items: TrayItem[], assets: readonly StudioAs
   return changed ? next : items;
 }
 
+/** Shared thumbnail image URL used by both the tray and the video confirm card (no second fetch). */
+export function trayThumbSrc(item: Pick<TrayItem, "thumbUrl" | "url">): string {
+  return item.thumbUrl ?? item.url;
+}
+
 export function trayItemFromOutput(output: StudioOutputView, name: string): TrayItem {
   return {
     key: `o:${output.id}`,

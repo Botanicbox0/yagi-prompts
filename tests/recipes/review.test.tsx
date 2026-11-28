@@ -10,6 +10,9 @@ import { platformHome } from '@/lib/creator-platform/service';
 import { loadCreatorWorkspace } from '@/lib/creator-platform/onboarding';
 import { makerAction, uploadMakerFile } from '@/lib/recipes/maker';
 import { loadReviewEntries, startReviewRenders, REVIEW_RENDERS } from '@/lib/recipes/review';
+import * as pricing from '@/lib/recipes/pricing';
+import { RecipeReviewPanel } from '@/components/recipes/review-panel';
+import { ko } from '@/messages/ko';
 import { loadJobRecipe, loadTemplateRecipe } from '@/lib/recipes/repo';
 import { loadPublicRecipe, recipeTeaser, TEASER_CHARS, type PublicRecipe } from '@/lib/recipes/public';
 import { makerFileObject } from '@/lib/recipes/media';
@@ -223,5 +226,73 @@ describe('studio review and acceptance of a maker recipe', () => {
     expect(teaser.steps![0]!.prompt).toBe(`${teaserOpening}\n\n[BGM: lo-fi 92bpm, vinyl crackle]`);
     expect(teaser).toMatchObject({ outro: null, files: null, steps: [{ note: null }] });
     for (const secret of ['SECRET_MIDDLE', 'STEP_TWO_SECRET', 'tip 1', 'ast_']) expect(JSON.stringify(teaser)).not.toContain(secret);
+  });
+});
+
+describe('review loader resilience against RecipePricingError', () => {
+  let h: PromptHarness, root: string, store: RenderStore;
+  beforeEach(async () => {
+    h = await promptHarness();
+    root = await mkdtemp(join(tmpdir(), 'twings-review-err-'));
+    store = createLocalRenderStore(root);
+    await administerPlatform(h.sql, ADMIN_VIEWER, { action: 'creator', id: maker.userId, active: true, contract: 'pilot-v1', reason: 'Owner-approved' });
+  });
+  afterEach(async () => {
+    vi.restoreAllMocks();
+    await h.close();
+    await rm(root, { recursive: true, force: true });
+  });
+
+  it('keeps other rows and returns quote: null when one row triggers RecipePricingError, and renders an admin note', async () => {
+    const goodId = randomUUID();
+    const badId = randomUUID();
+    const deps = { sql: h.sql, store };
+    const goodRecipe = {
+      version: 2,
+      slots: { selfie: { kind: 'image', source: 'user', required: true } },
+      steps: [{ id: 'step1', kind: 'image', engine: 'gpt-image-2', inputs: ['selfie'], prompt: 'Good {{selfie}} step.', params: { aspect: '4:5' } }],
+      output: { from: 'step1' },
+    };
+    const badRecipe = {
+      version: 2,
+      slots: { selfie: { kind: 'image', source: 'user', required: true } },
+      steps: [{ id: 'badstep', kind: 'video', engine: 'seedance-2.0', inputs: ['selfie'], prompt: 'Unquotable {{selfie}} step.', params: { aspect: '9:16', duration: 5, resolution: '720p' } }],
+      output: { from: 'badstep' },
+    };
+    await makerAction(deps, maker, { action: 'save', id: goodId, title: 'Good row', titleKo: '정상', recipe: goodRecipe, example: 'https://www.instagram.com/reel/good1/', disclosure: { prompts: false, assets: false }, presentation: 'story-first', royalty: 1000 }, open);
+    await makerAction(deps, maker, { action: 'submit', id: goodId, rights: true }, open);
+    await makerAction(deps, maker, { action: 'save', id: badId, title: 'Bad quote row', titleKo: '미지원', recipe: badRecipe, example: 'https://www.instagram.com/reel/bad1/', disclosure: { prompts: false, assets: false }, presentation: 'story-first', royalty: 1000 }, open);
+    await makerAction(deps, maker, { action: 'submit', id: badId, rights: true }, open);
+
+    const orig = pricing.quoteRecipeBase;
+    vi.spyOn(pricing, 'quoteRecipeBase').mockImplementation((recipe, royaltyKrw) => {
+      if (recipe.steps.some((step) => step.id === 'badstep')) {
+        throw new pricing.RecipePricingError('unknown_engine', 'badstep', 'legacy-unknown');
+      }
+      return orig(recipe, royaltyKrw);
+    });
+
+    const map = await loadReviewEntries(h.sql, [badId, goodId]);
+    expect(map.size).toBe(2);
+    expect(map.get(goodId)!.quote).not.toBeNull();
+    const badEntry = map.get(badId)!;
+    expect(badEntry.quote).toBeNull();
+    expect(badEntry.valid).toBe(true);
+
+    const html = renderToStaticMarkup(
+      <RecipeReviewPanel
+        entry={badEntry}
+        copy={ko.makerRecipe}
+        mediums={{ video: '영상', image: '이미지', carousel: '캐러셀' }}
+        acceptLabel="승인"
+        rejectLabel="반려"
+        reason={<input name="reason" />}
+        note={<input name="note" />}
+        submitted
+        locale="ko"
+      />,
+    );
+    expect(html).toContain('data-recipe-quote-unavailable');
+    expect(html).toContain('가격을 계산할 수 없는 엔진');
   });
 });

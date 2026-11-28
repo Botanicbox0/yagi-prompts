@@ -35,11 +35,13 @@ export type CircuitBreakerState =
   | 'open_insufficient_hold'
   | 'open_provider_outage';
 
+export type SunraVideoModelId = 'seedance-2.0' | 'seedance-2.5' | 'magi-2';
+
 /**
  * Pinned baseline display prices (USD per second, before Sunra's 5% top-up fee) from
- * `docs/SUNRA-PROVIDER.md` (verified 2026-10-31).
+ * `docs/SUNRA-PROVIDER.md` (verified 2026-10-31) and MAGI-2 provider contract (2026-11-28).
  */
-const SUNRA_BASE_USD_PER_SEC: Readonly<Record<string, Readonly<Record<'720p' | '1080p', number>>>> = {
+const SUNRA_BASE_USD_PER_SEC: Readonly<Record<SunraVideoModelId, Readonly<Partial<Record<'720p' | '1080p', number>>>>> = {
   'seedance-2.0': {
     '720p': 0.142,   // $0.710 / 5s
     '1080p': 0.3542  // $1.771 / 5s
@@ -47,16 +49,25 @@ const SUNRA_BASE_USD_PER_SEC: Readonly<Record<string, Readonly<Record<'720p' | '
   'seedance-2.5': {
     '720p': 0.2312,  // $1.156 / 5s
     '1080p': 0.5686  // $2.843 / 5s
+  },
+  'magi-2': {
+    '1080p': 0.08
   }
 };
 
+/**
+ * The pinned price of one run, or `null` when no baseline is pinned for this model and resolution (MAGI-2 at 720p,
+ * or a model this table does not know). Never a guessed figure: the guardrail treats `null` as outside the band.
+ */
 export function expectedSunraVideoUsd(input: {
-  model: 'seedance-2.0' | 'seedance-2.5';
+  model: SunraVideoModelId;
   resolution: '720p' | '1080p';
   seconds: number;
   includeTopupFee?: boolean;
-}): number {
-  const perSec = SUNRA_BASE_USD_PER_SEC[input.model]?.[input.resolution] ?? 0.2312;
+}): number | null {
+  const row = Object.prototype.hasOwnProperty.call(SUNRA_BASE_USD_PER_SEC, input.model) ? SUNRA_BASE_USD_PER_SEC[input.model] : undefined;
+  const perSec = row && Object.prototype.hasOwnProperty.call(row, input.resolution) ? row[input.resolution] : undefined;
+  if (typeof perSec !== 'number' || !Number.isFinite(perSec) || perSec <= 0) return null;
   const raw = perSec * Math.max(1, input.seconds);
   const multiplier = input.includeTopupFee ? SUNRA_TOPUP_FEE_MULTIPLIER : 1;
   return Math.round(raw * multiplier * 10000) / 10000;
@@ -64,21 +75,25 @@ export function expectedSunraVideoUsd(input: {
 
 export interface SunraPriceDriftAlert {
   severity: 'warning' | 'critical';
-  model: 'seedance-2.0' | 'seedance-2.5';
+  /** Absent on a measured drift (kept as before); `no_baseline` when nothing was pinned to measure against. */
+  reason?: 'no_baseline';
+  model: SunraVideoModelId;
   resolution: '720p' | '1080p';
   seconds: number;
+  /** 0 when there is no baseline (`reason: 'no_baseline'`). */
   expectedUsd: number;
   actualUsd: number;
+  /** Infinity when there is no baseline: any charge is unmeasured, never "within tolerance". */
   driftRatio: number;
   driftPercent: number;
-  actionTaken: 'circuit_opened_fallback_modelark' | 'logged_within_tolerance';
+  actionTaken: 'circuit_opened_fallback_modelark' | 'circuit_opened_no_baseline' | 'logged_within_tolerance';
   messageKo: string;
   messageEn: string;
   detectedAt: string;
 }
 
 export function evaluateSunraPriceGuardrail(input: {
-  model: 'seedance-2.0' | 'seedance-2.5';
+  model: SunraVideoModelId;
   resolution: '720p' | '1080p';
   seconds: number;
   actualBilledUsd: number;
@@ -86,15 +101,38 @@ export function evaluateSunraPriceGuardrail(input: {
   now?: Date;
 }): { withinGuardrail: boolean; alert: SunraPriceDriftAlert | null } {
   const maxDrift = input.maxDriftRatio ?? SUNRA_DEFAULT_MAX_PRICE_DRIFT_RATIO;
-  const expectedUsd = expectedSunraVideoUsd({
+  const expected = expectedSunraVideoUsd({
     model: input.model,
     resolution: input.resolution,
     seconds: input.seconds,
     includeTopupFee: false
   });
+  const detectedAt = (input.now ?? new Date()).toISOString();
+  // Fail safe: with no pinned baseline there is nothing to measure the charge against, so it is outside the
+  // guardrail (the circuit opens, exactly as for a drift) — never a ratio of 1 that always passes.
+  if (expected === null) {
+    return {
+      withinGuardrail: false,
+      alert: {
+        severity: 'critical',
+        reason: 'no_baseline',
+        model: input.model,
+        resolution: input.resolution,
+        seconds: input.seconds,
+        expectedUsd: 0,
+        actualUsd: input.actualBilledUsd,
+        driftRatio: Number.POSITIVE_INFINITY,
+        driftPercent: Number.POSITIVE_INFINITY,
+        actionTaken: 'circuit_opened_no_baseline',
+        messageKo: `Sunra AI 기준 단가 없음 (${input.model} ${input.resolution} ${input.seconds}초): 고정된 기준 단가가 없어 실청구 $${input.actualBilledUsd.toFixed(3)}를 검증할 수 없습니다. Sunra 자동 라우팅을 차단했습니다.`,
+        messageEn: `Sunra AI has no pinned price baseline (${input.model} ${input.resolution} ${input.seconds}s): billed $${input.actualBilledUsd.toFixed(3)} cannot be checked. Opened circuit breaker.`,
+        detectedAt
+      }
+    };
+  }
+  const expectedUsd = expected;
   const driftRatio = expectedUsd > 0 ? Math.round((input.actualBilledUsd / expectedUsd) * 1000) / 1000 : 1;
   const driftPercent = Math.round((driftRatio - 1) * 1000) / 10;
-  const detectedAt = (input.now ?? new Date()).toISOString();
 
   if (driftRatio > maxDrift) {
     return {
@@ -299,7 +337,7 @@ export function compareProviderPerformance(
 
 export interface SelectProviderInput {
   jobId: string;
-  model: 'seedance-2.0' | 'seedance-2.5';
+  model: SunraVideoModelId;
   mode: SunraRoutingMode;
   sunraConfigured: boolean;
   circuitState: CircuitBreakerState;
@@ -310,23 +348,45 @@ export interface SelectProviderInput {
   telemetrySamples?: readonly ProviderTurnaroundSample[];
 }
 
-export interface ProviderRouteDecision {
-  primary: VideoProviderId;
-  fallback: VideoProviderId | null;
-  reason:
-    | 'sunra_disabled'
-    | 'circuit_breaker_open'
-    | 'person_face_privacy_lock'
-    | 'modelark_within_capacity'
-    | 'modelark_concurrency_overflow'
-    | 'sunra_primary_mode'
-    | 'ab_benchmark_sunra'
-    | 'ab_benchmark_modelark'
-    | 'auto_fastest_sunra'
-    | 'auto_fastest_modelark';
+/** A refusal: no provider may take this job (`primary: null`). Only a Sunra-only model (MAGI-2) is ever refused. */
+export interface ProviderRouteRefusal {
+  primary: null;
+  fallback: null;
+  reason: 'sunra_disabled' | 'circuit_breaker_open' | 'person_face_privacy_lock';
+}
+
+export type ProviderRouteDecision =
+  | {
+      primary: VideoProviderId;
+      fallback: VideoProviderId | null;
+      reason:
+        | 'sunra_disabled'
+        | 'circuit_breaker_open'
+        | 'person_face_privacy_lock'
+        | 'modelark_within_capacity'
+        | 'modelark_concurrency_overflow'
+        | 'sunra_primary_mode'
+        | 'ab_benchmark_sunra'
+        | 'ab_benchmark_modelark'
+        | 'auto_fastest_sunra'
+        | 'auto_fastest_modelark'
+        | 'sunra_only_model';
+    }
+  | ProviderRouteRefusal;
+
+/** Models only Sunra serves: no other provider renders them, so there is never a fallback to name. */
+function sunraOnlyModel(model: SunraVideoModelId): boolean {
+  return model === 'magi-2';
 }
 
 export function selectVideoProvider(input: SelectProviderInput): ProviderRouteDecision {
+  // MAGI-2 renders on Sunra or not at all: each gate that would send a Seedance job to ModelArk refuses it instead.
+  if (sunraOnlyModel(input.model)) {
+    if (!input.sunraConfigured || input.mode === 'off') return { primary: null, fallback: null, reason: 'sunra_disabled' };
+    if (input.circuitState !== 'closed') return { primary: null, fallback: null, reason: 'circuit_breaker_open' };
+    if (input.hasPersonFace && input.sunraSignedFaceAllowed !== true) return { primary: null, fallback: null, reason: 'person_face_privacy_lock' };
+    return { primary: 'sunra', fallback: null, reason: 'sunra_only_model' };
+  }
   if (!input.sunraConfigured || input.mode === 'off') {
     return { primary: 'modelark', fallback: null, reason: 'sunra_disabled' };
   }
@@ -446,11 +506,11 @@ export function createProviderRouterRuntime(options?: {
         input.provider === 'sunra' &&
         typeof input.costUsd === 'number' &&
         input.costUsd > 0 &&
-        (input.model === 'seedance-2.0' || input.model === 'seedance-2.5')
+        (input.model === 'seedance-2.0' || input.model === 'seedance-2.5' || input.model === 'magi-2')
       ) {
         const guardrail = evaluateSunraPriceGuardrail({
           model: input.model,
-          resolution: input.resolution ?? '720p',
+          resolution: input.resolution ?? (input.model === 'magi-2' ? '1080p' : '720p'),
           seconds: input.seconds ?? 5,
           actualBilledUsd: input.costUsd,
           maxDriftRatio

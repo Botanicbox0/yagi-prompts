@@ -3,7 +3,7 @@ import { getViewer } from '@/lib/auth/viewer';
 import { getSqlRunner } from '@/lib/db/connect';
 import { getLocaleFromHeaders } from '@/lib/i18n/server';
 import { getDictionary } from '@/lib/i18n/dictionaries';
-import { interpolate } from '@/lib/i18n/format';
+import { formatPostDate, interpolate } from '@/lib/i18n/format';
 import { signInHref } from '@/lib/billing/links';
 import { BUSINESS } from '@/lib/legal/documents';
 import { platformAccess } from '@/lib/creator-platform/runtime';
@@ -99,6 +99,72 @@ export default async function CreatorWorkspacePage({ searchParams }: { searchPar
           ? <a href={recipeEditorHref('new', revising?.id)} data-recipe-new className={BUTTON}>{dict.makerRecipe.newCta} →</a>
           : <FormatSubmitForm key={revising?.id ?? 'new'} copy={formCopy} revision={revising && { id: revising.id, title: revising.title, medium: revising.medium, exampleUrl: revising.exampleUrl ?? '' }} />}
       </section>
+      {blogEnabled && (
+        <section id="blog" data-creative-blog className={`scroll-mt-24 ${PANEL}`}>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-semibold">{b.workspaceHeading}</h2>
+              <p className="mt-1 text-sm leading-relaxed opacity-70">{b.workspaceLede}</p>
+            </div>
+            <a href={postEditorHref('new')} data-creative-blog-new className={BUTTON}>
+              {b.workspaceNewCta}
+            </a>
+          </div>
+          {!posts.length ? (
+            <p className="text-sm opacity-65">{b.workspaceEmpty}</p>
+          ) : (
+            <ul className="space-y-3">
+              {posts.map((post) => {
+                const statusText =
+                  post.status === 'published'
+                    ? b.statusPublished
+                    : post.status === 'hidden'
+                      ? b.statusHidden
+                      : b.statusDraft;
+                const liveHref =
+                  post.status === 'published' && makerSettings?.publicProfile && makerSettings?.handle
+                    ? makerBlogPostHref(locale, makerSettings.handle, post.slug)
+                    : null;
+                return (
+                  <li
+                    key={post.id}
+                    data-creative-blog-row={post.id}
+                    data-status={post.status}
+                    className="flex flex-wrap items-center justify-between gap-3 border-t border-hairline pt-4"
+                  >
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="break-words text-base font-semibold">{post.title}</h3>
+                        <span className="inline-flex min-h-6 items-center rounded-full border border-hairline px-2.5 text-xs">
+                          {statusText}
+                        </span>
+                      </div>
+                      <p className="text-xs opacity-60 tabular-nums">
+                        {formatPostDate(post.publishedAt ?? post.updatedAt, locale)}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <a href={postEditorHref(post.id)} className={BUTTON_OUTLINE}>
+                        {b.workspaceEdit}
+                      </a>
+                      {liveHref ? (
+                        <a
+                          href={liveHref}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex min-h-11 items-center px-3 text-sm underline underline-offset-4"
+                        >
+                          {b.workspaceViewLive} ↗
+                        </a>
+                      ) : null}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+      )}
       <MakerProfilePanel settings={makerSettings} dict={dict} locale={locale} saved={query.ok === 'profile'} error={typeof query.profile === 'string' ? query.profile : null} />
       {extended && <>
         <section id="works" data-creative-works-panel className={`scroll-mt-24 ${PANEL}`}>
@@ -126,72 +192,6 @@ export default async function CreatorWorkspacePage({ searchParams }: { searchPar
           <McpConnect initial={tokens} endpoint={`${origin}/api/mcp`} locale={locale} copy={p.connect} />
         </section>
       </>}
-      {blogEnabled && (
-        <section id="blog" data-creative-blog className={`scroll-mt-24 ${PANEL}`}>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h2 className="text-xl font-semibold">{b.workspaceHeading}</h2>
-              <p className="mt-1 text-sm leading-relaxed opacity-70">{b.workspaceLede}</p>
-            </div>
-            <a href={postEditorHref('new')} data-creative-blog-new className={BUTTON}>
-              {b.workspaceNewCta}
-            </a>
-          </div>
-          {!posts.length ? (
-            <p className="text-sm opacity-65">{b.workspaceEmpty}</p>
-          ) : (
-            <ul className="space-y-3">
-              {posts.map((post) => {
-                const statusText =
-                  post.status === 'published'
-                    ? b.statusPublished
-                    : post.status === 'hidden'
-                      ? b.statusHidden
-                      : b.statusDraft;
-                const liveHref =
-                  post.status === 'published' && makerSettings?.handle
-                    ? makerBlogPostHref(locale, makerSettings.handle, post.slug)
-                    : null;
-                return (
-                  <li
-                    key={post.id}
-                    data-creative-blog-row={post.id}
-                    data-status={post.status}
-                    className="flex flex-wrap items-center justify-between gap-3 border-t border-hairline pt-4"
-                  >
-                    <div className="min-w-0 space-y-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="break-words text-base font-semibold">{post.title}</h3>
-                        <span className="inline-flex min-h-6 items-center rounded-full border border-hairline px-2.5 text-xs">
-                          {statusText}
-                        </span>
-                      </div>
-                      <p className="text-xs opacity-60 tabular-nums">
-                        {formatDate(post.publishedAt ?? post.updatedAt, locale)}
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <a href={postEditorHref(post.id)} className={BUTTON_OUTLINE}>
-                        {b.workspaceEdit}
-                      </a>
-                      {liveHref ? (
-                        <a
-                          href={liveHref}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex min-h-11 items-center px-3 text-sm underline underline-offset-4"
-                        >
-                          {b.workspaceViewLive} ↗
-                        </a>
-                      ) : null}
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </section>
-      )}
       {records}
     </>);
   }
@@ -229,7 +229,7 @@ export default async function CreatorWorkspacePage({ searchParams }: { searchPar
   if (openMaker) {
     return shell('open_maker', <>
       {declinedCard}
-      <OpenMakerCard locale={locale} workspaceHref={CREATOR_WORKSPACE_PATH} />
+      <OpenMakerCard locale={locale} workspaceHref={CREATOR_WORKSPACE_PATH} copy={t.openMaker} />
       {data.formats.length > 0 ? records : null}
     </>);
   }

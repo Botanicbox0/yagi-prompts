@@ -92,7 +92,6 @@ import { ReversePanel } from "./reverse";
 import { collectSessionRunAdds, createSessionRunBook } from "./session-runs";
 import { fillText } from "./reverse-model";
 import { SequenceRail, type SequenceInspectorTab, type SequenceRailHeight } from "./sequence-rail";
-import { VideoModeExplainer } from "./mode-explainer";
 import { useVideoModes } from "./use-video-modes";
 import w from "./video-workspace.module.css";
 import { validateVideoEditDurationSeconds } from "./workspace-model";
@@ -1287,6 +1286,7 @@ export function VideoStudioWorkspace({
 
   const videoModesState = useVideoModes({
     enabled: videoModesOn,
+    organizationId,
     modesCopy: videoModesCopy,
     dock,
     copy,
@@ -1295,8 +1295,10 @@ export function VideoStudioWorkspace({
     remixFilm,
     remixVideoAssetId: remixVideo?.assetId ?? null,
     analyzeFilm,
+    understandVideo: (input) => clientApi.call("video.understand", input),
   });
   const attachItem = videoModesState.attachItem;
+  const updateTrayItem = videoModesState.updateTrayItem;
   const removeTrayItem = videoModesState.removeTrayItem;
   const clearForcedLimit = videoModesState.clearForcedLimit;
 
@@ -1314,23 +1316,33 @@ export function VideoStudioWorkspace({
     (source: RefSource): TrayItem | null => {
       const asset = "assetId" in source ? lookup.asset(source.assetId) : null;
       const output = "outputId" in source ? lookup.output(source.outputId) : null;
-      return asset ? trayItemFromAsset(asset) : output ? trayItemFromOutput(output, copy.viewer.label) : null;
+      if (asset) return trayItemFromAsset(asset);
+      if (!output) return null;
+      if (!videoModesOn) return trayItemFromOutput(output, copy.viewer.label);
+      const owner = allJobs.find(
+        (j) => (output.jobId && j.id === output.jobId) || j.outputs.some((o) => o.id === output.id),
+      );
+      const title = owner?.music?.title?.trim() || owner?.prompt?.trim().slice(0, 80) || "";
+      return trayItemFromOutput(output, title);
     },
-    [copy.viewer.label, lookup],
+    [allJobs, copy.viewer.label, lookup, videoModesOn],
   );
 
   // Recent outputs across image & video jobs for Section 2 of `@` autocomplete.
   const recentOutputs = useMemo(() => {
     const out: TrayItem[] = [];
     for (const job of allJobs) {
+      const title = videoModesOn
+        ? job.music?.title?.trim() || job.prompt?.trim().slice(0, 80) || ""
+        : copy.viewer.label;
       for (const output of job.outputs) {
         if (out.length >= 12) break;
-        out.push(trayItemFromOutput(output, copy.viewer.label));
+        out.push(trayItemFromOutput(output, title));
       }
       if (out.length >= 12) break;
     }
     return out;
-  }, [allJobs, copy.viewer.label]);
+  }, [allJobs, copy.viewer.label, videoModesOn]);
 
   const latestReadyVideoOutput = useMemo(() => {
     for (const job of jobs) {
@@ -1370,6 +1382,12 @@ export function VideoStudioWorkspace({
     onRegionSending: () => undefined,
     focusPrompt,
     reviseV2: Boolean(state?.reviseV2),
+    ...(videoModesOn
+      ? {
+          blueprintToDock: true,
+          onReuseOpenConfirm: videoModesState.openConfirmForReuse,
+        }
+      : {}),
   });
 
   const attachSource = useCallback(
@@ -1390,7 +1408,7 @@ export function VideoStudioWorkspace({
     const tile = trayItemFromAsset(found);
     dock.attach(tile);
     if (found.kind === "video") {
-      if (initialTab === "edit") {
+      if (initialTab === "edit" && !videoModesOn) {
         const videoModel = dockControls(dock.draft).model as StudioVideoModel;
         const canEdit =
           typeof found.seconds !== "number" ||
@@ -1404,7 +1422,7 @@ export function VideoStudioWorkspace({
         dock.setDraft((cur) => ({ ...cur, method: "blueprint", methodPinned: true }));
       }
     }
-  }, [dock, initialAssetId, initialCreateMode, initialTab, state]);
+  }, [dock, initialAssetId, initialCreateMode, initialTab, state, videoModesOn]);
 
   // URL `?from=` (opening frame from Image Studio) & `?ref=` (from Brand Asset Hub)
   const urlAttachDone = useRef(false);
@@ -1874,7 +1892,12 @@ export function VideoStudioWorkspace({
           if (isFailure(res)) setStatus(res.code === "conflict" ? copy.viewer.deleteBusy : errorLine(copy, res.code));
         });
       case "reference":
-        attachItem(trayItemFromOutput(output, copy.viewer.label));
+        attachItem(
+          trayItemFromOutput(
+            output,
+            videoModesOn ? job.music?.title?.trim() || job.prompt?.trim().slice(0, 80) || "" : copy.viewer.label,
+          ),
+        );
         if (railHeight === "full") setRailHeight("compact");
         return focusPrompt();
       case "download":
@@ -2038,7 +2061,7 @@ export function VideoStudioWorkspace({
       onAttachItem={attachItem}
       onTrimVideo={openTrimForTrayItem}
       onDraft={dock.setDraft}
-      onTrayUpdate={dock.update}
+      onTrayUpdate={updateTrayItem}
       onTrayRemove={removeTrayItem}
       onTrayMove={dock.move}
       onSubmit={() => {
@@ -2059,6 +2082,7 @@ export function VideoStudioWorkspace({
         // opened (or a new one started) meanwhile, nothing is recorded for this press.
         void dock.submit().then((started) => {
           if (!started) return;
+          videoModesState.onSubmitted();
           setStageTab("history");
           setStatus(copy.state.started);
           if (projectContextRef.current !== context) return;
@@ -2300,17 +2324,6 @@ export function VideoStudioWorkspace({
                     {pillDrag ? copy.tray.drop : wc.projects.expandDock}
                   </button>
                 </div>
-              ) : videoModesOn && videoModesCopy && videoModesState.explainerMode ? (
-                <>
-                  <VideoModeExplainer
-                    mode={videoModesState.explainerMode}
-                    copy={videoModesCopy}
-                    model={videoModel}
-                    hidden={!videoModesState.hydrated}
-                    onDismiss={videoModesState.dismissExplainer}
-                  />
-                  {dockElement}
-                </>
               ) : (
                 dockElement
               )
@@ -2398,17 +2411,19 @@ export function VideoStudioWorkspace({
         />
       )}
 
-      <ReversePanel
-        organizationId={organizationId}
-        locale={locale}
-        copy={copy}
-        video={videoCopy}
-        // `?start=reverse` (a link from the asset hub or the prompt bar, with or without `&asset=`): open once on arrival. The panel
-        // reads this only as its first state, so a state refresh never reopens it after it was closed.
-        initialOpen={initialCreateMode === "blueprint"}
-        initialAssetId={remixVideo?.assetId ?? initialAssetId}
-        api={reverseApi}
-      />
+      {!videoModesOn && (
+        <ReversePanel
+          organizationId={organizationId}
+          locale={locale}
+          copy={copy}
+          video={videoCopy}
+          // `?start=reverse` (a link from the asset hub or the prompt bar, with or without `&asset=`): open once on arrival. The panel
+          // reads this only as its first state, so a state refresh never reopens it after it was closed.
+          initialOpen={initialCreateMode === "blueprint"}
+          initialAssetId={remixVideo?.assetId ?? initialAssetId}
+          api={reverseApi}
+        />
+      )}
 
       {trimModalClip && (
         <ClipTrimModal
@@ -2416,6 +2431,10 @@ export function VideoStudioWorkspace({
           copy={wc.trimModal}
           minSeconds={videoModel.referenceVideoSeconds.editMin}
           maxSeconds={videoModel.referenceVideoSeconds.max}
+          shots={(() => {
+            const f = studio.films[trimModalClip.id];
+            return f?.status === "done" ? f.sheet?.shots : undefined;
+          })()}
           onSkip={(original) => {
             replaceVideoInTray(original);
             setTrimModalClip(null);

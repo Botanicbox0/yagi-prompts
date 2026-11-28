@@ -12,6 +12,7 @@ import { buildRenderPrompt } from '@/lib/renders/prompt';
 import { templateCompileSource, type CompileSourceInput } from '@/lib/template-director/compile-prompts';
 import { deterministicDirectorPrompt } from '@/lib/template-director/flash-director';
 import type { PersonalDirectorSpec, PersonalOwnStylePart } from '@/lib/template-director/schema';
+import { isVideoEngine } from '@/lib/images/engines';
 import { videoModelForEngine } from '@/lib/video/models';
 
 /**
@@ -60,7 +61,8 @@ export function templateCompileClips(input: TemplateLengthInput): CompileClip[] 
     // `renderNow`: the text through `buildRenderPrompt` (no cast: the solo identity line), then the compile with the
     // template's cast and the person's photo.
     const base = buildRenderPrompt({ promptText: input.promptText, medium: 'video', hasPhoto: true }).text;
-    const engine = videoModelForEngine(input.engine, input.runtimeSeconds ?? 0).model;
+    const knownEngine = input.engine && isVideoEngine(input.engine) ? input.engine : null;
+    const engine = videoModelForEngine(knownEngine, input.runtimeSeconds ?? 0).model;
     return [{ clip: 1, stepId: null, base, limit, engine, medium: 'video', cast: toTemplateCast(input.cast ?? 'solo'), hasPersonSlot: true }];
   }
   return source.prompts.flatMap((prompt, index) => {
@@ -139,8 +141,10 @@ export function templateEditRoom(input: TemplateLengthInput): { headroom: number
 
 /** The first clip over its limit, as a refusal detail; null when every clip fits. */
 export function promptLengthRefusal(field: string, input: TemplateLengthInput): string | null {
-  const over = overLimitClips(templateClipLengths(input))[0];
-  return over ? promptLengthRefusalDetail(field, over) : null;
+  const over = templateCompileClips(input).find((c) => c.base.length > c.limit);
+  return over
+    ? promptLengthRefusalDetail(field, { clip: over.clip, stepId: over.stepId, chars: over.base.length, limit: over.limit }, over.engine)
+    : null;
 }
 
 /**
@@ -152,9 +156,12 @@ export function promptLengthRefusal(field: string, input: TemplateLengthInput): 
 export function promptLengthUpdateRefusal(field: string, before: TemplateLengthInput, after: TemplateLengthInput): string | null {
   if (before.promptText === after.promptText) return null;
   const old = templateClipLengths(before);
-  for (const clip of overLimitClips(templateClipLengths(after))) {
+  for (const clip of templateCompileClips(after)) {
+    if (clip.base.length <= clip.limit) continue;
     const was = old.find((c) => c.clip === clip.clip && c.stepId === clip.stepId);
-    if (!(was && was.chars > was.limit && clip.chars <= was.chars)) return promptLengthRefusalDetail(field, clip);
+    if (!(was && was.chars > was.limit && clip.base.length <= was.chars)) {
+      return promptLengthRefusalDetail(field, { clip: clip.clip, stepId: clip.stepId, chars: clip.base.length, limit: clip.limit }, clip.engine);
+    }
   }
   return null;
 }

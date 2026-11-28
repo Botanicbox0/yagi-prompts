@@ -106,7 +106,7 @@ export function seedanceReferenceRequest(input: SeedanceReferenceInput): { endpo
  */
 const QUOTED = /"[^"\n]*"|“[^”\n]*”/g;
 
-function outsideQuotes(text: string, fn: (plain: string) => string): string {
+export function outsideQuotes(text: string, fn: (plain: string) => string): string {
   let out = '';
   let at = 0;
   for (const match of text.matchAll(QUOTED)) {

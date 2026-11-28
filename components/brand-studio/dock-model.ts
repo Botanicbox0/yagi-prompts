@@ -168,7 +168,7 @@ export function initialDraft(medium: StudioMedium = "image"): DockDraft {
     quality: "",
     count: 1,
     seconds: model.medium === "video" ? (model as StudioVideoModel).defaultSeconds : 5,
-    audio: "native",
+    audio: "ambient",
     enhance: true,
     method: "reference",
     keep: ["camera", "timing"],

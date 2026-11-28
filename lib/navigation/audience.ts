@@ -2,6 +2,8 @@ import type { Locale } from '@/lib/i18n/config';
 import type { Dictionary } from '@/lib/i18n/dictionaries';
 import { brandEnquiryHref, brandsHref, brandWorkspaceHref, campaignsHref } from '@/lib/campaigns/links';
 import { templatesHref } from '@/lib/prompts/links';
+import { makerBlogOpen } from '@/lib/posts/flag';
+import { blogFeedHref } from '@/lib/posts/links';
 
 export type Audience = 'creator' | 'brand';
 export function audienceForPath(rest: string): Audience {
@@ -10,9 +12,15 @@ export function audienceForPath(rest: string): Audience {
 }
 
 /** Audience is a navigation destination, never a persisted account role or an authorization input. */
-export function audienceNavigation(locale: Locale, dict: Dictionary, rest: string) {
+export function audienceNavigation(
+  locale: Locale,
+  dict: Dictionary,
+  rest: string,
+  options?: { blogOpen?: boolean },
+) {
   const audience = audienceForPath(rest);
   const t = dict.audience;
+  const blogOpen = options?.blogOpen ?? makerBlogOpen();
   const next = rest === '/' || rest === '' ? templatesHref(locale, 'video') : `/${locale}${rest}`;
   return {
     audience,
@@ -29,6 +37,7 @@ export function audienceNavigation(locale: Locale, dict: Dictionary, rest: strin
       { href: templatesHref(locale, 'image'), label: dict.nav.image },
       { href: `/${locale}/direct`, label: dict.nav.direct },
       { href: campaignsHref(locale), label: dict.nav.campaigns },
+      ...(blogOpen ? [{ href: blogFeedHref(locale), label: dict.nav.blog }] : []),
       { href: `/${locale}/pricing`, label: dict.nav.pricing },
     ],
     signInHref: audience === 'brand' ? brandWorkspaceHref(locale) : `/auth/signin?next=${encodeURIComponent(next)}&locale=${locale}`,

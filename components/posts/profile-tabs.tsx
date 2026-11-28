@@ -4,7 +4,7 @@ import { makerBlogListHref } from '@/lib/posts/links';
 
 /**
  * Single horizontal tab strip on the maker profile and blog index (`템플릿 · 블로그 · 대표 작업`).
- * Rendered ONLY when `TWINGS_MAKER_BLOG=on` and the maker has >= 1 published blog post.
+ * Rendered whenever `TWINGS_MAKER_BLOG=on`, even before the creative writes their first post.
  */
 export function ProfileTabs({
   locale,
@@ -42,7 +42,7 @@ export function ProfileTabs({
       className="mt-10 flex flex-wrap items-center gap-2 border-t border-[#09090B]/[0.08] pt-6 sm:px-8 lg:px-10"
     >
       <a
-        href={active === 'profile' ? '#maker' : `${profileUrl}#maker`}
+        href={active === 'profile' ? '#rail-maker' : `${profileUrl}#rail-maker`}
         aria-current={active === 'profile' ? 'page' : undefined}
         className={pillClass(active === 'profile')}
       >
@@ -54,13 +54,15 @@ export function ProfileTabs({
         className={pillClass(active === 'blog')}
       >
         <span>{labels.blog}</span>
-        <span
-          className={`tabular-nums text-xs ${
-            active === 'blog' ? 'text-white/80' : 'text-[#71717A]'
-          }`}
-        >
-          {postCount}
-        </span>
+        {postCount > 0 ? (
+          <span
+            className={`tabular-nums text-xs ${
+              active === 'blog' ? 'text-white/80' : 'text-[#71717A]'
+            }`}
+          >
+            {postCount}
+          </span>
+        ) : null}
       </a>
       {hasWorks ? (
         <a
