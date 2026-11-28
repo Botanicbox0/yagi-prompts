@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import { AssetRefSchema, type AssetRef } from '@/lib/content/schemas';
 import { isVideoAspect } from '@/lib/images/engines';
-import { centsForKrw, isRoyalty, quoteRecipe, quoteRecipeBase } from '@/lib/recipes/pricing';
+import { RecipePricingError, centsForKrw, isRoyalty, quoteRecipe, quoteRecipeBase } from '@/lib/recipes/pricing';
 import { loadTemplateRecipe, recipeSchemaReady } from '@/lib/recipes/repo';
 import { legacyPromptText, parseRecipe, SELFIE_SLOT, type Recipe } from '@/lib/recipes/schema';
 import type { StorageDriver } from '@/lib/storage';
@@ -79,12 +79,20 @@ export function buildMakerFilm(raw: unknown, prompt: string): { ok: true; film: 
     output: { from: 'film' },
   });
   if (!checked.ok) return { ok: false, errors: checked.issues.map((issue) => `recipe: ${issue.code}${'step' in issue && issue.step ? ` (${issue.step})` : ''}`) };
-  const floor = quoteRecipeBase(checked.recipe, f.royalty_krw).floorKrw;
-  if (f.price_krw < floor) return { ok: false, errors: [`price_krw: ${f.price_krw} is below the 720p cost floor ${floor}`] };
-  if (f.price_1080_krw !== undefined) {
-    const floor1080 = quoteRecipe(checked.recipe, f.royalty_krw, '1080p').floorKrw;
-    if (f.price_1080_krw < floor1080) return { ok: false, errors: [`price_1080_krw: ${f.price_1080_krw} is below the 1080p cost floor ${floor1080}`] };
-    if (f.price_1080_krw < f.price_krw) return { ok: false, errors: [`price_1080_krw: ${f.price_1080_krw} is below price_krw ${f.price_krw}`] };
+  let floor: number;
+  try {
+    floor = quoteRecipeBase(checked.recipe, f.royalty_krw).floorKrw;
+    if (f.price_krw < floor) return { ok: false, errors: [`price_krw: ${f.price_krw} is below the 720p cost floor ${floor}`] };
+    if (f.price_1080_krw !== undefined) {
+      const floor1080 = quoteRecipe(checked.recipe, f.royalty_krw, '1080p').floorKrw;
+      if (f.price_1080_krw < floor1080) return { ok: false, errors: [`price_1080_krw: ${f.price_1080_krw} is below the 1080p cost floor ${floor1080}`] };
+      if (f.price_1080_krw < f.price_krw) return { ok: false, errors: [`price_1080_krw: ${f.price_1080_krw} is below price_krw ${f.price_krw}`] };
+    }
+  } catch (error) {
+    if (error instanceof RecipePricingError) {
+      return { ok: false, errors: [`recipe: ${error.code} (${error.stepId}: ${error.engine})`] };
+    }
+    throw error;
   }
   return { ok: true, film: { ...f, recipe: checked.recipe } };
 }

@@ -1,6 +1,6 @@
 import type { ArkRatio, ArkResolution } from '@/lib/ark/models';
 import { ArkError, arkConfigFromEnv, createArkClient, isTerminal, type ArkClient, type ArkContentItem } from '@/lib/ark/client';
-import { IMAGE_ENGINES, estimateImageUsd, isGoogleEngine, isKlingEngine, isOpenAiEngine, type ImageAspect, type ImageEngineId, type VideoAspect, type VideoEngineId } from '@/lib/images/engines';
+import { IMAGE_ENGINES, estimateImageUsd, isGoogleEngine, isKlingEngine, isOpenAiEngine, isSunraEngine, type ImageAspect, type ImageEngineId, type VideoAspect, type VideoEngineId } from '@/lib/images/engines';
 import { OpenAiImageError, createOpenAiImageClient, openAiConfigFromEnv, type OpenAiImageClient, type ReferenceImage } from '@/lib/images/openai';
 import { SeedreamError, createSeedreamClient, seedreamConfigFromEnv, type SeedreamClient } from '@/lib/images/seedream';
 import { GeminiImageError, createGeminiImageClient, geminiConfigFromEnv, type GeminiImageClient } from '@/lib/images/gemini';
@@ -8,8 +8,9 @@ import { KlingError, createKlingClient, isKlingTerminal, klingConfigFromEnv, typ
 import type { KlingAspect, KlingResolution } from '@/lib/kling/models';
 import { assetReference } from '@/lib/identity/service';
 import { quoteArkVideo } from '@/lib/ark/pricing';
+import { personalMagi2Open } from '@/lib/flags';
 import { DEFAULT_CREATOR_RESOLUTION, type CreatorResolution } from '@/lib/twings/resolution';
-import { isKlingModel, quoteVideo, videoModelForEngine, type VideoModelKey } from '@/lib/video/models';
+import { isKlingModel, isMagi2Model, quoteVideo, videoModelForEngine, type VideoModelKey } from '@/lib/video/models';
 import type { SunraClient } from '@/lib/sunra/client';
 import type { RenderProvider } from './repo';
 import { isSunraLaneTaskId, pollSunraRender, startSunraRender } from './engines-sunra';
@@ -335,13 +336,23 @@ export interface StartedVideo {
   provider: RenderProvider;
 }
 
-export async function startVideoRender(input: VideoRenderInput, deps: RenderEngineDeps = {}): Promise<StartedVideo> {
-  if (input.lane === 'sunra') return startSunraRender(input, deps);
+export async function startVideoRender(
+  input: VideoRenderInput,
+  deps: RenderEngineDeps = {},
+  env: Record<string, string | undefined> = process.env,
+): Promise<StartedVideo> {
+  if (input.lane === 'sunra') return startSunraRender(input, deps, env);
+  if (isSunraEngine(input.engine)) {
+    if (!personalMagi2Open(env)) {
+      throw new RenderFailure('no_engine_key', 'TWINGS_PERSONAL_MAGI2 is not enabled', false);
+    }
+    return startSunraRender(input, deps, env);
+  }
   if (isKlingEngine(input.engine)) return startKlingRender(input, deps);
   const client = deps.ark === undefined ? arkClientFromEnv() : deps.ark;
   if (client === null) throw new RenderFailure('no_engine_key', 'ARK_API_KEY is not set', false);
   const { model, seconds } = videoModelFor(input.engine, input.seconds);
-  if (isKlingModel(model)) throw new RenderFailure('engine_error', `${input.engine} does not render on ${model}`, false);
+  if (isKlingModel(model) || isMagi2Model(model)) throw new RenderFailure('engine_error', `${input.engine} does not render on ${model}`, false);
   const content: ArkContentItem[] = [{ type: 'text', text: input.prompt }];
   if (input.references) {
     for (const reference of input.references) {
@@ -422,6 +433,7 @@ export async function pollVideoRender(args: {
   // The task id names the lane, so the pass's poll needs no change for it.
   if (isSunraLaneTaskId(args.taskId)) return pollSunraRender(args.taskId, args, deps);
   if (isKlingModel(args.model)) return pollKlingRender({ ...args, model: args.model }, deps);
+  if (isMagi2Model(args.model)) return { status: 'failed', failure: new RenderFailure('engine_error', 'MAGI-2 tasks must run on the Sunra lane', false) };
   const client = deps.ark === undefined ? arkClientFromEnv() : deps.ark;
   if (client === null) return { status: 'failed', failure: new RenderFailure('no_engine_key', 'ARK_API_KEY is not set', false) };
   let task;

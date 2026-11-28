@@ -1,6 +1,8 @@
 import { marginSplit } from '@/lib/creator-platform/economics';
 import { quoteArkVideo } from '@/lib/ark/pricing';
+import { quoteVideo, videoResolutions, type VideoModelKey } from '@/lib/video/models';
 import { COST_ASSUMPTIONS, IMAGE_MIN_PRICE_KRW, roundUpToHundred } from './cost-model';
+import type { CreatorResolution } from './resolution';
 
 /**
  * docs/PLATFORM-2.0.md §19.2 (founder decision, 2026-11-02) — what a template costs and what one
@@ -59,6 +61,60 @@ export function creditsToKrw(credits: number, medium: PriceMedium): number {
 /** The base won price of a template: the lowest a creative may sell it at. */
 export function baseKrw(input: CostInput, level: PriceLevel = 'target'): number {
   return creditsToKrw(baseCredits(input, level), input.medium);
+}
+
+export interface VideoTemplatePriceQuote {
+  model: VideoModelKey;
+  resolution: CreatorResolution;
+  seconds: number;
+  providerUsd: number;
+  providerKrw: number;
+  baseCredits: number;
+  floorKrw: number;
+  royaltyKrw: number;
+  totalCredits: number;
+  totalKrw: number;
+}
+
+/**
+ * Quotes a single video template at `quoteVideo`'s cost row for `model` (MAGI-2 uses $0.08/s × 1.05,
+ * defaulting to `'1080p'` because MAGI-2 only renders at 1080p). Returns null when the model cannot
+ * render the requested resolution/duration/aspect.
+ */
+export function quoteVideoTemplatePrice(input: {
+  model: VideoModelKey;
+  resolution?: CreatorResolution;
+  seconds: number;
+  aspect?: string;
+  royaltyKrw?: number;
+}): VideoTemplatePriceQuote | null {
+  const supported = videoResolutions(input.model);
+  const resolution: CreatorResolution =
+    input.resolution ?? (supported.includes('720p') ? '720p' : supported.includes('1080p') ? '1080p' : '720p');
+  const quote = quoteVideo({
+    model: input.model,
+    resolution,
+    seconds: input.seconds,
+    aspect: input.aspect ?? '9:16',
+  });
+  if (!quote) return null;
+  const bCredits = baseCredits({ medium: 'video', providerUsd: quote.providerUsd });
+  const floorKrw = baseKrw({ medium: 'video', providerUsd: quote.providerUsd });
+  const royaltyKrw = isRaise(input.royaltyKrw) ? input.royaltyKrw : 0;
+  const raiseCredits =
+    royaltyKrw > 0 ? Math.ceil((royaltyKrw * NET_SHARE) / CREDIT_NET_KRW - 1e-9) : 0;
+  return {
+    model: input.model,
+    resolution,
+    seconds: input.seconds,
+    providerUsd: quote.providerUsd,
+    providerKrw: Math.round(providerKrw(quote.providerUsd)),
+    baseCredits: bCredits,
+    floorKrw,
+    royaltyKrw,
+    totalCredits: bCredits + raiseCredits,
+    totalKrw: floorKrw + royaltyKrw,
+  };
 }
 
 export interface MakeEarning {

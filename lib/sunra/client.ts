@@ -8,10 +8,12 @@
  *   can immediately detect unannounced Sunra price changes and trip the pricing circuit breaker.
  */
 
+import { SUNRA_TOPUP_FEE_MULTIPLIER } from './fees';
+
 export const SUNRA_DEFAULT_BASE_URL = 'https://api.sunra.ai' as const;
 
 /** Sunra charges a 5% platform top-up fee on credit purchases (Terms §6.2). */
-export const SUNRA_TOPUP_FEE_MULTIPLIER = 1.05 as const;
+export { SUNRA_TOPUP_FEE_MULTIPLIER };
 
 /** Pre-submission credit hold amounts required by Sunra per video request. */
 export const SUNRA_CREDIT_HOLD_USD: Readonly<Record<string, number>> = {
@@ -48,7 +50,7 @@ export function fromSunraTaskId(taskId: string): string | null {
 
 const VIDEO_ENDPOINTS: Readonly<Record<string, string>> = {
   'seedance-2.0': 'bytedance/seedance-2.0/text-to-video',
-  'seedance-2.5': 'bytedance/seedance-2.5/text-to-video'
+  'seedance-2.5': 'bytedance/seedance-2.5/text-to-video',
 };
 
 export function sunraVideoEndpoint(model: string): string | null {

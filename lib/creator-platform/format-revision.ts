@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import { toTemplateCast } from '@/lib/prompts/schemas';
-import { quoteRecipeBase, quoteRecipeByResolution } from '@/lib/recipes/pricing';
+import { RecipePricingError, quoteRecipeBase, quoteRecipeByResolution } from '@/lib/recipes/pricing';
 import { MAX_STEP_PROMPT_CHARS, legacyPromptText, parseRecipe, type Recipe } from '@/lib/recipes/schema';
 import { templateCardStyling, templateCompileSource } from '@/lib/template-director/compile-prompts';
 import { checkLockBlock, lockBlockRefusalDetail } from '@/lib/template-director/locks';
@@ -185,6 +185,7 @@ export type RevisionRefusalCode =
   | 'styling_partial'
   | 'price_floor'
   | 'price_floor_1080'
+  | 'recipe_pricing'
   | 'pending_jobs'
   | 'verify_failed'
   | 'trigger_refused';
@@ -321,10 +322,17 @@ export async function reviseFormatRecipe(sql: SqlRunner, actorId: string | null,
       if (declares && templateCardStyling({ promptText, recipe: next, recipeReady: true, cast }) === null) return refuse('styling_partial');
 
       // 5. The price floors (text cannot move them; asserted anyway).
-      const floor = quoteRecipeBase(recipe, 0).floorKrw;
+      let floor: number;
+      let hd: ReturnType<typeof quoteRecipeByResolution>['1080p'];
+      try {
+        floor = quoteRecipeBase(recipe, 0).floorKrw;
+        hd = quoteRecipeByResolution(recipe, 0)['1080p'];
+      } catch (error) {
+        if (error instanceof RecipePricingError) return refuse('recipe_pricing', `${error.stepId}: ${error.engine}`);
+        throw error;
+      }
       if (!(row.price_krw >= floor)) return refuse('price_floor', `${row.price_krw} < ${floor}`);
       const price1080 = Number(row.price_1080_krw ?? 0);
-      const hd = quoteRecipeByResolution(recipe, 0)['1080p'];
       if (price1080 > 0 && hd && price1080 < hd.floorKrw) return refuse('price_floor_1080', `${price1080} < ${hd.floorKrw}`);
 
       // 6. Never under an order that has not taken its recipe snapshot yet.

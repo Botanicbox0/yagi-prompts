@@ -26,6 +26,17 @@ export function isRoyalty(value: unknown): value is number {
   return isRaise(value);
 }
 
+export class RecipePricingError extends Error {
+  constructor(
+    readonly code: 'unknown_engine' | 'unquotable_step',
+    readonly stepId: string,
+    readonly engine: string,
+  ) {
+    super(`recipe pricing ${code} at step ${stepId} (${engine})`);
+    this.name = 'RecipePricingError';
+  }
+}
+
 export interface StepCost { step: string; providerUsd: number }
 export interface RecipeQuote {
   steps: StepCost[];
@@ -43,13 +54,18 @@ export interface RecipeQuote {
 
 export function stepCosts(recipe: Recipe): StepCost[] {
   return recipe.steps.map((step) => {
-    if (step.kind === 'image' && isImageEngine(step.engine)) return { step: step.id, providerUsd: estimateImageUsd(step.engine, step.inputs.length) };
-    if (step.kind === 'video' && isVideoEngine(step.engine)) {
+    if (step.kind === 'image') {
+      if (!isImageEngine(step.engine)) throw new RecipePricingError('unknown_engine', step.id, step.engine);
+      return { step: step.id, providerUsd: estimateImageUsd(step.engine, step.inputs.length) };
+    }
+    if (step.kind === 'video') {
+      if (!isVideoEngine(step.engine)) throw new RecipePricingError('unknown_engine', step.id, step.engine);
       const { model, seconds } = videoModelForEngine(step.engine, step.params.duration);
       const quote = quoteVideo({ model, resolution: step.params.resolution, seconds, aspect: step.params.aspect });
-      return { step: step.id, providerUsd: quote?.providerUsd ?? 0 };
+      if (quote === null) throw new RecipePricingError('unquotable_step', step.id, step.engine);
+      return { step: step.id, providerUsd: quote.providerUsd };
     }
-    return { step: step.id, providerUsd: 0 };
+    throw new RecipePricingError('unknown_engine', (step as { id: string }).id, String((step as { engine?: unknown }).engine ?? 'unknown'));
   });
 }
 

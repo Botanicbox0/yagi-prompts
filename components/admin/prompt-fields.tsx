@@ -1,8 +1,20 @@
 import { PublicLink } from '@/components/admin/public-link';
-import { IMAGE_ASPECTS, IMAGE_ENGINES, IMAGE_ENGINE_IDS, VIDEO_ASPECTS, VIDEO_ENGINE_IDS, estimateImageUsd, isImageEngine, resolveEngine } from '@/lib/images/engines';
+import {
+  IMAGE_ASPECTS,
+  IMAGE_ENGINES,
+  IMAGE_ENGINE_IDS,
+  VIDEO_ASPECTS,
+  VIDEO_ENGINES,
+  enginesForMedium,
+  estimateImageUsd,
+  isImageEngine,
+  isVideoEngine,
+  resolveEngine,
+} from '@/lib/images/engines';
 import { formatDate, interpolate } from '@/lib/i18n/format';
 import { formatKrw, suggestedKrw } from '@/lib/twings/products';
 import { costFloor } from '@/lib/twings/cost-model';
+import { is1080pOnlyTemplate } from '@/lib/twings/resolution';
 import { baseKrw, makeEarning, providerKrw } from '@/lib/twings/template-price';
 import { videoModelForEngine } from '@/lib/video/models';
 import { formatPromptChars } from '@/lib/engines/prompt-limits';
@@ -189,12 +201,25 @@ function CostFloorNote({ row, dict }: { row: PromptRow | null; dict: Dict }) {
     );
   }
   if (row.medium !== 'video' || !row.runtimeSeconds) return null;
-  const { model, seconds } = videoModelForEngine(row.engine, row.runtimeSeconds);
-  const q720 = costFloor({ model, resolution: '720p', seconds, aspect: row.aspectDefault ?? '9:16' });
+  const only1080 = is1080pOnlyTemplate(row);
+  const engine = row.engine && isVideoEngine(row.engine) ? row.engine : null;
+  const { model, seconds } = videoModelForEngine(engine, row.runtimeSeconds);
   const q1080 = costFloor({ model, resolution: '1080p', seconds, aspect: row.aspectDefault ?? '9:16' });
-  if (!q720 || !q1080) return null;
+  if (!q1080) return null;
   const film = (providerUsd: number, level?: 'min') => baseKrw({ medium: 'video', providerUsd }, level);
-  const p720 = film(q720.providerUsd), p1080 = film(q1080.providerUsd);
+  const p1080 = film(q1080.providerUsd);
+  if (only1080) {
+    const below = row.priceKrw > 0 && row.priceKrw < film(q1080.providerUsd, 'min');
+    return (
+      <p data-cost-floor={String(p1080)} className="font-mono text-[0.72rem] opacity-70">
+        {interpolate(a.templateCostFloor1080Only, { p1080: formatKrw(p1080) })}
+        {below ? ` ${a.templateBelowFloor}` : ''}
+      </p>
+    );
+  }
+  const q720 = costFloor({ model, resolution: '720p', seconds, aspect: row.aspectDefault ?? '9:16' });
+  if (!q720) return null;
+  const p720 = film(q720.providerUsd);
   const below = (row.priceKrw > 0 && row.priceKrw < film(q720.providerUsd, 'min')) || (row.price1080Krw > 0 && row.price1080Krw < film(q1080.providerUsd, 'min'));
   return (
     <p data-cost-floor={`${p720}/${p1080}`} className="font-mono text-[0.72rem] opacity-70">
@@ -288,7 +313,7 @@ export function LockBlockRefusalNote({ detail, dict }: { detail: string | undefi
   return <LockRefusalNotice lines={lines} className="mt-3 rounded-[10px] border border-accent px-3.5 py-2.5 text-[13px] text-accent" />;
 }
 
-export function PromptFields({ row, dict, look, recipeTemplate = false }: {
+export function PromptFields({ row, dict, look, recipeTemplate = false, magi2Open = false }: {
   row: PromptRow | null;
   dict: Dict;
   /**
@@ -302,6 +327,8 @@ export function PromptFields({ row, dict, look, recipeTemplate = false }: {
    * so the styling helper and warning stay off here; the styling panel declares it in every step at once.
    */
   recipeTemplate?: boolean;
+  /** Whether TWINGS_PERSONAL_MAGI2 && TWINGS_PERSONAL_SUNRA_FACES are on in the server environment. */
+  magi2Open?: boolean;
 }) {
   const a = dict.admin;
   const existing = row === null ? {} : parsePromptMedia(row.media);
@@ -309,6 +336,9 @@ export function PromptFields({ row, dict, look, recipeTemplate = false }: {
   // Create-only: the two things `prompt.create` refuses without (a use case, a poster) say so up front.
   const labels = mediaDropLabels(a);
   if (creating) labels.posterHeading = `${a.fieldPromptPoster} · ${a.requiredMark}`;
+  const offeredVideoEngines = enginesForMedium('video', { includeMagi2: magi2Open });
+  const offeredAllEngines: readonly string[] = [...offeredVideoEngines, ...IMAGE_ENGINE_IDS];
+  const preservedEngine = row?.engine && !offeredAllEngines.includes(row.engine) ? row.engine : null;
   return (
     <>
       <div className="grid gap-3 sm:grid-cols-2">
@@ -500,9 +530,9 @@ export function PromptFields({ row, dict, look, recipeTemplate = false }: {
         <Field label={a.fieldTemplateEngine} hint={a.templateEngineHint}>
           <select name="engine" defaultValue={row?.engine ?? ''} className={INPUT}>
             <option value="">{a.templateEngineDefault}</option>
-            {VIDEO_ENGINE_IDS.map((id) => (
+            {offeredVideoEngines.map((id) => (
               <option key={id} value={id}>
-                {a.templateMedia.video} · {id}
+                {a.templateMedia.video} · {id === 'magi-2' ? VIDEO_ENGINES[id].label : id}
               </option>
             ))}
             {IMAGE_ENGINE_IDS.map((id) => (
@@ -510,7 +540,19 @@ export function PromptFields({ row, dict, look, recipeTemplate = false }: {
                 {a.templateMedia.image} · {IMAGE_ENGINES[id].label}
               </option>
             ))}
+            {preservedEngine && (
+              <option value={preservedEngine}>
+                {isVideoEngine(preservedEngine)
+                  ? `${a.templateMedia.video} · ${VIDEO_ENGINES[preservedEngine].label} (${a.templateEngineOff})`
+                  : `${preservedEngine} (${a.templateEngineOff})`}
+              </option>
+            )}
           </select>
+          {magi2Open && (
+            <p data-admin-engine-hint="magi-2" className="mt-1 font-mono text-[0.72rem] opacity-70">
+              {a.templateEngineMagi2Hint}
+            </p>
+          )}
         </Field>
         <Field label={a.fieldTemplateAspect} hint={a.templateAspectHint}>
           <select name="aspectDefault" defaultValue={row?.aspectDefault ?? ''} className={INPUT}>
@@ -751,8 +793,9 @@ export function TemplateSpecSummaryCard({
       floor720Krw = baseKrw({ medium: 'image', providerUsd: cost720Usd });
     }
   } else if (row.runtimeSeconds) {
+    const engine = row.engine && isVideoEngine(row.engine) ? row.engine : null;
     const { model, seconds } = videoModelForEngine(
-      row.engine,
+      engine,
       row.runtimeSeconds
     );
     const q720 = costFloor({
@@ -777,8 +820,11 @@ export function TemplateSpecSummaryCard({
     }
   }
 
+  const single1080Only = is1080pOnlyTemplate(row);
+  const effective1080Price = single1080Only && price1080 === 0 ? price720 : price1080;
+
   const earning720 =
-    price720 > 0 && cost720Usd > 0
+    !single1080Only && price720 > 0 && cost720Usd > 0
       ? makeEarning({
           medium: row.medium,
           providerUsd: cost720Usd,
@@ -787,11 +833,11 @@ export function TemplateSpecSummaryCard({
         })
       : null;
   const earning1080 =
-    price1080 > 0 && cost1080Usd > 0
+    effective1080Price > 0 && cost1080Usd > 0
       ? makeEarning({
           medium: row.medium,
           providerUsd: cost1080Usd,
-          priceKrw: price1080,
+          priceKrw: effective1080Price,
           company: row.source === 'yagi',
         })
       : null;
@@ -813,7 +859,7 @@ export function TemplateSpecSummaryCard({
         <div className="admin-subcard">
           <h3>{p.price720}</h3>
           <p className="admin-nowrap font-semibold">
-            {price720 > 0 ? formatKrw(price720) : '—'}
+            {!single1080Only && price720 > 0 ? formatKrw(price720) : '—'}
             {earning720 ? ` · net ${formatKrw(earning720.margin)}` : ''}
           </p>
           <p>
@@ -827,7 +873,7 @@ export function TemplateSpecSummaryCard({
         <div className="admin-subcard">
           <h3>{p.price1080}</h3>
           <p className="admin-nowrap font-semibold">
-            {price1080 > 0 ? formatKrw(price1080) : '—'}
+            {effective1080Price > 0 ? formatKrw(effective1080Price) : '—'}
             {earning1080 ? ` · net ${formatKrw(earning1080.margin)}` : ''}
           </p>
           <p>

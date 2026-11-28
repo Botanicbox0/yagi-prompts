@@ -22,7 +22,7 @@ import {
   sunraDispatchMarker,
   type SunraRenderDeps,
 } from '@/lib/renders/engines-sunra';
-import { RenderFailure, pollVideoRender, startVideoRender, type VideoRenderInput } from '@/lib/renders/engines';
+import { RenderFailure, pollVideoRender, startVideoRender, type RenderEngineDeps, type VideoRenderInput } from '@/lib/renders/engines';
 
 /**
  * PR A of the personal Sunra lane (docs/PERSONAL-STUDIO.md §5.1): the adapter, driven with fake clients.
@@ -499,5 +499,161 @@ describe('the three hooks in lib/renders/engines.ts', () => {
       await h.close();
       await rm(root, { recursive: true, force: true });
     }
+  });
+});
+
+describe('MAGI-2 on the personal Sunra lane', () => {
+  const MAGI_ENV = { TWINGS_PERSONAL_SUNRA_FACES: 'on', TWINGS_PERSONAL_MAGI2: 'on' };
+  const MAGI_INPUT: VideoRenderInput = {
+    engine: 'magi-2',
+    prompt: 'A subject walks down a lit street.',
+    aspect: '9:16',
+    seconds: 10,
+    photo: null,
+    resolution: '1080p',
+    references: [{ type: 'image', url: A }],
+  };
+  /** $0.08 * 10 = $0.80 list price, booked with 5% top-up fee = $0.84. */
+  const MAGI_ESTIMATE_WITH_FEE = 0.84;
+
+  function fakeArk() {
+    const created: CreateVideoTaskInput[] = [];
+    const ark: ArkClient = {
+      async createVideoTask(input) { created.push(input); return { id: 'cgt-never' }; },
+      async getVideoTask() { throw new Error('never'); },
+    };
+    return { ark, created };
+  }
+
+  it('refuses MAGI-2 in startSunraRender and startVideoRender unless BOTH flags are on', async () => {
+    for (const env of [
+      {},
+      { TWINGS_PERSONAL_SUNRA_FACES: 'on' },
+      { TWINGS_PERSONAL_MAGI2: 'on' },
+      { TWINGS_PERSONAL_SUNRA_FACES: 'on', TWINGS_PERSONAL_MAGI2: 'off' },
+    ]) {
+      const { client, calls } = fakeSunra();
+      const { ark, created } = fakeArk();
+      const rec = recorder();
+      await expect(startSunraRender({ ...MAGI_INPUT, lane: 'sunra' }, deps(client, rec), env)).rejects.toMatchObject({ code: 'engine_error', retryable: false });
+      await expect(startVideoRender(MAGI_INPUT, { ark, sunra: client, onProviderCharge: rec.onProviderCharge }, env)).rejects.toMatchObject({ code: 'no_engine_key', retryable: false });
+      expect(calls.submit).toEqual([]);
+      expect(created).toEqual([]);
+    }
+  });
+
+  it('routes startVideoRender(magi-2) to Sunra when both flags are on and sends sand/magi-2/reference-to-video', async () => {
+    const { client, calls } = fakeSunra();
+    const { ark, created } = fakeArk();
+    const rec = recorder();
+    const started = await startVideoRender(
+      {
+        ...MAGI_INPUT,
+        references: [
+          { type: 'image', url: A },
+          { type: 'video', url: 'https://media.example.com/renders/job-1/motion.mp4?sig=3' },
+          { type: 'audio', url: 'https://media.example.com/renders/job-1/voice.wav?sig=4' },
+        ],
+      },
+      { ark, sunra: client, onProviderCharge: rec.onProviderCharge, fetch: rangedHost().fetchFn },
+      MAGI_ENV,
+    );
+    expect(started).toEqual({ taskId: 'sunra:req-1', model: 'magi-2', seconds: 10, provider: 'sunra' });
+    expect(created).toEqual([]);
+    expect(calls.submit).toEqual([{
+      endpoint: 'sand/magi-2/reference-to-video',
+      body: {
+        prompt: 'A subject walks down a lit street.',
+        duration: 10,
+        aspect_ratio: '9:16',
+        resolution: '1080p',
+        generate_audio: true,
+        reference_images: [A],
+        reference_videos: ['https://media.example.com/renders/job-1/motion.mp4?sig=3'],
+        reference_audios: ['https://media.example.com/renders/job-1/voice.wav?sig=4'],
+      },
+    }]);
+  });
+
+  it('refuses non-https / data URLs, 720p, missing charge recorder, and records ambiguous submits without retry', async () => {
+    const { client, calls } = fakeSunra();
+    const rec = recorder();
+    await expect(startSunraRender({ ...MAGI_INPUT, resolution: '720p' }, deps(client, rec), MAGI_ENV)).rejects.toMatchObject({ code: 'engine_error', retryable: false });
+    await expect(startSunraRender({ ...MAGI_INPUT, references: [{ type: 'image', url: 'data:image/png;base64,AAAA' }] }, deps(client, rec), MAGI_ENV)).rejects.toMatchObject({ code: 'engine_error', retryable: false });
+    await expect(startSunraRender({ ...MAGI_INPUT, references: [{ type: 'image', url: 'http://media.example.com/a.png' }] }, deps(client, rec), MAGI_ENV)).rejects.toMatchObject({ code: 'engine_error', retryable: false });
+    await expect(startSunraRender(MAGI_INPUT, { sunra: client }, MAGI_ENV)).rejects.toMatchObject({ code: 'engine_error', retryable: false, message: expect.stringMatching(/charge/) });
+    expect(calls.submit).toEqual([]);
+
+    const flaky = fakeSunra({ submit: async () => { throw new SunraError('http_500', 'internal', 500, true); } });
+    const rec2 = recorder();
+    await expect(startSunraRender(MAGI_INPUT, deps(flaky.client, rec2), MAGI_ENV)).rejects.toMatchObject({ retryable: false });
+    expect(flaky.calls.submit).toHaveLength(1);
+    expect(rec2.charges).toEqual([{ taskId: null, usd: MAGI_ESTIMATE_WITH_FEE, source: 'estimate' }]);
+  });
+
+  it('refuses before any call (not retryable, nothing billed) a prompt with an unresolved {{…}} token or a reference it does not carry', async () => {
+    const VIDEO_URL = 'https://media.example.com/renders/job-1/motion.mp4?sig=3';
+    const AUDIO_URL = 'https://media.example.com/renders/job-1/voice.wav?sig=4';
+    const cases: Array<[string, VideoRenderInput]> = [
+      ['unresolved selfie token', { ...MAGI_INPUT, prompt: '{{selfie}} walks down a lit street.' }],
+      ['unresolved token with spaces', { ...MAGI_INPUT, prompt: 'Image 1 walks with {{ product }}.' }],
+      ['stray closing braces', { ...MAGI_INPUT, prompt: 'Image 1 walks }} down a lit street.' }],
+      ['image past the count', { ...MAGI_INPUT, prompt: 'Image 1 and Image 2 walk down a lit street.' }],
+      ['@image past the count', { ...MAGI_INPUT, prompt: '@Image2 walks down a lit street.' }],
+      ['video not attached', { ...MAGI_INPUT, prompt: 'Image 1 moves like Video 1.' }],
+      ['audio not attached', { ...MAGI_INPUT, prompt: 'Image 1 sings over Audio 1.', references: [{ type: 'image', url: A }, { type: 'video', url: VIDEO_URL }] }],
+      ['second video not attached', { ...MAGI_INPUT, prompt: 'Image 1 moves like Video 2.', references: [{ type: 'image', url: A }, { type: 'video', url: VIDEO_URL }] }],
+    ];
+    for (const [label, input] of cases) {
+      const { client, calls } = fakeSunra();
+      const rec = recorder();
+      await expect(startSunraRender(input, deps(client, rec), MAGI_ENV), label).rejects.toMatchObject({ code: 'engine_error', retryable: false });
+      expect(calls.submit, label).toEqual([]);
+      expect(rec.charges, label).toEqual([]);
+      expect(rec.circuits, label).toEqual([]);
+    }
+    // The same prompts are fine once the reference is there, and the prompt goes out exactly as written (no
+    // Seedance "@ImageN" rewrite: MAGI-2's own reference syntax is not verified yet).
+    const { client, calls } = fakeSunra();
+    await startSunraRender(
+      { ...MAGI_INPUT, prompt: 'Image 1 moves like Video 1 and sings over Audio 1. She says "Image 9".', references: [{ type: 'image', url: A }, { type: 'video', url: VIDEO_URL }, { type: 'audio', url: AUDIO_URL }] },
+      deps(client),
+      MAGI_ENV,
+    );
+    expect(calls.submit).toHaveLength(1);
+    expect(calls.submit[0]!.body).toMatchObject({
+      prompt: 'Image 1 moves like Video 1 and sings over Audio 1. She says "Image 9".',
+      reference_images: [A],
+      reference_videos: [VIDEO_URL],
+      reference_audios: [AUDIO_URL],
+    });
+  });
+
+  it('classifies references by their explicit type and refuses an unknown type instead of sending it as audio', async () => {
+    for (const type of ['text', 'Audio', 'mask', '', undefined, null]) {
+      const { client, calls } = fakeSunra();
+      const rec = recorder();
+      const input: VideoRenderInput = { ...MAGI_INPUT, references: [{ type: 'image', url: A }, { type: type as never, url: B }] };
+      await expect(startSunraRender(input, deps(client, rec), MAGI_ENV), String(type)).rejects.toMatchObject({ code: 'engine_error', retryable: false });
+      expect(calls.submit, String(type)).toEqual([]);
+      expect(rec.charges, String(type)).toEqual([]);
+    }
+  });
+
+  it('polls MAGI-2 using $0.08/s estimate fallback, records billed failures, and checks MAGI-2 price drift', async () => {
+    const magiPoll = { model: 'magi-2' as const, seconds: 10, resolution: '1080p' as const, aspect: '9:16' };
+    const none = fakeSunra({ status: async () => state({}) });
+    const est = await pollSunraRender('sunra:req-1', magiPoll, deps(none.client));
+    expect(est).toMatchObject({ status: 'succeeded', output: { costUsd: MAGI_ESTIMATE_WITH_FEE, costSource: 'estimate' } });
+
+    const billedFail = fakeSunra({ status: async () => state({ success: false, billingUsd: 0.8, error: { code: 'internal_error', reason: null, retryable: true, message: 'failed' } }) });
+    const recFail = recorder();
+    await expect(pollSunraRender('sunra:req-1', magiPoll, deps(billedFail.client, recFail))).resolves.toMatchObject({ status: 'failed', failure: { retryable: false } });
+    expect(recFail.charges).toEqual([{ taskId: 'sunra:req-1', usd: 0.84, source: 'provider_usage' }]);
+
+    const drift = fakeSunra({ status: async () => state({ billingUsd: 1.0 }) });
+    const recDrift = recorder();
+    await expect(pollSunraRender('sunra:req-1', magiPoll, deps(drift.client, recDrift))).resolves.toMatchObject({ status: 'succeeded', output: { costUsd: 1.05, costSource: 'provider_usage' } });
+    expect(recDrift.circuits).toEqual([{ state: 'open_price_drift', reason: expect.stringMatching(/drift/) }]);
   });
 });

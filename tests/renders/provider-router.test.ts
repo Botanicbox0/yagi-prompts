@@ -241,4 +241,201 @@ describe('50-User Traffic Surge Routing & Dynamic Pricing Circuit Breaker', () =
     expect(check.withinGuardrail).toBe(true);
     expect(check.alert).toBeNull();
   });
+
+  it('prices MAGI-2 at $0.08/s (1080p) and guards against >10% drift', () => {
+    expect(expectedSunraVideoUsd({ model: 'magi-2', resolution: '1080p', seconds: 10 })).toBe(0.8);
+    expect(expectedSunraVideoUsd({ model: 'magi-2', resolution: '1080p', seconds: 10, includeTopupFee: true })).toBe(0.84);
+    expect(evaluateSunraPriceGuardrail({ model: 'magi-2', resolution: '1080p', seconds: 10, actualBilledUsd: 0.84 }).withinGuardrail).toBe(true);
+    const spike = evaluateSunraPriceGuardrail({ model: 'magi-2', resolution: '1080p', seconds: 10, actualBilledUsd: 0.95 });
+    expect(spike.withinGuardrail).toBe(false);
+    expect(spike.alert?.model).toBe('magi-2');
+
+    const router = createProviderRouterRuntime();
+    const { priceAlert } = router.recordCompletedSample({
+      jobId: 'magi-job-1',
+      provider: 'sunra',
+      model: 'magi-2',
+      resolution: '1080p',
+      seconds: 10,
+      createdAt: '2026-11-28T00:00:00.000Z',
+      finishedAt: '2026-11-28T00:02:30.000Z',
+      costUsd: 0.95,
+      succeeded: true,
+    });
+    expect(priceAlert).not.toBeNull();
+    expect(router.getCircuitState()).toBe('open_price_drift');
+  });
+});
+
+describe('price-drift guardrail without a pinned baseline (M1 fix 1: fail safe, never "fine")', () => {
+  /** Main's numbers (7165e399), produced by main's own provider-router.ts: [no fee, with the 5% top-up fee]. */
+  const MAIN: Record<string, [number, number]> = {
+    'seedance-2.0 720p 0s': [0.142, 0.1491],
+    'seedance-2.0 720p 4s': [0.568, 0.5964],
+    'seedance-2.0 720p 5s': [0.71, 0.7455],
+    'seedance-2.0 720p 10s': [1.42, 1.491],
+    'seedance-2.0 720p 15s': [2.13, 2.2365],
+    'seedance-2.0 720p 30s': [4.26, 4.473],
+    'seedance-2.0 1080p 0s': [0.3542, 0.3719],
+    'seedance-2.0 1080p 4s': [1.4168, 1.4876],
+    'seedance-2.0 1080p 5s': [1.771, 1.8596],
+    'seedance-2.0 1080p 10s': [3.542, 3.7191],
+    'seedance-2.0 1080p 15s': [5.313, 5.5787],
+    'seedance-2.0 1080p 30s': [10.626, 11.1573],
+    'seedance-2.5 720p 0s': [0.2312, 0.2428],
+    'seedance-2.5 720p 4s': [0.9248, 0.971],
+    'seedance-2.5 720p 5s': [1.156, 1.2138],
+    'seedance-2.5 720p 10s': [2.312, 2.4276],
+    'seedance-2.5 720p 15s': [3.468, 3.6414],
+    'seedance-2.5 720p 30s': [6.936, 7.2828],
+    'seedance-2.5 1080p 0s': [0.5686, 0.597],
+    'seedance-2.5 1080p 4s': [2.2744, 2.3881],
+    'seedance-2.5 1080p 5s': [2.843, 2.9852],
+    'seedance-2.5 1080p 10s': [5.686, 5.9703],
+    'seedance-2.5 1080p 15s': [8.529, 8.9555],
+    'seedance-2.5 1080p 30s': [17.058, 17.9109],
+  };
+
+  it('keeps every Seedance row exactly at main’s numbers and main’s verdicts', () => {
+    for (const [key, [plain, withFee]] of Object.entries(MAIN)) {
+      const [model, resolution, s] = key.split(' ') as ['seedance-2.0' | 'seedance-2.5', '720p' | '1080p', string];
+      const seconds = Number.parseInt(s, 10);
+      expect(expectedSunraVideoUsd({ model, resolution, seconds }), key).toBe(plain);
+      expect(expectedSunraVideoUsd({ model, resolution, seconds, includeTopupFee: true }), key).toBe(withFee);
+      // Billed at list price + fee: inside the 10% tolerance, no alert (main's verdict).
+      expect(evaluateSunraPriceGuardrail({ model, resolution, seconds, actualBilledUsd: withFee }), key).toEqual({ withinGuardrail: true, alert: null });
+      // Billed 20% over: main's alert, field for field.
+      const over = Math.round(plain * 1.2 * 10000) / 10000;
+      const { withinGuardrail, alert } = evaluateSunraPriceGuardrail({ model, resolution, seconds, actualBilledUsd: over, now: new Date('2026-11-28T00:00:00Z') });
+      expect(withinGuardrail, key).toBe(false);
+      expect(alert, key).toMatchObject({ severity: 'critical', model, resolution, seconds, expectedUsd: plain, actualUsd: over, driftRatio: 1.2, driftPercent: 20, actionTaken: 'circuit_opened_fallback_modelark' });
+      expect(alert?.messageEn, key).toBe(`Sunra AI price drift detected (${model} ${resolution} ${seconds}s): expected $${plain.toFixed(3)} → billed $${over.toFixed(3)} (+20.0%). Opened circuit breaker and routed back to ByteDance ModelArk.`);
+    }
+  });
+
+  it('has no baseline for MAGI-2 at 720p or for a model it does not know, and says so instead of 0', () => {
+    expect(expectedSunraVideoUsd({ model: 'magi-2', resolution: '720p', seconds: 10 })).toBeNull();
+    expect(expectedSunraVideoUsd({ model: 'seedance-9' as never, resolution: '720p', seconds: 10 })).toBeNull();
+    expect(expectedSunraVideoUsd({ model: 'seedance-2.5', resolution: '480p' as never, seconds: 10 })).toBeNull();
+  });
+
+  it('treats a missing baseline as outside the guardrail, whatever was billed', () => {
+    const rows: Array<{ model: 'magi-2'; resolution: '720p' | '1080p' }> = [
+      { model: 'magi-2', resolution: '720p' },
+      { model: 'seedance-9' as never, resolution: '720p' },
+      { model: 'seedance-2.5' as never, resolution: '480p' as never },
+    ];
+    for (const row of rows) {
+      for (const billed of [0.01, 0.84, 5, 100]) {
+        const { withinGuardrail, alert } = evaluateSunraPriceGuardrail({ ...row, seconds: 10, actualBilledUsd: billed, now: new Date('2026-11-28T00:00:00Z') });
+        expect(withinGuardrail, `${row.model} ${row.resolution} $${billed}`).toBe(false);
+        expect(alert, `${row.model} ${row.resolution} $${billed}`).toMatchObject({
+          severity: 'critical',
+          model: row.model,
+          resolution: row.resolution,
+          seconds: 10,
+          actualUsd: billed,
+          reason: 'no_baseline',
+          actionTaken: 'circuit_opened_no_baseline',
+        });
+        expect(alert?.messageEn).toMatch(/no pinned price baseline/i);
+      }
+    }
+  });
+
+  it('opens the drift circuit in the router runtime for a sample with no baseline, as it does for a drift', () => {
+    const router = createProviderRouterRuntime();
+    const { priceAlert } = router.recordCompletedSample({
+      jobId: 'magi-job-720',
+      provider: 'sunra',
+      model: 'magi-2',
+      resolution: '720p',
+      seconds: 10,
+      createdAt: '2026-11-28T00:00:00.000Z',
+      finishedAt: '2026-11-28T00:02:30.000Z',
+      costUsd: 0.84,
+      succeeded: true,
+    });
+    expect(priceAlert).toMatchObject({ reason: 'no_baseline' });
+    expect(router.getCircuitState()).toBe('open_price_drift');
+    expect(router.getAlerts()).toHaveLength(1);
+  });
+});
+
+describe('selectVideoProvider for MAGI-2 (M1 fix 1: Sunra or nothing, never ModelArk or Kling)', () => {
+  const base = {
+    jobId: 'magi-job-1',
+    model: 'magi-2' as const,
+    mode: 'sunra_primary' as const,
+    sunraConfigured: true,
+    circuitState: 'closed' as const,
+    modelarkInFlight: 0,
+    hasPersonFace: true,
+    sunraSignedFaceAllowed: true,
+  };
+
+  it('answers Sunra with no fallback when Sunra may take it, in every routing mode and at any ModelArk load', () => {
+    for (const mode of ['surge_overflow', 'auto_fastest', 'ab_benchmark', 'sunra_primary'] as const) {
+      for (const modelarkInFlight of [0, 7, 8, 10]) {
+        for (const jobId of ['magi-job-1', 'job-that-hashes-to-modelark-3', 'x']) {
+          for (const hasPersonFace of [true, false]) {
+            const decision = selectVideoProvider({ ...base, mode, modelarkInFlight, jobId, hasPersonFace, telemetrySamples: [] });
+            expect(decision, `${mode} ${modelarkInFlight} ${jobId} ${hasPersonFace}`).toEqual({ primary: 'sunra', fallback: null, reason: 'sunra_only_model' });
+          }
+        }
+      }
+    }
+  });
+
+  it('refuses (no provider) when Sunra is not configured or routing is off', () => {
+    expect(selectVideoProvider({ ...base, sunraConfigured: false })).toEqual({ primary: null, fallback: null, reason: 'sunra_disabled' });
+    expect(selectVideoProvider({ ...base, mode: 'off' })).toEqual({ primary: null, fallback: null, reason: 'sunra_disabled' });
+  });
+
+  it('refuses (no provider) while any circuit is open', () => {
+    for (const circuitState of ['open_price_drift', 'open_insufficient_hold', 'open_provider_outage'] as const) {
+      expect(selectVideoProvider({ ...base, circuitState }), circuitState).toEqual({ primary: null, fallback: null, reason: 'circuit_breaker_open' });
+    }
+  });
+
+  it('refuses (no provider) a person-face job unless signed face input is allowed', () => {
+    for (const sunraSignedFaceAllowed of [false, undefined]) {
+      expect(selectVideoProvider({ ...base, sunraSignedFaceAllowed }), String(sunraSignedFaceAllowed)).toEqual({ primary: null, fallback: null, reason: 'person_face_privacy_lock' });
+    }
+  });
+
+  it('never names ModelArk or Kling for MAGI-2, in any combination', () => {
+    for (const sunraConfigured of [true, false])
+      for (const mode of ['off', 'surge_overflow', 'auto_fastest', 'ab_benchmark', 'sunra_primary'] as const)
+        for (const circuitState of ['closed', 'open_price_drift', 'open_insufficient_hold', 'open_provider_outage'] as const)
+          for (const hasPersonFace of [true, false])
+            for (const sunraSignedFaceAllowed of [true, false, undefined])
+              for (const modelarkInFlight of [0, 9]) {
+                const d = selectVideoProvider({ jobId: 'j', model: 'magi-2', mode, sunraConfigured, circuitState, hasPersonFace, sunraSignedFaceAllowed, modelarkInFlight });
+                expect([d.primary, d.fallback].some((p) => p === 'modelark' || (p as string) === 'kling')).toBe(false);
+                expect(d.fallback).toBeNull();
+              }
+  });
+
+  it('runtime: after a drift the router refuses MAGI-2 instead of sending it to ModelArk', () => {
+    const router = createProviderRouterRuntime();
+    router.recordCompletedSample({
+      jobId: 'magi-job-1', provider: 'sunra', model: 'magi-2', resolution: '1080p', seconds: 10,
+      createdAt: '2026-11-28T00:00:00.000Z', finishedAt: '2026-11-28T00:02:30.000Z', costUsd: 0.95, succeeded: true,
+    });
+    expect(router.routeJob({ jobId: 'magi-job-2', model: 'magi-2', mode: 'sunra_primary', sunraConfigured: true, modelarkInFlight: 0, hasPersonFace: true, sunraSignedFaceAllowed: true }))
+      .toEqual({ primary: null, fallback: null, reason: 'circuit_breaker_open' });
+  });
+
+  it('leaves every Seedance answer as main gives it', () => {
+    const seedance = { jobId: 'job-1', model: 'seedance-2.5' as const, mode: 'sunra_primary' as const, sunraConfigured: true, circuitState: 'closed' as const, modelarkInFlight: 0, hasPersonFace: false };
+    expect(selectVideoProvider({ ...seedance, sunraConfigured: false })).toEqual({ primary: 'modelark', fallback: null, reason: 'sunra_disabled' });
+    expect(selectVideoProvider({ ...seedance, mode: 'off' })).toEqual({ primary: 'modelark', fallback: null, reason: 'sunra_disabled' });
+    expect(selectVideoProvider({ ...seedance, circuitState: 'open_price_drift' })).toEqual({ primary: 'modelark', fallback: null, reason: 'circuit_breaker_open' });
+    expect(selectVideoProvider({ ...seedance, hasPersonFace: true })).toEqual({ primary: 'modelark', fallback: null, reason: 'person_face_privacy_lock' });
+    expect(selectVideoProvider({ ...seedance, modelarkInFlight: 8, mode: 'surge_overflow' })).toEqual({ primary: 'sunra', fallback: 'modelark', reason: 'modelark_concurrency_overflow' });
+    expect(selectVideoProvider({ ...seedance })).toEqual({ primary: 'sunra', fallback: 'modelark', reason: 'sunra_primary_mode' });
+    expect(selectVideoProvider({ ...seedance, mode: 'surge_overflow' })).toEqual({ primary: 'modelark', fallback: 'sunra', reason: 'modelark_within_capacity' });
+    expect(selectVideoProvider({ ...seedance, model: 'seedance-2.0', hasPersonFace: true, sunraSignedFaceAllowed: true })).toEqual({ primary: 'sunra', fallback: 'modelark', reason: 'sunra_primary_mode' });
+  });
 });

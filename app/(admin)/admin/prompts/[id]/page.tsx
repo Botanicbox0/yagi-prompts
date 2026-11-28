@@ -44,6 +44,7 @@ import { OriginalPostPanel } from '@/components/admin/original-post-panel';
 import { loadOriginalPostView } from '@/lib/creator-platform/original-post';
 import { PromptLengthRefusalNote, PromptLengthStatus } from '@/components/admin/prompt-length-status';
 import { templateClipLengths, templateEditHeadroom } from '@/lib/prompts/prompt-length';
+import { personalMagi2Open } from '@/lib/flags';
 
 /**
  * `/admin/prompts/{id}` — one prompt, everything you can do to it (2026-08-15).
@@ -310,7 +311,7 @@ export default async function AdminPromptItemPage({
       {one(query, 'err') === 'invalid' && <PromptLengthRefusalNote detail={one(query, 'detail')} dict={dict} />}
 
       <TemplateSpecSummaryCard row={row} dict={dict} />
-      <PromptLengthStatus clips={clips} headroom={headroom} dict={dict} />
+      <PromptLengthStatus clips={clips} headroom={headroom} dict={dict} engine={row.engine} />
 
     {/* Quick actions FIRST (2026-09-03): they were the last thing on the page, under a
         12-row textarea and two 10-row ones. Feature / open / archive are one press each. */}
@@ -385,6 +386,7 @@ export default async function AdminPromptItemPage({
             dict={dict}
             {...(look !== null ? { look } : {})}
             recipeTemplate={templateCompileSource({ promptText: row.promptText, ...stylingSource }).kind === 'recipe'}
+            magi2Open={personalMagi2Open()}
           />
 
           <div>

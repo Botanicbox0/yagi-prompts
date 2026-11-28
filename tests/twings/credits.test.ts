@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { templateCredits } from '@/lib/twings/credits';
+import { templateCredits, templateCreditsByResolution } from '@/lib/twings/credits';
 
 /** docs/PLATFORM-2.0.md §19.2's table is the contract: 1 credit = 10원 net, the margin in the template. */
 
@@ -10,6 +10,14 @@ describe('template credits', () => {
   it('prices Seedance 2.5 films at 720p on a 6% margin', () => {
     expect(templateCredits(film(10))).toBe(345);
     expect(templateCredits(film(15))).toBe(517);
+  });
+
+  it('prices MAGI-2 films at 1080p only from 0.08 * seconds * 1.05', () => {
+    const magi10 = film(10, 'magi-2', '9:16');
+    expect(templateCredits(magi10)).toBe(126);
+    expect(templateCredits(magi10, '1080p')).toBe(126);
+    expect(templateCredits(magi10, '720p')).toBeNull();
+    expect(templateCreditsByResolution(magi10)).toEqual({ '1080p': 126 });
   });
 
   it('prices a set on all its frames together, at cost × 1.12', () => {

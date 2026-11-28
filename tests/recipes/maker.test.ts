@@ -3,11 +3,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import sharp from 'sharp';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ANON_VIEWER } from '@/lib/auth/identity';
 import { administerPlatform } from '@/lib/creator-platform/admin';
 import { saveSelfie } from '@/lib/identity/selfie-service';
-import { loadMakerDraft, makerAction, MAKER_TEST_RENDERS, RecipeRejected, uploadMakerFile } from '@/lib/recipes/maker';
+import { loadMakerDraft, makerAction, MAKER_TEST_RENDERS, previewQuote, RecipeRejected, uploadMakerFile } from '@/lib/recipes/maker';
+import * as pricing from '@/lib/recipes/pricing';
 import { MAKER_FILE_MAX_BYTES, sniffMakerFile } from '@/lib/recipes/assets';
 import { loadJobRecipe } from '@/lib/recipes/repo';
 import { makerFileObject, recipeRenderOutput } from '@/lib/recipes/media';
@@ -139,5 +140,23 @@ describe('maker recipe editor — server', () => {
     expect(await recipeRenderOutput(h.sql, maker, renders[0]!, 0)).not.toBeNull();
     expect(await recipeRenderOutput(h.sql, stranger, renders[0]!, 0)).toBeNull();
     expect(await recipeRenderOutput(h.sql, ADMIN_VIEWER, renders[0]!, 0)).toBeNull();
+  });
+
+  it('previewQuote returns null instead of throwing on RecipePricingError', () => {
+    const valid = {
+      version: 2,
+      slots: { selfie },
+      steps: [{ id: 'step1', kind: 'image', engine: 'gpt-image-2', inputs: ['selfie'], prompt: 'Hello {{selfie}}.', params: { aspect: '4:5' } }],
+      output: { from: 'step1' },
+    };
+    expect(previewQuote(valid, 1000)).not.toBeNull();
+    const spy = vi.spyOn(pricing, 'quoteRecipeBase').mockImplementationOnce(() => {
+      throw new pricing.RecipePricingError('unknown_engine', 'step1', 'legacy-unknown');
+    });
+    try {
+      expect(previewQuote(valid, 1000)).toBeNull();
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
