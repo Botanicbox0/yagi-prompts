@@ -9,7 +9,7 @@ import { canonicalPost } from '@/lib/creator-platform/social';
 import { currentSelfie, savedSelfiePhoto } from '@/lib/identity/selfie-service';
 import { createRecipeSandboxRender } from '@/lib/renders/service';
 import { listMakerFiles, storeMakerFile, deleteMakerFiles, type MakerAsset } from './assets';
-import { isRoyalty, quoteRecipeBase, ROYALTY_DEFAULT_KRW } from './pricing';
+import { RecipePricingError, isRoyalty, quoteRecipeBase, ROYALTY_DEFAULT_KRW } from './pricing';
 import { parseDisclosure, parsePresentation, recipeSchemaReady, type Disclosure, type Presentation } from './repo';
 import { MAX_RECIPE_BYTES, parseRecipe, recipeCast, recipeMedium, type Recipe, type RecipeIssue, type RecipeMedium } from './schema';
 import { selfPublishFormat, selfPublishOpen } from './self-publish';
@@ -252,6 +252,12 @@ export async function loadMakerDraft(sql: SqlRunner, viewer: Viewer, id: string,
 /** For the editor's price line: the floor and the proposal, never a price the maker sets. */
 export function previewQuote(recipeRaw: unknown, royalty: number): ReturnType<typeof quoteRecipeBase> | null {
   const checked = parseRecipe(recipeRaw);
-  return checked.ok && isRoyalty(royalty) ? quoteRecipeBase(checked.recipe, royalty) : null;
+  if (!checked.ok || !isRoyalty(royalty)) return null;
+  try {
+    return quoteRecipeBase(checked.recipe, royalty);
+  } catch (error) {
+    if (error instanceof RecipePricingError) return null;
+    throw error;
+  }
 }
 

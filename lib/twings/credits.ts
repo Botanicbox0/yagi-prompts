@@ -1,6 +1,7 @@
 import type { PromptCard } from '@/lib/prompts/catalog';
-import { estimateImageUsd, isImageEngine, resolveEngine } from '@/lib/images/engines';
+import { estimateImageUsd, isImageEngine, isVideoEngine, resolveEngine } from '@/lib/images/engines';
 import { quoteVideo, videoModelForEngine } from '@/lib/video/models';
+import { defaultCreatorResolution } from './resolution';
 import { baseCredits, PERSONAL_VIDEO_RESOLUTIONS, type PersonalVideoResolution } from './template-price';
 
 /**
@@ -18,7 +19,7 @@ import { baseCredits, PERSONAL_VIDEO_RESOLUTIONS, type PersonalVideoResolution }
 
 export function templateCredits(
   card: Pick<PromptCard, 'medium' | 'engine' | 'runtimeSeconds' | 'aspectDefault' | 'gallery'>,
-  resolution: PersonalVideoResolution = '720p'
+  resolution?: PersonalVideoResolution
 ): number | null {
   const engine = resolveEngine(card.engine, card.medium);
   if (card.medium === 'image') {
@@ -26,9 +27,11 @@ export function templateCredits(
     const frames = Math.max(1, card.gallery?.length ?? 0);
     return baseCredits({ medium: 'image', providerUsd: estimateImageUsd(engine, 1) * frames });
   }
-  if (!card.runtimeSeconds || card.runtimeSeconds <= 0) return null;
+  if (!isVideoEngine(engine) || !card.runtimeSeconds || card.runtimeSeconds <= 0) return null;
+  const resolvedResolution: PersonalVideoResolution =
+    resolution ?? defaultCreatorResolution({ medium: 'video', engine, runtimeSeconds: card.runtimeSeconds });
   const { model, seconds } = videoModelForEngine(engine, card.runtimeSeconds);
-  const quote = quoteVideo({ model, seconds, resolution, aspect: card.aspectDefault ?? '9:16' });
+  const quote = quoteVideo({ model, seconds, resolution: resolvedResolution, aspect: card.aspectDefault ?? '9:16' });
   return quote ? baseCredits({ medium: 'video', providerUsd: quote.providerUsd }) : null;
 }
 

@@ -3,6 +3,7 @@ import { prerender } from 'react-dom/static';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { loadFormatRevisionView, recipeSha256, reviseFormatRecipe } from '@/lib/creator-platform/format-revision';
+import * as pricing from '@/lib/recipes/pricing';
 import { MAX_RECIPE_BYTES, MAX_STUDIO_RECIPE_BYTES, legacyPromptText, parseRecipe, type Recipe } from '@/lib/recipes/schema';
 import { templateCardStyling } from '@/lib/template-director/compile-prompts';
 import { renderLockBlock } from '@/lib/template-director/locks';
@@ -333,6 +334,24 @@ describe('format.reviseRecipe', () => {
     // An external creative's format and a studio original: no panel at all.
     const external = await residueFormat({ payout: 'external' });
     expect(await page(external.templateId)).not.toContain('data-format-revision-panel');
+  });
+
+  it('returns a typed recipe_pricing refusal instead of an uncaught exception when pricing throws', async () => {
+    const f = await residueFormat();
+    const spy = vi.spyOn(pricing, 'quoteRecipeBase').mockImplementationOnce(() => {
+      throw new pricing.RecipePricingError('unknown_engine', 'film', 'seedance-2.5');
+    });
+    try {
+      const outcome = await reviseFormatRecipe(sql(), ADMIN_VIEWER.userId, {
+        id: f.templateId,
+        reviewedSha256: recipeSha256(f.recipe),
+        reason: 'Trigger pricing check cleanly',
+        recipe: cleaned(),
+      });
+      expect(outcome).toEqual({ ok: false, code: 'recipe_pricing', detail: 'film: seedance-2.5' });
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it('prompt.declareStyling still refuses a company format, and points at the revision panel', async () => {

@@ -42,11 +42,25 @@ function engineResolutions(step: FilmStep): FilmResolution[] {
   return FILM_RESOLUTIONS.filter((resolution) => supported.includes(resolution));
 }
 
-/** The resolutions this recipe's film can be made at, 720p first. Empty when it makes no film. */
+/** The resolutions this recipe's film can be made at, 720p first (or ['1080p'] for 1080p-only). Empty when it makes no film. */
 export function recipeResolutions(recipe: Recipe): FilmResolution[] {
   const films = outputFilms(recipe);
   if (films.length === 0) return [];
   return FILM_RESOLUTIONS.filter((resolution) => films.every((film) => engineResolutions(film).includes(resolution)));
+}
+
+/** The default resolution for this recipe (`720p` when offered, else `1080p` for 1080p-only engines). */
+export function defaultRecipeResolution(recipe: Recipe): FilmResolution | null {
+  return recipeResolutions(recipe)[0] ?? null;
+}
+
+/** Resolves an empty/missing requested resolution to the recipe's default; refuses unsupported ones. */
+export function resolveRecipeResolution(recipe: Recipe, requested: string | null | undefined): FilmResolution | null {
+  const supported = recipeResolutions(recipe);
+  if (supported.length === 0) return null;
+  const raw = (requested ?? '').trim();
+  if (raw === '') return supported[0]!;
+  return isFilmResolution(raw) && supported.includes(raw) ? raw : null;
 }
 
 /** The resolution the creative wrote the film at (test and review renders use it). */
@@ -55,18 +69,24 @@ export function authoredResolution(recipe: Recipe): FilmResolution | null {
 }
 
 /**
- * The recipe as it runs for an order at `resolution`. No resolution (an image, a legacy row, a test
- * render carrying the recipe's own value) or one the engine cannot make leaves the recipe as it is:
- * a value the engine refuses is the order step's job to reject, never this function's to guess.
+ * The recipe as it runs for an order at `resolution`. For a 1080p-only recipe, an empty/missing
+ * choice resolves to `'1080p'` (never `'720p'`). For multi-resolution recipes, no resolution leaves
+ * the recipe as authored; an unsupported resolution leaves the recipe as it is for the order gate
+ * to reject.
  */
 export function recipeAtResolution(recipe: Recipe, resolution: string | null | undefined): Recipe {
-  if (!isFilmResolution(resolution)) return recipe;
-  if (!recipeResolutions(recipe).includes(resolution)) return recipe;
+  const supported = recipeResolutions(recipe);
+  const raw = resolution == null ? '' : resolution.trim();
+  const target: FilmResolution | null =
+    raw === ''
+      ? (supported.length === 1 && supported[0] === '1080p' ? '1080p' : null)
+      : (isFilmResolution(raw) && supported.includes(raw) ? raw : null);
+  if (target === null) return recipe;
   const films = new Set(outputFilms(recipe).map((film) => film.id));
-  if (recipe.steps.every((step) => !films.has(step.id) || (step.kind === 'video' && step.params.resolution === resolution))) return recipe;
+  if (recipe.steps.every((step) => !films.has(step.id) || (step.kind === 'video' && step.params.resolution === target))) return recipe;
   return {
     ...recipe,
     steps: recipe.steps.map((step) =>
-      step.kind === 'video' && films.has(step.id) ? { ...step, params: { ...step.params, resolution } } : step),
+      step.kind === 'video' && films.has(step.id) ? { ...step, params: { ...step.params, resolution: target } } : step),
   };
 }

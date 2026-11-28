@@ -14,6 +14,7 @@ import {
   NET_SHARE,
   quoteSelectiveImageSet,
   quoteVideoResolutionTiers,
+  quoteVideoTemplatePrice,
   simulateMakerTemplateRevenue,
 } from '@/lib/twings/template-price';
 import { templateCreditsByResolution } from '@/lib/twings/credits';
@@ -275,5 +276,52 @@ describe('template price', () => {
         alreadyClaimedCount: 1,
       })
     ).toBe(false);
+  });
+
+  it('prices 10s and 30s MAGI-2 templates from their 0.08 * 1.05/s cost row (not Seedance or hard-coded won)', () => {
+    const q = quoteVideoTemplatePrice({ model: 'magi-2', seconds: 10, aspect: '9:16' });
+    expect(q).toEqual({
+      model: 'magi-2',
+      resolution: '1080p',
+      seconds: 10,
+      providerUsd: 0.84,
+      providerKrw: 1176,
+      baseCredits: 126,
+      floorKrw: 1500,
+      royaltyKrw: 0,
+      totalCredits: 126,
+      totalKrw: 1500,
+    });
+    // Hand values for 30s MAGI-2: 30 * $0.08 * 1.05 = $2.52, ceil((2.52*1400/0.94)/10) = 376 credits, ceil(3760/NET_SHARE/100)*100 = 4,300원.
+    expect(quoteVideoTemplatePrice({ model: 'magi-2', seconds: 30, aspect: '9:16' })).toEqual({
+      model: 'magi-2',
+      resolution: '1080p',
+      seconds: 30,
+      providerUsd: 2.52,
+      providerKrw: 3528,
+      baseCredits: 376,
+      floorKrw: 4300,
+      royaltyKrw: 0,
+      totalCredits: 376,
+      totalKrw: 4300,
+    });
+    expect(quoteVideoTemplatePrice({ model: 'magi-2', resolution: '720p', seconds: 10, aspect: '9:16' })).toBeNull();
+    expect(quoteVideoTemplatePrice({ model: 'magi-2', seconds: 10, royaltyKrw: 1000 })?.totalKrw).toBe(2500);
+  });
+
+  it('pins unchanged main won prices for Seedance 2.0, Seedance 2.5, and Kling at 720p and 1080p for 5/10/15s', () => {
+    const expected = [
+      ['seedance-2.0', '720p', [1300, 2600, 3900]],
+      ['seedance-2.0', '1080p', [3200, 6400, 9600]],
+      ['seedance-2.5', '720p', [2000, 4000, 6000]],
+      ['seedance-2.5', '1080p', [4900, 9700, 14600]],
+      ['kling-3.0-omni', '720p', [1000, 2000, 2900]],
+      ['kling-3.0-omni', '1080p', [1200, 2400, 3600]],
+    ] as const;
+    for (const [model, resolution, [w5, w10, w15]] of expected) {
+      expect(quoteVideoTemplatePrice({ model, resolution, seconds: 5, aspect: '9:16' })?.floorKrw, `${model} ${resolution} 5s`).toBe(w5);
+      expect(quoteVideoTemplatePrice({ model, resolution, seconds: 10, aspect: '9:16' })?.floorKrw, `${model} ${resolution} 10s`).toBe(w10);
+      expect(quoteVideoTemplatePrice({ model, resolution, seconds: 15, aspect: '9:16' })?.floorKrw, `${model} ${resolution} 15s`).toBe(w15);
+    }
   });
 });

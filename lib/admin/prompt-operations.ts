@@ -50,6 +50,8 @@ import { ADMIN_PROMPTS_PATH, adminPromptPath } from '@/lib/prompts/links';
 import { announceTemplate, markPromptAnnounced } from '@/lib/prompts/announce';
 import { buildImageTemplateSet, writeImageTemplateSet } from '@/lib/prompts/image-templates';
 import { aspectsForMedium, enginesForMedium, imageFitsAspect, isImageAspect, isImageEngine, type ImageAspect, type ImageEngineId } from '@/lib/images/engines';
+import { personalMagi2Open } from '@/lib/flags';
+import { is1080pOnlyTemplate } from '@/lib/twings/resolution';
 import { checkLockBlock, lockBlockRefusalDetail } from '@/lib/template-director/locks';
 import { checkStylingBlock, stylingBlockRefusalDetail, stylingRequiredDetail } from '@/lib/template-director/styling';
 import { planStylingDeclaration, templateCardStyling } from '@/lib/template-director/compile-prompts';
@@ -115,29 +117,36 @@ function chips(form: FormData, name: string): string[] {
  * their own so the authoring and edit schemas stay what §13 pinned; whole USD cents, and a runtime
  * only for a film (the 0015 CHECK refuses one on an image, so it is dropped here rather than sent).
  */
-const TemplateFields = z
-  .object({
-    medium: z.enum(TEMPLATE_MEDIA),
-    /** docs/CAST-CATEGORIES.md §1 — who is in it. Absent (a form without the field) = unchanged / solo. */
-    cast: z.enum(TEMPLATE_CASTS).optional(),
-    priceCents: z.number().int().min(0).max(1_000_000),
-    /** The fixed won price (0018); 0 = suggested from the dollar price. */
-    priceKrw: z.number().int().min(0).max(100_000_000),
-    /** The 1080p price (0039), films only; 0 = 1080p not offered. Both currencies or neither. */
-    price1080Cents: z.number().int().min(0).max(1_000_000),
-    price1080Krw: z.number().int().min(0).max(100_000_000),
-    runtimeSeconds: z.number().int().positive().max(600).nullable(),
-    /** docs/TEMPLATES-IA.md §7 — null = the medium's default; a named engine must be one of its medium's. */
-    engine: z.string().nullable(),
-    aspectDefault: z.string().nullable(),
-    /**
-     * docs/PERSONAL-STUDIO.md §3.4.10 — who the template is written for ("대상: 누구나 / 여성 스타일 / 남성 스타일").
-     * Absent (a form without the select: 0190 not applied, or an older open tab) = unchanged / for anyone.
-     */
-    look: z.enum(TEMPLATE_AUDIENCES).optional(),
-  })
-  .superRefine((value, ctx) => {
-    if (value.engine !== null && !(enginesForMedium(value.medium) as readonly string[]).includes(value.engine)) {
+const TemplateFieldsShape = z.object({
+  medium: z.enum(TEMPLATE_MEDIA),
+  /** docs/CAST-CATEGORIES.md §1 — who is in it. Absent (a form without the field) = unchanged / solo. */
+  cast: z.enum(TEMPLATE_CASTS).optional(),
+  priceCents: z.number().int().min(0).max(1_000_000),
+  /** The fixed won price (0018); 0 = suggested from the dollar price. */
+  priceKrw: z.number().int().min(0).max(100_000_000),
+  /** The 1080p price (0039), films only; 0 = 1080p not offered. Both currencies or neither. */
+  price1080Cents: z.number().int().min(0).max(1_000_000),
+  price1080Krw: z.number().int().min(0).max(100_000_000),
+  runtimeSeconds: z.number().int().positive().max(600).nullable(),
+  /** docs/TEMPLATES-IA.md §7 — null = the medium's default; a named engine must be one of its medium's. */
+  engine: z.string().nullable(),
+  aspectDefault: z.string().nullable(),
+  /**
+   * docs/PERSONAL-STUDIO.md §3.4.10 — who the template is written for ("대상: 누구나 / 여성 스타일 / 남성 스타일").
+   * Absent (a form without the select: 0190 not applied, or an older open tab) = unchanged / for anyone.
+   */
+  look: z.enum(TEMPLATE_AUDIENCES).optional(),
+});
+
+function templateFieldsSchema(storedEngine?: string | null) {
+  return TemplateFieldsShape.superRefine((value, ctx) => {
+    const allowed = enginesForMedium(value.medium, { includeMagi2: personalMagi2Open() }) as readonly string[];
+    // Keeping the row's engine is allowed only for an engine of this medium that is merely switched
+    // off; a stored value that was never valid for the medium is refused, as it always was.
+    const everValid = enginesForMedium(value.medium, { includeMagi2: true }) as readonly string[];
+    const keepingStored =
+      storedEngine !== undefined && storedEngine !== null && value.engine === storedEngine && everValid.includes(storedEngine);
+    if (value.engine !== null && !allowed.includes(value.engine) && !keepingStored) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['engine'], message: `not a ${value.medium} engine` });
     }
     if (value.aspectDefault !== null && !(aspectsForMedium(value.medium) as readonly string[]).includes(value.aspectDefault)) {
@@ -147,6 +156,14 @@ const TemplateFields = z
     if (hd && value.medium !== 'video') {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['price1080Cents'], message: 'a 1080p price is for films only' });
     }
+    if (hd && value.medium === 'video' && is1080pOnlyTemplate({ medium: value.medium, engine: value.engine, runtimeSeconds: value.runtimeSeconds })) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['price1080Krw'],
+        message: 'this engine already renders at 1080p only; leave the second 1080p price empty',
+      });
+      return;
+    }
     if (hd && (value.price1080Cents <= 0 || value.price1080Krw <= 0)) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['price1080Krw'], message: 'set the 1080p price in both currencies, or neither' });
     }
@@ -155,11 +172,12 @@ const TemplateFields = z
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['price1080Krw'], message: 'the 1080p price must be at least the base price' });
     }
   });
+}
 
-function templateFields(form: FormData): ParseResult<z.infer<typeof TemplateFields>> {
+function templateFields(form: FormData, storedEngine?: string | null): ParseResult<z.infer<typeof TemplateFieldsShape>> {
   const medium = f.str(form, 'medium') || 'video';
   const runtime = f.optionalInt(form, 'runtimeSeconds');
-  return parsed(TemplateFields, {
+  return parsed(templateFieldsSchema(storedEngine), {
     medium,
     cast: f.str(form, 'cast') || undefined,
     priceCents: f.optionalInt(form, 'priceCents') ?? 0,
@@ -561,7 +579,7 @@ const editPrompt: AdminOperation<{ input: z.infer<typeof EditSchema>; form: Form
   async run(ctx, { input, form }) {
     const row = await loadPromptById(ctx.sql, input.id);
     if (row === null || row.audience === 'brand') return fail('notFound', NOT_FOUND_DETAIL);
-    const template = templateFields(form);
+    const template = templateFields(form, row.engine);
     if (!template.ok) return fail('invalid', template.detail);
     const locks = lockBlockRefusal('promptText', input.promptText);
     if (locks !== null) return fail('invalid', locks);
