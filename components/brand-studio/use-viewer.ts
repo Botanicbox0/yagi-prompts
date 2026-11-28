@@ -54,6 +54,10 @@ export function useViewer(input: {
   regionV2?: boolean;
   /** `StudioState.reviseV2`: the clip edit panel is a conversation; drafts and finals are named on version cards. */
   reviseV2?: boolean;
+  /** When `BRAND_STUDIO_VIDEO_MODES` is open, blueprint reuse restores into the dock + confirm card. */
+  blueprintToDock?: boolean;
+  /** Called right after a blueprint reuse restores the dock so the confirm card opens directly. */
+  onReuseOpenConfirm?(plan: Extract<ReusePlan, { to: "dock" }>): void;
 }) {
   const { studio, dock, copy, locale, mode, organizationId, jobs, assets, lookup, onCampaign, focusPrompt } = input;
   const [open, setOpen] = useState<{ list: "outputs" | "assets"; key: string } | null>(null);
@@ -124,7 +128,14 @@ export function useViewer(input: {
   const reuse = (target: StudioJobView, from?: StudioOutputView | null) => {
     // A version's own words are only the change; its settings are the clip's first run.
     const job = (target.revision && jobs.find((j) => j.id === target.revision!.rootJobId)) || target;
-    const plan = planReuse(job, { current: dock.draft, lookup, outputName: copy.viewer.label, from: from ?? null, siblings: groupSiblings(job, jobs) });
+    const plan = planReuse(job, {
+      current: dock.draft,
+      lookup,
+      outputName: copy.viewer.label,
+      from: from ?? null,
+      siblings: groupSiblings(job, jobs),
+      ...(input.blueprintToDock ? { blueprintToDock: true } : {}),
+    });
     switch (plan.to) {
       case "reverse":
         // A blueprint is set up again in the reverse panel (slice C), not in the bar.
@@ -138,7 +149,11 @@ export function useViewer(input: {
       case "dock":
         dock.reuse(plan);
         show(null);
-        focusPrompt();
+        if (plan.openConfirm && input.onReuseOpenConfirm) {
+          input.onReuseOpenConfirm(plan);
+        } else {
+          focusPrompt();
+        }
         return;
     }
   };

@@ -30,6 +30,7 @@ import {
   type StudioRevisePlan,
   type StudioState,
   type StudioStateScope,
+  type StudioVideoUnderstand,
 } from './contracts';
 import { brandStudioEditToWallOpenFor, brandStudioV2Open } from '@/lib/flags';
 import { studioSeat } from './access';
@@ -56,6 +57,7 @@ import { designMusicPreview } from './sound/design-op';
 import { planStudioRevise } from './revision/advise';
 import { talkStudioRevise } from './revision/talk';
 import { readStudioMark } from './revision/mark';
+import { understandStudioVideo } from './video/understand';
 import { assetView, assetsOf, campaignsOf, jobSoftDeleteReady, jobsByIds, jobsOfStudioState, viewsOf } from './repo';
 import type { StudioDeps } from './types';
 import { allowanceViewWithRefill, loadAllowanceViewWithRefill } from './allowance-refill';
@@ -79,6 +81,7 @@ export type StudioOperationResult =
   | StudioFilmAnalysis
   | StudioRevisePlan
   | StudioReviseMarkRead
+  | StudioVideoUnderstand
   | StudioAssetReserved
   | StudioAssetSaved
   | StudioOutputEditReserved
@@ -94,6 +97,7 @@ const SELF_STUDIO_OPS: ReadonlySet<StudioOperation> = new Set([
   'revise.plan',
   'revise.mark',
   'revise.talk',
+  'video.understand',
   'handoff.campaign',
   'job.assign_project',
   'output.edit.reserve',
@@ -154,6 +158,9 @@ export async function runStudioOperation(deps: StudioDeps, viewer: Viewer, opera
     case 'revise.talk':
       // Behind BRAND_STUDIO_REVISE_V2 (the handler answers `invalid` when it is off), after the same gate as every operation.
       return talkStudioRevise(deps, viewer, input);
+    case 'video.understand':
+      // Behind BRAND_STUDIO_VIDEO_MODES (the handler answers `invalid` when closed), read-only & prompt-guarded.
+      return understandStudioVideo(deps, viewer, input);
     case 'asset.reserve':
       return reserveStudioAsset(deps, viewer, input);
     // The library answers go to the member who sent them (owners and editors): `brandProjectId` is added here,

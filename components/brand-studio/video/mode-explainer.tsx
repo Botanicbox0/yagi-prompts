@@ -1,19 +1,14 @@
 "use client";
 /**
- * First-use visual explainer for Re-Architect and Motion Transfer (slice VM-1).
- * Studio-local component (self-contained; uses studio CSS tokens and allow-listed brand stills only).
+ * Drawn visual diagrams for Re-Architect and Motion Transfer (VM-2: embedded inside the `(i)` popover).
+ * Uses studio CSS tokens and the 3 allow-listed brand stills only.
  */
-import { STUDIO_SHOT_LIMITS } from "@/lib/brand-studio/contracts";
-import { DEFAULT_VIDEO_MODEL, STUDIO_MODELS, type StudioVideoModel } from "@/lib/brand-studio/models";
 import type { StudioVideoModesCopy } from "@/messages/studio-video-modes";
-import { fill } from "../copy";
-import { formatVideoModeTipLines, type PendingVideoMode } from "./video-modes-model";
 import s from "./mode-explainer.module.css";
 
 const STILL_REF = "/reel/brands/city-fashion.jpg";
 const STILL_ALT_A = "/reel/brands/tea-editorial.jpg";
 const STILL_ALT_B = "/reel/brands/production-paris.jpg";
-const DEFAULT_MODEL = STUDIO_MODELS.find((m) => m.id === DEFAULT_VIDEO_MODEL) as StudioVideoModel;
 
 function ArrowGlyph() {
   return (
@@ -80,8 +75,7 @@ function DrawnGlyph({ kind }: { kind: "product" | "cast" | "place" }) {
   );
 }
 
-function ReArchitectPicture({ copy }: { copy: StudioVideoModesCopy["explainer"]["reArchitect"] }) {
-  // Before strip: three distinct allowed stills. After strip (Round 3 item 2): three drawn tiles in accent tone (no photos).
+export function ReArchitectPicture({ copy }: { copy: StudioVideoModesCopy["explainer"]["reArchitect"] }) {
   const refFrames = [STILL_REF, STILL_ALT_A, STILL_ALT_B] as const;
   const drawnTiles: ReadonlyArray<{ id: "1" | "2" | "3"; kind: "product" | "cast" | "place"; label: string }> = [
     { id: "1", kind: "product", label: copy.mine1 },
@@ -142,8 +136,7 @@ function ReArchitectPicture({ copy }: { copy: StudioVideoModesCopy["explainer"][
   );
 }
 
-function MotionTransferPicture({ copy }: { copy: StudioVideoModesCopy["explainer"]["motionTransfer"] }) {
-  // Round 3 item 2: before = one still x3 with moving outline; after = a clearly different allowed still x3 with the SAME outlines.
+export function MotionTransferPicture({ copy }: { copy: StudioVideoModesCopy["explainer"]["motionTransfer"] }) {
   return (
     <div className={s.steps} data-video-mode-picture="motion_transfer">
       <div className={s.stepCard}>
@@ -195,90 +188,5 @@ function MotionTransferPicture({ copy }: { copy: StudioVideoModesCopy["explainer
         <p className={s.stepLabel}>{copy.step3}</p>
       </div>
     </div>
-  );
-}
-
-export interface VideoModeExplainerProps {
-  mode: PendingVideoMode;
-  copy: StudioVideoModesCopy;
-  model?: Pick<StudioVideoModel, "maxReferenceImages" | "minSeconds" | "maxSeconds" | "referenceVideoSeconds">;
-  shotLimits?: { secondsMax: number };
-  maxClips?: number;
-  /** Keep hidden before client hydration to avoid SSR/CSR flash. */
-  hidden?: boolean;
-  onDismiss(): void;
-}
-
-export function VideoModeExplainer({
-  mode,
-  copy,
-  model = DEFAULT_MODEL,
-  shotLimits = STUDIO_SHOT_LIMITS,
-  maxClips,
-  hidden = false,
-  onDismiss,
-}: VideoModeExplainerProps) {
-  const modeName = mode === "re_architect" ? copy.modes.reArchitect : copy.modes.motionTransfer;
-  const oneLiner = mode === "re_architect" ? copy.oneLiners.reArchitect : copy.oneLiners.motionTransfer;
-  const lines = formatVideoModeTipLines({
-    mode,
-    model,
-    shotLimits,
-    maxClips,
-    copy: copy.tip,
-  });
-
-  return (
-    <section
-      className={s.root}
-      aria-label={fill(copy.explainer.label, { mode: modeName })}
-      data-video-mode-explainer={mode}
-      hidden={hidden}
-    >
-      <div className={s.head}>
-        <div className={s.titleGroup}>
-          <h3 className={s.title}>{modeName}</h3>
-          <p className={s.oneLiner}>{oneLiner}</p>
-        </div>
-        <button
-          type="button"
-          className="bs-btn"
-          data-variant="soft"
-          data-size="sm"
-          onClick={onDismiss}
-          data-video-mode-explainer-dismiss
-        >
-          {copy.status.gotIt}
-        </button>
-      </div>
-
-      {mode === "re_architect" ? (
-        <ReArchitectPicture copy={copy.explainer.reArchitect} />
-      ) : (
-        <MotionTransferPicture copy={copy.explainer.motionTransfer} />
-      )}
-
-      <ul className={s.lines}>
-        <li>
-          <span className={s.lineLabel}>{copy.tip.giveLabel}</span>
-          <span className={s.lineText}>{lines.give}</span>
-        </li>
-        <li>
-          <span className={s.lineLabel}>{copy.tip.keepLabel}</span>
-          <span className={s.lineText}>{lines.keep}</span>
-        </li>
-        <li>
-          <span className={s.lineLabel}>{copy.tip.getLabel}</span>
-          <span className={s.lineText}>{lines.get}</span>
-        </li>
-      </ul>
-
-      {mode === "motion_transfer" && (
-        <ul className={s.honestNotes} data-video-mode-honest-notes>
-          <li>{copy.tip.motionHonestNotes.faceColor}</li>
-          <li>{copy.tip.motionHonestNotes.extraCredits}</li>
-        </ul>
-      )}
-    </section>
   );
 }

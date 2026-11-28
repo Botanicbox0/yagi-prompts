@@ -57,6 +57,8 @@ export const FREE_INTEL_LIMITS = {
   analyzePerMinute: 6,
   /** `revise.plan` (lib/brand-studio/revision/advise.ts). */
   revisePerMinute: 20,
+  /** `video.understand` (lib/brand-studio/video/understand.ts). */
+  understandPerMinute: 20,
   /** `revise.mark` (lib/brand-studio/revision/mark.ts): one call per mark placed. */
   markPerMinute: 30,
   /** `lyrics.draft` (lib/brand-studio/sound/lyrics-draft.ts): a first draft of lyrics, per organization. */

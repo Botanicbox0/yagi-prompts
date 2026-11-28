@@ -1,92 +1,44 @@
 /*
- * Studio-local first-use visual explainer for Video Studio modes (slice VM-1).
- * Uses workspace / studio tokens only (`app/(brand)/workspace.css`, `studio-v2.css`):
- * zero new colour values, one accent (`var(--ys-accent)`), full `prefers-reduced-motion` support.
+ * Compact visual diagrams embedded inside the `(i)` mode info popover (slice VM-2).
+ * Uses workspace / studio tokens only (`app/(brand)/workspace.css`, `studio-v2.css`).
  */
-.root {
-  width: min(860px, 100%);
-  align-self: center;
-  display: grid;
-  gap: 12px;
-  margin-bottom: 10px;
-  padding: 14px 16px;
-  border: 1px solid var(--ys-hairline);
-  border-radius: 18px;
-  background: var(--ys-surface);
-  color: var(--ys-ink);
-  word-break: keep-all;
-  overflow-wrap: break-word;
-}
-
-.root[hidden] {
-  display: none;
-}
-
-.head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.titleGroup {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 10px;
-  min-width: 0;
-}
-
-.title {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 650;
-  letter-spacing: -0.02em;
-  color: var(--ys-ink);
-}
-
-.oneLiner {
-  margin: 0;
-  font-size: 12.5px;
-  color: var(--ys-ink-secondary);
-}
-
 .steps {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: stretch;
-  gap: 8px;
+  gap: 6px;
 }
 
 .stepCard {
   display: grid;
   grid-template-rows: 1fr auto;
-  gap: 6px;
+  gap: 5px;
   min-width: 0;
-  padding: 10px;
+  padding: 7px;
   border: 1px solid var(--ys-hairline);
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--ys-panel);
 }
 
 .stepLabel {
   margin: 0;
-  font-size: 11.5px;
+  font-size: 10.5px;
   font-weight: 600;
   color: var(--ys-ink-secondary);
   text-align: center;
+  word-break: keep-all;
 }
 
 .arrow {
   display: grid;
   place-items: center;
-  width: 20px;
+  width: 14px;
   color: var(--ys-ink-muted);
 }
 
 .arrow svg {
-  width: 16px;
-  height: 16px;
+  width: 13px;
+  height: 13px;
   fill: none;
   stroke: currentColor;
   stroke-width: 1.8;
@@ -94,13 +46,12 @@
   stroke-linejoin: round;
 }
 
-/* Film strip: sprockets + 3 compact frames. */
 .filmStrip {
   display: grid;
   grid-template-rows: auto 1fr auto;
-  gap: 4px;
-  padding: 6px;
-  border-radius: 8px;
+  gap: 3px;
+  padding: 4px;
+  border-radius: 7px;
   background: var(--ys-raised);
   border: 1px solid var(--ys-hairline);
 }
@@ -108,13 +59,13 @@
 .sprockets {
   display: flex;
   justify-content: space-between;
-  gap: 4px;
+  gap: 3px;
   padding: 0 2px;
 }
 
 .sprockets span {
-  width: 8px;
-  height: 3px;
+  width: 6px;
+  height: 2.5px;
   border-radius: 1px;
   background: var(--ys-line-strong);
 }
@@ -122,7 +73,7 @@
 .frames {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 4px;
+  gap: 3px;
 }
 
 .frame {
@@ -141,36 +92,35 @@
   object-position: 50% 15%;
 }
 
-/* Re-Architect after row: three drawn tiles in accent tone (no photos), same 4/5 height as before row. */
 .drawnTile {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: 4px 2px;
+  gap: 2px;
+  padding: 3px 1px;
   border: 1px solid color-mix(in srgb, var(--ys-accent) 36%, var(--ys-hairline));
   background: color-mix(in srgb, var(--ys-accent) 12%, var(--ys-surface));
   color: var(--ys-accent);
 }
 
 .drawnIcon {
-  width: 22px;
-  height: 22px;
+  width: 16px;
+  height: 16px;
   flex: none;
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.7;
+  stroke-width: 1.8;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 
 .drawnLabel {
   max-width: 100%;
-  padding: 0 2px;
-  font-size: 9.5px;
+  padding: 0 1px;
+  font-size: 8.5px;
   font-weight: 600;
-  line-height: 1.15;
+  line-height: 1.1;
   text-align: center;
   color: var(--ys-ink);
   word-break: keep-all;
@@ -180,27 +130,26 @@
   object-position: 72% 18%;
 }
 
-/* Shot table: timed rows with bars. */
 .shotTable {
   display: grid;
   align-content: center;
-  gap: 5px;
-  padding: 6px 8px;
-  border-radius: 8px;
+  gap: 4px;
+  padding: 5px 6px;
+  border-radius: 7px;
   background: var(--ys-surface);
   border: 1px solid var(--ys-hairline);
 }
 
 .shotRow {
   display: grid;
-  gap: 3px;
-  padding: 4px 6px;
-  border-radius: 6px;
+  gap: 2px;
+  padding: 3px 5px;
+  border-radius: 5px;
   background: var(--ys-panel);
 }
 
 .shotMeta {
-  font-size: 10.5px;
+  font-size: 9.5px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   color: var(--ys-ink);
@@ -211,7 +160,7 @@
 
 .shotBar {
   display: block;
-  height: 3px;
+  height: 2.5px;
   border-radius: 999px;
   background: var(--ys-line-strong);
 }
@@ -229,7 +178,6 @@
   width: 86%;
 }
 
-/* Motion Transfer figure outline & carry tile. */
 .motionOverlay {
   position: absolute;
   inset: 0;
@@ -252,14 +200,14 @@
 .carryStage {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 6px;
+  gap: 5px;
   align-items: center;
 }
 
 .carryTile {
   position: relative;
   aspect-ratio: 4 / 5;
-  border-radius: 6px;
+  border-radius: 5px;
   overflow: hidden;
   border: 1px solid var(--ys-line-strong);
   background: var(--ys-media-bg);
@@ -270,23 +218,23 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: 50% 15%;
+  object-position: 72% 18%;
 }
 
 .carryMotion {
   display: grid;
   place-items: center;
-  gap: 4px;
-  padding: 6px;
-  border-radius: 6px;
+  gap: 3px;
+  padding: 5px;
+  border-radius: 5px;
   border: 1px dashed var(--ys-line-strong);
   background: var(--ys-surface);
   text-align: center;
 }
 
 .carryMotion svg {
-  width: 34px;
-  height: 40px;
+  width: 26px;
+  height: 32px;
   fill: none;
   stroke: var(--ys-accent);
   stroke-width: 2;
@@ -295,49 +243,9 @@
 }
 
 .carryTag {
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 600;
   color: var(--ys-ink-secondary);
-}
-
-/* Three structured lines + optional honest notes. */
-.lines {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px 14px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.lines li {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-
-.lineLabel {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--ys-ink-muted);
-}
-
-.lineText {
-  font-size: 12.5px;
-  line-height: 1.45;
-  color: var(--ys-ink-secondary);
-}
-
-.honestNotes {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 16px;
-  margin: 0;
-  padding: 8px 0 0;
-  border-top: 1px solid var(--ys-hairline);
-  list-style: none;
-  font-size: 12px;
-  color: var(--ys-ink-muted);
 }
 
 @media (prefers-reduced-motion: reduce) {

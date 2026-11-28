@@ -78,6 +78,10 @@ export type ReusePlan =
       reviewed: { original: string; improved: string } | null;
       /** A shielded reviewed video run: the dock shows its pictures and sends `reviewedFrom`. */
       shieldedReviewed?: ShieldedDockDesign;
+      /** Open the inline confirm card after restoring a Re-Architect blueprint into the dock (video modes open). */
+      openConfirm?: boolean;
+      /** True when a reused Re-Architect run carried edited shots that the dock cannot carry over. */
+      shotsNotCarried?: boolean;
     }
   | {
       to: "region";
@@ -92,6 +96,24 @@ export type ReusePlan =
   | { to: "reverse"; jobId: string }
   | { to: "none" };
 
+/**
+ * Strips multi-clip builder headers (`Reference authority: ...` and `[Part n/N · ...]`, written by
+ * `dock-model.ts:buildMultiClipJobs`) when reusing one clip from a multi-clip blueprint run so the
+ * restored prompt contains only the customer's words.
+ */
+export function stripMultiClipPromptHeaders(prompt: string): string {
+  return prompt
+    .split(/\r?\n/)
+    .filter((line) => {
+      const trimmed = line.trim();
+      if (/^Reference authority:/i.test(trimmed)) return false;
+      if (/^\[Part\s+\d+\/\d+\s*·\s*[^\]]+\]$/i.test(trimmed)) return false;
+      return true;
+    })
+    .join("\n")
+    .trim();
+}
+
 export function planReuse(
   job: StudioJobView,
   ctx: {
@@ -102,11 +124,15 @@ export function planReuse(
     from?: StudioOutputView | null;
     /** The runs made with it on other models in one request (group-model.ts `groupSiblings`). */
     siblings?: readonly StudioJobView[];
+    /** When `BRAND_STUDIO_VIDEO_MODES` is open, blueprint remixes restore directly into the dock + confirm card. */
+    blueprintToDock?: boolean;
   },
 ): ReusePlan {
   // A preset workflow run or LayerEditor save has no generation settings to bring back.
   if (job.preset || job.edited) return { to: "none" };
-  if (job.kind === "video_remix" && job.method === "blueprint") return { to: "reverse", jobId: job.id };
+  if (job.kind === "video_remix" && job.method === "blueprint" && !ctx.blueprintToDock) {
+    return { to: "reverse", jobId: job.id };
+  }
   if (job.kind === "region_edit") return planRegionReuse(job, ctx);
   if (job.kind === "image") {
     const { items, missing } = restoreTray(job.references, ctx.lookup, ctx.outputName, "image");
@@ -116,8 +142,27 @@ export function planReuse(
     return { to: "dock", draft: job.group ? groupDraft(job, draft, ctx.siblings ?? []) : draft, tray: items, missing, reviewed: null };
   }
   // Video runs: as before ("설정 다시 쓰기" brings back the sentence that was read and the typed words).
-  const reviewed = job.reviewed && job.finalPrompt ? job.finalPrompt.slice(0, STUDIO_LIMITS.promptMax) : null;
-  const next = draftFromJob(job, ctx.current);
+  const rawReviewed = job.reviewed && job.finalPrompt ? job.finalPrompt.slice(0, STUDIO_LIMITS.promptMax) : null;
+  let next = draftFromJob(job, ctx.current);
+  let reviewed = rawReviewed;
+  let originalPrompt = job.prompt;
+
+  // Fix round 1 leftover 1: with video modes open, reusing an old `method: "edit"` run maps to Motion Transfer (`reference`).
+  if (ctx.blueprintToDock && job.kind === "video_remix" && job.method === "edit") {
+    next = { ...next, method: "reference", methodPinned: true, clipCount: 1, targetTotalSeconds: null };
+  }
+
+  // Fix round 1 leftover 2a: strip multi-clip builder headers when reusing a blueprint clip in the open dock.
+  const openConfirm = Boolean(ctx.blueprintToDock && job.kind === "video_remix" && job.method === "blueprint");
+  if (openConfirm) {
+    next = { ...next, prompt: stripMultiClipPromptHeaders(next.prompt) };
+    if (reviewed) reviewed = stripMultiClipPromptHeaders(reviewed);
+    originalPrompt = stripMultiClipPromptHeaders(originalPrompt);
+  }
+
+  // Fix round 1 leftover 2b: reverse-panel runs with edited shot tables cannot carry shots into the dock.
+  const shotsNotCarried = Boolean(openConfirm && Array.isArray(job.shots) && job.shots.length > 0);
+
   const shieldedReviewed = !reviewed ? shieldedDesignFromJob(job, dockControls(next).model.id) : null;
   const { items, missing } = restoreTray(job.references, ctx.lookup, ctx.outputName, "any");
   return {
@@ -125,8 +170,10 @@ export function planReuse(
     draft: reviewed ? { ...next, prompt: reviewed } : next,
     tray: items,
     missing,
-    reviewed: reviewed ? { original: job.prompt, improved: reviewed } : null,
+    reviewed: reviewed ? { original: originalPrompt, improved: reviewed } : null,
     ...(shieldedReviewed ? { shieldedReviewed } : {}),
+    ...(openConfirm ? { openConfirm: true } : {}),
+    ...(shotsNotCarried ? { shotsNotCarried: true } : {}),
   };
 }
 

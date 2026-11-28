@@ -45,6 +45,7 @@ export const INVENTORY: readonly InventoryEntry[] = [
   { file: 'lib/brand-studio/director/analyzer.ts', kind: 'argon', count: 1, audit: '#4', status: 'not-yet', by: 'S2 (proposed: feeds #2)' },
   { file: 'lib/brand-studio/enhancer/blocked.ts', kind: 'gemini-json', count: 1, audit: '#5', status: 'not-yet', by: 'S2 (proposed: writes final_prompt, senior)' },
   { file: 'lib/brand-studio/revision/talk.ts', kind: 'gemini-json', count: 1, audit: '#6', status: 'not-yet', by: 'S3' },
+  { file: 'lib/brand-studio/video/understand.ts', kind: 'gemini-json', count: 1, audit: 'VM-2 Batch B (guarded via brand-studio.video-understand)', status: 'not-yet', by: 'VM-2 Batch B (proof-table row pending)' },
   { file: 'lib/brand-studio/revision/advise.ts', kind: 'gemini-json', count: 1, audit: '#7', status: 'not-yet', by: 'S3' },
   { file: 'lib/brand-studio/revision/mark.ts', kind: 'gemini-json', count: 1, audit: '#8', status: 'not-yet', by: 'S3' },
   { file: 'lib/brand-studio/revision/clip.ts', kind: 'gemini-json', count: 1, audit: '#9', status: 'not-yet', by: 'S3 (proposed: feeds #6)' },

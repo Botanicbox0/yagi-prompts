@@ -1038,41 +1038,98 @@ button.bs-sibling:focus-visible { outline: 2px solid var(--ys-focus); outline-of
 /* Nothing said yet: one quiet line right above the input. */
 .bs-talk-first { margin: 0; color: var(--ys-ink-secondary); font-size: 13px; line-height: 1.5; word-break: keep-all; }
 
-/* Video studio modes (slice VM-1): top-of-dock 3-mode switch, empty-video drop well, quiet edit toggle & undo. */
-.bs-vmode-bar { display: grid; gap: 4px; }
-.bs-vmode-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-width: 0; }
-.bs-vmode-seg { display: inline-flex; flex: none; gap: 2px; padding: 3px; border-radius: var(--ys-r-pill); background: var(--ys-panel); }
-.bs-vmode-option { display: inline-flex; align-items: center; min-height: 28px; padding: 0 12px; border: 0; border-radius: var(--ys-r-pill); background: transparent; color: var(--ys-ink-secondary); font: inherit; font-size: 12.5px; font-weight: 500; letter-spacing: -0.02em; white-space: nowrap; cursor: pointer; transition: background-color 150ms var(--ys-ease), color 150ms var(--ys-ease); }
-.bs-vmode-option:hover:not(:disabled):not([aria-disabled="true"]):not([data-selected]) { background: var(--ys-hover); color: var(--ys-ink); }
-.bs-vmode-option[data-selected] { background: var(--ys-active-bg); color: var(--ys-active-fg); font-weight: 600; }
-.bs-vmode-option:focus-visible { outline: 2px solid var(--ys-focus); outline-offset: 2px; }
-.bs-vmode-option:disabled, .bs-vmode-option[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; }
-.bs-vmode-oneliner { margin: 0; min-width: 0; font-size: 12.5px; line-height: 1.4; color: var(--ys-ink-secondary); word-break: keep-all; }
-.bs-vmode-reasons { display: grid; gap: 2px; }
-.bs-vmode-reason { padding: 0 2px; font-size: 12px; color: var(--ys-ink-muted); }
-/* W7: visible circle + focus ring on dark dock surface; tooltip opens on hover and keyboard :focus-within. */
-.bs-vmode-tip .bs-tip-btn { border: 1px solid var(--ys-line-strong); background: var(--ys-raised); color: var(--ys-ink-secondary); }
-.bs-vmode-tip .bs-tip-btn:hover, .bs-vmode-tip .bs-tip-btn:focus-visible { border-color: var(--ys-ink); background: var(--ys-hover); color: var(--ys-ink); }
-.bs-vmode-tip-body { max-width: min(320px, calc(100vw - 32px)); gap: 6px; border: 1px solid var(--ys-line-strong); }
-.bs-vmode-tip-row { display: grid; gap: 1px; }
-.bs-vmode-tip-row strong { font-size: 11px; font-weight: 600; color: var(--ys-ink-muted); }
-.bs-vmode-tip-row span { font-size: 12px; color: var(--ys-ink); word-break: keep-all; }
-.bs-vmode-tip-note { padding-top: 4px; border-top: 1px solid var(--ys-hairline); font-size: 11.5px; color: var(--ys-ink-muted); word-break: keep-all; }
-/* W5: three distinct well states — rest (dashed neutral), drag on page (dashed accent tint), over target (solid accent). */
-.bs-vmode-well { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 14px; padding: 12px 14px; border: 1px dashed var(--ys-line-strong); border-radius: 16px; background: var(--ys-panel); transition: border-color 150ms var(--ys-ease), background-color 150ms var(--ys-ease); }
-.bs-vmode-well[data-drop-ready] { border: 1.5px dashed var(--ys-accent); background: color-mix(in srgb, var(--ys-accent) 8%, var(--ys-panel)); }
-.bs-vmode-well[data-drop-target] { border: 1.5px solid var(--ys-accent); background: color-mix(in srgb, var(--ys-accent) 12%, var(--ys-raised)); }
-.bs-vmode-well-copy { display: grid; gap: 2px; min-width: 0; }
-.bs-vmode-well-title { margin: 0; font-size: 13.5px; font-weight: 600; color: var(--ys-ink); word-break: keep-all; }
-.bs-vmode-well-limits { margin: 0; font-size: 12px; color: var(--ys-ink-muted); }
-.bs-vmode-well-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.bs-vmode-edit-row { display: flex; align-items: center; justify-content: flex-start; padding-left: 2px; }
-.bs-vmode-edit-btn { min-height: 28px; padding: 0 10px; font-size: 12px; font-weight: 500; color: var(--ys-ink-secondary); }
+/* Video studio modes (slice VM-2 Batch A): settings-row mode listbox + (i) popover, compact tray line, inline confirm card. */
+.bs-vmode-list { min-width: 268px; max-width: min(340px, calc(100vw - 32px)); }
+.bs-vmode-list-item { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; width: 100%; padding: 8px 10px; border: 0; border-radius: 10px; background: transparent; color: var(--ys-ink); font: inherit; text-align: left; cursor: pointer; }
+.bs-vmode-list-item:hover:not([aria-disabled="true"]) { background: var(--ys-hover); }
+.bs-vmode-list-item[aria-disabled="true"] { opacity: 0.48; cursor: not-allowed; }
+.bs-vmode-list-copy { display: grid; gap: 2px; min-width: 0; }
+.bs-vmode-list-title { font-size: 13px; font-weight: 600; color: var(--ys-ink); }
+.bs-vmode-list-desc { font-size: 11.5px; line-height: 1.4; color: var(--ys-ink-secondary); word-break: keep-all; }
+.bs-vmode-list-reason { font-size: 11px; color: var(--ys-ink-muted); word-break: keep-all; }
+.bs-vmode-info { position: relative; display: inline-flex; align-items: center; }
+.bs-vmode-info-btn { display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 1px solid var(--ys-line-strong); border-radius: 50%; background: var(--ys-raised); color: var(--ys-ink-secondary); font: inherit; font-size: 12px; font-weight: 700; line-height: 1; cursor: pointer; transition: border-color 150ms var(--ys-ease), background-color 150ms var(--ys-ease), color 150ms var(--ys-ease); }
+.bs-vmode-info-btn:hover, .bs-vmode-info-btn:focus-visible, .bs-vmode-info-btn[aria-expanded="true"] { border-color: var(--ys-ink); background: var(--ys-hover); color: var(--ys-ink); }
+.bs-vmode-info-btn:focus-visible { outline: 2px solid var(--ys-focus); outline-offset: 2px; }
+.bs-vmode-info-pop { position: absolute; bottom: calc(100% + 10px); left: 0; z-index: 44; display: grid; gap: 10px; width: min(500px, calc(100vw - 32px)); padding: 14px; border: 1px solid var(--ys-line-strong); border-radius: 16px; background: var(--ys-surface); box-shadow: var(--ys-float); color: var(--ys-ink); word-break: keep-all; }
+.bs-vmode-info-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.bs-vmode-info-title { font-size: 13.5px; font-weight: 650; color: var(--ys-ink); }
+.bs-vmode-info-one { font-size: 12px; color: var(--ys-ink-secondary); }
+.bs-vmode-info-lines { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.bs-vmode-info-lines li { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 8px; font-size: 12px; line-height: 1.45; }
+.bs-vmode-info-lines strong { font-size: 11.5px; font-weight: 600; color: var(--ys-ink-muted); }
+.bs-vmode-info-lines span { color: var(--ys-ink); }
+.bs-vmode-info-notes { display: grid; gap: 3px; margin: 0; padding: 8px 0 0; border-top: 1px solid var(--ys-hairline); list-style: none; font-size: 11.5px; color: var(--ys-ink-muted); }
+.bs-vmode-tray-need { display: flex; flex: 1 1 auto; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; min-height: 44px; min-width: 0; padding: 4px 10px; border: 1px dashed var(--ys-line-strong); border-radius: 10px; background: var(--ys-panel); transition: border-color 150ms var(--ys-ease), background-color 150ms var(--ys-ease); }
+.bs-dock[data-drop-ready] .bs-vmode-tray-need { border: 1.5px dashed var(--ys-accent); background: color-mix(in srgb, var(--ys-accent) 8%, var(--ys-panel)); }
+.bs-dock[data-drop-target] .bs-vmode-tray-need { border: 1.5px solid var(--ys-accent); background: color-mix(in srgb, var(--ys-accent) 12%, var(--ys-raised)); }
+.bs-vmode-tray-need-text { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; min-width: 0; }
+.bs-vmode-tray-need-title { font-size: 12.5px; font-weight: 600; color: var(--ys-ink); word-break: keep-all; }
+.bs-vmode-tray-need-limits { font-size: 11.5px; color: var(--ys-ink-muted); }
+.bs-vmode-tray-need-actions { display: inline-flex; align-items: center; gap: 10px; flex: none; }
+.bs-vmode-tray-btn { font-size: 12px; color: var(--ys-ink-secondary); }
+.bs-vmode-tray-btn:hover:not(:disabled) { color: var(--ys-ink); }
+/* W1: Re-Architect reading state badge on the reference video thumbnail (reading / read / unreadable). */
+.bs-thumb-read { position: absolute; right: 3px; bottom: 3px; z-index: 2; display: grid; place-items: center; width: 16px; height: 16px; border: 1px solid var(--ys-line-strong); border-radius: 50%; background: var(--ys-surface); color: var(--ys-ink); font-size: 10px; font-weight: 700; line-height: 1; pointer-events: none; }
+.bs-thumb-read .bs-icon { width: 10px; height: 10px; }
+.bs-thumb-read[data-video-read-state="read"] { border-color: var(--ys-accent); color: var(--ys-accent); }
+.bs-thumb-read[data-video-read-state="unreadable"] { border-color: var(--ys-ink-muted); color: var(--ys-ink-muted); }
+.bs-thumb-read-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ys-accent); animation: bs-pulse 0.9s var(--ys-ease) infinite alternate; }
+/* W2 + W3: Compact dock & confirm card (<= 360px open with 2 pictures; <= 400px with question open; 28px rounded thumbs). */
+.bs-dock[data-confirm-open] { gap: 4px; padding: 6px 12px; }
+.bs-dock[data-confirm-open] .bs-tray-list { padding-top: 0; }
+.bs-dock[data-confirm-open] .bs-thumb { width: 36px; height: 36px; border-radius: 8px; }
+.bs-dock[data-confirm-open] .bs-thumb-n { font-size: 10.5px; line-height: 12px; }
+.bs-dock[data-confirm-open] .bs-prompt, .bs-dock[data-confirm-open] .bs-prompt-backdrop { min-height: 28px; padding: 2px 4px; line-height: 22px; }
+.bs-dock[data-confirm-open] .bs-select, .bs-dock[data-confirm-open] .bs-chip-btn { height: 28px; min-height: 28px; }
+.bs-vmode-card { display: grid; gap: 2px; padding: 4px 8px; border: 1px solid var(--ys-line-strong); border-radius: 14px; background: var(--ys-panel); }
+.bs-vmode-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 20px; }
+.bs-vmode-card-reply-wrap { display: grid; gap: 2px; min-width: 0; }
+.bs-vmode-card-reply { margin: 0; font-size: 12px; line-height: 1.35; color: var(--ys-ink); word-break: keep-all; }
+.bs-vmode-card-reply[data-clamped] { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.bs-vmode-card-reply-more { justify-self: start; padding: 0; font-size: 11px; line-height: 1.25; color: var(--ys-ink-muted); }
+.bs-vmode-card-reply-more:hover { color: var(--ys-ink); }
+.bs-vmode-card-failed { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; color: var(--ys-ink-secondary); }
+.bs-vmode-card-note { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 0; font-size: 11.5px; line-height: 1.3; color: var(--ys-ink-muted); word-break: keep-all; }
+.bs-vmode-card-question { display: grid; gap: 3px; padding: 2px 0 0; border-top: 1px solid var(--ys-hairline); }
+.bs-vmode-card-qtext { margin: 0; font-size: 11.5px; line-height: 1.3; font-weight: 500; color: var(--ys-ink); word-break: keep-all; }
+.bs-vmode-card-qopts { display: flex; flex-wrap: wrap; gap: 4px; }
+.bs-vmode-card-qopt { display: inline-flex; align-items: center; gap: 5px; min-height: 28px; height: 28px; padding: 0 9px; font-size: 11.5px; }
+.bs-vmode-card-qopt[data-has-thumb] { padding: 0 9px 0 0; overflow: hidden; }
+.bs-vmode-card-swaps { display: inline-flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden; }
+.bs-vmode-card-swap { display: inline-flex; align-items: center; gap: 4px; flex: none; }
+.bs-vmode-card-thumb { display: block; width: 28px; height: 28px; border-radius: 8px; object-fit: cover; flex: none; border: 1px solid var(--ys-line); background: var(--ys-media-bg); }
+.bs-vmode-card-rows { display: grid; gap: 1px; margin: 0; }
+.bs-vmode-card-row { position: relative; min-width: 0; }
+.bs-vmode-card-row-static, .bs-vmode-card-row-btn { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; align-items: center; gap: 8px; width: 100%; min-height: 20px; height: 20px; padding: 0 6px; border: 0; border-radius: 6px; background: transparent; font: inherit; font-size: 12px; line-height: 18px; text-align: left; }
+.bs-vmode-card-row-btn[data-confirm-line-btn="change"]:has([data-confirm-swaps]) { min-height: 30px; height: 30px; }
+.bs-vmode-card-row-static { grid-template-columns: 64px minmax(0, 1fr); }
+.bs-vmode-card-row-btn { color: var(--ys-ink); cursor: pointer; }
+.bs-vmode-card-row-btn:hover, .bs-vmode-card-row-btn[aria-expanded="true"] { background: var(--ys-hover); }
+.bs-vmode-card-row-btn:focus-visible { outline: 2px solid var(--ys-focus); outline-offset: 1px; }
+.bs-vmode-card-row-btn .bs-icon { flex: none; width: 12px; height: 12px; color: var(--ys-ink-muted); }
+.bs-vmode-card-label { font-size: 11.5px; font-weight: 600; color: var(--ys-ink-muted); white-space: nowrap; }
+.bs-vmode-card-val { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ys-ink); }
+.bs-vmode-card-static { color: var(--ys-ink-secondary); }
+.bs-vmode-line-pop { position: absolute; bottom: calc(100% + 8px); left: 0; z-index: 46; display: grid; gap: 10px; min-width: 260px; max-width: min(440px, calc(100vw - 48px)); padding: 12px; border: 1px solid var(--ys-line-strong); border-radius: 14px; background: var(--ys-surface); box-shadow: var(--ys-float); }
+.bs-vmode-line-pop-foot { display: flex; justify-content: flex-end; }
+.bs-vmode-card-refs { display: grid; gap: 8px; }
+.bs-vmode-card-ref-item { display: grid; gap: 6px; padding-bottom: 8px; border-bottom: 1px solid var(--ys-hairline); }
+.bs-vmode-card-ref-item:last-child { padding-bottom: 0; border-bottom: 0; }
+.bs-vmode-card-ref-tag { font-size: 12px; font-weight: 600; color: var(--ys-ink); }
+.bs-vmode-card-ref-notes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.bs-vmode-card-ref-field { display: grid; gap: 3px; min-width: 0; }
+.bs-vmode-card-ref-label { font-size: 11px; font-weight: 600; color: var(--ys-ink-muted); }
+.bs-vmode-card-foot { display: flex; align-items: center; justify-content: flex-end; gap: 6px; min-height: 24px; padding-top: 2px; border-top: 1px solid var(--ys-hairline); }
+.bs-vmode-card-title { margin: 0; font-size: 12px; font-weight: 600; color: var(--ys-ink-secondary); white-space: nowrap; }
+.bs-vmode-card-actions { display: inline-flex; align-items: center; gap: 6px; flex: none; }
+.bs-vmode-card-edit-btn, .bs-vmode-card-make-btn { min-height: 24px; height: 24px; padding: 0 10px; font-size: 12px; }
+.bs-vmode-card-close-btn { width: 20px; min-width: 20px; min-height: 20px; height: 20px; padding: 0; }
 .bs-vmode-undo { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-/* Round 3 items 1 & 3: neutral guidance line (`role="status"`) — never error/alert colour; leaves `.bs-dock-message` untouched. */
 .bs-dock-guidance { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 0; padding: 0 4px; font-size: 13px; color: var(--ys-ink-muted); word-break: keep-all; }
 .bs-vmode-retry-btn { font-size: 12.5px; color: var(--ys-ink-secondary); }
 .bs-vmode-retry-btn:hover:not(:disabled) { color: var(--ys-ink); }
 @media (prefers-reduced-motion: reduce) {
-  .bs-vmode-option, .bs-vmode-well { transition: none; }
+  .bs-vmode-info-btn, .bs-vmode-tray-need { transition: none; }
+  .bs-thumb-read-dot { animation: none; }
 }
