@@ -71,6 +71,8 @@ import {
   type StudioReviseTalk,
   type StudioShieldedReuse,
   type StudioState,
+  type StudioVideoUnderstand,
+  type VideoUnderstandSchema,
 } from "@/lib/brand-studio/contracts";
 import { isUnapprovedUploadReason, type UploadLimitReason } from "@/lib/brands/upload-limits-format";
 import { newRequestId } from "./copy";
@@ -88,6 +90,7 @@ export interface StudioOps {
   "revise.plan": [z.input<typeof RevisePlanSchema>, StudioRevisePlan];
   "revise.mark": [z.input<typeof ReviseMarkReadSchema>, StudioReviseMarkRead];
   "revise.talk": [z.input<typeof ReviseTalkSchema>, StudioReviseTalk];
+  "video.understand": [z.input<typeof VideoUnderstandSchema>, StudioVideoUnderstand];
   "asset.reserve": [z.input<typeof AssetReserveSchema> & BrandProjectFilingInput, StudioAssetReserved];
   "asset.complete": [z.input<typeof AssetCompleteSchema>, StudioAssetSaved];
   "asset.update": [z.input<typeof AssetUpdateSchema>, StudioAssetSaved];
