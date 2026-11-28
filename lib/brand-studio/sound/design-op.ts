@@ -20,15 +20,15 @@ import { failure, guarded } from '../outcome';
 import { brandSummary } from '../prepare';
 import type { StudioDeps } from '../types';
 import { loadAllowance } from '../usage';
-import { minimaxMusic3Sunra } from './engines/minimax-sunra';
+import { resolveMinimaxDurationSeconds } from './architect';
 import { ownLyrics } from './lyrics';
-import { designInputOf, wordsText } from './music-jobs';
+import { designInputOf, V2_MUSIC_FIELDS, wordsText } from './music-jobs';
 import { namedArtist } from './names';
 import { designForDeps, designForDepsV2 } from './prepare-music';
 import { parseRequestedSeconds } from './requested-seconds';
 import { videoFitOf, videoStructure, videoTargetSeconds } from './video-fit';
 
-export const V2_MUSIC_DESIGN_FIELDS = ['model', 'composerMode', 'durationSeconds', 'title', 'readings'] as const;
+export const V2_MUSIC_DESIGN_FIELDS = [...V2_MUSIC_FIELDS, 'readings'] as const;
 
 export function hasV2MusicDesignFields(raw: unknown): boolean {
   if (!raw || typeof raw !== 'object') return false;
@@ -106,15 +106,14 @@ async function designMusicPreviewV2(
   const brand = await brandSummary(deps, v.organizationId, gate.name);
   const sentenceSeconds = parseRequestedSeconds(v.prompt);
 
-  const minimaxRange = minimaxMusic3Sunra.capabilities.lengthInput || { min: 1, max: 75 };
-  const clampMinimax = (s: number) => Math.min(minimaxRange.max, Math.max(minimaxRange.min, Math.round(s)));
-
   const resolvedSunoTarget =
     v.targetSeconds ??
     (gate.video ? videoTargetSeconds(gate.video) : sentenceSeconds !== null ? Math.min(240, Math.max(5, sentenceSeconds)) : undefined);
-  const resolvedMinimaxDuration =
-    v.durationSeconds ??
-    (gate.video ? clampMinimax(videoTargetSeconds(gate.video)) : sentenceSeconds !== null ? clampMinimax(sentenceSeconds) : 60);
+  const resolvedMinimaxDuration = resolveMinimaxDurationSeconds({
+    durationSeconds: v.durationSeconds,
+    video: gate.video,
+    prompt: v.prompt,
+  });
 
   const baseInput = designInputOf(
     {

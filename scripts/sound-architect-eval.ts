@@ -3,9 +3,9 @@
  * Sound Studio v2 Batch B3), text only: every case goes through `designMusic` / `designMusicForModel` and the design
  * is held to the deterministic per-model rule checks. No music model is ever called.
  *
- * v2 modes (12 rough requests × 3 models = 36 cases):
- *   npx tsx scripts/sound-architect-eval.ts --dry-validate
- *   npx tsx scripts/sound-architect-eval.ts [env-file] --v2 --out <path> [--only id,id] [--cap 120]
+ * v2 modes (12 rough requests × 3 models = 36 cases + regression probes + fallback validation):
+ *   npx tsx --conditions=react-server scripts/sound-architect-eval.ts --dry-validate
+ *   npx tsx --conditions=react-server scripts/sound-architect-eval.ts [env-file] --v2 --out <path> [--only id,id] [--cap 160]
  *
  * Existing v1 modes (unchanged):
  *   npx tsx scripts/sound-architect-eval.ts <env-file> [--label after] [--out-dir <dir>] [--only id,id] [--cap 120] [--describe-only]
@@ -29,14 +29,19 @@ import { performance } from 'node:perf_hooks';
 import { studioGeminiConfig } from '@/lib/brand-studio/enhancer/gemini';
 import { musicProfileForModel } from '@/lib/brand-studio/enhancer/profiles/music';
 import {
+  checkMinimaxLyrics,
   checkMusicDesign,
   designMusic,
   designMusicForModel,
   fallbackDesign,
+  fallbackDesignForModel,
   inspectMusicDesignForModel,
   markMinimaxLyrics,
   MUSIC_PROFILE_VERSION,
+  parseMinimaxCaptionSections,
+  partitionMusicDesignProblemsForModel,
   planProblems,
+  resolveMinimaxDurationSeconds,
   subjectSentence,
   type MusicDesign,
   type MusicDesignCheckItem,
@@ -46,7 +51,7 @@ import {
 } from '@/lib/brand-studio/sound/architect';
 import { audioSeconds } from '@/lib/brand-studio/sound/audio-info';
 import { musicEngine, musicEngineOfModel, type MusicModelId } from '@/lib/brand-studio/sound/engine';
-import { formText, lineSyllables, stanzaLines, sungPlan, type LengthPlan } from '@/lib/brand-studio/sound/length-plan';
+import { cleanBpm, formText, lineSyllables, stanzaLines, sungPlan, type LengthPlan } from '@/lib/brand-studio/sound/length-plan';
 import { defaultStructure, markLyrics, ownLyrics, tempoOf, withoutAddedLines, type LyricStructure } from '@/lib/brand-studio/sound/lyrics';
 import {
   askedLines,
@@ -61,7 +66,10 @@ import {
 } from '@/lib/brand-studio/sound/lyrics-draft';
 import { isLyricsModel, LYRICS_DEFAULT_MODEL, lyricsGeminiConfig } from '@/lib/brand-studio/sound/lyrics-model';
 import { namedArtist } from '@/lib/brand-studio/sound/names';
+import { writeMinimaxLyricsWithFallback } from '@/lib/brand-studio/sound/prepare-music';
 import { parseRequestedSeconds } from '@/lib/brand-studio/sound/requested-seconds';
+import type { MusicVideoFit } from '@/lib/brand-studio/sound/video-fit';
+import { judgeExistingLyrics } from '@/lib/brand-studio/sound/warnings';
 
 export const V2_MODELS: readonly MusicModelId[] = ['suno-v6', 'suno-v6-wild', 'minimax-music-3'] as const;
 export const V2_FIXTURES_PATH = resolve(process.cwd(), 'scripts/fixtures/sound-architect/v2-fixtures.json');
@@ -205,15 +213,38 @@ export interface V2EvalFixtureCase {
   lyrics: string;
   structure?: LyricStructure | null;
   explicitTargetSeconds: number | null;
+  video?: MusicVideoFit | null;
   readings: MusicDesignReadings | null;
   words: MusicWords | null;
   expectBlocked?: 'name' | 'lyrics';
   outputs: Record<MusicModelId, StoredModelFixtureOutput>;
 }
 
+export interface V2RegressionProbe {
+  id: string;
+  description: string;
+  model: MusicModelId;
+  prompt: string;
+  vocal: boolean;
+  language?: 'ko' | 'en';
+  readings?: MusicDesignReadings | null;
+  words?: MusicWords | null;
+  design: {
+    style?: string;
+    prompt?: string;
+    title: string;
+    lyrics?: string;
+  };
+  expectPass: boolean;
+  expectCaptionClean: boolean;
+  expectTitleClean: boolean;
+  expectFailedCheckIds?: string[];
+}
+
 export interface V2EvalFixtureFile {
   version: string;
   cases: V2EvalFixtureCase[];
+  regressionProbes?: V2RegressionProbe[];
 }
 
 export interface V2CaseEvaluation {
@@ -242,6 +273,21 @@ export interface V2CaseEvaluation {
   engineBody: unknown;
 }
 
+export interface V2FallbackValidation {
+  caseId: string;
+  model: MusicModelId;
+  passed: boolean;
+  problems: string[];
+  endpoint: string | null;
+}
+
+export interface V2ProbeValidation {
+  id: string;
+  model: MusicModelId;
+  passed: boolean;
+  problems: string[];
+}
+
 export function loadV2Fixtures(path: string = V2_FIXTURES_PATH): V2EvalFixtureFile {
   return JSON.parse(readFileSync(path, 'utf8')) as V2EvalFixtureFile;
 }
@@ -253,9 +299,13 @@ export function buildV2CaseInput(c: V2EvalFixtureCase, model: MusicModelId): {
 } {
   const fromSentence = parseRequestedSeconds(c.prompt);
   const sunoTargetSeconds =
-    c.explicitTargetSeconds ?? (fromSentence !== null ? Math.min(240, Math.max(5, fromSentence)) : null);
-  const rawMinimax = c.explicitTargetSeconds ?? fromSentence ?? 60;
-  const minimaxDurationSeconds = Math.min(75, Math.max(1, Math.round(rawMinimax)));
+    c.explicitTargetSeconds ??
+    (c.video ? Math.min(240, Math.max(5, Math.round(c.video.seconds))) : fromSentence !== null ? Math.min(240, Math.max(5, fromSentence)) : null);
+  const minimaxDurationSeconds = resolveMinimaxDurationSeconds({
+    durationSeconds: c.explicitTargetSeconds,
+    video: c.video ?? null,
+    prompt: c.prompt,
+  });
   const own = c.vocal ? ownLyrics(c.lyrics) : '';
   const structure = c.structure ?? (sunoTargetSeconds ? defaultStructure(sunoTargetSeconds) : null);
 
@@ -284,9 +334,10 @@ export function buildV2CaseInput(c: V2EvalFixtureCase, model: MusicModelId): {
       language: c.language,
       locale: c.locale,
       words: c.words,
+      video: c.video ?? null,
       plan,
-      targetSeconds: model === 'minimax-music-3' ? minimaxDurationSeconds : sunoTargetSeconds,
-      ...(model === 'minimax-music-3' ? { durationSeconds: minimaxDurationSeconds } : {}),
+      targetSeconds: model === 'minimax-music-3' ? undefined : sunoTargetSeconds,
+      ...(model === 'minimax-music-3' && c.explicitTargetSeconds !== null ? { durationSeconds: c.explicitTargetSeconds } : {}),
       ...(c.readings ? { readings: c.readings } : {}),
       customerLyrics: Boolean(own),
     },
@@ -301,11 +352,18 @@ export function enginePayloadForModel(
   const engine = musicEngineOfModel(model);
   if (!engine) throw new Error(`unknown music engine for ${model}`);
   if (model === 'minimax-music-3') {
+    const durationSeconds =
+      design.durationSeconds ??
+      resolveMinimaxDurationSeconds({
+        durationSeconds: input.durationSeconds,
+        video: input.video,
+        prompt: input.prompt,
+      });
     return engine.request({
       mode: design.mode,
       prompt: design.prompt ?? design.style,
       vocal: input.vocal,
-      durationSeconds: design.durationSeconds ?? input.durationSeconds ?? 60,
+      durationSeconds,
       ...(input.vocal ? { lyrics: design.lyrics } : {}),
     });
   }
@@ -330,6 +388,7 @@ export function evaluateV2CaseOutput(
     fallbackReason?: string | null;
     rewriteNeeded?: boolean;
     latencyMs?: number;
+    lyricStageProblems?: readonly string[];
   } = {},
 ): V2CaseEvaluation {
   const profile = musicProfileForModel(model);
@@ -340,6 +399,7 @@ export function evaluateV2CaseOutput(
     const passed = output.blocked === expected && !output.style && !output.prompt;
     const check: MusicDesignCheckItem = {
       id: 'pre_design_artist_block',
+      category: 'caption',
       rule: 'Requests naming a real artist or song are refused before any model call',
       support: 'official',
       passed,
@@ -371,7 +431,7 @@ export function evaluateV2CaseOutput(
   // On Suno describe-mode vocals without lyrics, `subjectSentence` is appended by us after the model paragraph check.
   let paragraphForCheck = rawStyle;
   let styleMax = model === 'minimax-music-3' ? 2000 : 1000;
-  const extraProblems: string[] = [];
+  const extraProblems: string[] = [...(meta.lyricStageProblems ?? [])];
 
   if (model !== 'minimax-music-3' && subject) {
     styleMax = 1000 - subject.length - 1;
@@ -404,6 +464,7 @@ export function evaluateV2CaseOutput(
             readings: c.readings,
             styleMax,
             customerLyrics: Boolean(customerOwn),
+            source: meta.source ?? 'model',
           },
         );
 
@@ -435,7 +496,7 @@ export function evaluateV2CaseOutput(
 
   // Exclusion preservation check on MiniMax when brief says "no drums".
   if (model === 'minimax-music-3' && /\bno drums\b/i.test(c.prompt) && (meta.source ?? 'model') === 'model') {
-    if (!/\b(?:no drums|drumless|without drums)\b/i.test(rawStyle)) {
+    if (!/\b(?:no drums|drumless|without drums|zero percussion)\b/i.test(rawStyle)) {
       extraProblems.push('MiniMax caption dropped explicit "no drums" exclusion');
     }
   }
@@ -489,8 +550,134 @@ export function evaluateV2CaseOutput(
 }
 
 /**
- * Offline `--dry-validate`: runs all 36 `(12 cases × 3 models)` stored fixture outputs through `evaluateV2CaseOutput`
- * with zero network calls.
+ * Validates deterministic `fallbackDesignForModel` across all 36 `(case, model)` pairs through `engine.request` (`SHOULD-FIX 7`).
+ */
+export function validateV2Fallbacks(fixtureFile: V2EvalFixtureFile = loadV2Fixtures()): V2FallbackValidation[] {
+  const out: V2FallbackValidation[] = [];
+  for (const c of fixtureFile.cases) {
+    for (const model of V2_MODELS) {
+      const problems: string[] = [];
+      const artistHit = namedArtist(c.prompt) || (c.vocal && namedArtist(c.lyrics));
+      if (c.expectBlocked || artistHit) {
+        out.push({
+          caseId: c.id,
+          model,
+          passed: Boolean(artistHit),
+          problems: artistHit ? [] : ['expected pre-design artist block'],
+          endpoint: null,
+        });
+        continue;
+      }
+
+      const { input, minimaxDurationSeconds } = buildV2CaseInput(c, model);
+      const fb = fallbackDesignForModel(model, input, 'check_failed');
+      if (fb.source !== 'fallback') problems.push(`expected source 'fallback', got '${fb.source}'`);
+      if (fb.fallbackReason !== 'check_failed') problems.push(`expected fallbackReason 'check_failed', got '${fb.fallbackReason ?? 'none'}'`);
+      if (fb.llmModel !== null) problems.push('fallback llmModel must be null');
+      if (fb.notes !== null) problems.push('fallback notes must be null');
+      if (fb.profileVersion !== musicProfileForModel(model).version) {
+        problems.push(`fallback profileVersion mismatch: ${fb.profileVersion}`);
+      }
+
+      if (model === 'minimax-music-3') {
+        const caption = fb.prompt ?? fb.style;
+        if (!parseMinimaxCaptionSections(caption)) problems.push('MiniMax fallback missing three headings in order');
+        if (caption.length < 200 || caption.length > 2000) problems.push(`MiniMax fallback length ${caption.length} out of 200..2000`);
+        if (fb.durationSeconds !== minimaxDurationSeconds) {
+          problems.push(`MiniMax fallback durationSeconds ${fb.durationSeconds} !== ${minimaxDurationSeconds}`);
+        }
+      } else {
+        if (fb.style.length < 1 || fb.style.length > 1000) problems.push(`Suno fallback style length ${fb.style.length} out of 1..1000`);
+        if (/\n/.test(fb.style)) problems.push('Suno fallback style contains newline');
+      }
+
+      let endpoint: string | null = null;
+      try {
+        // On MiniMax vocal runs with blank customer lyrics, `prepareMusicV2` drafts bare-tag lyrics before `engine.request`.
+        const effectiveLyrics =
+          model === 'minimax-music-3' && input.vocal && !fb.lyrics.trim() ? '[Chorus]\n_' : fb.lyrics;
+        const built = enginePayloadForModel(model, input, {
+          mode: fb.mode,
+          style: fb.style,
+          ...(fb.prompt !== undefined ? { prompt: fb.prompt } : {}),
+          title: fb.title,
+          lyrics: effectiveLyrics,
+          ...(fb.durationSeconds !== undefined ? { durationSeconds: fb.durationSeconds } : {}),
+        });
+        endpoint = built.endpoint;
+      } catch (error) {
+        problems.push(`engine.request threw on fallback: ${error instanceof Error ? error.message : String(error)}`);
+      }
+
+      out.push({
+        caseId: c.id,
+        model,
+        passed: problems.length === 0,
+        problems,
+        endpoint,
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * Evaluates stored regression probes covering tricky check cases (`'in a ...'`, era words, supported/unsupported gender,
+ * supported/mismatched/low-confidence BPM, two-problem title + clean/dirty caption, instrumental string harmonies).
+ */
+export function validateV2Probes(fixtureFile: V2EvalFixtureFile = loadV2Fixtures()): V2ProbeValidation[] {
+  const probes = fixtureFile.regressionProbes ?? [];
+  return probes.map((p) => {
+    const partitioned = partitionMusicDesignProblemsForModel(
+      p.model,
+      p.design,
+      {
+        prompt: p.prompt,
+        vocal: p.vocal,
+        language: p.language ?? 'ko',
+        lyrics: p.design.lyrics ?? '',
+        readings: p.readings ?? null,
+        words: p.words ?? null,
+      },
+    );
+    const failedIds = partitioned.items.filter((i) => !i.passed).map((i) => i.id);
+    const allClean =
+      partitioned.captionProblems.length === 0 &&
+      partitioned.titleProblems.length === 0 &&
+      partitioned.lyricsProblems.length === 0;
+    const captionClean = partitioned.captionProblems.length === 0;
+    const titleClean = partitioned.titleProblems.length === 0;
+
+    const problems: string[] = [];
+    if (allClean !== p.expectPass) {
+      problems.push(`expected overall pass=${p.expectPass}, got ${allClean} (failed: ${failedIds.join(', ') || 'none'})`);
+    }
+    if (captionClean !== p.expectCaptionClean) {
+      problems.push(`expected captionClean=${p.expectCaptionClean}, got ${captionClean} (${partitioned.captionProblems.join('; ')})`);
+    }
+    if (titleClean !== p.expectTitleClean) {
+      problems.push(`expected titleClean=${p.expectTitleClean}, got ${titleClean} (${partitioned.titleProblems.join('; ')})`);
+    }
+    if (p.expectFailedCheckIds) {
+      const expectedSorted = [...p.expectFailedCheckIds].sort().join(',');
+      const actualSorted = [...failedIds].sort().join(',');
+      if (actualSorted !== expectedSorted) {
+        problems.push(`expected failed check ids [${expectedSorted}], got [${actualSorted}]`);
+      }
+    }
+
+    return {
+      id: p.id,
+      model: p.model,
+      passed: problems.length === 0,
+      problems,
+    };
+  });
+}
+
+/**
+ * Offline `--dry-validate`: runs all 36 `(12 cases × 3 models)` stored fixture outputs, all 36 deterministic fallbacks
+ * through `engine.request`, and all regression probes with zero network calls.
  */
 export function validateV2Fixtures(fixtureFile: V2EvalFixtureFile = loadV2Fixtures()): {
   passed: boolean;
@@ -498,6 +685,8 @@ export function validateV2Fixtures(fixtureFile: V2EvalFixtureFile = loadV2Fixtur
   passCount: number;
   failCount: number;
   results: V2CaseEvaluation[];
+  fallbacks: V2FallbackValidation[];
+  probes: V2ProbeValidation[];
 } {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (() => {
@@ -531,21 +720,33 @@ export function validateV2Fixtures(fixtureFile: V2EvalFixtureFile = loadV2Fixtur
         results.push(evaluateV2CaseOutput(c, model, stored, { source: 'model', rewriteNeeded: false, latencyMs: 0 }));
       }
     }
+    const fallbacks = validateV2Fallbacks(fixtureFile);
+    const probes = validateV2Probes(fixtureFile);
+
     const passCount = results.filter((r) => r.passed).length;
     const failCount = results.length - passCount;
+    const fallbacksPassed = fallbacks.every((f) => f.passed);
+    const probesPassed = probes.length >= 6 && probes.every((p) => p.passed);
+
     return {
-      passed: failCount === 0 && results.length === 36,
+      passed: failCount === 0 && results.length === 36 && fallbacksPassed && probesPassed,
       total: results.length,
       passCount,
       failCount,
       results,
+      fallbacks,
+      probes,
     };
   } finally {
     globalThis.fetch = originalFetch;
   }
 }
 
-export function formatV2EvalSummary(results: readonly V2CaseEvaluation[], modeLabel: 'dry-validate' | 'live-v2'): string {
+export function formatV2EvalSummary(
+  results: readonly V2CaseEvaluation[],
+  modeLabel: 'dry-validate' | 'live-v2',
+  extras?: { fallbacks?: readonly V2FallbackValidation[]; probes?: readonly V2ProbeValidation[] },
+): string {
   const lines: string[] = [
     `# Sound Prompt Architect v2 (${modeLabel}) — ${results.length} runs`,
     '',
@@ -559,8 +760,27 @@ export function formatV2EvalSummary(results: readonly V2CaseEvaluation[], modeLa
       `[${status}] ${r.caseId} | ${r.model} (${r.profileVersion}) | rewrite=${r.rewriteNeeded} | fallback=${r.fallbackUsed}${r.fallbackReason ? `(${r.fallbackReason})` : ''} | ${r.latencyMs}ms | ${checkSummary}${r.extraProblems.length ? ` | extra=${r.extraProblems.join('; ')}` : ''}`,
     );
   }
+  if (extras?.probes?.length) {
+    lines.push('', `# Regression probes — ${extras.probes.length} cases`);
+    for (const p of extras.probes) {
+      lines.push(`[${p.passed ? 'PASS' : 'FAIL'}] ${p.id} | ${p.model}${p.problems.length ? ` | ${p.problems.join('; ')}` : ''}`);
+    }
+  }
+  if (extras?.fallbacks?.length) {
+    const fbPass = extras.fallbacks.filter((f) => f.passed).length;
+    lines.push('', `# Deterministic fallbacks — ${fbPass}/${extras.fallbacks.length} valid through engine.request`);
+    for (const f of extras.fallbacks.filter((x) => !x.passed)) {
+      lines.push(`[FAIL] fallback ${f.caseId} | ${f.model} | ${f.problems.join('; ')}`);
+    }
+  }
   const passCount = results.filter((r) => r.passed).length;
-  lines.push('', `Summary: ${passCount}/${results.length} passed, ${results.length - passCount} failed.`);
+  const fbSuffix = extras?.fallbacks
+    ? `, fallbacks ${extras.fallbacks.filter((f) => f.passed).length}/${extras.fallbacks.length}`
+    : '';
+  const probeSuffix = extras?.probes
+    ? `, probes ${extras.probes.filter((p) => p.passed).length}/${extras.probes.length}`
+    : '';
+  lines.push('', `Summary: ${passCount}/${results.length} passed, ${results.length - passCount} failed${probeSuffix}${fbSuffix}.`);
   return lines.join('\n');
 }
 
@@ -618,23 +838,37 @@ export async function runLiveV2Eval(options: {
 
       const { input, minimaxDurationSeconds } = buildV2CaseInput(c, model);
       let effectiveInput = input;
+      const lyricStageProblems: string[] = [];
 
-      // Match production `prepareMusicV2`: MiniMax vocal runs with blank customer lyrics draft bare-tag lyrics first.
+      // SHOULD-FIX 6 / item 9: match production `prepareMusicV2` (`writeMinimaxLyricsWithFallback` + `judgeExistingLyrics`).
       if (model === 'minimax-music-3' && c.vocal && !ownLyrics(c.lyrics) && lyricsConfig) {
-        const structure = defaultStructure(minimaxDurationSeconds);
+        const structure = c.structure ?? defaultStructure(minimaxDurationSeconds);
         const req: LyricsRequest = {
           flow: 'topic',
           topic: c.prompt,
           language: c.language,
           seconds: minimaxDurationSeconds,
-          bpm: tempoOf(c.prompt),
+          bpm: cleanBpm(/(\d{2,3})\s*bpm/i.exec(c.prompt)?.[1]),
           structure,
           tone: null,
           brand: c.words?.brand ? { name: c.words.brand.name, ...(c.words.brand.readAs ? { readAs: c.words.brand.readAs } : {}) } : null,
           mustInclude: c.words?.mustInclude ? [...c.words.mustInclude] : [],
         };
-        const written = await writeLyricsWithFallback(req, lyricsConfig, fetcher, log);
-        const marked = written.text ? markMinimaxLyrics(written.text, structure) : '';
+        const written = await writeMinimaxLyricsWithFallback(req, lyricsConfig, fetcher, log);
+        const rawLyrics = ownLyrics(written.text);
+        const marked = rawLyrics ? markMinimaxLyrics(rawLyrics, structure) : '';
+        if (!marked) {
+          lyricStageProblems.push('MiniMax lyric draft returned empty lyrics');
+        } else {
+          const lyricIssues = checkMinimaxLyrics(marked);
+          if (lyricIssues.length > 0) {
+            lyricStageProblems.push(...lyricIssues);
+          } else {
+            const verdict = await judgeExistingLyrics(rawLyrics, lyricsConfig, fetcher, log);
+            if (verdict === 'existing') lyricStageProblems.push('MiniMax drafted lyrics flagged as existing song');
+            else if (verdict !== 'original') lyricStageProblems.push('MiniMax lyrics originality judge failed');
+          }
+        }
         effectiveInput = {
           ...input,
           lyrics: marked,
@@ -666,6 +900,7 @@ export async function runLiveV2Eval(options: {
           fallbackReason: design.fallbackReason ?? null,
           rewriteNeeded: rejectedCount > 0,
           latencyMs,
+          lyricStageProblems,
         },
       );
       results.push(evaluated);
@@ -935,7 +1170,12 @@ function writeOut(outDir: string, name: string, tableText: string, raw: readonly
 async function main(): Promise<void> {
   if (process.argv.includes('--dry-validate')) {
     const validated = validateV2Fixtures();
-    console.log(formatV2EvalSummary(validated.results, 'dry-validate'));
+    console.log(
+      formatV2EvalSummary(validated.results, 'dry-validate', {
+        fallbacks: validated.fallbacks,
+        probes: validated.probes,
+      }),
+    );
     if (!validated.passed) {
       process.exit(1);
     }

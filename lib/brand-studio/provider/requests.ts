@@ -17,7 +17,7 @@ import { pixelSize, studioModel, type StudioImageModel, type StudioModel, type S
 import type { StudioJobParams, StudioMusicParams } from '../types';
 import type { StudioProviderRequest } from './types';
 import { musicEngineOfModel, type MusicEngine } from '../sound/engine';
-import { markMinimaxLyrics } from '../sound/architect';
+import { markMinimaxLyrics, resolveMinimaxDurationSeconds } from '../sound/architect';
 import { markLyrics, ownLyrics } from '../sound/lyrics';
 import { isV2MusicJob } from '../sound/music-jobs';
 
@@ -292,7 +292,11 @@ export function minimaxMusicRequestOf(
   input: StudioRequestInput,
   music: StudioMusicParams,
 ): StudioProviderRequest {
-  const durationSeconds = Math.min(75, Math.max(1, Math.round(music.durationSeconds ?? 60)));
+  const durationSeconds = resolveMinimaxDurationSeconds({
+    durationSeconds: music.durationSeconds,
+    video: music.video,
+    prompt: input.prompt,
+  });
   const own = music.vocal ? ownLyrics(music.lyrics) : '';
   const lyrics = music.vocal ? (own ? markMinimaxLyrics(own, music.structure ?? null) : (input.draftedLyrics ?? '')) : undefined;
   try {

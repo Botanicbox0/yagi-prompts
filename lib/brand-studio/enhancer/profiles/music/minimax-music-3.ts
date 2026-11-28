@@ -28,7 +28,7 @@ export const MINIMAX_OPEN_WEIGHTS_TAGS = [
 
 export const MINIMAX_MUSIC_3_HEADER: ProfileHeader = {
   id: 'minimax-music-3',
-  version: '2026-11-28.1',
+  version: '2026-11-28.2',
   models: ['minimax-music-3'],
   sources: [
     {
@@ -39,7 +39,7 @@ export const MINIMAX_MUSIC_3_HEADER: ProfileHeader = {
     {
       url: 'https://github.com/MiniMax-AI/MiniMax-Music3/blob/main/skills/music-caption-rewriter/SKILL.md',
       seen: '2026-11-28',
-      claim: 'do not invent a precise key, BPM, or vocal gender unless stated or strongly supported; instrumental Vocal Details states Instrumental + lead melodic instrument; concrete musical changes in Arrangement; never quote or paraphrase lyrics in prompt; preserve explicit exclusions; lead with genre, groove, instrumentation over generic adjectives [official]',
+      claim: 'use an exact BPM or key only when stated or strongly supported (otherwise a BPM range or tempo word); do not invent vocal gender; instrumental Vocal Details states Instrumental + lead melodic instrument; each lyric section tag has a matching Arrangement mention with concrete musical changes; never quote or paraphrase lyrics in prompt; preserve explicit exclusions; lead with genre, groove, instrumentation over generic adjectives [official]',
     },
     {
       url: 'https://fal.ai/models/minimax/music-3/api',
@@ -66,32 +66,32 @@ export const MINIMAX_MUSIC_3_HEADER: ProfileHeader = {
  *
  * Rule support levels (`PROMPTING-RESEARCH.md` §1):
  * - [official] English Structured Caption with three headings in exact order: `Global Metadata:`, `Vocal Details:`, `Arrangement:`.
- * - [official] Sized under Sunra's 2,000-character ceiling: aim for 400 to 1,750 characters (~90 to 270 English words; minimum 200 characters, hard cap 2,000).
- * - [official] `Global Metadata:` genre/subgenre, groove/meter, tempo feel (NO invented BPM or musical key unless the request or attached reading explicitly states it), emotional progression, and commercial production profile. Lead with specific genre, groove, and instrumentation rather than generic adjectives (`emotional`, `epic`, `dark`, `modern`).
+ * - [official] Sized under Sunra's 2,000-character ceiling: 200 to 2,000 characters, aiming for 450 to 1,800 characters (~90 to 280 English words).
+ * - [official] `Global Metadata:` genre/subgenre, groove/meter, tempo feel or range (exact single BPM or musical key ONLY when stated in the request or high-confidence reading), emotional progression, and commercial production profile. Lead with specific genre, groove, and instrumentation rather than generic adjectives (`emotional`, `epic`, `dark`, `modern`).
  * - [official] + [single-source] Exclusions ("no drums", "without synth pads") ARE kept in the caption when asked for.
- * - [official] + [single-source] `Vocal Details:` for vocals, describe timbre, register, delivery, placement, and restrained backing/harmonies; include vocal gender (`male`/`female`) ONLY if the request or reading states it; explicitly include `"in Korean"` when singing in Korean (or name the sung language). For instrumentals, write `"Instrumental;"` and name the lead melodic instrument — never describe a singer or voice.
- * - [official] `Arrangement:` section-by-section timeline of concrete musical changes (what enters, exits, shifts, or intensifies in each section, matching any lyric tags in order); section directions go here, never on lyric tag lines; never quote or paraphrase lyrics in the caption.
- * - [official] Never write a duration in seconds or minutes in the caption (`duration` is sent separately), never name a real artist, band, song, album, producer or label, and keep the caption in English (Hangul allowed only inside double quotes for an explicit brand or product name from the request).
+ * - [official] + [single-source] `Vocal Details:` for vocals, describe timbre, register, delivery, placement, and restrained backing/harmonies; include vocal gender (`male`/`female`) ONLY if a singer's gender is stated in the request or reading; explicitly state `"in Korean"` when vocals are sung in Korean (`[single-source]`). For instrumentals, write `"Instrumental;"` and name the lead melodic instrument — never describe a singer, singing, or vocal harmonies.
+ * - [official] `Arrangement:` section-by-section timeline of concrete musical changes (what enters, exits, shifts, or intensifies in each section, naming every lyric section tag used in order); section directions go here, never on lyric tag lines; never quote or paraphrase lyrics in the caption.
+ * - [official] + [house] Never write a duration in seconds or minutes in the caption (`duration` is sent separately), never name a real artist, band, song, album, producer or label, keep the caption in English (Hangul allowed only inside double quotes for an explicit brand or product name from the request), and never include engine/API terms.
  */
 export const MINIMAX_MUSIC_3_PROFILE = `Model: MiniMax Music 3.0, a song and music generator for commercial advertising and brand videos. It reads a structured English caption (\`style\`) and, for vocal songs, separate tagged lyrics.
 
-Write \`style\` in English as a Structured Caption of 450 to 1,750 characters (at least 220 characters and strictly under 1,800 characters; hard limit 2,000), using these exact three headings on separate lines in this exact order:
+Write \`style\` in English as a Structured Caption of 200 to 2,000 characters (aim for 450 to 1,800 characters), using these exact three headings on separate lines in this exact order:
 
 Global Metadata: <text>
 Vocal Details: <text>
 Arrangement: <text>
 
 Rules for each heading:
-1. Global Metadata: Lead with the specific genre and subgenre, time feel and groove, tempo feel word (such as unhurried, steady mid-tempo, upbeat, driving), emotional progression, and clean commercial production profile. Prefer concrete genre, groove, and instrumentation over vague adjectives (emotional, epic, dark, modern). When the customer asks to exclude an element (for example "no drums" or "드럼 없이"), state that exclusion explicitly here or in Arrangement (for example "no drums").
-2. STRICT precision rule (Global Metadata & Vocal Details): NEVER invent a numeric BPM (such as "120 BPM"), a musical key (such as "C major" or "A minor"), or a vocal gender ("male", "female", "man", "woman") unless the customer's request or an attached reference reading explicitly states it. When BPM is not given, use tempo feel words only. When vocal gender is not given, describe vocal timbre, register, and delivery without naming a gender.
+1. Global Metadata: Lead with the specific genre and subgenre, time feel and groove, tempo feel word (such as unhurried, steady mid-tempo, upbeat, driving) or tempo range, emotional progression, and clean commercial production profile. Prefer concrete genre, groove, and instrumentation over vague adjectives (emotional, epic, dark, modern). When the customer asks to exclude an element (for example "no drums" or "드럼 없이"), state that exclusion explicitly here or in Arrangement (for example "no drums").
+2. STRICT precision rule (Global Metadata & Vocal Details): NEVER invent an exact numeric BPM (such as "120 BPM"), a musical key (such as "C major" or "A minor"), or a vocal gender ("male", "female", "man", "woman", "boy", "girl", "lady", "guy", "feminine", "masculine", "she", "he", "her", "his") unless the customer's request or an attached reference reading explicitly states it. When BPM is not given, use tempo feel words or a BPM range (such as "90-100 BPM") rather than a single number. When a singer's gender is not given, describe vocal timbre, register, and delivery without naming a gender or gendered pronoun.
 3. Vocal Details:
-   - When vocals are enabled: describe lead timbre, register, placement, delivery, and restrained harmonies or backing; include vocal gender ONLY if explicitly supported by the request or reading; always state the sung language explicitly (write "singing in Korean" — including the exact phrase "in Korean" — whenever the vocals are in Korean, or "singing in English" for English).
-   - When instrumental (vocals disabled): start with "Instrumental;" and name the lead melodic instrument that carries the theme (for example "Instrumental; a warm felt piano carries the main melody."). Never mention a singer, vocalist, singing, or harmonies.
-4. Arrangement: Write a section-by-section timeline of concrete musical changes — what instruments enter, exit, answer, build, or stop in each section (for example "Intro: ... Verse: ... Chorus: ... Outro: ..." for vocal tracks, matching the song's sections in order, or "Opening: ... Middle: ... Ending: ..." for instrumentals). Put all section-specific musical directions here in Arrangement. Never quote, translate, or paraphrase the sung lyric lines inside the caption.
+   - When vocals are enabled: describe lead timbre, register, placement, delivery, and restrained harmonies or backing; include vocal gender ONLY if a singer's gender is explicitly stated by the request or reading; name non-English vocal languages explicitly (always include the exact phrase "in Korean" whenever the vocals are sung in Korean).
+   - When instrumental (vocals disabled): start with "Instrumental;" and name the concrete lead melodic instrument that carries the theme (for example "Instrumental; a warm felt piano carries the main melody."). Never mention a singer, vocalist, singing, or vocal harmonies.
+4. Arrangement: Write a section-by-section timeline of concrete musical changes — what instruments enter, exit, answer, build, or stop in each section (for example "Intro: ... Verse: ... Chorus: ... Outro: ..." for vocal tracks, naming every section tag used in the lyrics in order, or "Opening: ... Middle: ... Ending: ..." for instrumentals). Put all section-specific musical directions here in Arrangement. Never quote, translate, or paraphrase the sung lyric lines inside the caption.
 
 Hard bans across the caption:
 - Write the caption in English only. Never include Hangul characters anywhere in \`style\` except inside double quotes for an exact brand or product name given by the customer's request (and only when needed).
-- Never write a length in seconds or minutes (such as "30 seconds", "30s", "30-second", "1 minute"): output length is passed in a separate parameter.
+- Never write a length in seconds or minutes (such as "30 seconds", "30s", "30-second", "1 minute"): output length is passed in a separate parameter. Era descriptors such as "70s-inspired", "80s synth", or "90s hip-hop" are style terms and are fine when relevant.
 - Never name a real singer, band, group, song, album, producer, or record label: translate any style direction into genre, groove, era production traits, and instrumentation.
 - Never mention engine, service, or API terms.
 

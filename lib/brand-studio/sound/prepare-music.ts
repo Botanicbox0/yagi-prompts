@@ -13,7 +13,9 @@ import { saveJob, tokenOf } from '../job-store';
 import { brandSummary, PrepareFailure } from '../prepare';
 import type { JobRow, StudioDeps, StudioJobWork } from '../types';
 import {
+  checkMinimaxLyrics,
   designMeta,
+  designMetaForModel,
   designMusic,
   designMusicForModel,
   fallbackDesignForModel,
@@ -21,6 +23,7 @@ import {
   minimaxFallbackDesign,
   MUSIC_PROFILE_VERSION,
   normalizeReadings,
+  resolveMinimaxDurationSeconds,
   type MusicDesign,
   type MusicDesignInput,
   type MusicDesignReadings,
@@ -283,8 +286,11 @@ export async function writeMinimaxLyricsWithFallback(
 async function draftMinimaxLyrics(deps: StudioDeps, job: JobRow): Promise<DraftedMinimaxLyrics> {
   const m = job.params.music!;
   const maxLyrics = minimaxMusic3Sunra.capabilities.limits.lyrics;
-  const range = minimaxMusic3Sunra.capabilities.lengthInput || { min: 1, max: 75 };
-  const durationSeconds = Math.min(range.max, Math.max(range.min, Math.round(m.durationSeconds ?? 60)));
+  const durationSeconds = resolveMinimaxDurationSeconds({
+    durationSeconds: m.durationSeconds,
+    video: m.video,
+    prompt: job.prompt,
+  });
   const structure = m.structure ?? defaultStructure(durationSeconds);
   const req: LyricsRequest = {
     flow: 'topic',
@@ -303,7 +309,7 @@ async function draftMinimaxLyrics(deps: StudioDeps, job: JobRow): Promise<Drafte
   if (deps.env.provider === 'fake' && !config) {
     const rawLyrics = ownLyrics(localLyrics(req));
     const lyrics = markMinimaxLyrics(rawLyrics, structure);
-    if (!lyrics || !/\S/.test(lyrics) || lyrics.length > maxLyrics || namedArtist(lyrics)) {
+    if (!lyrics || !/\S/.test(lyrics) || lyrics.length > maxLyrics || namedArtist(lyrics) || checkMinimaxLyrics(lyrics).length > 0) {
       throw new PrepareFailure('failed', MINIMAX_LYRICS_DRAFT_FAILED_DETAIL);
     }
     if (rawLyrics.includes(FAKE_EXISTING)) {
@@ -344,6 +350,17 @@ async function draftMinimaxLyrics(deps: StudioDeps, job: JobRow): Promise<Drafte
 
   if (namedArtist(lyrics)) {
     deps.log?.('studio_minimax_lyrics_draft_failed', { jobId: job.id, reason: 'unusable' });
+    throw new PrepareFailure('failed', MINIMAX_LYRICS_DRAFT_FAILED_DETAIL);
+  }
+
+  // MUST-FIX 4: drafted lyrics are validated separately here at prepare time, never inside the caption retry loop.
+  const lyricProblems = checkMinimaxLyrics(lyrics);
+  if (lyricProblems.length > 0) {
+    deps.log?.('studio_minimax_lyrics_draft_failed', {
+      jobId: job.id,
+      reason: 'lyric_check_failed',
+      problems: lyricProblems.join('; ').slice(0, 240),
+    });
     throw new PrepareFailure('failed', MINIMAX_LYRICS_DRAFT_FAILED_DETAIL);
   }
 
@@ -418,7 +435,7 @@ async function prepareMusicV2(deps: StudioDeps, job: JobRow): Promise<{ finalPro
         !job.enhance && hasAttachedReadings
           ? fallbackDesignForModel('minimax-music-3', baseNoBrand, 'off')
           : minimaxFallbackDesign(baseNoBrand, 'off');
-      const baseMeta = existingEnhancer ?? designMeta(offFallback);
+      const baseMeta = existingEnhancer ?? designMetaForModel(offFallback);
       const finalPrompt =
         !job.enhance && hasAttachedReadings ? offFallback.style : (job.final_prompt ?? offFallback.style);
       return {
@@ -439,10 +456,15 @@ async function prepareMusicV2(deps: StudioDeps, job: JobRow): Promise<{ finalPro
     const brand = await brandSummary(deps, job.organization_id, org?.name ?? '');
     const baseInput = musicDesignInputOf(job, brand ? { name: brand.name ?? null, tone: brand.tone ?? null, rules: brand.rules ?? [] } : null);
     const hasOwnLyrics = Boolean(m.vocal && ownLyrics(m.lyrics));
+    const resolvedDuration = resolveMinimaxDurationSeconds({
+      durationSeconds: m.durationSeconds,
+      video: m.video,
+      prompt: job.prompt,
+    });
     const designed = await designForDepsV2(deps, 'minimax-music-3', {
       ...baseInput,
       plan: null,
-      durationSeconds: m.durationSeconds ?? 60,
+      durationSeconds: resolvedDuration,
       customerLyrics: hasOwnLyrics,
       ...(drafted ? { lyrics: drafted.lyrics, customerLyrics: false } : {}),
     });
@@ -452,7 +474,7 @@ async function prepareMusicV2(deps: StudioDeps, job: JobRow): Promise<{ finalPro
         ...currentWork,
         prepared: true,
         enhancer: {
-          ...designMeta(designed),
+          ...designMetaForModel(designed),
           ...(m.titleSource === 'customer' ? { title: m.title } : {}),
           ...(drafted ? { lyrics: drafted.lyrics, lyricsModel: drafted.model } : {}),
         },
@@ -467,7 +489,7 @@ async function prepareMusicV2(deps: StudioDeps, job: JobRow): Promise<{ finalPro
     ...input,
     customerLyrics: Boolean(m.vocal && ownLyrics(m.lyrics)),
   });
-  const meta = designMeta(design);
+  const meta = designMetaForModel(design);
   return {
     finalPrompt: design.style,
     work: {

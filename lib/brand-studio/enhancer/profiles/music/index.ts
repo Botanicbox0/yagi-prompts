@@ -57,7 +57,7 @@ export const MUSIC_PROFILES: Readonly<Record<MusicModelId, MusicProfile>> = {
       styleAimMax: 900,
       styleHardMax: 1000,
       titleMax: 40,
-      lyricsMax: 3000,
+      lyricsMax: 5000,
     },
   },
   'suno-v6-wild': {
@@ -70,7 +70,7 @@ export const MUSIC_PROFILES: Readonly<Record<MusicModelId, MusicProfile>> = {
       styleAimMax: 900,
       styleHardMax: 1000,
       titleMax: 40,
-      lyricsMax: 3000,
+      lyricsMax: 5000,
     },
     note: SUNO_V6_WILD_NOTE,
   },
