@@ -12,9 +12,11 @@
  * Client-safe: no env, no db, no fetch.
  */
 import type { StudioProviderRequest } from '../provider/types';
-import { sunoV6Sunra } from './engines/suno-sunra';
+import { minimaxMusic3Sunra } from './engines/minimax-sunra';
+import { sunoV6Sunra, sunoV6WildSunra } from './engines/suno-sunra';
 
 export type MusicMode = 'describe' | 'custom';
+export type MusicModelId = 'suno-v6' | 'suno-v6-wild' | 'minimax-music-3';
 
 export interface MusicRequest {
   mode: MusicMode;
@@ -27,6 +29,8 @@ export interface MusicRequest {
   lyrics?: string;
   /** "더 고르게 만들기": more compute, twice the price (custom mode only). */
   careful?: boolean;
+  /** Maximum requested length in seconds for engines with `lengthInput` (MiniMax Music 3.0: 1..75, default 60). */
+  durationSeconds?: number;
 }
 
 export interface MusicEngineCapabilities {
@@ -56,9 +60,15 @@ export interface MusicEngine {
 
 export const MUSIC_ENGINES: Readonly<Record<string, MusicEngine>> = {
   [sunoV6Sunra.id]: sunoV6Sunra,
+  [sunoV6WildSunra.id]: sunoV6WildSunra,
+  [minimaxMusic3Sunra.id]: minimaxMusic3Sunra,
 };
 
 export const DEFAULT_MUSIC_ENGINE = sunoV6Sunra.id;
+
+const V1_MUSIC_ENGINES: Readonly<Record<string, MusicEngine>> = {
+  [sunoV6Sunra.id]: sunoV6Sunra,
+};
 
 /**
  * How long a music run may wait for the engine (paid smoke test 2026-11-20: 40–69 s per request). Past it, a run
@@ -67,10 +77,13 @@ export const DEFAULT_MUSIC_ENGINE = sunoV6Sunra.id;
  */
 export const MUSIC_WAIT_CEILING_MS = 10 * 60_000;
 
-/** The engine for this environment: `BRAND_SOUND_MUSIC_ENGINE` when it names a known one, else the default. */
+/**
+ * The engine for the closed v1 path: `BRAND_SOUND_MUSIC_ENGINE` resolves only within `V1_MUSIC_ENGINES`
+ * (`suno-v6-sunra`) so registering v2 engines in `MUSIC_ENGINES` never switches closed organizations' v1 composer.
+ */
 export function musicEngine(env: Record<string, string | undefined> = {}): MusicEngine {
   const picked = env.BRAND_SOUND_MUSIC_ENGINE?.trim();
-  return (picked && MUSIC_ENGINES[picked]) || MUSIC_ENGINES[DEFAULT_MUSIC_ENGINE]!;
+  return picked && Object.hasOwn(V1_MUSIC_ENGINES, picked) ? V1_MUSIC_ENGINES[picked]! : V1_MUSIC_ENGINES[DEFAULT_MUSIC_ENGINE]!;
 }
 
 /** The engine that made a stored job (by the model id on the row), or null. */

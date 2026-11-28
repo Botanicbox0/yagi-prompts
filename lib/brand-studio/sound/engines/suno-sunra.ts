@@ -42,39 +42,45 @@ function asWritten(text: string | undefined, max: number): string {
   return value;
 }
 
-export const sunoV6Sunra: MusicEngine = {
-  id: 'suno-v6-sunra',
-  model: { id: 'suno-v6', mcp: null },
-  capabilities: {
-    lengthInput: false,
-    vocals: true,
-    lyrics: true,
-    careful: true,
-    // The legacy extend failed on a v6 clip in the smoke test: the length tool is ours alone (SS4).
-    extend: false,
-    inpaint: false,
-    stems: false,
-    limits: LIMITS,
-  },
-  quoteUsd(request: MusicRequest): number {
-    return request.mode === 'custom' && request.careful ? 0.2 : 0.1;
-  },
-  request(request: MusicRequest) {
-    if (request.mode === 'describe') {
-      const prompt = clean(request.prompt, LIMITS.prompt, 'prompt');
-      if (!prompt) throw new MusicRequestError('empty prompt');
-      return { endpoint: `${ALIAS}/inspire-mode`, body: { prompt, instrumental: !request.vocal } };
-    }
-    const title = clean(request.title, LIMITS.title, 'title');
-    const style = clean(request.prompt, LIMITS.style, 'style');
-    if (!title || !style) throw new MusicRequestError('custom mode needs a title and a style');
-    // Instrumental (with or without Max Mode): no lyrics are sent, whatever the request carried.
-    const lyrics = request.vocal ? asWritten(request.lyrics, LIMITS.lyrics) : '';
-    return {
-      endpoint: `${ALIAS}/custom-mode`,
-      body: { title, style, lyrics, instrumental: !request.vocal, max_mode: request.careful === true },
-    };
-  },
-};
+export function makeSunoEngine(id: string, modelId: 'suno-v6' | 'suno-v6-wild', alias: string): MusicEngine {
+  return {
+    id,
+    model: { id: modelId, mcp: null },
+    capabilities: {
+      lengthInput: false,
+      vocals: true,
+      lyrics: true,
+      careful: true,
+      // The legacy extend failed on a v6 clip in the smoke test: the length tool is ours alone (SS4).
+      extend: false,
+      inpaint: false,
+      stems: false,
+      limits: LIMITS,
+    },
+    quoteUsd(request: MusicRequest): number {
+      return request.mode === 'custom' && request.careful ? 0.2 : 0.1;
+    },
+    request(request: MusicRequest) {
+      if (request.mode === 'describe') {
+        const prompt = clean(request.prompt, LIMITS.prompt, 'prompt');
+        if (!prompt) throw new MusicRequestError('empty prompt');
+        return { endpoint: `${alias}/inspire-mode`, body: { prompt, instrumental: !request.vocal } };
+      }
+      const title = clean(request.title, LIMITS.title, 'title');
+      const style = clean(request.prompt, LIMITS.style, 'style');
+      if (!title || !style) throw new MusicRequestError('custom mode needs a title and a style');
+      // Instrumental (with or without Max Mode): no lyrics are sent, whatever the request carried.
+      const lyrics = request.vocal ? asWritten(request.lyrics, LIMITS.lyrics) : '';
+      return {
+        endpoint: `${alias}/custom-mode`,
+        body: { title, style, lyrics, instrumental: !request.vocal, max_mode: request.careful === true },
+      };
+    },
+  };
+}
+
+export const sunoV6Sunra: MusicEngine = makeSunoEngine('suno-v6-sunra', 'suno-v6', ALIAS);
+
+export const sunoV6WildSunra: MusicEngine = makeSunoEngine('suno-v6-wild-sunra', 'suno-v6-wild', 'suno/suno-v6-wild');
 
 export { MusicRequestError };

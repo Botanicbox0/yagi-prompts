@@ -4,7 +4,7 @@
  */
 import { creditsOf } from '../credits';
 import { usageKrw } from '../usage-rate';
-import { musicEngine, type MusicEngine, type MusicRequest } from './engine';
+import { musicEngine, musicEngineOfModel, type MusicEngine, type MusicModelId, type MusicRequest } from './engine';
 
 /** Our own limits, under the engine's (§7.4). */
 export const MUSIC_LIMITS = { promptMax: 1000, titleMax: 80 } as const;
@@ -17,4 +17,11 @@ export function musicQuoteKrw(request: Pick<MusicRequest, 'mode' | 'careful'>, e
 /** The same quote in credits (what the button says). */
 export function musicQuoteCredits(request: Pick<MusicRequest, 'mode' | 'careful'>, engine?: MusicEngine): number {
   return creditsOf(musicQuoteKrw(request, engine));
+}
+
+/** The quote in won for a chosen music model (`MusicModelId`); throws on an unknown model id. */
+export function musicQuoteForModel(modelId: MusicModelId, request: Pick<MusicRequest, 'mode' | 'careful'>): number {
+  const engine = musicEngineOfModel(modelId);
+  if (!engine) throw new Error(`unknown music model: ${String(modelId)}`);
+  return musicQuoteKrw(request, engine);
 }

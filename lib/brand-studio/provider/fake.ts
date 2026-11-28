@@ -18,6 +18,7 @@
 import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import sharp from 'sharp';
+import { synthesizePreviewMusicWav } from '../music/synth';
 import { FAKE_CLIP_MP4_BASE64, FAKE_CLIP_SECONDS } from './fake-clip';
 import { FAKE_MUSIC_CLIPS } from './fake-music';
 import type { StudioProvider, StudioProviderRequest } from './types';
@@ -56,6 +57,8 @@ export function fakeClipBytes(): Uint8Array {
 
 interface FakeTask {
   medium: 'image' | 'video' | 'audio';
+  audioKind?: 'suno' | 'minimax';
+  wavSeconds?: number;
   width: number;
   height: number;
   draft: boolean;
@@ -63,6 +66,18 @@ interface FakeTask {
   /** Music with `max_mode`: twice the charge. */
   careful?: boolean;
   polls: number;
+}
+
+const fakeWavCache = new Map<number, Uint8Array>();
+
+function fakeMusicWavBytes(durationSec: number): Uint8Array {
+  const clamped = Math.max(1, Math.min(60, Math.round(durationSec)));
+  let cached = fakeWavCache.get(clamped);
+  if (!cached) {
+    cached = synthesizePreviewMusicWav({ bpm: 112, keySignature: 'Cm', durationSec: clamped }).bytes;
+    fakeWavCache.set(clamped, cached);
+  }
+  return new Uint8Array(cached);
 }
 
 export function createFakeStudioProvider(options: { pollsBeforeDone?: number } = {}): StudioProvider & { tasks: Map<string, FakeTask> } {
@@ -73,13 +88,20 @@ export function createFakeStudioProvider(options: { pollsBeforeDone?: number } =
     tasks,
     async submit(request: StudioProviderRequest) {
       const video = /-to-video$/.test(request.endpoint);
-      const music = request.endpoint.startsWith('suno/');
+      const minimax = request.endpoint.startsWith('minimax/');
+      const music = request.endpoint.startsWith('suno/') || minimax;
+      const wavSeconds =
+        minimax && typeof request.body.duration === 'number' && Number.isFinite(request.body.duration)
+          ? Math.max(1, Math.min(60, Math.round(request.body.duration)))
+          : 8;
       const prompt = ['prompt', 'style', 'lyrics', 'title'].map((k) => (typeof request.body[k] === 'string' ? request.body[k] : '')).join(' ');
       const size = fakeImageSize(request.body.aspect_ratio);
       const id = `fake_${randomBytes(9).toString('hex')}`;
       tasks.set(id, {
         medium: music ? 'audio' : video ? 'video' : 'image',
-        careful: music && request.body.max_mode === true,
+        ...(music ? { audioKind: minimax ? 'minimax' : 'suno' } : {}),
+        ...(minimax ? { wavSeconds } : {}),
+        careful: music && !minimax && request.body.max_mode === true,
         ...size,
         draft: request.body.draft === true,
         outcome: prompt.includes('[[fake:reject]]') ? 'reject' : prompt.includes('[[fake:fail]]') ? 'fail' : music && prompt.includes('[[fake:none]]') ? 'none' : 'ok',
@@ -96,6 +118,18 @@ export function createFakeStudioProvider(options: { pollsBeforeDone?: number } =
       if (task.outcome === 'fail') return { state: 'failed', code: 'failed', detail: 'fake failure' };
       if (task.outcome === 'none') return { state: 'failed', code: 'failed', detail: 'fake: completed without a version' };
       if (task.medium === 'audio') {
+        if (task.audioKind === 'minimax') {
+          return {
+            state: 'succeeded',
+            costUsd: 0.16,
+            outputs: [
+              {
+                url: `fake://wav/${task.wavSeconds ?? 8}/${taskId}`,
+                mime: 'audio/wav',
+              },
+            ],
+          };
+        }
         return {
           state: 'succeeded',
           costUsd: task.careful ? 0.2 : 0.1,
@@ -122,6 +156,11 @@ export function createFakeStudioProvider(options: { pollsBeforeDone?: number } =
       const image = /^fake:\/\/image\/(\d{1,4})x(\d{1,4})\//.exec(url);
       if (image) return { bytes: await fakeImagePng(Number(image[1]), Number(image[2])), mime: 'image/png' };
       if (url.startsWith('fake://video/')) return { bytes: fakeClipBytes(), mime: 'video/mp4' };
+      if (url.startsWith('fake://wav/')) {
+        const wav = /^fake:\/\/wav\/(\d{1,3})\//.exec(url);
+        const seconds = wav ? Math.max(1, Math.min(60, Number(wav[1]))) : 8;
+        return { bytes: fakeMusicWavBytes(seconds), mime: 'audio/wav' };
+      }
       const audio = /^fake:\/\/audio\/(\d)\//.exec(url);
       const clip = audio ? FAKE_MUSIC_CLIPS[Number(audio[1])] : undefined;
       if (clip) {
