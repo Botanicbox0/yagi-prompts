@@ -1,0 +1,456 @@
+{
+  "version": "2026-11-28.1",
+  "cases": [
+    {
+      "id": "01-ko-inst-15-plain",
+      "description": "Korean instrumental, 15s in sentence, no readings",
+      "prompt": "15초 립틴트 숏폼, 통통 튀는 신스 팝",
+      "locale": "ko",
+      "language": "ko",
+      "vocal": false,
+      "lyrics": "",
+      "explicitTargetSeconds": null,
+      "readings": null,
+      "words": null,
+      "outputs": {
+        "suno-v6": {
+          "mode": "describe",
+          "style": "Bright, glossy synth-pop with a playful, upbeat bounce, around 122 BPM, energetic. Instrumental; a crisp plucky synthesizer lead carries the catchy main melody. A punchy four-on-the-floor kick keeps a tight pulse, a rubbery synth bass locks to the groove, and sparkling bell chords answer each phrase. Opens on a crisp two-bar bounce, lands the bright hook right after, and finishes cleanly on a staccato downbeat. Clean, wide, close-up commercial mix with a tight low end.",
+          "title": "체리빛 바운스",
+          "lyrics": "",
+          "notes": "통통 튀는 플럭 신스와 단단한 비트로 발랄한 신스 팝 연주곡을 설계했어요."
+        },
+        "suno-v6-wild": {
+          "mode": "describe",
+          "style": "Bright, glossy synth-pop with a playful, upbeat bounce, around 122 BPM, energetic. Instrumental; a crisp plucky synthesizer lead carries the catchy main melody. A punchy four-on-the-floor kick keeps a tight pulse, a rubbery synth bass locks to the groove, and sparkling bell chords answer each phrase. Opens on a crisp two-bar bounce, lands the bright hook right after, and finishes cleanly on a staccato downbeat. Clean, wide, close-up commercial mix with a tight low end.",
+          "title": "체리빛 바운스",
+          "lyrics": "",
+          "notes": "통통 튀는 플럭 신스와 단단한 비트로 발랄한 신스 팝 연주곡을 설계했어요."
+        },
+        "minimax-music-3": {
+          "mode": "describe",
+          "style": "Global Metadata: Bright Korean commercial dance synth-pop in 4/4 with a bouncy, playful upbeat groove, sparkling and confident from the opening bar through the hook. Glossy, punchy close-up studio production with tight low-end control for a cosmetics short-form video.\nVocal Details: Instrumental; a crisp plucky synthesizer lead carries the playful main melody.\nArrangement: Opening: bouncy synth bass and tight four-on-the-floor kick establish the groove immediately. Middle: glossy pluck lead states the bright hook while crisp handclaps and shimmering synth chords lift the momentum. Ending: percussion stops cleanly on a crisp staccato synth chord.",
+          "prompt": "Global Metadata: Bright Korean commercial dance synth-pop in 4/4 with a bouncy, playful upbeat groove, sparkling and confident from the opening bar through the hook. Glossy, punchy close-up studio production with tight low-end control for a cosmetics short-form video.\nVocal Details: Instrumental; a crisp plucky synthesizer lead carries the playful main melody.\nArrangement: Opening: bouncy synth bass and tight four-on-the-floor kick establish the groove immediately. Middle: glossy pluck lead states the bright hook while crisp handclaps and shimmering synth chords lift the momentum. Ending: percussion stops cleanly on a crisp staccato synth chord.",
+          "title": "체리빛 바운스",
+          "lyrics": "",
+          "notes": "통통 튀는 플럭 신스 리드와 경쾌한 신스 베이스로 발랄한 연주곡을 설계했어요.",
+          "durationSeconds": 15
+        }
+      }
+    },
+    {
+      "id": "02-ko-inst-30-audio",
+      "description": "Korean instrumental, explicit 30s target, audio reading with 92 BPM",
+      "prompt": "차분한 스킨케어 필름 배경 음악",
+      "locale": "ko",
+      "language": "ko",
+      "vocal": false,
+      "lyrics": "",
+      "explicitTargetSeconds": 30,
+      "readings": {
+        "audio": "warm Rhodes electric piano, brushed drums, relaxed groove around 92 BPM"
+      },
+      "words": null,
+      "outputs": {
+        "suno-v6": {
+          "mode": "describe",
+          "style": "Calm neo-soul lounge instrumental with a soft, unhurried warmth, around 92 BPM, relaxed. Instrumental; a warm Rhodes electric piano carries the gentle melody. Soft brushed drums keep an unhurried pocket, a round muted electric bass moves smoothly underneath, and an airy pad adds subtle shimmer. Starts with sparse Rhodes chords, settles into a gentle mid-track pocket, and resolves on a warm held chord. Intimate, clean, close-miked mix with soft room air.",
+          "title": "온기의 결",
+          "lyrics": "",
+          "notes": "따뜻한 로즈 피아노와 브러시 드럼을 중심으로 차분한 스킨케어 배경 연주곡을 설계했어요."
+        },
+        "suno-v6-wild": {
+          "mode": "describe",
+          "style": "Calm neo-soul lounge instrumental with a soft, unhurried warmth, around 92 BPM, relaxed. Instrumental; a warm Rhodes electric piano carries the gentle melody. Soft brushed drums keep an unhurried pocket, a round muted electric bass moves smoothly underneath, and an airy pad adds subtle shimmer. Starts with sparse Rhodes chords, settles into a gentle mid-track pocket, and resolves on a warm held chord. Intimate, clean, close-up mix with soft room air.",
+          "title": "온기의 결",
+          "lyrics": "",
+          "notes": "따뜻한 로즈 피아노와 브러시 드럼을 중심으로 차분한 스킨케어 배경 연주곡을 설계했어요."
+        },
+        "minimax-music-3": {
+          "mode": "describe",
+          "style": "Global Metadata: Warm neo-soul and lounge underscore for a skincare brand film, 4/4, relaxed groove around 92 BPM, calm and unhurried from start to finish with gentle poise. Intimate, soft-edged commercial studio production with warm midrange detail.\nVocal Details: Instrumental; a warm Rhodes electric piano carries the gentle main melody.\nArrangement: Opening: solo Rhodes electric piano plays soft, spacious chords. Middle: brushed drums and a round muted bass enter quietly to establish a steady relaxed pocket while a subtle pad warms the background. Ending: brushes fade away and the Rhodes settles on a clean sustained chord.",
+          "prompt": "Global Metadata: Warm neo-soul and lounge underscore for a skincare brand film, 4/4, relaxed groove around 92 BPM, calm and unhurried from start to finish with gentle poise. Intimate, soft-edged commercial studio production with warm midrange detail.\nVocal Details: Instrumental; a warm Rhodes electric piano carries the gentle main melody.\nArrangement: Opening: solo Rhodes electric piano plays soft, spacious chords. Middle: brushed drums and a round muted bass enter quietly to establish a steady relaxed pocket while a subtle pad warms the background. Ending: brushes fade away and the Rhodes settles on a clean sustained chord.",
+          "title": "온기의 결",
+          "lyrics": "",
+          "notes": "참고 음원의 로즈 피아노와 브러시 드럼 질감을 살려 차분한 연주곡으로 설계했어요.",
+          "durationSeconds": 30
+        }
+      }
+    },
+    {
+      "id": "03-ko-inst-over75-inspo",
+      "description": "Korean instrumental asking for >75s (90s -> MiniMax clamps to 75s), inspo readings",
+      "prompt": "90초 런칭 티저 배경음, 점점 고조되게",
+      "locale": "ko",
+      "language": "ko",
+      "vocal": false,
+      "lyrics": "",
+      "explicitTargetSeconds": null,
+      "readings": {
+        "inspo": [
+          "pulsing analogue synth arpeggio, deep sub-bass, progressive build",
+          "crisp electronic percussion entering halfway, clean downbeat stop"
+        ]
+      },
+      "words": null,
+      "outputs": {
+        "suno-v6": {
+          "mode": "describe",
+          "style": "Cinematic electronic launch underscore with focused tension that builds steadily, around 116 BPM, driving. Instrumental; a pulsing analogue synthesizer arpeggio carries the central motif. Deep sub-bass anchors the low end with steady weight, crisp electronic percussion enters halfway to lift the momentum, and wide brassy synth swells open the climax. Begins minimal and tight, rises through layered percussion, and cuts cleanly on a final downbeat. Wide, punchy modern mix.",
+          "title": "새벽의 신호",
+          "lyrics": "",
+          "notes": "아날로그 신스 아르페지오와 후반부 전자 퍼커션으로 서서히 고조되는 티저 음악을 설계했어요."
+        },
+        "suno-v6-wild": {
+          "mode": "describe",
+          "style": "Cinematic electronic launch underscore with focused tension that builds steadily, around 116 BPM, driving. Instrumental; a pulsing analogue synthesizer arpeggio carries the central motif. Deep sub-bass anchors the low end with steady weight, crisp electronic percussion enters halfway to lift the momentum, and wide brassy synth swells open the climax. Begins minimal and tight, rises through layered percussion, and cuts cleanly on a final downbeat. Wide, punchy modern mix.",
+          "title": "새벽의 신호",
+          "lyrics": "",
+          "notes": "아날로그 신스 아르페지오와 후반부 전자 퍼커션으로 서서히 고조되는 티저 음악을 설계했어요."
+        },
+        "minimax-music-3": {
+          "mode": "describe",
+          "style": "Global Metadata: Progressive electronic brand-launch teaser underscore in 4/4 with a steady driving pulse, starting restrained and building in intensity toward a confident peak. Sleek, wide commercial production with deep sub-bass weight and crisp transient definition.\nVocal Details: Instrumental; a pulsing analogue synthesizer arpeggio carries the central melodic motif.\nArrangement: Opening: muted analogue synth arpeggio and deep sub-bass pulse establish quiet anticipation. Middle: filter opens gradually as crisp electronic percussion enters halfway and wide synth chords stack to raise momentum. Ending: full percussion and layered synths crest together and stop cleanly on the downbeat.",
+          "prompt": "Global Metadata: Progressive electronic brand-launch teaser underscore in 4/4 with a steady driving pulse, starting restrained and building in intensity toward a confident peak. Sleek, wide commercial production with deep sub-bass weight and crisp transient definition.\nVocal Details: Instrumental; a pulsing analogue synthesizer arpeggio carries the central melodic motif.\nArrangement: Opening: muted analogue synth arpeggio and deep sub-bass pulse establish quiet anticipation. Middle: filter opens gradually as crisp electronic percussion enters halfway and wide synth chords stack to raise momentum. Ending: full percussion and layered synths crest together and stop cleanly on the downbeat.",
+          "title": "새벽의 신호",
+          "lyrics": "",
+          "notes": "신스 아르페지오와 서브 베이스 위에 퍼커션을 쌓아 점층적으로 고조되는 연주곡을 설계했어요.",
+          "durationSeconds": 75
+        }
+      }
+    },
+    {
+      "id": "04-ko-vocal-15-gender-brand",
+      "description": "Korean vocal, 15s in sentence, Korean female gender word + quoted Hangul brand name",
+      "prompt": "15초 제로 탄산수 광고, 상쾌한 여성 보컬, 브랜드 '모아'",
+      "locale": "ko",
+      "language": "ko",
+      "vocal": true,
+      "lyrics": "",
+      "explicitTargetSeconds": null,
+      "readings": null,
+      "words": {
+        "brand": {
+          "name": "모아"
+        }
+      },
+      "outputs": {
+        "suno-v6": {
+          "mode": "describe",
+          "style": "Crisp, sparkling K-indie dance-pop with a refreshing summer bounce, around 120 BPM, lively. A bright female vocal sings clearly in Korean, close and dry at the front of the mix. Clean Nile-style rhythm guitar strums tight sixteenth notes, a snappy slap bass drives the groove, and crisp drums with tambourine lift the hook. Opens straight into a catchy hook and finishes cleanly on a bright chord. Airy, punchy mix with sparkling highs. The lyrics are about: \"15초 제로 탄산수 광고, 상쾌한 여성 보컬, 브랜드 '모아'\". Sing these words as written: \"모아\".",
+          "title": "투명한 탄산",
+          "lyrics": "",
+          "notes": "청량한 리듬 기타와 밝은 한국어 여성 보컬로 상쾌한 탄산수 광고 음악을 설계했어요."
+        },
+        "suno-v6-wild": {
+          "mode": "describe",
+          "style": "Crisp, sparkling K-indie dance-pop with a refreshing summer bounce, around 120 BPM, lively. A bright female vocal sings clearly in Korean, close and dry at the front of the mix. Clean Nile-style rhythm guitar strums tight sixteenth notes, a snappy slap bass drives the groove, and crisp drums with tambourine lift the hook. Opens straight into a catchy hook and finishes cleanly on a bright chord. Airy, punchy mix with sparkling highs. The lyrics are about: \"15초 제로 탄산수 광고, 상쾌한 여성 보컬, 브랜드 '모아'\". Sing these words as written: \"모아\".",
+          "title": "투명한 탄산",
+          "lyrics": "",
+          "notes": "청량한 리듬 기타와 밝은 한국어 여성 보컬로 상쾌한 탄산수 광고 음악을 설계했어요."
+        },
+        "minimax-music-3": {
+          "mode": "describe",
+          "style": "Global Metadata: Refreshing Korean commercial dance-pop for sparkling water brand \"모아\", 4/4, brisk upbeat groove, fizzy and uplifting from the first beat. Bright, crisp modern commercial production with tight low end and airy top-end sheen.\nVocal Details: Bright female lead vocal singing in Korean, clear upper-mid register, close and dry studio placement with light doubled backing on the main hook.\nArrangement: Chorus: crisp rhythm guitar, bouncy synth bass, and tight drums launch straight into the sparkling hook. Outro: tambourine and bright electric piano ring out on a clean downbeat stop.",
+          "prompt": "Global Metadata: Refreshing Korean commercial dance-pop for sparkling water brand \"모아\", 4/4, brisk upbeat groove, fizzy and uplifting from the first beat. Bright, crisp modern commercial production with tight low end and airy top-end sheen.\nVocal Details: Bright female lead vocal singing in Korean, clear upper-mid register, close and dry studio placement with light doubled backing on the main hook.\nArrangement: Chorus: crisp rhythm guitar, bouncy synth bass, and tight drums launch straight into the sparkling hook. Outro: tambourine and bright electric piano ring out on a clean downbeat stop.",
+          "title": "투명한 탄산",
+          "lyrics": "[Chorus]\n투명한 거품이 톡 터지는 순간\n모아와 함께 시원하게 깨어나\n[Outro]\n가볍게 빛나는 모아",
+          "notes": "청량한 리듬 기타와 밝은 한국어 여성 보컬로 상쾌한 광고 곡을 설계했어요.",
+          "durationSeconds": 15
+        }
+      }
+    },
+    {
+      "id": "05-ko-vocal-30-voice",
+      "description": "Korean vocal, explicit 30s target, voice reading supplying alto female traits",
+      "prompt": "봄 패션 캠페인 노래, 산뜻하게",
+      "locale": "ko",
+      "language": "ko",
+      "vocal": true,
+      "lyrics": "",
+      "explicitTargetSeconds": 30,
+      "readings": {
+        "voice": "female alto vocal, airy and close-miked delivery, singing in Korean"
+      },
+      "words": null,
+      "outputs": {
+        "suno-v6": {
+          "mode": "describe",
+          "style": "Breezy modern indie pop with a light springtime lift, around 110 BPM, easygoing. A female alto vocal sings in Korean with an airy, close-miked delivery and gentle phrasing. Clean jangly electric guitar plays bright arpeggios, a melodic electric bass walks smoothly underneath, and crisp snare-and-shaker drums keep a light step. Short bright intro, the chorus opens wide in the middle, and a neat guitar chord closes it. Warm, open commercial mix. The lyrics are about: \"봄 패션 캠페인 노래, 산뜻하게\".",
+          "title": "가벼운 발걸음",
+          "lyrics": "",
+          "notes": "산뜻한 일렉트릭 기타와 공기감 있는 한국어 알토 여성 보컬로 봄 캠페인 곡을 설계했어요."
+        },
+        "suno-v6-wild": {
+          "mode": "describe",
+          "style": "Breezy modern indie pop with a light springtime lift, around 110 BPM, easygoing. A female alto vocal sings in Korean with an airy, close-miked delivery and gentle phrasing. Clean jangly electric guitar plays bright arpeggios, a melodic electric bass walks smoothly underneath, and crisp snare-and-shaker drums keep a light step. Short bright intro, the chorus opens wide in the middle, and a neat guitar chord closes it. Warm, open commercial mix. The lyrics are about: \"봄 패션 캠페인 노래, 산뜻하게\".",
+          "title": "가벼운 발걸음",
+          "lyrics": "",
+          "notes": "산뜻한 일렉트릭 기타와 공기감 있는 한국어 알토 여성 보컬로 봄 캠페인 곡을 설계했어요."
+        },
+        "minimax-music-3": {
+          "mode": "describe",
+          "style": "Global Metadata: Breezy Korean indie pop for a spring fashion campaign, 4/4, light mid-uptempo walking groove, fresh and effortlessly stylish from opening to close. Clean, open studio production with warm midrange and crisp acoustic-electric blend.\nVocal Details: Airy female alto lead vocal singing in Korean, close-miked and relaxed on the verse, lifting smoothly with subtle soft harmonies on the chorus.\nArrangement: Intro: clean jangly guitar arpeggio and light shaker set a sunlit mood. Verse: melodic bass and soft kick-snare groove join beneath the close vocal. Chorus: bright layered guitars and warm keys open up the hook. Outro: band trims back to guitar and bass for a neat final chord.",
+          "prompt": "Global Metadata: Breezy Korean indie pop for a spring fashion campaign, 4/4, light mid-uptempo walking groove, fresh and effortlessly stylish from opening to close. Clean, open studio production with warm midrange and crisp acoustic-electric blend.\nVocal Details: Airy female alto lead vocal singing in Korean, close-miked and relaxed on the verse, lifting smoothly with subtle soft harmonies on the chorus.\nArrangement: Intro: clean jangly guitar arpeggio and light shaker set a sunlit mood. Verse: melodic bass and soft kick-snare groove join beneath the close vocal. Chorus: bright layered guitars and warm keys open up the hook. Outro: band trims back to guitar and bass for a neat final chord.",
+          "title": "가벼운 발걸음",
+          "lyrics": "[Intro]\n[Verse]\n가벼운 코트 자락에 스치는 바람\n햇살을 따라 걷는 새로운 거리\n[Chorus]\n산뜻하게 번지는 봄의 색깔\n오늘의 걸음이 더 환해져요\n[Outro]\n빛나는 계절 속으로",
+          "notes": "참고 보이스의 공기감 있는 한국어 여성 알토 톤과 산뜻한 인디 팝 사운드로 설계했어요.",
+          "durationSeconds": 30
+        }
+      }
+    },
+    {
+      "id": "06-ko-vocal-60-customer-lyrics",
+      "description": "Korean vocal with customer lyrics (must stay byte-identical on sung lines), explicit 60s target, no BPM/gender in brief",
+      "prompt": "따뜻한 어쿠스틱 브랜드 송",
+      "locale": "ko",
+      "language": "ko",
+      "vocal": true,
+      "lyrics": "  아침 햇살이 창가에 번지면  \n가벼운 걸음으로 문을 열어요\n\n오늘의 계절을 함께 걸어요!\n맑은 바람이 우리 곁에 머물러요",
+      "structure": "hook-verse",
+      "explicitTargetSeconds": 60,
+      "readings": null,
+      "words": null,
+      "outputs": {
+        "suno-v6": {
+          "mode": "custom",
+          "style": "Warm acoustic folk-pop with an inviting, unhurried feel, around 100 BPM, gentle. A clear, warm vocal sings in Korean with relaxed conversational phrasing. Fingerpicked acoustic guitar carries a steady rhythmic pattern, a round upright bass supports the root notes, and soft brushed snare with shaker keeps time. Opens on a four-bar instrumental intro before the hook, takes an instrumental break in the middle, and settles into a gentle outro. Intimate, natural acoustic mix.",
+          "title": "창가의 햇살",
+          "lyrics": "[Intro]\n\n[Chorus]\n  아침 햇살이 창가에 번지면  \n가벼운 걸음으로 문을 열어요\n\n[Instrumental Break]\n\n[Outro]\n오늘의 계절을 함께 걸어요!\n맑은 바람이 우리 곁에 머물러요",
+          "notes": "핑거피킹 어쿠스틱 기타와 브러시 드럼으로 따뜻한 한국어 브랜드 송을 설계했어요."
+        },
+        "suno-v6-wild": {
+          "mode": "custom",
+          "style": "Warm acoustic folk-pop with an inviting, unhurried feel, around 100 BPM, gentle. A clear, warm vocal sings in Korean with relaxed conversational phrasing. Fingerpicked acoustic guitar carries a steady rhythmic pattern, a round upright bass supports the root notes, and soft brushed snare with shaker keeps time. Opens on a four-bar instrumental intro before the hook, takes an instrumental break in the middle, and settles into a gentle outro. Intimate, natural acoustic mix.",
+          "title": "창가의 햇살",
+          "lyrics": "[Intro]\n\n[Chorus]\n  아침 햇살이 창가에 번지면  \n가벼운 걸음으로 문을 열어요\n\n[Instrumental Break]\n\n[Outro]\n오늘의 계절을 함께 걸어요!\n맑은 바람이 우리 곁에 머물러요",
+          "notes": "핑거피킹 어쿠스틱 기타와 브러시 드럼으로 따뜻한 한국어 브랜드 송을 설계했어요."
+        },
+        "minimax-music-3": {
+          "mode": "custom",
+          "style": "Global Metadata: Warm Korean acoustic folk-pop for a brand anthem, 4/4, relaxed mid-tempo sway, comforting and quietly uplifting throughout. Natural, close-miked acoustic studio production with organic wooden resonance and clear balance.\nVocal Details: Warm, clear mid-register lead vocal singing in Korean with gentle conversational diction, close studio presence, and subtle soft unison warmth on the main hook.\nArrangement: Chorus: fingerpicked acoustic guitar and warm upright bass support the opening vocal theme with light shaker pulse. Outro: soft brushed drums and delicate piano notes join gently before tapering to a warm held acoustic guitar chord.",
+          "prompt": "Global Metadata: Warm Korean acoustic folk-pop for a brand anthem, 4/4, relaxed mid-tempo sway, comforting and quietly uplifting throughout. Natural, close-miked acoustic studio production with organic wooden resonance and clear balance.\nVocal Details: Warm, clear mid-register lead vocal singing in Korean with gentle conversational diction, close studio presence, and subtle soft unison warmth on the main hook.\nArrangement: Chorus: fingerpicked acoustic guitar and warm upright bass support the opening vocal theme with light shaker pulse. Outro: soft brushed drums and delicate piano notes join gently before tapering to a warm held acoustic guitar chord.",
+          "title": "창가의 햇살",
+          "lyrics": "[Chorus]\n  아침 햇살이 창가에 번지면  \n가벼운 걸음으로 문을 열어요\n\n[Outro]\n오늘의 계절을 함께 걸어요!\n맑은 바람이 우리 곁에 머물러요",
+          "notes": "어쿠스틱 기타와 업라이트 베이스를 중심으로 따뜻한 한국어 보컬 곡을 설계했어요.",
+          "durationSeconds": 60
+        }
+      }
+    },
+    {
+      "id": "07-en-vague-three-words",
+      "description": "Very vague three-word English request, no target length, instrumental, no readings",
+      "prompt": "calm piano music",
+      "locale": "en",
+      "language": "en",
+      "vocal": false,
+      "lyrics": "",
+      "explicitTargetSeconds": null,
+      "readings": null,
+      "words": null,
+      "outputs": {
+        "suno-v6": {
+          "mode": "describe",
+          "style": "Intimate contemporary ambient piano piece with a peaceful, unhurried mood, around 74 BPM, serene. Instrumental; a soft felt upright piano carries a simple lyrical melody. Warm sustained cello notes hold gentle low harmonies underneath, and a delicate room pad adds quiet depth in the background. Begins with solo felt piano phrases, blooms softly in the middle register, and ends on a quiet decaying chord. Close, natural mix with soft hammer detail and gentle room air.",
+          "title": "Quiet Keys",
+          "lyrics": "",
+          "notes": "Designed a serene felt-piano instrumental with subtle cello warmth and an unhurried pace."
+        },
+        "suno-v6-wild": {
+          "mode": "describe",
+          "style": "Intimate contemporary ambient piano piece with a peaceful, unhurried mood, around 74 BPM, serene. Instrumental; a soft felt upright piano carries a simple lyrical melody. Warm sustained cello notes hold gentle low harmonies underneath, and a delicate room pad adds quiet depth in the background. Begins with solo felt piano phrases, blooms softly in the middle register, and ends on a quiet decaying chord. Close, natural mix with soft hammer detail and gentle room air.",
+          "title": "Quiet Keys",
+          "lyrics": "",
+          "notes": "Designed a serene felt-piano instrumental with subtle cello warmth and an unhurried pace."
+        },
+        "minimax-music-3": {
+          "mode": "describe",
+          "style": "Global Metadata: Intimate contemporary solo and chamber piano underscore, slow unhurried pulse in 4/4, peaceful and reflective from start to finish without dramatic spikes. Close-miked, natural studio production capturing soft felt-hammer warmth and gentle room air.\nVocal Details: Instrumental; a soft felt upright piano carries the lyrical main melody.\nArrangement: Opening: sparse solo felt piano phrases over gentle open voicings. Middle: warm low cello notes and a subtle atmospheric pad enter quietly underneath the piano melody. Ending: accompaniment fades away as the piano resolves on a quiet held chord.",
+          "prompt": "Global Metadata: Intimate contemporary solo and chamber piano underscore, slow unhurried pulse in 4/4, peaceful and reflective from start to finish without dramatic spikes. Close-miked, natural studio production capturing soft felt-hammer warmth and gentle room air.\nVocal Details: Instrumental; a soft felt upright piano carries the lyrical main melody.\nArrangement: Opening: sparse solo felt piano phrases over gentle open voicings. Middle: warm low cello notes and a subtle atmospheric pad enter quietly underneath the piano melody. Ending: accompaniment fades away as the piano resolves on a quiet held chord.",
+          "title": "Quiet Keys",
+          "lyrics": "",
+          "notes": "Designed a close-miked felt piano instrumental with gentle cello support and a calm ending.",
+          "durationSeconds": 60
+        }
+      }
+    },
+    {
+      "id": "08-en-inst-15-audio",
+      "description": "English instrumental, 15s in sentence, audio reading with 128 BPM",
+      "prompt": "A 15 second fast tech product reveal",
+      "locale": "en",
+      "language": "en",
+      "vocal": false,
+      "lyrics": "",
+      "explicitTargetSeconds": null,
+      "readings": {
+        "audio": "crisp two-step garage percussion around 128 BPM, glassy synth plucks, tight sub-bass"
+      },
+      "words": null,
+      "outputs": {
+        "suno-v6": {
+          "mode": "describe",
+          "style": "Sleek UK garage electronic cue with sharp modern precision, around 128 BPM, propulsive. Instrumental; glassy synthesizer plucks carry a memorable rhythmic motif. Crisp shuffled two-step hi-hats and tight rimshots drive the groove, while a focused sub-bass locks cleanly under each accent. Launches straight into the pluck motif, lifts with a bright filter sweep, and lands on a crisp downbeat hit. Clean, punchy studio mix with defined transients and tight sub weight.",
+          "title": "Glass Signal",
+          "lyrics": "",
+          "notes": "Designed a crisp 128 BPM two-step electronic cue with glassy synth plucks and tight sub-bass."
+        },
+        "suno-v6-wild": {
+          "mode": "describe",
+          "style": "Sleek UK garage electronic cue with sharp modern precision, around 128 BPM, propulsive. Instrumental; glassy synthesizer plucks carry a memorable rhythmic motif. Crisp shuffled two-step hi-hats and tight rimshots drive the groove, while a focused sub-bass locks cleanly under each accent. Launches straight into the pluck motif, lifts with a bright filter sweep, and lands on a crisp downbeat hit. Clean, punchy studio mix with defined transients and tight sub weight.",
+          "title": "Glass Signal",
+          "lyrics": "",
+          "notes": "Designed a crisp 128 BPM two-step electronic cue with glassy synth plucks and tight sub-bass."
+        },
+        "minimax-music-3": {
+          "mode": "describe",
+          "style": "Global Metadata: Sleek UK garage and modern electronic product-reveal cue, 4/4, propulsive shuffled groove around 128 BPM, sharp and confident from the first bar. Ultra-clean commercial electronic production with crisp transient detail and tight sub-bass control.\nVocal Details: Instrumental; glassy synthesizer plucks carry the lead rhythmic motif.\nArrangement: Opening: glassy synth plucks and tight sub-bass state the signature motif right away. Middle: crisp two-step garage percussion with shuffled hi-hats and snappy rimshots drives the reveal forward. Ending: rapid filter lift resolves into a clean, decisive downbeat hit.",
+          "prompt": "Global Metadata: Sleek UK garage and modern electronic product-reveal cue, 4/4, propulsive shuffled groove around 128 BPM, sharp and confident from the first bar. Ultra-clean commercial electronic production with crisp transient detail and tight sub-bass control.\nVocal Details: Instrumental; glassy synthesizer plucks carry the lead rhythmic motif.\nArrangement: Opening: glassy synth plucks and tight sub-bass state the signature motif right away. Middle: crisp two-step garage percussion with shuffled hi-hats and snappy rimshots drives the reveal forward. Ending: rapid filter lift resolves into a clean, decisive downbeat hit.",
+          "title": "Glass Signal",
+          "lyrics": "",
+          "notes": "Designed a sleek UK garage electronic reveal cue with glassy synth plucks and two-step percussion.",
+          "durationSeconds": 15
+        }
+      }
+    },
+    {
+      "id": "09-en-inst-60-exclusion",
+      "description": "English instrumental, explicit 60s target, explicit exclusion ('no drums')",
+      "prompt": "Minimal ambient product backdrop, warm synth pads, no drums",
+      "locale": "en",
+      "language": "en",
+      "vocal": false,
+      "lyrics": "",
+      "explicitTargetSeconds": 60,
+      "readings": null,
+      "words": null,
+      "outputs": {
+        "suno-v6": {
+          "mode": "describe",
+          "style": "Minimal ambient electronic underscore with a weightless, floating calm, around 70 BPM, unhurried. Instrumental; warm analogue synthesizer pads carry slow, evolving chord changes. A soft bell-like electric keyboard traces sparse high notes, and a warm sustained bass drone anchors the harmony gently. Opens quietly on a single warm pad, widens gradually in harmonic richness, and fades cleanly on a pure consonant chord. Spacious, airy, velvety mix.",
+          "title": "Weightless Air",
+          "lyrics": "",
+          "notes": "Designed a floating ambient synth-pad underscore focused on warm harmonic textures."
+        },
+        "suno-v6-wild": {
+          "mode": "describe",
+          "style": "Minimal ambient electronic underscore with a weightless, floating calm, around 70 BPM, unhurried. Instrumental; warm analogue synthesizer pads carry slow, evolving chord changes. A soft bell-like electric keyboard traces sparse high notes, and a warm sustained bass drone anchors the harmony gently. Opens quietly on a single warm pad, widens gradually in harmonic richness, and fades cleanly on a pure consonant chord. Spacious, airy, velvety mix.",
+          "title": "Weightless Air",
+          "lyrics": "",
+          "notes": "Designed a floating ambient synth-pad underscore focused on warm harmonic textures."
+        },
+        "minimax-music-3": {
+          "mode": "describe",
+          "style": "Global Metadata: Minimal ambient electronic underscore for a product video, slow floating pulse, calm and serene throughout, strictly no drums and no percussion. Warm, spacious studio production with wide stereo analogue pad depth and clean headroom.\nVocal Details: Instrumental; warm analogue synthesizer pads carry the slow melodic and harmonic movement.\nArrangement: Opening: soft warm synth pad swells in gently with no drums. Middle: delicate bell-like electric keys trace sparse upper-register intervals over a deep sustained synth bass drone, keeping a drumless floating texture. Ending: upper layers dissolve smoothly into a single held warm pad chord.",
+          "prompt": "Global Metadata: Minimal ambient electronic underscore for a product video, slow floating pulse, calm and serene throughout, strictly no drums and no percussion. Warm, spacious studio production with wide stereo analogue pad depth and clean headroom.\nVocal Details: Instrumental; warm analogue synthesizer pads carry the slow melodic and harmonic movement.\nArrangement: Opening: soft warm synth pad swells in gently with no drums. Middle: delicate bell-like electric keys trace sparse upper-register intervals over a deep sustained synth bass drone, keeping a drumless floating texture. Ending: upper layers dissolve smoothly into a single held warm pad chord.",
+          "title": "Weightless Air",
+          "lyrics": "",
+          "notes": "Designed a drumless minimal ambient underscore built on warm analogue synth pads and gentle electric keys.",
+          "durationSeconds": 60
+        }
+      }
+    },
+    {
+      "id": "10-en-vocal-30-no-gender",
+      "description": "English vocal, 30s in sentence, blank lyrics, no gender or BPM given (MiniMax must invent neither)",
+      "prompt": "30-second sunlit coffee commercial, upbeat indie pop",
+      "locale": "en",
+      "language": "en",
+      "vocal": true,
+      "lyrics": "",
+      "explicitTargetSeconds": null,
+      "readings": null,
+      "words": null,
+      "outputs": {
+        "suno-v6": {
+          "mode": "describe",
+          "style": "Sunlit upbeat indie pop with a cheerful morning warmth, around 114 BPM, breezy. A clear, warm mid-register lead vocal sings in English with friendly, conversational phrasing. Crisp strummed acoustic guitar drives the rhythm, a bouncy electric bass locks with tight kick-and-snare drums, and bright electric guitar chimes answer the hook. Short bright intro, uplifting chorus in the centre, and a crisp ring-out ending. Clean, warm commercial mix. The lyrics are about: \"30-second sunlit coffee commercial, upbeat indie pop\".",
+          "title": "Morning Pour",
+          "lyrics": "",
+          "notes": "Designed a bright indie-pop coffee commercial with crisp acoustic guitar and warm English vocals."
+        },
+        "suno-v6-wild": {
+          "mode": "describe",
+          "style": "Sunlit upbeat indie pop with a cheerful morning warmth, around 114 BPM, breezy. A clear, warm mid-register lead vocal sings in English with friendly, conversational phrasing. Crisp strummed acoustic guitar drives the rhythm, a bouncy electric bass locks with tight kick-and-snare drums, and bright electric guitar chimes answer the hook. Short bright intro, uplifting chorus in the centre, and a crisp ring-out ending. Clean, warm commercial mix. The lyrics are about: \"30-second sunlit coffee commercial, upbeat indie pop\".",
+          "title": "Morning Pour",
+          "lyrics": "",
+          "notes": "Designed a bright indie-pop coffee commercial with crisp acoustic guitar and warm English vocals."
+        },
+        "minimax-music-3": {
+          "mode": "describe",
+          "style": "Global Metadata: Bright sunlit indie pop for a morning coffee commercial, 4/4, upbeat bouncy groove, cheerful and inviting from the opening bar. Crisp, warm studio production balancing acoustic strum clarity with a tight rhythm section.\nVocal Details: Warm, clear mid-register lead vocal singing in English, friendly close-miked delivery with light doubled harmonies lifting the chorus hook.\nArrangement: Intro: bright strummed acoustic guitar and crisp tambourine establish a sunny groove. Chorus: bouncy electric bass, tight drums, and chiming electric guitar chords join behind the upbeat hook. Outro: rhythm section stops cleanly on a warm ringing guitar chord.",
+          "prompt": "Global Metadata: Bright sunlit indie pop for a morning coffee commercial, 4/4, upbeat bouncy groove, cheerful and inviting from the opening bar. Crisp, warm studio production balancing acoustic strum clarity with a tight rhythm section.\nVocal Details: Warm, clear mid-register lead vocal singing in English, friendly close-miked delivery with light doubled harmonies lifting the chorus hook.\nArrangement: Intro: bright strummed acoustic guitar and crisp tambourine establish a sunny groove. Chorus: bouncy electric bass, tight drums, and chiming electric guitar chords join behind the upbeat hook. Outro: rhythm section stops cleanly on a warm ringing guitar chord.",
+          "title": "Morning Pour",
+          "lyrics": "[Intro]\n[Chorus]\nGolden sunlight pouring in the cup\nRich aroma waking every morning up\nEvery sip brings a brighter start\n[Outro]\nWarmth in every morning cup",
+          "notes": "Designed an upbeat indie-pop coffee spot with strummed acoustic guitar and clear English vocals.",
+          "durationSeconds": 30
+        }
+      }
+    },
+    {
+      "id": "11-en-vocal-none-customer-lyrics-both",
+      "description": "English vocal with customer lyrics, no target length, audio (88 BPM) + voice (male baritone) readings",
+      "prompt": "Late-night fragrance launch song",
+      "locale": "en",
+      "language": "en",
+      "vocal": true,
+      "lyrics": "Velvet shadows on the avenue\nQuiet sparks beneath a silver sky\n\nStay a little closer tonight\nLet the evening glow fade slow",
+      "structure": "hook-verse",
+      "explicitTargetSeconds": null,
+      "readings": {
+        "audio": "nocturnal electronic R&B groove around 88 BPM, warm electric keys, deep sub-bass",
+        "voice": "male baritone vocal, intimate breathy delivery, singing in English"
+      },
+      "words": null,
+      "outputs": {
+        "suno-v6": {
+          "mode": "custom",
+          "style": "Nocturnal alternative R&B with a sleek, magnetic late-night mood, around 88 BPM, smooth. A male baritone vocal sings in English with an intimate, breathy close-miked delivery. Warm electric keys lay down lush minor-seventh chords, a deep sub-bass glides smoothly underneath, and sparse rimshot percussion keeps a poised pocket. Opens on moody keys, deepens through the central chorus, and fades cleanly on a warm chord. Velvety, spacious mix with deep low end.",
+          "title": "Silver Afterglow",
+          "lyrics": "[Chorus]\nVelvet shadows on the avenue\nQuiet sparks beneath a silver sky\n\n[Outro]\nStay a little closer tonight\nLet the evening glow fade slow",
+          "notes": "Designed a moody 88 BPM electronic R&B track with warm electric keys and an intimate male baritone vocal."
+        },
+        "suno-v6-wild": {
+          "mode": "custom",
+          "style": "Nocturnal alternative R&B with a sleek, magnetic late-night mood, around 88 BPM, smooth. A male baritone vocal sings in English with an intimate, breathy close-miked delivery. Warm electric keys lay down lush minor-seventh chords, a deep sub-bass glides smoothly underneath, and sparse rimshot percussion keeps a poised pocket. Opens on moody keys, deepens through the central chorus, and fades cleanly on a warm chord. Velvety, spacious mix with deep low end.",
+          "title": "Silver Afterglow",
+          "lyrics": "[Chorus]\nVelvet shadows on the avenue\nQuiet sparks beneath a silver sky\n\n[Outro]\nStay a little closer tonight\nLet the evening glow fade slow",
+          "notes": "Designed a moody 88 BPM electronic R&B track with warm electric keys and an intimate male baritone vocal."
+        },
+        "minimax-music-3": {
+          "mode": "custom",
+          "style": "Global Metadata: Nocturnal electronic R&B for a luxury fragrance launch, 4/4, smooth pocket around 88 BPM, poised and magnetic from start to finish. Velvety, spacious commercial studio production with deep sub-bass clarity and lush stereo electric keys.\nVocal Details: Intimate male baritone lead vocal singing in English, breathy close-miked delivery with restrained low-register poise and subtle airy backing on the final phrase.\nArrangement: Chorus: warm electric keys and gliding sub-bass open beneath the close vocal while sparse rimshot percussion enters softly. Outro: percussion drops back, leaving lush electric keys and sub-bass to resolve on a lingering chord.",
+          "prompt": "Global Metadata: Nocturnal electronic R&B for a luxury fragrance launch, 4/4, smooth pocket around 88 BPM, poised and magnetic from start to finish. Velvety, spacious commercial studio production with deep sub-bass clarity and lush stereo electric keys.\nVocal Details: Intimate male baritone lead vocal singing in English, breathy close-miked delivery with restrained low-register poise and subtle airy backing on the final phrase.\nArrangement: Chorus: warm electric keys and gliding sub-bass open beneath the close vocal while sparse rimshot percussion enters softly. Outro: percussion drops back, leaving lush electric keys and sub-bass to resolve on a lingering chord.",
+          "title": "Silver Afterglow",
+          "lyrics": "[Chorus]\nVelvet shadows on the avenue\nQuiet sparks beneath a silver sky\n\n[Outro]\nStay a little closer tonight\nLet the evening glow fade slow",
+          "notes": "Designed a nocturnal 88 BPM electronic R&B fragrance track featuring warm electric keys and a breathy male baritone vocal.",
+          "durationSeconds": 60
+        }
+      }
+    },
+    {
+      "id": "12-ko-trap-famous-artist",
+      "description": "Korean request naming a famous artist ('뉴진스') -> refused pre-design across all 3 models",
+      "prompt": "뉴진스 느낌으로 상쾌한 여름 음료 노래",
+      "locale": "ko",
+      "language": "ko",
+      "vocal": true,
+      "lyrics": "",
+      "explicitTargetSeconds": null,
+      "readings": null,
+      "words": null,
+      "expectBlocked": "name",
+      "outputs": {
+        "suno-v6": {
+          "blocked": "name"
+        },
+        "suno-v6-wild": {
+          "blocked": "name"
+        },
+        "minimax-music-3": {
+          "blocked": "name"
+        }
+      }
+    }
+  ]
+}

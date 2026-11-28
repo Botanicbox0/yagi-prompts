@@ -1,60 +1,70 @@
 /**
- * Evaluation of the music Prompt Architect (lib/brand-studio/sound/architect.ts, docs/BRAND-SOUND-STUDIO.md §12.6),
- * text only: every case goes through `designMusic` and the design is held to the rule check without a model.
- * No music is made, ever: `--emit` only writes request bodies to files, `--sung` only measures files already
- * downloaded.
+ * Evaluation of the music Prompt Architect (lib/brand-studio/sound/architect.ts, docs/BRAND-SOUND-STUDIO.md §12.6;
+ * Sound Studio v2 Batch B3), text only: every case goes through `designMusic` / `designMusicForModel` and the design
+ * is held to the deterministic per-model rule checks. No music model is ever called.
  *
+ * v2 modes (12 rough requests × 3 models = 36 cases):
+ *   npx tsx scripts/sound-architect-eval.ts --dry-validate
+ *   npx tsx scripts/sound-architect-eval.ts [env-file] --v2 --out <path> [--only id,id] [--cap 120]
+ *
+ * Existing v1 modes (unchanged):
  *   npx tsx scripts/sound-architect-eval.ts <env-file> [--label after] [--out-dir <dir>] [--only id,id] [--cap 120] [--describe-only]
  *   npx tsx scripts/sound-architect-eval.ts --label before [--out-dir <dir>]        (the fallback; no model, no key)
  *   npx tsx scripts/sound-architect-eval.ts <env-file> --emit <dir> [--only id,id]  (request bodies for a paid check)
  *   npx tsx scripts/sound-architect-eval.ts --sung <dir>                            (measure downloaded MP3s; no call)
+ *   npx tsx scripts/sound-architect-eval.ts <env-file> --lyrics [--model gemini-3.8-flash] [--label after] [--no-fallback]
+ *   npx tsx scripts/sound-architect-eval.ts --lyrics --label before
  *
- * - Reads ONLY `GEMINI_API_KEY` and `GEMINI_BASE_URL` from <env-file>, inside this process; the key is never printed
- *   or written, and every string that leaves the process is scrubbed of it.
- * - Every request URL must name an expected model (the Architect's, and for lyrics drafted first the lyrics model and
- *   its fast fallback); the run stops at the first other one.
- * - One case's error (a timeout, a refusal) is recorded as `error` and the run goes on. Next to the table,
- *   `<label>-raw.md` keeps every case in full: the input, the lyrics and the model that wrote them, the design, the
- *   body the engine would get, and each call's model and time (eval fixes, 2026-11-21).
- * - Sung with no lyrics, the design run follows the product (the dock drafts the lyrics first, then designs for them;
- *   about 1-2 more calls per such case on the lyrics model). `--describe-only` scores the path without lyrics, where
- *   the brand and the words to include must still reach the engine.
- * - The fetch counts calls and stops at `--cap` (default 120).
- * - Cases: the 16 briefs of the lyrics blind comparison (docs/research/…/lyrics-blind-sheet.md), descriptions
- *   without lyrics, and traps (a singer's name, a line of existing lyrics, a superlative, a long English brand name,
- *   the customer's own lyrics that must reach the engine unchanged).
- * - Verdicts: `pass` = the model's design holds every rule. `allow` = the fallback was used (the run still goes, the
- *   customer's words with basic directions). `fail` = a design that breaks a rule reached the engine, or the
- *   customer's lyrics changed.
- * - `--lyrics` (SA2, §12.3): the lyrics engine instead of the style design. The 16 briefs become lyric requests
- *   (length, structure for that length, brand, words to include, language from the sheet), plus traps (a singer's
- *   name, a superlative, an English brand with a Korean reading (scored like any brand: Latin vs Hangul is the founder's call, §12.8 e), a polish of the customer's lyrics, the customer's
- *   lyrics sent as written). `--model <id>` picks one of the five compared models (default: the server default);
- *   `--label before` scores the local fixed text (no model). Verdicts: `pass` = every rule, `allow` = only soft
- *   rules broken (syllables by tempo, hook, finals, register, stanza count), `fail` = a hard rule broken or the customer's
- *   lyrics changed on the way to the engine.
- *
- *     npx tsx scripts/sound-architect-eval.ts <env-file> --lyrics [--model gemini-3.8-flash] [--label after] [--no-fallback]
- *   By default a timed-out first model hands the case to gemini-3.8-flash once, as the studio does; the table names
- *   who wrote each. `--no-fallback` keeps a model comparison to the one model.
- *     npx tsx scripts/sound-architect-eval.ts --lyrics --label before
- * - `--sung <dir>`: for each MP3 the measured length and the loudness of the last 3 seconds (ffmpeg); transcription
- *   is not run here (no speech model in the repository): the column says so.
+ * Safety:
+ * - Reads ONLY `GEMINI_API_KEY` and `GEMINI_BASE_URL` (and optional `BRAND_STUDIO_ENHANCER_MODEL` / `BRAND_SOUND_LYRICS_MODEL`).
+ *   The API key is never printed or written; every string leaving this process is scrubbed of it.
+ * - `--dry-validate` installs a throwing `fetch` guard so network calls are impossible.
+ * - `--v2` refuses to run without `GEMINI_API_KEY`, and `guardedFetch` allows ONLY Gemini `:generateContent` endpoints
+ *   for the configured text models (never Sunra or any music generation endpoint).
  */
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { studioGeminiConfig } from '@/lib/brand-studio/enhancer/gemini';
-import { checkMusicDesign, designMusic, fallbackDesign, MUSIC_PROFILE_VERSION, type MusicDesign, type MusicDesignInput } from '@/lib/brand-studio/sound/architect';
-import { musicEngine } from '@/lib/brand-studio/sound/engine';
+import { musicProfileForModel } from '@/lib/brand-studio/enhancer/profiles/music';
+import {
+  checkMusicDesign,
+  designMusic,
+  designMusicForModel,
+  fallbackDesign,
+  inspectMusicDesignForModel,
+  markMinimaxLyrics,
+  MUSIC_PROFILE_VERSION,
+  planProblems,
+  subjectSentence,
+  type MusicDesign,
+  type MusicDesignCheckItem,
+  type MusicDesignInput,
+  type MusicDesignReadings,
+  type MusicWords,
+} from '@/lib/brand-studio/sound/architect';
 import { audioSeconds } from '@/lib/brand-studio/sound/audio-info';
-import { defaultStructure, markLyrics, ownLyrics, tempoOf, withoutAddedLines } from '@/lib/brand-studio/sound/lyrics';
-import { askedLines, draftProblems, LYRICS_FALLBACK_MODEL, localBpm, localLyrics, writeLyrics, writeLyricsWithFallback, type LyricsRequest, type WrittenLyrics } from '@/lib/brand-studio/sound/lyrics-draft';
+import { musicEngine, musicEngineOfModel, type MusicModelId } from '@/lib/brand-studio/sound/engine';
 import { formText, lineSyllables, stanzaLines, sungPlan, type LengthPlan } from '@/lib/brand-studio/sound/length-plan';
-import { planProblems } from '@/lib/brand-studio/sound/architect';
+import { defaultStructure, markLyrics, ownLyrics, tempoOf, withoutAddedLines, type LyricStructure } from '@/lib/brand-studio/sound/lyrics';
+import {
+  askedLines,
+  draftProblems,
+  localBpm,
+  localLyrics,
+  LYRICS_FALLBACK_MODEL,
+  writeLyrics,
+  writeLyricsWithFallback,
+  type LyricsRequest,
+  type WrittenLyrics,
+} from '@/lib/brand-studio/sound/lyrics-draft';
 import { isLyricsModel, LYRICS_DEFAULT_MODEL, lyricsGeminiConfig } from '@/lib/brand-studio/sound/lyrics-model';
 import { namedArtist } from '@/lib/brand-studio/sound/names';
+import { parseRequestedSeconds } from '@/lib/brand-studio/sound/requested-seconds';
+
+export const V2_MODELS: readonly MusicModelId[] = ['suno-v6', 'suno-v6-wild', 'minimax-music-3'] as const;
+export const V2_FIXTURES_PATH = resolve(process.cwd(), 'scripts/fixtures/sound-architect/v2-fixtures.json');
 
 export interface EvalCase {
   id: string;
@@ -164,10 +174,525 @@ function arg(name: string): string | undefined {
 function readKeys(file: string): Record<string, string> {
   const out: Record<string, string> = {};
   for (const line of readFileSync(file, 'utf8').split(/\r?\n/)) {
-    const m = /^\s*(GEMINI_API_KEY|GEMINI_BASE_URL)\s*=\s*"?([^"\r\n]*)"?\s*$/.exec(line);
+    const m = /^\s*(?:export\s+)?(GEMINI_API_KEY|GEMINI_BASE_URL|BRAND_STUDIO_ENHANCER_MODEL|BRAND_SOUND_LYRICS_MODEL)\s*=\s*"?([^"\r\n]*)"?\s*$/.exec(
+      line,
+    );
     if (m) out[m[1]!] = m[2]!.trim();
   }
   return out;
+}
+
+/* ------------------------------------------------------------------ v2 per-model evaluation (Batch B3) */
+
+export interface StoredModelFixtureOutput {
+  blocked?: 'name' | 'lyrics';
+  mode?: 'describe' | 'custom';
+  style?: string;
+  prompt?: string;
+  title?: string;
+  lyrics?: string;
+  notes?: string | null;
+  durationSeconds?: number;
+}
+
+export interface V2EvalFixtureCase {
+  id: string;
+  description: string;
+  prompt: string;
+  locale: 'ko' | 'en';
+  language: 'ko' | 'en';
+  vocal: boolean;
+  lyrics: string;
+  structure?: LyricStructure | null;
+  explicitTargetSeconds: number | null;
+  readings: MusicDesignReadings | null;
+  words: MusicWords | null;
+  expectBlocked?: 'name' | 'lyrics';
+  outputs: Record<MusicModelId, StoredModelFixtureOutput>;
+}
+
+export interface V2EvalFixtureFile {
+  version: string;
+  cases: V2EvalFixtureCase[];
+}
+
+export interface V2CaseEvaluation {
+  caseId: string;
+  model: MusicModelId;
+  profileVersion: string;
+  passed: boolean;
+  blocked: 'name' | 'lyrics' | null;
+  rewriteNeeded: boolean;
+  fallbackUsed: boolean;
+  fallbackReason: string | null;
+  latencyMs: number;
+  checks: MusicDesignCheckItem[];
+  extraProblems: string[];
+  design: {
+    mode?: 'describe' | 'custom';
+    style?: string;
+    prompt?: string;
+    title?: string;
+    lyrics?: string;
+    notes?: string | null;
+    source?: MusicDesign['source'];
+    durationSeconds?: number;
+  } | null;
+  engineEndpoint: string | null;
+  engineBody: unknown;
+}
+
+export function loadV2Fixtures(path: string = V2_FIXTURES_PATH): V2EvalFixtureFile {
+  return JSON.parse(readFileSync(path, 'utf8')) as V2EvalFixtureFile;
+}
+
+export function buildV2CaseInput(c: V2EvalFixtureCase, model: MusicModelId): {
+  input: MusicDesignInput;
+  sunoTargetSeconds: number | null;
+  minimaxDurationSeconds: number;
+} {
+  const fromSentence = parseRequestedSeconds(c.prompt);
+  const sunoTargetSeconds =
+    c.explicitTargetSeconds ?? (fromSentence !== null ? Math.min(240, Math.max(5, fromSentence)) : null);
+  const rawMinimax = c.explicitTargetSeconds ?? fromSentence ?? 60;
+  const minimaxDurationSeconds = Math.min(75, Math.max(1, Math.round(rawMinimax)));
+  const own = c.vocal ? ownLyrics(c.lyrics) : '';
+  const structure = c.structure ?? (sunoTargetSeconds ? defaultStructure(sunoTargetSeconds) : null);
+
+  const plan =
+    model === 'minimax-music-3'
+      ? null
+      : sungPlan({
+          prompt: c.prompt,
+          vocal: c.vocal,
+          lyrics: own,
+          structure,
+          seconds: sunoTargetSeconds,
+          draftBpm: null,
+          drafted: false,
+        });
+
+  return {
+    sunoTargetSeconds,
+    minimaxDurationSeconds,
+    input: {
+      prompt: c.prompt,
+      vocal: c.vocal,
+      lyrics: own,
+      careful: false,
+      structure,
+      language: c.language,
+      locale: c.locale,
+      words: c.words,
+      plan,
+      targetSeconds: model === 'minimax-music-3' ? minimaxDurationSeconds : sunoTargetSeconds,
+      ...(model === 'minimax-music-3' ? { durationSeconds: minimaxDurationSeconds } : {}),
+      ...(c.readings ? { readings: c.readings } : {}),
+      customerLyrics: Boolean(own),
+    },
+  };
+}
+
+export function enginePayloadForModel(
+  model: MusicModelId,
+  input: MusicDesignInput,
+  design: { mode: 'describe' | 'custom'; style: string; prompt?: string; title: string; lyrics: string; durationSeconds?: number },
+): { endpoint: string; body: unknown } {
+  const engine = musicEngineOfModel(model);
+  if (!engine) throw new Error(`unknown music engine for ${model}`);
+  if (model === 'minimax-music-3') {
+    return engine.request({
+      mode: design.mode,
+      prompt: design.prompt ?? design.style,
+      vocal: input.vocal,
+      durationSeconds: design.durationSeconds ?? input.durationSeconds ?? 60,
+      ...(input.vocal ? { lyrics: design.lyrics } : {}),
+    });
+  }
+  return engine.request({
+    mode: design.mode,
+    prompt: design.style,
+    vocal: input.vocal,
+    ...(design.mode === 'custom' ? { title: design.title, lyrics: design.lyrics, careful: false } : {}),
+  });
+}
+
+/**
+ * Evaluates one `(case, model)` result against every deterministic rule for `model` (`inspectMusicDesignForModel`),
+ * customer-lyrics byte preservation, duration precedence, and exact Sunra adapter request validation.
+ */
+export function evaluateV2CaseOutput(
+  c: V2EvalFixtureCase,
+  model: MusicModelId,
+  output: StoredModelFixtureOutput,
+  meta: {
+    source?: MusicDesign['source'];
+    fallbackReason?: string | null;
+    rewriteNeeded?: boolean;
+    latencyMs?: number;
+  } = {},
+): V2CaseEvaluation {
+  const profile = musicProfileForModel(model);
+  const artistBlocked = namedArtist(c.prompt) ? ('name' as const) : c.vocal && namedArtist(c.lyrics) ? ('lyrics' as const) : null;
+
+  if (c.expectBlocked || artistBlocked) {
+    const expected = c.expectBlocked ?? artistBlocked;
+    const passed = output.blocked === expected && !output.style && !output.prompt;
+    const check: MusicDesignCheckItem = {
+      id: 'pre_design_artist_block',
+      rule: 'Requests naming a real artist or song are refused before any model call',
+      support: 'official',
+      passed,
+      ...(!passed ? { problem: `expected pre-design block "${expected}", got "${output.blocked ?? 'none'}"` } : {}),
+    };
+    return {
+      caseId: c.id,
+      model,
+      profileVersion: profile.version,
+      passed,
+      blocked: output.blocked ?? null,
+      rewriteNeeded: false,
+      fallbackUsed: false,
+      fallbackReason: null,
+      latencyMs: meta.latencyMs ?? 0,
+      checks: [check],
+      extraProblems: passed ? [] : [check.problem!],
+      design: null,
+      engineEndpoint: null,
+      engineBody: null,
+    };
+  }
+
+  const { input, minimaxDurationSeconds } = buildV2CaseInput(c, model);
+  const mode = output.mode ?? 'describe';
+  const rawStyle = output.style ?? output.prompt ?? '';
+  const subject = model === 'minimax-music-3' ? '' : subjectSentence(input);
+
+  // On Suno describe-mode vocals without lyrics, `subjectSentence` is appended by us after the model paragraph check.
+  let paragraphForCheck = rawStyle;
+  let styleMax = model === 'minimax-music-3' ? 2000 : 1000;
+  const extraProblems: string[] = [];
+
+  if (model !== 'minimax-music-3' && subject) {
+    styleMax = 1000 - subject.length - 1;
+    if (rawStyle.endsWith(` ${subject}`)) {
+      paragraphForCheck = rawStyle.slice(0, rawStyle.length - subject.length - 1);
+    } else if ((meta.source ?? 'model') === 'model') {
+      extraProblems.push('missing appended subjectSentence on Suno vocal describe run');
+    }
+  }
+
+  const customerOwn = c.vocal ? ownLyrics(c.lyrics) : '';
+  const checks =
+    (meta.source ?? 'model') === 'fallback'
+      ? []
+      : inspectMusicDesignForModel(
+          model,
+          {
+            style: paragraphForCheck,
+            ...(model === 'minimax-music-3' ? { prompt: output.prompt ?? rawStyle } : {}),
+            title: output.title ?? '',
+            lyrics: output.lyrics ?? '',
+          },
+          {
+            prompt: c.prompt,
+            vocal: c.vocal,
+            lyrics: output.lyrics ?? '',
+            language: c.language,
+            plan: input.plan ?? null,
+            words: c.words,
+            readings: c.readings,
+            styleMax,
+            customerLyrics: Boolean(customerOwn),
+          },
+        );
+
+  // Customer lyrics must pass through with sung lines byte-for-byte identical (including leading/trailing whitespace on every sung line).
+  if (customerOwn) {
+    const expectedMarked =
+      model === 'minimax-music-3'
+        ? markMinimaxLyrics(customerOwn, input.structure ?? null)
+        : markLyrics(customerOwn, input.structure ?? null, input.plan?.form ?? null);
+    if ((output.lyrics ?? '') !== expectedMarked) {
+      extraProblems.push(`marked lyrics do not match deterministic section marking (expected ${JSON.stringify(expectedMarked)})`);
+    }
+    const ownSungLines = customerOwn.split('\n').filter((line) => line.trim() !== '');
+    const sentSungLines = (output.lyrics ?? '')
+      .split('\n')
+      .filter((line) => line.trim() !== '' && (ownSungLines.includes(line) || !/^\[[^\]\n]{1,40}\]$/.test(line.trim())));
+    if (JSON.stringify(sentSungLines) !== JSON.stringify(ownSungLines)) {
+      extraProblems.push('customer sung lyric lines were altered');
+    }
+  }
+
+  // MiniMax duration precedence + >75s clamp check.
+  if (model === 'minimax-music-3') {
+    const gotDuration = output.durationSeconds ?? minimaxDurationSeconds;
+    if (gotDuration !== minimaxDurationSeconds) {
+      extraProblems.push(`expected MiniMax durationSeconds ${minimaxDurationSeconds}, got ${gotDuration}`);
+    }
+  }
+
+  // Exclusion preservation check on MiniMax when brief says "no drums".
+  if (model === 'minimax-music-3' && /\bno drums\b/i.test(c.prompt) && (meta.source ?? 'model') === 'model') {
+    if (!/\b(?:no drums|drumless|without drums)\b/i.test(rawStyle)) {
+      extraProblems.push('MiniMax caption dropped explicit "no drums" exclusion');
+    }
+  }
+
+  let engineEndpoint: string | null = null;
+  let builtBody: unknown = null;
+  try {
+    const built = enginePayloadForModel(model, input, {
+      mode,
+      style: rawStyle,
+      ...(output.prompt !== undefined ? { prompt: output.prompt } : {}),
+      title: output.title ?? '',
+      lyrics: output.lyrics ?? '',
+      ...(output.durationSeconds !== undefined ? { durationSeconds: output.durationSeconds } : {}),
+    });
+    engineEndpoint = built.endpoint;
+    builtBody = built.body;
+  } catch (error) {
+    extraProblems.push(`engine request build failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
+  const checkFailures = checks.filter((item) => !item.passed);
+  const fallbackUsed = meta.source === 'fallback';
+  const passed = !fallbackUsed && checkFailures.length === 0 && extraProblems.length === 0;
+
+  return {
+    caseId: c.id,
+    model,
+    profileVersion: profile.version,
+    passed,
+    blocked: null,
+    rewriteNeeded: meta.rewriteNeeded ?? false,
+    fallbackUsed,
+    fallbackReason: meta.fallbackReason ?? null,
+    latencyMs: meta.latencyMs ?? 0,
+    checks,
+    extraProblems,
+    design: {
+      mode,
+      style: rawStyle,
+      ...(model === 'minimax-music-3' ? { prompt: output.prompt ?? rawStyle } : {}),
+      title: output.title ?? '',
+      lyrics: output.lyrics ?? '',
+      notes: output.notes ?? null,
+      source: meta.source ?? 'model',
+      ...(model === 'minimax-music-3' ? { durationSeconds: output.durationSeconds ?? minimaxDurationSeconds } : {}),
+    },
+    engineEndpoint,
+    engineBody: builtBody,
+  };
+}
+
+/**
+ * Offline `--dry-validate`: runs all 36 `(12 cases × 3 models)` stored fixture outputs through `evaluateV2CaseOutput`
+ * with zero network calls.
+ */
+export function validateV2Fixtures(fixtureFile: V2EvalFixtureFile = loadV2Fixtures()): {
+  passed: boolean;
+  total: number;
+  passCount: number;
+  failCount: number;
+  results: V2CaseEvaluation[];
+} {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (() => {
+    throw new Error('network_forbidden_in_dry_validate');
+  }) as unknown as typeof fetch;
+
+  try {
+    const results: V2CaseEvaluation[] = [];
+    for (const c of fixtureFile.cases) {
+      for (const model of V2_MODELS) {
+        const stored = c.outputs[model];
+        if (!stored) {
+          results.push({
+            caseId: c.id,
+            model,
+            profileVersion: musicProfileForModel(model).version,
+            passed: false,
+            blocked: null,
+            rewriteNeeded: false,
+            fallbackUsed: false,
+            fallbackReason: null,
+            latencyMs: 0,
+            checks: [],
+            extraProblems: [`missing fixture output for ${c.id} (${model})`],
+            design: null,
+            engineEndpoint: null,
+            engineBody: null,
+          });
+          continue;
+        }
+        results.push(evaluateV2CaseOutput(c, model, stored, { source: 'model', rewriteNeeded: false, latencyMs: 0 }));
+      }
+    }
+    const passCount = results.filter((r) => r.passed).length;
+    const failCount = results.length - passCount;
+    return {
+      passed: failCount === 0 && results.length === 36,
+      total: results.length,
+      passCount,
+      failCount,
+      results,
+    };
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+}
+
+export function formatV2EvalSummary(results: readonly V2CaseEvaluation[], modeLabel: 'dry-validate' | 'live-v2'): string {
+  const lines: string[] = [
+    `# Sound Prompt Architect v2 (${modeLabel}) — ${results.length} runs`,
+    '',
+  ];
+  for (const r of results) {
+    const checkSummary = r.checks.length
+      ? r.checks.map((c) => `${c.id}:${c.passed ? 'PASS' : 'FAIL'}`).join(', ')
+      : 'fallback(no-model-checks)';
+    const status = r.passed ? 'PASS' : 'FAIL';
+    lines.push(
+      `[${status}] ${r.caseId} | ${r.model} (${r.profileVersion}) | rewrite=${r.rewriteNeeded} | fallback=${r.fallbackUsed}${r.fallbackReason ? `(${r.fallbackReason})` : ''} | ${r.latencyMs}ms | ${checkSummary}${r.extraProblems.length ? ` | extra=${r.extraProblems.join('; ')}` : ''}`,
+    );
+  }
+  const passCount = results.filter((r) => r.passed).length;
+  lines.push('', `Summary: ${passCount}/${results.length} passed, ${results.length - passCount} failed.`);
+  return lines.join('\n');
+}
+
+export async function runLiveV2Eval(options: {
+  env: Record<string, string | undefined>;
+  outPath: string;
+  only?: readonly string[];
+  cap?: number;
+  fetchImpl?: typeof fetch;
+}): Promise<{ passed: boolean; results: V2CaseEvaluation[] }> {
+  const architectConfig = studioGeminiConfig(options.env);
+  if (!architectConfig) {
+    throw new Error(
+      'Refusing to run --v2: GEMINI_API_KEY is required (provide an env file with GEMINI_API_KEY or set GEMINI_API_KEY in the environment).',
+    );
+  }
+  const secret = options.env.GEMINI_API_KEY ?? '';
+  const scrub = (text: string) => (secret ? text.split(secret).join('<redacted>') : text);
+
+  const lyricsConfig = lyricsGeminiConfig(options.env);
+  const allowedModels = [
+    architectConfig.model,
+    lyricsConfig?.model,
+    lyricsConfig ? LYRICS_FALLBACK_MODEL : undefined,
+  ].filter((m): m is string => Boolean(m));
+
+  const guarded = guardedFetch(allowedModels, options.cap ?? 160, options.fetchImpl ?? fetch);
+  const fixtureFile = loadV2Fixtures();
+  const cases = fixtureFile.cases.filter((c) => !options.only?.length || options.only.includes(c.id));
+  const results: V2CaseEvaluation[] = [];
+
+  for (const c of cases) {
+    for (const model of V2_MODELS) {
+      const started = performance.now();
+      const artistHit = namedArtist(c.prompt) ? ('name' as const) : c.vocal && namedArtist(c.lyrics) ? ('lyrics' as const) : null;
+      if (artistHit) {
+        results.push(
+          evaluateV2CaseOutput(
+            c,
+            model,
+            { blocked: artistHit },
+            { latencyMs: Math.round(performance.now() - started) },
+          ),
+        );
+        continue;
+      }
+
+      const calls: CallTime[] = [];
+      let rejectedCount = 0;
+      const fetcher = timedFetch(guarded, calls);
+      const log = (event: string, detail?: Record<string, unknown>) => {
+        if (event === 'studio_music_design_rejected') rejectedCount += 1;
+        console.error(scrub(`${event} ${JSON.stringify(detail ?? {})}`));
+      };
+
+      const { input, minimaxDurationSeconds } = buildV2CaseInput(c, model);
+      let effectiveInput = input;
+
+      // Match production `prepareMusicV2`: MiniMax vocal runs with blank customer lyrics draft bare-tag lyrics first.
+      if (model === 'minimax-music-3' && c.vocal && !ownLyrics(c.lyrics) && lyricsConfig) {
+        const structure = defaultStructure(minimaxDurationSeconds);
+        const req: LyricsRequest = {
+          flow: 'topic',
+          topic: c.prompt,
+          language: c.language,
+          seconds: minimaxDurationSeconds,
+          bpm: tempoOf(c.prompt),
+          structure,
+          tone: null,
+          brand: c.words?.brand ? { name: c.words.brand.name, ...(c.words.brand.readAs ? { readAs: c.words.brand.readAs } : {}) } : null,
+          mustInclude: c.words?.mustInclude ? [...c.words.mustInclude] : [],
+        };
+        const written = await writeLyricsWithFallback(req, lyricsConfig, fetcher, log);
+        const marked = written.text ? markMinimaxLyrics(written.text, structure) : '';
+        effectiveInput = {
+          ...input,
+          lyrics: marked,
+          structure,
+          customerLyrics: false,
+        };
+      }
+
+      const design = await designMusicForModel(model, effectiveInput, {
+        fetch: fetcher,
+        env: options.env,
+        log,
+      });
+      const latencyMs = Math.round(performance.now() - started);
+      const evaluated = evaluateV2CaseOutput(
+        c,
+        model,
+        {
+          mode: design.mode,
+          style: design.style,
+          ...(design.prompt !== undefined ? { prompt: design.prompt } : {}),
+          title: design.title,
+          lyrics: design.lyrics,
+          notes: design.notes,
+          ...(design.durationSeconds !== undefined ? { durationSeconds: design.durationSeconds } : {}),
+        },
+        {
+          source: design.source,
+          fallbackReason: design.fallbackReason ?? null,
+          rewriteNeeded: rejectedCount > 0,
+          latencyMs,
+        },
+      );
+      results.push(evaluated);
+    }
+  }
+
+  const summary = scrub(formatV2EvalSummary(results, 'live-v2'));
+  console.log(summary);
+
+  const outFile = resolve(options.outPath);
+  mkdirSync(dirname(outFile), { recursive: true });
+  const payload = {
+    generatedAt: new Date().toISOString(),
+    textModel: architectConfig.model,
+    lyricsModel: lyricsConfig?.model ?? null,
+    totalRuns: results.length,
+    passedRuns: results.filter((r) => r.passed).length,
+    failedRuns: results.filter((r) => !r.passed).length,
+    results,
+  };
+  writeFileSync(outFile, `${scrub(JSON.stringify(payload, null, 2))}\n`, 'utf8');
+  console.log(scrub(`Wrote full JSON outputs (${results.length} runs) to ${outFile}`));
+
+  return {
+    passed: results.every((r) => r.passed),
+    results,
+  };
 }
 
 /* ------------------------------------------------------------------ the lyrics engine (SA2) */
@@ -287,7 +812,7 @@ export function lyricsTable(label: string, model: string, rows: readonly LyricsS
   return [head, ...body, '', `pass ${count('pass')} · allow ${count('allow')} · fail ${count('fail')} · error ${count('error')} of ${rows.length}`].join('\n');
 }
 
-/** A fetch that counts calls, stops at the cap, and only lets the expected models through. */
+/** A fetch that counts calls, stops at the cap, and only lets the expected Gemini text models through (never Sunra / music models). */
 export function guardedFetch(model: string | readonly string[], cap: number, inner: typeof fetch = fetch): typeof fetch & { calls: () => number } {
   const models = typeof model === 'string' ? [model] : [...model];
   let calls = 0;
@@ -399,15 +924,46 @@ function measureSung(dir: string): void {
   console.log(rows.join('\n'));
 }
 
-function writeOut(outDir: string, name: string, table: string, raw: readonly string[], scrub: (text: string) => string): void {
+function writeOut(outDir: string, name: string, tableText: string, raw: readonly string[], scrub: (text: string) => string): void {
   mkdirSync(outDir, { recursive: true });
-  writeFileSync(join(outDir, `${name}.md`), scrub(table));
+  writeFileSync(join(outDir, `${name}.md`), scrub(tableText));
   writeFileSync(join(outDir, `${name}-raw.md`), scrub(`# ${name}: every case in full\n\n${raw.join('\n')}`));
-  console.log(scrub(table));
+  console.log(scrub(tableText));
   console.log(`\nfull text: ${join(outDir, `${name}-raw.md`)}`);
 }
 
 async function main(): Promise<void> {
+  if (process.argv.includes('--dry-validate')) {
+    const validated = validateV2Fixtures();
+    console.log(formatV2EvalSummary(validated.results, 'dry-validate'));
+    if (!validated.passed) {
+      process.exit(1);
+    }
+    return;
+  }
+
+  if (process.argv.includes('--v2')) {
+    const envArg = process.argv[2] && !process.argv[2].startsWith('--') ? resolve(process.argv[2]) : null;
+    if (envArg && !existsSync(envArg)) {
+      throw new Error(`env file not found: ${envArg}`);
+    }
+    const fileKeys = envArg ? readKeys(envArg) : {};
+    const mergedEnv: Record<string, string | undefined> = {
+      GEMINI_API_KEY: fileKeys.GEMINI_API_KEY ?? process.env.GEMINI_API_KEY,
+      GEMINI_BASE_URL: fileKeys.GEMINI_BASE_URL ?? process.env.GEMINI_BASE_URL,
+      BRAND_STUDIO_ENHANCER_MODEL: fileKeys.BRAND_STUDIO_ENHANCER_MODEL ?? process.env.BRAND_STUDIO_ENHANCER_MODEL,
+      BRAND_SOUND_LYRICS_MODEL: fileKeys.BRAND_SOUND_LYRICS_MODEL ?? process.env.BRAND_SOUND_LYRICS_MODEL,
+    };
+    const outPath = arg('--out') ?? 'sound-architect-eval/v2-results.json';
+    const only = arg('--only')?.split(',').map((s) => s.trim()).filter(Boolean);
+    const cap = Number(arg('--cap') ?? 160);
+    const live = await runLiveV2Eval({ env: mergedEnv, outPath, only, cap });
+    if (!live.passed) {
+      process.exit(1);
+    }
+    return;
+  }
+
   const sung = arg('--sung');
   if (sung) return measureSung(resolve(sung));
   const envFile = process.argv[2] && !process.argv[2].startsWith('--') ? resolve(process.argv[2]) : null;
@@ -487,8 +1043,6 @@ async function main(): Promise<void> {
 async function runLyrics(sheet: string, label: string, only: string[] | undefined, cap: number, outDir: string, keys: Record<string, string>): Promise<void> {
   const picked = arg('--model') ?? LYRICS_DEFAULT_MODEL;
   if (!isLyricsModel(picked)) throw new Error(`--model must be one of the compared models, not ${picked}`);
-  // The studio's own way by default (a timed-out first model hands over to the fast one once); `--no-fallback` keeps a
-  // model comparison to the one model.
   const fallback = !process.argv.includes('--no-fallback');
   const cases = [...lyricsBriefCases(sheet), ...LYRICS_TRAPS].filter((c) => !only || only.includes(c.id));
   const env: Record<string, string | undefined> =

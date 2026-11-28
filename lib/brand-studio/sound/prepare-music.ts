@@ -1,26 +1,32 @@
 /**
  * The prepare step of a music run (docs/BRAND-SOUND-STUDIO.md §12.2): the engine's `queued` step calls this once,
  * after the job is committed and before anything is sent, exactly where an image run gets its prompt designed
- * (../prepare.ts). It never fails a run: any problem is the deterministic design.
+ * (../prepare.ts). It never fails a run on style design: any problem is the deterministic design.
  *
  * Local mode without a text-model key (`BRAND_STUDIO_PROVIDER=fake`) uses a fixed local design instead of the
  * fallback, so a laptop can see the whole designed path without a paid call.
  */
 import type { LyricsDraftFailureReason } from '../contracts';
 import { callGeminiJson, studioGeminiConfig, type GeminiConfig } from '../enhancer/gemini';
+import { musicProfileForModel } from '../enhancer/profiles/music';
 import { saveJob, tokenOf } from '../job-store';
 import { brandSummary, PrepareFailure } from '../prepare';
 import type { JobRow, StudioDeps, StudioJobWork } from '../types';
 import {
   designMeta,
   designMusic,
+  designMusicForModel,
+  fallbackDesignForModel,
   markMinimaxLyrics,
   minimaxFallbackDesign,
   MUSIC_PROFILE_VERSION,
+  normalizeReadings,
   type MusicDesign,
   type MusicDesignInput,
+  type MusicDesignReadings,
   type MusicEnhanceMeta,
 } from './architect';
+import type { MusicModelId } from './engine';
 import { minimaxMusic3Sunra } from './engines/minimax-sunra';
 import { cleanBpm } from './length-plan';
 import { checkLyrics, defaultStructure, LYRICS_LIMITS, markLyrics, musicWay, ownLyrics, type LyricCheckInput } from './lyrics';
@@ -61,8 +67,9 @@ export function minimaxLyricsFailureReason(detail: string): LyricsDraftFailureRe
   }
 }
 
-export function musicDesignInputOf(job: Pick<JobRow, 'prompt' | 'params'>, brand: MusicDesignInput['brand'] = null): MusicDesignInput {
+export function musicDesignInputOf(job: Pick<JobRow, 'prompt' | 'params' | 'organization_id'>, brand: MusicDesignInput['brand'] = null): MusicDesignInput {
   const m = job.params.music!;
+  const maybeReadings = (m as unknown as { readings?: MusicDesignReadings | null }).readings ?? null;
   return {
     prompt: job.prompt,
     vocal: m.vocal,
@@ -75,10 +82,15 @@ export function musicDesignInputOf(job: Pick<JobRow, 'prompt' | 'params'>, brand
     language: m.language,
     locale: job.params.locale === 'en' ? 'en' : 'ko',
     brand,
+    ...(m.composerMode ? { composerMode: m.composerMode } : {}),
+    ...(m.targetSeconds !== undefined ? { targetSeconds: m.targetSeconds } : {}),
+    ...(m.durationSeconds !== undefined ? { durationSeconds: m.durationSeconds } : {}),
+    ...(maybeReadings ? { readings: maybeReadings } : {}),
+    ...(job.organization_id ? { organizationId: job.organization_id } : {}),
   };
 }
 
-/** The fixed design local mode shows (never used with a real provider). */
+/** The fixed v1 Suno design local mode shows (never used with a real provider). */
 export function localDesign(input: MusicDesignInput): MusicDesign {
   const mode = musicWay({ vocal: input.vocal, lyrics: input.lyrics, careful: input.careful });
   const words = input.prompt.replace(/\s+/g, ' ').trim().slice(0, 200);
@@ -101,10 +113,57 @@ export function localDesign(input: MusicDesignInput): MusicDesign {
   };
 }
 
-/** Designs a music run and returns what the job keeps: the sent paragraph and the design record. */
+/** Per-model local design for fake mode without a Gemini key (`BRAND_STUDIO_PROVIDER=fake`). */
+export function localDesignForModel(modelId: MusicModelId, input: MusicDesignInput): MusicDesign {
+  const profile = musicProfileForModel(modelId);
+  if (modelId === 'suno-v6' || modelId === 'suno-v6-wild') {
+    const base = localDesign(input);
+    return { ...base, profileVersion: profile.version };
+  }
+
+  const lyrics = input.vocal ? ownLyrics(input.lyrics) : '';
+  const mode = musicWay({ vocal: input.vocal, lyrics, careful: false });
+  const words = input.prompt.replace(/\s+/g, ' ').replace(/"/g, "'").trim().slice(0, 160);
+  const sungKorean = lyrics ? /[가-힣]/.test(lyrics) : input.language === 'ko';
+  const readings = normalizeReadings(input.readings, input.vocal);
+  const readingNote = readings?.audio ? ` Reference audio character: ${readings.audio.replace(/[.]+$/, '')}.` : '';
+  const voiceNote = readings?.voice ? ` Reference vocal character: ${readings.voice.replace(/[.]+$/, '')}.` : '';
+  const caption = [
+    `Global Metadata: Warm acoustic indie pop commercial piece inspired by "${words}", relaxed mid-tempo groove with steady hopeful energy and clean close-miked studio production.${readingNote}`,
+    input.vocal
+      ? `Vocal Details: Clear, intimate lead vocal singing in ${sungKorean ? 'Korean' : 'English'} with gentle phrasing and subtle doubled backing on the main hook.${voiceNote}`
+      : 'Vocal Details: Instrumental; a warm felt piano carries the lead melody.',
+    'Arrangement: Opening: fingerpicked acoustic guitar sets a clean pulse. Middle: round upright bass and soft brushed drums join to lift the main theme. Ending: percussion drops out and the harmony resolves cleanly on a held chord.',
+  ].join('\n');
+
+  return {
+    mode,
+    style: caption,
+    prompt: caption,
+    title: input.locale === 'ko' ? '맑은 하루' : 'Clear Day',
+    lyrics: lyrics ? markMinimaxLyrics(lyrics, input.structure ?? null) : '',
+    notes: input.locale === 'ko' ? '로컬 설계 예시예요. 실제 설계는 운영 환경에서 만들어져요.' : 'A local design example; the real design is made in production.',
+    source: 'model',
+    profileVersion: profile.version,
+    llmModel: 'local',
+    ...(typeof input.durationSeconds === 'number' ? { durationSeconds: input.durationSeconds } : {}),
+  };
+}
+
+/** Closed v1 path: designs a Suno v6 music run (`suno@2026-11-21.2`). */
 export async function designForDeps(deps: Pick<StudioDeps, 'env' | 'intelDeps' | 'log'>, input: MusicDesignInput): Promise<MusicDesign> {
   if (deps.env.provider === 'fake' && !studioGeminiConfig(deps.intelDeps.env)) return localDesign(input);
   return designMusic(input, { fetch: deps.intelDeps.fetch, env: deps.intelDeps.env, log: deps.log });
+}
+
+/** Sound Studio v2 path: designs a music run using the chosen model's profile (`suno-v6`, `suno-v6-wild`, `minimax-music-3`). */
+export async function designForDepsV2(
+  deps: Pick<StudioDeps, 'env' | 'intelDeps' | 'log'>,
+  modelId: MusicModelId,
+  input: MusicDesignInput,
+): Promise<MusicDesign> {
+  if (deps.env.provider === 'fake' && !studioGeminiConfig(deps.intelDeps.env)) return localDesignForModel(modelId, input);
+  return designMusicForModel(modelId, input, { fetch: deps.intelDeps.fetch, env: deps.intelDeps.env, log: deps.log });
 }
 
 interface DraftedMinimaxLyrics {
@@ -317,7 +376,10 @@ async function draftMinimaxLyrics(deps: StudioDeps, job: JobRow): Promise<Drafte
 
 async function prepareMusicV2(deps: StudioDeps, job: JobRow): Promise<{ finalPrompt: string; work: StudioJobWork }> {
   const m = job.params.music!;
-  if (job.model === 'minimax-music-3') {
+  const modelId: MusicModelId =
+    job.model === 'minimax-music-3' || job.model === 'suno-v6-wild' ? job.model : 'suno-v6';
+
+  if (modelId === 'minimax-music-3') {
     let currentWork: StudioJobWork = job.work ?? {};
     let drafted: DraftedMinimaxLyrics | null = null;
     if (m.vocal && !ownLyrics(m.lyrics)) {
@@ -346,9 +408,19 @@ async function prepareMusicV2(deps: StudioDeps, job: JobRow): Promise<{ finalPro
         ? (currentWork.enhancer as MusicEnhanceMeta)
         : null;
 
+    const baseNoBrand = musicDesignInputOf(job);
+    const hasAttachedReadings = Boolean(normalizeReadings(baseNoBrand.readings, m.vocal));
+
     if (!job.enhance || existingEnhancer?.source === 'reviewed') {
-      const baseMeta = existingEnhancer ?? designMeta(minimaxFallbackDesign(musicDesignInputOf(job), 'off'));
-      const finalPrompt = job.final_prompt ?? minimaxFallbackDesign(musicDesignInputOf(job), 'off').style;
+      // When Architect is off AND readings are attached, fold readings into the 3-heading deterministic fallback;
+      // otherwise preserve customer's raw prompt (`minimaxFallbackDesign`, matching B2 `architect: false`).
+      const offFallback =
+        !job.enhance && hasAttachedReadings
+          ? fallbackDesignForModel('minimax-music-3', baseNoBrand, 'off')
+          : minimaxFallbackDesign(baseNoBrand, 'off');
+      const baseMeta = existingEnhancer ?? designMeta(offFallback);
+      const finalPrompt =
+        !job.enhance && hasAttachedReadings ? offFallback.style : (job.final_prompt ?? offFallback.style);
       return {
         finalPrompt,
         work: {
@@ -366,19 +438,21 @@ async function prepareMusicV2(deps: StudioDeps, job: JobRow): Promise<{ finalPro
     const org = (await deps.sql.query<{ name: string }>('select name from brand_organizations where id = $1', [job.organization_id])).rows[0];
     const brand = await brandSummary(deps, job.organization_id, org?.name ?? '');
     const baseInput = musicDesignInputOf(job, brand ? { name: brand.name ?? null, tone: brand.tone ?? null, rules: brand.rules ?? [] } : null);
-    const designed = await designForDeps(deps, {
+    const hasOwnLyrics = Boolean(m.vocal && ownLyrics(m.lyrics));
+    const designed = await designForDepsV2(deps, 'minimax-music-3', {
       ...baseInput,
       plan: null,
-      ...(drafted ? { lyrics: drafted.rawLyrics } : {}),
+      durationSeconds: m.durationSeconds ?? 60,
+      customerLyrics: hasOwnLyrics,
+      ...(drafted ? { lyrics: drafted.lyrics, customerLyrics: false } : {}),
     });
-    const effective = designed.source === 'fallback' ? minimaxFallbackDesign(baseInput, designed.fallbackReason) : designed;
     return {
-      finalPrompt: effective.style,
+      finalPrompt: designed.style,
       work: {
         ...currentWork,
         prepared: true,
         enhancer: {
-          ...designMeta(effective),
+          ...designMeta(designed),
           ...(m.titleSource === 'customer' ? { title: m.title } : {}),
           ...(drafted ? { lyrics: drafted.lyrics, lyricsModel: drafted.model } : {}),
         },
@@ -388,7 +462,11 @@ async function prepareMusicV2(deps: StudioDeps, job: JobRow): Promise<{ finalPro
 
   const org = (await deps.sql.query<{ name: string }>('select name from brand_organizations where id = $1', [job.organization_id])).rows[0];
   const brand = await brandSummary(deps, job.organization_id, org?.name ?? '');
-  const design = await designForDeps(deps, musicDesignInputOf(job, brand ? { name: brand.name ?? null, tone: brand.tone ?? null, rules: brand.rules ?? [] } : null));
+  const input = musicDesignInputOf(job, brand ? { name: brand.name ?? null, tone: brand.tone ?? null, rules: brand.rules ?? [] } : null);
+  const design = await designForDepsV2(deps, modelId, {
+    ...input,
+    customerLyrics: Boolean(m.vocal && ownLyrics(m.lyrics)),
+  });
   const meta = designMeta(design);
   return {
     finalPrompt: design.style,

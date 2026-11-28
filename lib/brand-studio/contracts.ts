@@ -669,9 +669,74 @@ export const MusicDesignSchema = z
     lyricsBy: z.object({ flow: z.enum(['topic', 'polish']), model: z.string().max(40) }).strict().optional(),
   })
   .strict();
+
+export const MUSIC_MODEL_IDS = ['suno-v6', 'suno-v6-wild', 'minimax-music-3'] as const;
+
+export const MusicDesignReadingsSchema = z
+  .object({
+    audio: z.string().trim().min(1).max(500).optional(),
+    voice: z.string().trim().min(1).max(500).optional(),
+    inspo: z.array(z.string().trim().min(1).max(2000)).max(3).optional(),
+  })
+  .strict();
+
+/** `music.design` for Sound Studio composer v2 (`BRAND_SOUND_COMPOSER_V2_ORGS`), used ONLY when v2 fields are sent. */
+export const MusicDesignV2Schema = z
+  .object({
+    organizationId: Id,
+    model: z.enum(MUSIC_MODEL_IDS).default('suno-v6'),
+    composerMode: z.enum(['simple', 'advanced']).optional(),
+    prompt: z.string().trim().min(1).max(2000),
+    title: z.string().trim().max(80).optional(),
+    vocal: z.boolean().default(false),
+    lyrics: z.string().max(3500).optional(),
+    careful: z.boolean().optional(),
+    language: z.enum(['ko', 'en']).optional(),
+    structure: z.enum(LYRIC_STRUCTURES).optional(),
+    avoid: z.boolean().optional(),
+    words: z
+      .object({
+        brand: z.object({ name: z.string().trim().min(1).max(60), readAs: z.string().trim().max(60).optional() }).strict().optional(),
+        mustInclude: z.array(z.string().trim().min(1).max(40)).max(5).optional(),
+      })
+      .strict()
+      .optional(),
+    videoAssetId: Id.optional(),
+    targetSeconds: z.number().int().min(5).max(240).optional(),
+    durationSeconds: z.number().int().min(1).max(75).optional(),
+    bpm: z.number().int().min(60).max(160).optional(),
+    lyricsBy: z.object({ flow: z.enum(['topic', 'polish']), model: z.string().max(40) }).strict().optional(),
+    readings: MusicDesignReadingsSchema.optional(),
+  })
+  .strict()
+  .superRefine((v, ctx) => {
+    const minimax = v.model === 'minimax-music-3';
+    if (!minimax) {
+      if (v.prompt.length > 1000) {
+        ctx.addIssue({ code: 'custom', path: ['prompt'], message: 'prompt over 1000 characters' });
+      }
+      if (v.lyrics && v.lyrics.length > 3000) {
+        ctx.addIssue({ code: 'custom', path: ['lyrics'], message: 'lyrics over 3000 characters' });
+      }
+      if (v.durationSeconds !== undefined) {
+        ctx.addIssue({ code: 'custom', path: ['durationSeconds'], message: 'durationSeconds is only supported on MiniMax Music 3.0' });
+      }
+    } else if (v.careful === true) {
+      ctx.addIssue({ code: 'custom', path: ['careful'], message: 'careful mode is not supported on MiniMax Music 3.0' });
+    }
+  });
+
 export type StudioMusicDesign = {
   ok: true;
-  design: { mode: 'describe' | 'custom'; style: string; title: string; notes: string | null; source: 'model' | 'fallback' };
+  design: {
+    mode: 'describe' | 'custom';
+    style: string;
+    /** Present on v2 `minimax-music-3` previews: the Structured Caption (`TextToMusicInput.prompt`, <=2000). */
+    prompt?: string;
+    title: string;
+    notes: string | null;
+    source: 'model' | 'fallback';
+  };
 };
 
 /** Reason a MiniMax blank-lyrics vocal run failed during server lyric preparation (`StudioJobView.lyricsDraftFailed`). */

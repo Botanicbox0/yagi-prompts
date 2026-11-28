@@ -383,33 +383,142 @@ describe('1. Gate: unlisted vs listed vs without-v2-fields vs sandboxed/blocked 
     }
   });
 
-  it('keeps music.design strict (400 invalid) when v2 fields are sent even from a listed organization (B2 leaves music.design untouched for B3)', async () => {
-    const f = await studioFixture();
+  it('accepts v2 fields on music.design for a listed organization (Suno vs three-heading MiniMax shapes), rejects Suno durationSeconds, and refuses every v2 field on an unlisted organization like an unknown field', async () => {
+    const listedFx = await studioFixture();
+    const unlistedFx = await studioFixture();
     try {
-      vi.stubEnv('BRAND_SOUND_COMPOSER_V2_ORGS', f.orgId);
-      const deps = studioDeps(f.sql, {
-        env: studioEnv({ BRAND_STUDIO_PROVIDER: 'fake', BRAND_STUDIO_DEFAULT_LANE: 'sunra_api', BRAND_SOUND_STUDIO: 'on' }),
+      vi.stubEnv('BRAND_SOUND_COMPOSER_V2_ORGS', listedFx.orgId);
+      const commonEnv = studioEnv({
+        BRAND_STUDIO_PROVIDER: 'fake',
+        BRAND_STUDIO_DEFAULT_LANE: 'sunra_api',
+        BRAND_SOUND_STUDIO: 'on',
       });
-      const owner = viewerOf(f.ids.owner, 'ko');
+      const listedDeps = studioDeps(listedFx.sql, { env: commonEnv });
+      const unlistedDeps = studioDeps(unlistedFx.sql, { env: commonEnv });
+      const listedOwner = viewerOf(listedFx.ids.owner, 'ko');
+      const unlistedOwner = viewerOf(unlistedFx.ids.owner, 'ko');
+
+      // 1. Listed org: `model: 'suno-v6-wild'` -> Suno shape (single-paragraph `style`, no `prompt` key)
+      const wildRes = await runStudioOperation(listedDeps, listedOwner, 'music.design', {
+        organizationId: listedFx.orgId,
+        prompt: '차분한 피아노 배경음',
+        vocal: false,
+        model: 'suno-v6-wild',
+      });
+      expect(wildRes.ok).toBe(true);
+      if (wildRes.ok && 'design' in wildRes) {
+        expect(wildRes.design.mode).toBe('describe');
+        expect(wildRes.design.source).toBe('model');
+        expect(wildRes.design.style.length).toBeGreaterThanOrEqual(40);
+        expect(wildRes.design.style.length).toBeLessThanOrEqual(1000);
+        expect(wildRes.design.style).not.toContain('\n');
+        expect('prompt' in wildRes.design).toBe(false);
+        expect(wildRes.design.title.length).toBeGreaterThan(0);
+        expect(wildRes.design.title.length).toBeLessThanOrEqual(80);
+      }
+
+      // 2. Listed org: `model: 'minimax-music-3'` -> three-heading MiniMax caption in `prompt` & `style`
+      const mmRes = await runStudioOperation(listedDeps, listedOwner, 'music.design', {
+        organizationId: listedFx.orgId,
+        prompt: '차분한 피아노 배경음',
+        vocal: false,
+        model: 'minimax-music-3',
+      });
+      expect(mmRes.ok).toBe(true);
+      if (mmRes.ok && 'design' in mmRes) {
+        expect(mmRes.design.mode).toBe('describe');
+        expect(mmRes.design.source).toBe('model');
+        expect(mmRes.design.prompt).toBe(mmRes.design.style);
+        expect(mmRes.design.prompt!.length).toBeGreaterThanOrEqual(200);
+        expect(mmRes.design.prompt!.length).toBeLessThanOrEqual(2000);
+        expect(mmRes.design.prompt).toMatch(/^Global Metadata:[\s\S]+\nVocal Details:[\s\S]+\nArrangement:/);
+        expect(mmRes.design.title.length).toBeGreaterThan(0);
+        expect(mmRes.design.title.length).toBeLessThanOrEqual(80);
+      }
+
+      // 3. Listed org: `composerMode: 'simple'` (defaults to `suno-v6`) -> Suno shape
+      const simpleRes = await runStudioOperation(listedDeps, listedOwner, 'music.design', {
+        organizationId: listedFx.orgId,
+        prompt: '차분한 피아노 배경음',
+        vocal: false,
+        composerMode: 'simple',
+      });
+      expect(simpleRes.ok).toBe(true);
+      if (simpleRes.ok && 'design' in simpleRes) {
+        expect(simpleRes.design.mode).toBe('describe');
+        expect(simpleRes.design.style).not.toContain('\n');
+        expect('prompt' in simpleRes.design).toBe(false);
+      }
+
+      // 4. Listed org: customer `title` preserved on both Suno and MiniMax
+      const sunoTitled = await runStudioOperation(listedDeps, listedOwner, 'music.design', {
+        organizationId: listedFx.orgId,
+        prompt: '차분한 피아노 배경음',
+        vocal: false,
+        title: '모닝 루틴',
+      });
+      expect(sunoTitled.ok).toBe(true);
+      if (sunoTitled.ok && 'design' in sunoTitled) {
+        expect(sunoTitled.design.title).toBe('모닝 루틴');
+        expect('prompt' in sunoTitled.design).toBe(false);
+      }
+
+      const mmTitled = await runStudioOperation(listedDeps, listedOwner, 'music.design', {
+        organizationId: listedFx.orgId,
+        prompt: '차분한 피아노 배경음',
+        vocal: false,
+        model: 'minimax-music-3',
+        durationSeconds: 30,
+        title: '모닝 루틴',
+      });
+      expect(mmTitled.ok).toBe(true);
+      if (mmTitled.ok && 'design' in mmTitled) {
+        expect(mmTitled.design.title).toBe('모닝 루틴');
+        expect(mmTitled.design.prompt).toMatch(/^Global Metadata:[\s\S]+\nVocal Details:[\s\S]+\nArrangement:/);
+      }
+
+      // 5. Listed org: `durationSeconds` without `model: 'minimax-music-3'` stays `400 invalid`
+      const badSunoDuration = await runStudioOperation(listedDeps, listedOwner, 'music.design', {
+        organizationId: listedFx.orgId,
+        prompt: '차분한 피아노 배경음',
+        vocal: false,
+        durationSeconds: 30,
+      });
+      expect(badSunoDuration).toEqual({ ok: false, code: 'invalid' });
+      if (!badSunoDuration.ok) expect(studioStatus(badSunoDuration.code)).toBe(400);
+
+      // 6. Unlisted org: every v2 field is refused identically to an unknown field (`400 invalid`)
+      const unknownField = await runStudioOperation(unlistedDeps, unlistedOwner, 'music.design', {
+        organizationId: unlistedFx.orgId,
+        prompt: '차분한 피아노 배경음',
+        vocal: false,
+        unknownV99Field: true,
+      });
+      expect(unknownField).toEqual({ ok: false, code: 'invalid' });
+      if (!unknownField.ok) expect(studioStatus(unknownField.code)).toBe(400);
 
       for (const v2Extra of [
+        { model: 'suno-v6' },
         { model: 'suno-v6-wild' },
         { model: 'minimax-music-3' },
         { composerMode: 'simple' },
         { durationSeconds: 30 },
+        { model: 'minimax-music-3', durationSeconds: 30 },
         { title: '모닝 루틴' },
+        { readings: { audio: 'soft felt piano' } },
       ]) {
-        const res = await runStudioOperation(deps, owner, 'music.design', {
-          organizationId: f.orgId,
+        const refused = await runStudioOperation(unlistedDeps, unlistedOwner, 'music.design', {
+          organizationId: unlistedFx.orgId,
           prompt: '차분한 피아노 배경음',
           vocal: false,
           ...v2Extra,
         });
-        expect(res, JSON.stringify(v2Extra)).toEqual({ ok: false, code: 'invalid' });
-        if (!res.ok) expect(studioStatus(res.code)).toBe(400);
+        expect(refused, JSON.stringify(v2Extra)).toEqual(unknownField);
+        if (!refused.ok) expect(studioStatus(refused.code)).toBe(400);
       }
     } finally {
-      await f.db.close();
+      await listedFx.db.close();
+      await unlistedFx.db.close();
     }
   });
 
@@ -1005,7 +1114,10 @@ describe('4. MiniMax blank-lyrics vocal draft + judge path (N1, N2, S6, retry pe
       // (a) Architect ON: writeMinimaxLyricsWithFallback + judgeExistingLyrics + designMusic
       const providerOn = wrapRecordingProvider(createFakeStudioProvider({ pollsBeforeDone: 1 }));
       const stubOn = geminiAnswers(draftedStanzas, JUDGE_ORIGINAL, {
-        style: GOOD_SUNO_STYLE,
+        style:
+          'Global Metadata: Refreshing Korean indie pop for a morning skincare commercial, 4/4, bright upbeat groove, airy and uplifting from start to finish. Clean, close-miked studio production with warm acoustic clarity and tight low end.\n' +
+          'Vocal Details: Clear, warm mid-register lead vocal singing in Korean, close studio placement with light doubled backing on the hook.\n' +
+          'Arrangement: Chorus: crisp strummed acoustic guitar, warm bass, and light drums lift the sparkling main hook. Outro: rhythm section tapers cleanly onto a bright ringing guitar chord.',
         title: '상쾌한 아침',
         notes: '밝고 가볍게 설계했어요.',
       });
@@ -1284,7 +1396,10 @@ describe('4. MiniMax blank-lyrics vocal draft + judge path (N1, N2, S6, retry pe
         },
         JUDGE_ORIGINAL,
         {
-          style: GOOD_SUNO_STYLE,
+          style:
+            'Global Metadata: Breezy Korean acoustic pop for a fresh skincare campaign, 4/4, light mid-uptempo groove, bright and inviting throughout. Open, natural commercial studio production with crisp midrange balance.\n' +
+            'Vocal Details: Clear mid-register lead vocal singing in Korean, relaxed conversational delivery with subtle airy unison on the hook.\n' +
+            'Arrangement: Chorus: fingerpicked acoustic guitar, melodic electric bass, and brushed snare support the uplifting hook. Outro: percussion fades gently into a clean held acoustic chord.',
           title: '산뜻한 시작',
           notes: '밝고 가볍게 설계했어요.',
         },

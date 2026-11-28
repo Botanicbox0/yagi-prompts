@@ -7,6 +7,7 @@
  * `instrumental`, `max_mode`. No length, language, tempo, key, negative-prompt or seed input.
  */
 import type { ProfileHeader } from './meta';
+import { SUNO_V6_PROFILE } from './music/suno-v6';
 
 export const SUNO_HEADER: ProfileHeader = {
   id: 'suno',
@@ -61,21 +62,7 @@ export const SUNO_HEADER: ProfileHeader = {
  * The system instruction for designing what goes to Suno. The model answers JSON (lib/brand-studio/sound/architect.ts):
  * `style` (one English paragraph), `title`, `notes` (one sentence in the customer's language).
  */
-export const SUNO_PROFILE = `Model: a song and music generator for short brand advertising and social videos. It reads one English style paragraph and, when given, lyrics.
-
-Write the style as ONE paragraph of plain English, 400 to 900 characters, in this order:
-1. Genre and feel in a few words.
-2. Tempo as a number with a feel word ("around 92 BPM, relaxed"). It is only approximate.
-3. The voice: gender, register and delivery, and the language it sings in when there are vocals; or "instrumental" and what carries the melody when there are none.
-4. Two or three instruments, one short sentence each on what that instrument does.
-5. Structure in a phrase (a short intro, where the hook lands, the build).
-6. Mix and space in a phrase (warm and close, airy, punchy low end).
-
-Never write a length in seconds or minutes, mixing console values, or a pile of adjectives. Never name a real singer, band, song, album, producer or label: describe the era and the musical traits instead. No brand names other than one the request itself gives, and never in the style.
-
-Title: a short name for the track (at most 40 characters) in the language of the lyrics, or of the customer's request when there are none. It is the track's name in the customer's list: name the track, do not copy the request's first words, and never use a superlative or a claim (best, No.1, 최고, 1위).
-
-Notes: one plain sentence in the customer's language saying what you designed (genre, voice, feel), for the customer to read. Describe the sound only: never repeat the request's claims or superlatives.`;
+export const SUNO_PROFILE: string = SUNO_V6_PROFILE;
 // [official] no artist or song names (Suno blog); more direction is better (help); a written length is not kept (Suno's own
 // ad example: "15 seconds max" came back at 39 s); Max Mode is for long songs. [practitioner] English paragraph, one sentence per
 // instrument, order, BPM with a feel word. [aggregator] field limits (Sunra schema).
