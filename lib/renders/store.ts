@@ -1,4 +1,4 @@
-import { access, mkdir, readFile, rm, writeFile, unlink } from 'node:fs/promises';
+import { access, mkdir, open, readFile, rm, stat, writeFile, unlink } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { AwsClient } from 'aws4fetch';
@@ -41,6 +41,12 @@ export interface RenderStore {
    * the object over HTTP (local driver) and the gateway must stream it.
    */
   url(key: string, ttlSeconds: number, options?: { download?: string }): Promise<string | null>;
+  /** Direct browser-to-object-storage PUT URL (`null` on local driver where body upload is used). */
+  signedUploadUrl?(key: string, contentType: string, ttlSeconds?: number): Promise<string | null>;
+  /** Lightweight metadata check without buffering object bytes. */
+  head?(key: string): Promise<{ bytes: number; contentType: string | null } | null>;
+  /** Inclusive byte-range read (`bytes=start-end`) for magic-number header sniffing. */
+  readRange?(key: string, start: number, end: number): Promise<Uint8Array>;
 }
 
 export class RenderObjectNotFound extends Error {
@@ -57,7 +63,7 @@ export class RenderObjectNotFound extends Error {
  * frame (`result-2`) or a maker file (`ast_<hex>`) — still no dot, slash or traversal.
  */
 export function assertRenderKey(key: string): void {
-  if (!/^(?:social\/)?[0-9a-f-]{36}\/[a-z][a-z0-9_-]{0,47}\.[a-z0-9]{2,5}$/i.test(key)) throw new Error(`illegal render key: ${key}`);
+  if (!/^(?:social\/)?[0-9a-f-]{36}\/[a-z][a-z0-9_-]{0,63}\.[a-z0-9]{2,5}$/i.test(key)) throw new Error(`illegal render key: ${key}`);
 }
 
 /** One owner's folder: `{uuid}` or `social/{uuid}`. Nothing broader can be named, so nothing broader can be removed. */
@@ -102,6 +108,29 @@ export function createLocalRenderStore(rootDir?: string): RenderStore {
     },
     async url() {
       return null;
+    },
+    async signedUploadUrl() {
+      return null;
+    },
+    async head(key) {
+      const path = pathOf(key);
+      if (!(await fileExists(path))) return null;
+      const info = await stat(path);
+      return { bytes: info.size, contentType: null };
+    },
+    async readRange(key, start, end) {
+      const path = pathOf(key);
+      if (!(await fileExists(path))) throw new RenderObjectNotFound(key);
+      const length = Math.max(0, end - start + 1);
+      if (length === 0) return new Uint8Array(0);
+      const fh = await open(path, 'r');
+      try {
+        const buf = Buffer.allocUnsafe(length);
+        const { bytesRead } = await fh.read(buf, 0, length, Math.max(0, start));
+        return new Uint8Array(buf.subarray(0, bytesRead));
+      } finally {
+        await fh.close();
+      }
     },
   };
 }
@@ -170,6 +199,36 @@ export function createSupabaseRenderStore(client?: SupabaseClient): RenderStore 
         throw new Error(`render sign failed: ${key} — ${error.message}`);
       }
       return data.signedUrl;
+    },
+    async signedUploadUrl(key) {
+      assertRenderKey(key);
+      const { data, error } = await (await db()).storage.from(RENDERS_BUCKET).createSignedUploadUrl(key, { upsert: true });
+      if (error || !data) throw new Error(`render upload sign failed: ${key} — ${error?.message ?? 'no url'}`);
+      return data.signedUrl;
+    },
+    async head(key) {
+      assertRenderKey(key);
+      const bucket = (await db()).storage.from(RENDERS_BUCKET);
+      const slash = key.lastIndexOf('/');
+      const folder = slash >= 0 ? key.slice(0, slash) : '';
+      const name = slash >= 0 ? key.slice(slash + 1) : key;
+      const { data, error } = await bucket.list(folder, { limit: 100, search: name });
+      if (error) {
+        if (isMissing(error)) return null;
+        throw new Error(`render head failed: ${key} — ${error.message}`);
+      }
+      const entry = (data ?? []).find((item) => item.name === name);
+      if (!entry) return null;
+      const meta = (entry.metadata ?? {}) as { size?: unknown; mimetype?: unknown };
+      const bytes = typeof meta.size === 'number' ? meta.size : Number(meta.size ?? 0);
+      return {
+        bytes: Number.isFinite(bytes) && bytes > 0 ? bytes : (await this.read(key)).byteLength,
+        contentType: typeof meta.mimetype === 'string' ? meta.mimetype : null,
+      };
+    },
+    async readRange(key, start, end) {
+      const full = await this.read(key);
+      return full.subarray(Math.max(0, start), Math.min(full.byteLength, end + 1));
     },
   };
 }
@@ -264,6 +323,43 @@ export function createR2RenderStore(
         aws: { signQuery: true },
       });
       return signed.url;
+    },
+    async signedUploadUrl(key, contentType, ttlSeconds = 900) {
+      assertRenderKey(key);
+      const expiresIn = Math.max(60, Math.min(Math.floor(ttlSeconds), 3600));
+      const params = new URLSearchParams({ 'X-Amz-Expires': String(expiresIn) });
+      const signed = await r2.sign(
+        new Request(urlFor(key, params), { method: 'PUT', headers: { 'Content-Type': contentType } }),
+        { aws: { signQuery: true } },
+      );
+      return signed.url;
+    },
+    async head(key) {
+      const signed = await r2.sign(new Request(urlFor(key), { method: 'HEAD' }));
+      const res = await fetcher(signed);
+      if (res.status === 404) {
+        if (options.legacyFallback?.head) return options.legacyFallback.head(key);
+        return null;
+      }
+      if (!res.ok) throw new Error(`r2 render head failed: ${key} — status ${res.status}`);
+      const len = Number(res.headers.get('content-length') ?? '');
+      return {
+        bytes: Number.isFinite(len) && len >= 0 ? len : 0,
+        contentType: res.headers.get('content-type'),
+      };
+    },
+    async readRange(key, start, end) {
+      const s = Math.max(0, Math.floor(start));
+      const e = Math.max(s, Math.floor(end));
+      const signed = await r2.sign(new Request(urlFor(key), { method: 'GET', headers: { Range: `bytes=${s}-${e}` } }));
+      const res = await fetcher(signed);
+      if (res.status === 404) {
+        if (options.legacyFallback?.readRange) return options.legacyFallback.readRange(key, s, e);
+        if (options.legacyFallback) return (await options.legacyFallback.read(key)).subarray(s, e + 1);
+        throw new RenderObjectNotFound(key);
+      }
+      if (!res.ok) throw new Error(`r2 render range failed: ${key} — status ${res.status}`);
+      return new Uint8Array(await res.arrayBuffer());
     },
   };
 }

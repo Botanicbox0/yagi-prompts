@@ -132,12 +132,20 @@ export function PostEditor({
   const [rightsConfirmed, setRightsConfirmed] = useState<boolean>(initialPost?.status === 'published');
   const [previewMode, setPreviewMode] = useState<boolean>(false);
   const [busy, setBusy] = useState<'save' | 'publish' | 'unpublish' | 'delete' | null>(null);
+  const [uploadingTarget, setUploadingTarget] = useState<'cover' | 'block' | null>(null);
+  const [makeBuilderWorkId, setMakeBuilderWorkId] = useState<string>(() => initialPost?.coverWorkId || works[0]?.id || '');
+  const [makeBuilderAspect, setMakeBuilderAspect] = useState<string>('16:9');
+  const [makeBuilderDuration, setMakeBuilderDuration] = useState<number>(10);
+  const [makeBuilderRoyalty, setMakeBuilderRoyalty] = useState<number>(0);
+  const [creatingMakeCard, setCreatingMakeCard] = useState<boolean>(false);
+  const [localWorks, setLocalWorks] = useState<MakerWork[]>(() => [...works]);
+  const [localTemplates, setLocalTemplates] = useState<PublishableTemplateOption[]>(() => [...publishedTemplates]);
   const [feedback, setFeedback] = useState<{ tone: 'ok' | 'error'; message: string } | null>(null);
 
-  const worksById = useMemo(() => new Map(works.map((work) => [work.id, work])), [works]);
+  const worksById = useMemo(() => new Map(localWorks.map((work) => [work.id, work])), [localWorks]);
   const templatesBySlug = useMemo(
-    () => new Map(publishedTemplates.map((item) => [item.slug, item])),
-    [publishedTemplates],
+    () => new Map(localTemplates.map((item) => [item.slug, item])),
+    [localTemplates],
   );
 
   const locked = status === 'hidden';
@@ -171,13 +179,167 @@ export function PostEditor({
   function handleAddBlock(type: PostBlockType) {
     if (locked || blocks.length >= POST_MAX_BLOCKS) return;
     const empty = createEmptyBlock(type, {
-      defaultWorkId: works[0]?.id ?? '',
-      defaultTemplateSlug: publishedTemplates[0]?.slug ?? '',
+      defaultWorkId: localWorks[0]?.id ?? '',
+      defaultTemplateSlug: localTemplates[0]?.slug ?? '',
     });
     const nextIndex = blocks.length;
     setBlocks((prev) => [...prev, empty]);
     setSelectedIndex(nextIndex);
     setFeedback(null);
+  }
+
+  async function uploadWorkFile(file: File, target: 'cover' | 'block', blockIdx?: number) {
+    if (locked || uploadingTarget) return;
+    setUploadingTarget(target);
+    setFeedback(null);
+    try {
+      const mime = file.type || (file.name.toLowerCase().endsWith('.mov') ? 'video/quicktime' : file.name.toLowerCase().endsWith('.mp4') ? 'video/mp4' : 'image/jpeg');
+      const titleFromFile = file.name.replace(/\.[a-z0-9]{2,5}$/i, '').slice(0, 80);
+      const presignRes = await fetch('/api/makers/works/presign', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mime, bytes: file.size }),
+      });
+      const presignData = (await presignRes.json().catch(() => ({}))) as {
+        ok?: boolean;
+        code?: string;
+        mode?: 'presigned' | 'direct';
+        uploadId?: string;
+        uploadUrl?: string;
+      };
+      if (!presignRes.ok || !presignData.ok) {
+        setFeedback({ tone: 'error', message: errorMessage(blogCopy.errors, presignData.code ?? 'upload_failed') });
+        return;
+      }
+
+      let uploadedWork: MakerWork | null = null;
+      if (presignData.mode === 'presigned' && presignData.uploadUrl && presignData.uploadId) {
+        const putRes = await fetch(presignData.uploadUrl, {
+          method: 'PUT',
+          headers: { 'Content-Type': mime },
+          body: file,
+        });
+        if (!putRes.ok) {
+          setFeedback({ tone: 'error', message: blogCopy.errors.upload_failed });
+          return;
+        }
+        const completeRes = await fetch('/api/makers/works/complete', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ uploadId: presignData.uploadId, mime, title: titleFromFile }),
+        });
+        const completeData = (await completeRes.json().catch(() => ({}))) as {
+          ok?: boolean;
+          code?: string;
+          work?: MakerWork;
+        };
+        if (!completeRes.ok || !completeData.ok || !completeData.work) {
+          setFeedback({ tone: 'error', message: errorMessage(blogCopy.errors, completeData.code ?? 'upload_failed') });
+          return;
+        }
+        uploadedWork = completeData.work;
+      } else {
+        const directRes = await fetch(`/api/makers/works?kind=work&title=${encodeURIComponent(titleFromFile)}`, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': mime },
+          body: file,
+        });
+        const directData = (await directRes.json().catch(() => ({}))) as {
+          ok?: boolean;
+          code?: string;
+          work?: MakerWork;
+        };
+        if (!directRes.ok || !directData.ok || !directData.work) {
+          setFeedback({ tone: 'error', message: errorMessage(blogCopy.errors, directData.code ?? 'upload_failed') });
+          return;
+        }
+        uploadedWork = directData.work;
+      }
+
+      setLocalWorks((prev) => (prev.some((w) => w.id === uploadedWork!.id) ? prev : [...prev, uploadedWork!]));
+      if (!makeBuilderWorkId) setMakeBuilderWorkId(uploadedWork.id);
+      if (target === 'cover') {
+        setCoverWorkId(uploadedWork.id);
+      } else if (typeof blockIdx === 'number') {
+        const current = blocks[blockIdx];
+        if (current?.type === 'media') {
+          updateBlock(blockIdx, { ...current, workId: uploadedWork.id });
+        }
+      }
+      router.refresh();
+    } catch {
+      setFeedback({ tone: 'error', message: blogCopy.errors.upload_failed });
+    } finally {
+      setUploadingTarget(null);
+    }
+  }
+
+  async function handleCreateMakeCardFromPrompt(promptBlockIndex: number) {
+    const block = blocks[promptBlockIndex];
+    if (!block || block.type !== 'prompt' || locked || creatingMakeCard) return;
+    if (!rightsConfirmed) {
+      setFeedback({ tone: 'error', message: blogCopy.errors.rights_required });
+      return;
+    }
+    const chosenWorkId = makeBuilderWorkId || coverWorkId || localWorks[0]?.id || '';
+    if (!chosenWorkId) {
+      setFeedback({ tone: 'error', message: blogCopy.errors.invalid_work });
+      return;
+    }
+    setCreatingMakeCard(true);
+    setFeedback(null);
+    try {
+      const res = await fetch('/api/makers/posts/make-card', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: block.title.trim() || title.trim() || 'Creator Scene',
+          titleKo: block.title.trim() || title.trim() || null,
+          workId: chosenWorkId,
+          kind: block.kind,
+          prompt: block.prompt,
+          aspect: makeBuilderAspect,
+          ...(block.kind === 'video' ? { duration: makeBuilderDuration } : {}),
+          royaltyKrw: makeBuilderRoyalty,
+          rightsConfirmed: true,
+        }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        code?: string;
+        slug?: string;
+        title?: string;
+        card?: PromptCard | null;
+      };
+      if (!res.ok || !data.ok || !data.slug) {
+        setFeedback({ tone: 'error', message: errorMessage(blogCopy.errors, data.code) });
+        return;
+      }
+      if (data.card) {
+        const option: PublishableTemplateOption = {
+          slug: data.slug,
+          title: locale === 'ko' ? (data.card.titleKo ?? data.card.title) : data.card.title,
+          card: data.card,
+        };
+        setLocalTemplates((prev) => [option, ...prev.filter((item) => item.slug !== data.slug)]);
+      }
+      if (blocks.length < POST_MAX_BLOCKS) {
+        const nextBlocks = [...blocks];
+        nextBlocks.splice(promptBlockIndex + 1, 0, { type: 'template', slug: data.slug });
+        setBlocks(nextBlocks);
+        setSelectedIndex(promptBlockIndex + 1);
+      }
+      setFeedback({ tone: 'ok', message: blogCopy.makeBuilderCreatedNotice });
+      router.refresh();
+    } catch {
+      setFeedback({ tone: 'error', message: blogCopy.errors.unavailable });
+    } finally {
+      setCreatingMakeCard(false);
+    }
   }
 
   function handleMove(delta: -1 | 1) {
@@ -354,10 +516,10 @@ export function PostEditor({
     publicProfile,
     handle,
     coverWorkId,
-    hasWorks: works.length > 0,
+    hasWorks: localWorks.length > 0,
     profileHref: `${CREATOR_WORKSPACE_PATH}#profile`,
     worksHref:
-      works.length > 0
+      localWorks.length > 0
         ? '#post-cover'
         : worksAvailable
           ? `${CREATOR_WORKSPACE_PATH}#works`
@@ -635,9 +797,25 @@ export function PostEditor({
               </div>
 
               <div>
-                <label htmlFor="post-cover" className="block text-sm font-semibold text-[#09090B]">
-                  {blogCopy.editorCoverLabel}
-                </label>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <label htmlFor="post-cover" className="block text-sm font-semibold text-[#09090B]">
+                    {blogCopy.editorCoverLabel}
+                  </label>
+                  <label className="inline-flex min-h-8 cursor-pointer items-center rounded-full border border-hairline bg-white px-3 text-xs font-medium text-[#09090B] transition-colors hover:bg-[#F4F4F5]">
+                    <span>{uploadingTarget === 'cover' ? blogCopy.uploadingMedia : blogCopy.uploadMediaCta}</span>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime"
+                      disabled={locked || uploadingTarget !== null}
+                      className="sr-only"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        event.target.value = '';
+                        if (file) void uploadWorkFile(file, 'cover');
+                      }}
+                    />
+                  </label>
+                </div>
                 <select
                   id="post-cover"
                   data-post-cover-select
@@ -647,12 +825,13 @@ export function PostEditor({
                   className={FIELD}
                 >
                   <option value="">{blogCopy.editorCoverNone}</option>
-                  {works.map((work) => (
+                  {localWorks.map((work) => (
                     <option key={work.id} value={work.id}>
                       {workLabel(work)}
                     </option>
                   ))}
                 </select>
+                <p className="mt-1.5 text-xs text-[#71717A]">{blogCopy.uploadMediaHint}</p>
                 {coverWork ? (
                   <div className="mt-3 overflow-hidden rounded-xl border border-hairline bg-[#F4F4F5]">
                     {coverWork.kind === 'image' ? (
@@ -893,10 +1072,26 @@ export function PostEditor({
                   {selectedBlock.type === 'media' ? (
                     <div className="space-y-4">
                       <div>
-                        <label htmlFor="block-media-work" className="block text-sm font-medium">
-                          {blogCopy.fieldWorkSelect}
-                        </label>
-                        {works.length === 0 ? (
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <label htmlFor="block-media-work" className="block text-sm font-medium">
+                            {blogCopy.fieldWorkSelect}
+                          </label>
+                          <label className="inline-flex min-h-8 cursor-pointer items-center rounded-full border border-hairline bg-white px-3 text-xs font-medium text-[#09090B] transition-colors hover:bg-[#F4F4F5]">
+                            <span>{uploadingTarget === 'block' ? blogCopy.uploadingMedia : blogCopy.uploadMediaCta}</span>
+                            <input
+                              type="file"
+                              accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime"
+                              disabled={locked || uploadingTarget !== null}
+                              className="sr-only"
+                              onChange={(event) => {
+                                const file = event.target.files?.[0];
+                                event.target.value = '';
+                                if (file) void uploadWorkFile(file, 'block', selectedIndex);
+                              }}
+                            />
+                          </label>
+                        </div>
+                        {localWorks.length === 0 ? (
                           <p className="mt-2 text-xs text-[#71717A]">{blogCopy.fieldWorkNone}</p>
                         ) : (
                           <select
@@ -912,13 +1107,14 @@ export function PostEditor({
                             className={FIELD}
                           >
                             <option value="">{blogCopy.fieldWorkSelect}</option>
-                            {works.map((work) => (
+                            {localWorks.map((work) => (
                               <option key={work.id} value={work.id}>
                                 {workLabel(work)}
                               </option>
                             ))}
                           </select>
                         )}
+                        <p className="mt-1.5 text-xs text-[#71717A]">{blogCopy.uploadMediaHint}</p>
                       </div>
                       <div>
                         <label htmlFor="block-media-caption" className="block text-sm font-medium">
@@ -1046,6 +1242,103 @@ export function PostEditor({
                           className={FIELD}
                         />
                       </div>
+
+                      <div
+                        data-post-make-builder
+                        className="space-y-3 rounded-2xl border border-hairline bg-[#F4F4F5]/75 p-4"
+                      >
+                        <div className="space-y-1">
+                          <h3 className="text-sm font-semibold text-[#09090B]">{blogCopy.makeBuilderHeading}</h3>
+                          <p className="text-xs leading-relaxed break-keep text-[#52525B]">{blogCopy.makeBuilderHint}</p>
+                        </div>
+                        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                          <div>
+                            <label htmlFor="make-builder-work" className="block text-xs font-medium text-[#09090B]">
+                              {blogCopy.makeBuilderWorkLabel}
+                            </label>
+                            <select
+                              id="make-builder-work"
+                              disabled={locked || localWorks.length === 0}
+                              value={makeBuilderWorkId}
+                              onChange={(event) => setMakeBuilderWorkId(event.target.value)}
+                              className={FIELD}
+                            >
+                              {localWorks.map((work) => (
+                                <option key={work.id} value={work.id}>
+                                  {workLabel(work)}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label htmlFor="make-builder-aspect" className="block text-xs font-medium text-[#09090B]">
+                              {blogCopy.makeBuilderAspectLabel}
+                            </label>
+                            <select
+                              id="make-builder-aspect"
+                              disabled={locked}
+                              value={makeBuilderAspect}
+                              onChange={(event) => setMakeBuilderAspect(event.target.value)}
+                              className={FIELD}
+                            >
+                              {['16:9', '9:16', '4:3', '3:4', '4:5', '1:1'].map((ratio) => (
+                                <option key={ratio} value={ratio}>
+                                  {ratio}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          {selectedBlock.kind === 'video' ? (
+                            <div>
+                              <label htmlFor="make-builder-duration" className="block text-xs font-medium text-[#09090B]">
+                                {blogCopy.makeBuilderDurationLabel}
+                              </label>
+                              <select
+                                id="make-builder-duration"
+                                disabled={locked}
+                                value={makeBuilderDuration}
+                                onChange={(event) => setMakeBuilderDuration(Number(event.target.value))}
+                                className={FIELD}
+                              >
+                                {[5, 8, 10, 12, 15].map((sec) => (
+                                  <option key={sec} value={sec}>
+                                    {sec}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          ) : null}
+                          <div>
+                            <label htmlFor="make-builder-royalty" className="block text-xs font-medium text-[#09090B]">
+                              {blogCopy.makeBuilderRoyaltyLabel}
+                            </label>
+                            <select
+                              id="make-builder-royalty"
+                              disabled={locked}
+                              value={makeBuilderRoyalty}
+                              onChange={(event) => setMakeBuilderRoyalty(Number(event.target.value))}
+                              className={FIELD}
+                            >
+                              {[0, 500, 1000, 1500, 2000, 3000, 5000].map((krw) => (
+                                <option key={krw} value={krw}>
+                                  {krw.toLocaleString()}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                        <div>
+                          <button
+                            type="button"
+                            data-post-make-builder-cta
+                            disabled={locked || creatingMakeCard || localWorks.length === 0}
+                            onClick={() => void handleCreateMakeCardFromPrompt(selectedIndex)}
+                            className={BUTTON_OUTLINE}
+                          >
+                            {creatingMakeCard ? blogCopy.makeBuilderCreating : blogCopy.makeBuilderCreateCta}
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   ) : null}
 
@@ -1054,7 +1347,7 @@ export function PostEditor({
                       <label htmlFor="block-template-slug" className="block text-sm font-medium">
                         {blogCopy.fieldTemplateSelect}
                       </label>
-                      {publishedTemplates.length === 0 ? (
+                      {localTemplates.length === 0 ? (
                         <p className="mt-2 text-xs text-[#71717A]">{blogCopy.fieldTemplateEmpty}</p>
                       ) : (
                         <select
@@ -1067,7 +1360,7 @@ export function PostEditor({
                           className={FIELD}
                         >
                           <option value="">{blogCopy.fieldTemplateSelect}</option>
-                          {publishedTemplates.map((item) => (
+                          {localTemplates.map((item) => (
                             <option key={item.slug} value={item.slug}>
                               {item.title} ({item.slug})
                             </option>

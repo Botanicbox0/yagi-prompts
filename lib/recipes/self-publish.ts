@@ -58,6 +58,7 @@ export async function selfPublishFormat(
   userId: string,
   row: SelfPublishRow,
   recipe: Recipe,
+  options: { catalogListed?: boolean } = {},
 ): Promise<SelfPublished> {
   await lockUser(tx, userId);
   demand(row.royalty_krw !== null && isRoyalty(row.royalty_krw), 'invalid');
@@ -108,6 +109,13 @@ export async function selfPublishFormat(
   // Written before the format links to the row, so 0059's guard freezes it from then on (as at acceptance).
   await tx.query('update prompt_items set recipe=$2::jsonb,disclosure=$3::jsonb,presentation=$4 where id=$1',
     [templateId, JSON.stringify(recipe), JSON.stringify(parseDisclosure(row.disclosure)), parsePresentation(row.presentation)]);
+  if (options.catalogListed === false) {
+    try {
+      await tx.query('update prompt_items set catalog_listed = false where id = $1', [templateId]);
+    } catch {
+      // Pre-0208 fallback
+    }
+  }
   if (film?.kind === 'video') {
     try {
       const { rows: kfRows } = await tx.query<{ keyframes: unknown }>(
@@ -121,5 +129,12 @@ export async function selfPublishFormat(
     }
   }
   await tx.query("update platform_formats set status='accepted',template_id=$2,rights_at=coalesce(rights_at,now()),updated_at=now() where id=$1", [row.id, templateId]);
+  if (options.catalogListed === false) {
+    try {
+      await tx.query('update platform_formats set catalog_listed = false where id = $1', [row.id]);
+    } catch {
+      // Pre-0208 fallback
+    }
+  }
   return { id: row.id, templateId, slug, priceKrw };
 }

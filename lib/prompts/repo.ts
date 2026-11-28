@@ -59,6 +59,8 @@ export interface PromptRow {
   announcedAt: string | null;
   createdAt: string | null;
   publishedAt: string | null;
+  /** False for unlisted / blog-hosted creator formats (`0208`); omitted from official storefront listings. */
+  catalogListed?: boolean;
   /**
    * docs/PERSONAL-STUDIO.md §3.4.10 — set only when the template is written for one style and `TWINGS_TEMPLATE_LOOK=on`;
    * absent = for anyone (and always absent with the switch off).
@@ -98,6 +100,7 @@ interface RawRow {
   announced_at?: Date | string | null;
   created_at: Date | string | null;
   published_at: Date | string | null;
+  catalog_listed?: boolean | null;
   /** Present only while `TWINGS_TEMPLATE_LOOK=on` (see `columns()`). */
   look?: string | null;
 }
@@ -115,6 +118,7 @@ const PRICE_1080_COLUMNS = `coalesce((to_jsonb(prompt_items.*)->>'price_1080_cen
  * a database without 0078 serves every template as `solo`, which is what every row was before it.
  */
 const CAST_COLUMN = `coalesce(to_jsonb(prompt_items.*)->>'cast_kind', 'solo') as cast_kind`;
+const CATALOG_LISTED_COLUMN = `coalesce((to_jsonb(prompt_items.*)->>'catalog_listed')::boolean, true) as catalog_listed`;
 
 const COLUMNS = `id, audience, slug, source, author_id, author_handle, status, models, title, title_ko,
                  prompt_text, process_md, process_md_ko, source_url,
@@ -122,6 +126,7 @@ const COLUMNS = `id, audience, slug, source, author_id, author_handle, status, m
                  medium, price_cents, price_krw, runtime_seconds, engine, aspect_default,
                  ${PRICE_1080_COLUMNS},
                  ${CAST_COLUMN},
+                 ${CATALOG_LISTED_COLUMN},
                  reject_reason, created_at, published_at, announced_at`;
 
 /**
@@ -177,6 +182,7 @@ function toRow(raw: RawRow): PromptRow {
     announcedAt: toIso(raw.announced_at ?? null),
     createdAt: toIso(raw.created_at),
     publishedAt: toIso(raw.published_at),
+    catalogListed: raw.catalog_listed !== false,
     ...(isTemplateLook(raw.look) ? { look: raw.look } : {}),
   };
 }
@@ -185,10 +191,47 @@ function toRow(raw: RawRow): PromptRow {
 // read paths
 // ---------------------------------------------------------------------------
 
-/** Every PUBLISHED item, both rails, in rail order. The gallery's single query. */
+/** Every PUBLISHED & catalog-listed item, both rails, in rail order. The gallery's single query. */
 export async function loadPublishedPrompts(sql: SqlRunner): Promise<PromptRow[]> {
   const { rows } = await sql.query<RawRow>(
-    `select ${columns()} from prompt_items where status = 'published' and audience = 'public' order by ${RAIL_ORDER}`,
+    `select ${columns()} from prompt_items
+      where status = 'published'
+        and audience = 'public'
+        and coalesce((to_jsonb(prompt_items.*)->>'catalog_listed')::boolean, true) = true
+      order by ${RAIL_ORDER}`,
+  );
+  return rows.map(toRow);
+}
+
+/** Published public items by explicit slug list (includes unlisted `catalog_listed = false` blog/link formats). */
+export async function loadPublishedPromptsBySlugs(sql: SqlRunner, slugs: readonly string[]): Promise<PromptRow[]> {
+  if (slugs.length === 0) return [];
+  const { rows } = await sql.query<RawRow>(
+    `select ${columns()} from prompt_items
+      where slug = any($1::text[])
+        and status = 'published'
+        and audience = 'public'
+      order by ${RAIL_ORDER}`,
+    [slugs],
+  );
+  return rows.map(toRow);
+}
+
+/** A maker's own published public items (both catalog-listed and unlisted blog-make formats). */
+export async function loadMakerPublishedPrompts(sql: SqlRunner, userId: string): Promise<PromptRow[]> {
+  const { rows } = await sql.query<RawRow>(
+    `select ${columns()} from prompt_items
+      where status = 'published'
+        and audience = 'public'
+        and (
+          author_id = $1
+          or exists (
+            select 1 from platform_formats f
+             where f.template_id = prompt_items.id and f.user_id = $1 and f.status = 'accepted'
+          )
+        )
+      order by ${RAIL_ORDER}`,
+    [userId],
   );
   return rows.map(toRow);
 }
@@ -238,7 +281,10 @@ export async function loadRelatedPrompts(
   const { rows } = await sql.query<RawRow & { shared: boolean }>(
     `select ${columns()}, (use_case && $2::text[]) as shared
        from prompt_items
-      where status = 'published' and audience = 'public' and id <> $1
+      where status = 'published'
+        and audience = 'public'
+        and coalesce((to_jsonb(prompt_items.*)->>'catalog_listed')::boolean, true) = true
+        and id <> $1
       order by (use_case && $2::text[]) desc,
                (source = $3) desc,
                published_at desc nulls last,

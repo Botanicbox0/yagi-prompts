@@ -11,6 +11,7 @@ import { getLocaleFromHeaders } from '@/lib/i18n/server';
 import { creativeGate } from '@/lib/makers/access';
 import { loadMakerSettings } from '@/lib/makers/profile';
 import { listMakerWorks } from '@/lib/makers/works';
+import { loadMakerPublishedCards } from '@/lib/prompts/catalog';
 import { getPromptCatalog } from '@/lib/prompts/public-catalog';
 import { makerBlogOpen } from '@/lib/posts/flag';
 import { postEditorHref } from '@/lib/posts/links';
@@ -78,11 +79,12 @@ export default async function MakerPostEditorPage({ params }: RouteParams) {
     );
   }
 
-  const [post, works, settings, catalog, importableTemplates] = await Promise.all([
+  const [post, works, settings, catalog, ownCards, importableTemplates] = await Promise.all([
     isNew ? Promise.resolve(null) : loadMakerPost(sql, viewer.userId, id),
     listMakerWorks(sql, viewer.userId),
     loadMakerSettings(sql, viewer.userId),
     getPromptCatalog(),
+    loadMakerPublishedCards(sql, viewer.userId),
     loadMakerTemplatesForImport(sql, viewer.userId, {
       selfie: dict.makerRecipe.selfieLabel,
       reference: dict.makerRecipe.referenceLabel,
@@ -97,10 +99,16 @@ export default async function MakerPostEditorPage({ params }: RouteParams) {
   }
 
   const handle = settings?.handle ?? null;
-  const allCards = [...catalog.video, ...catalog.image];
-  const sortedCards = [...allCards].sort((a, b) => {
-    const aOwn = handle && a.authorHandle === handle ? 0 : 1;
-    const bOwn = handle && b.authorHandle === handle ? 0 : 1;
+  const mergedBySlug = new Map<string, (typeof catalog.video)[number]>();
+  for (const card of ownCards) {
+    mergedBySlug.set(card.slug, card);
+  }
+  for (const card of [...catalog.video, ...catalog.image]) {
+    if (!mergedBySlug.has(card.slug)) mergedBySlug.set(card.slug, card);
+  }
+  const sortedCards = [...mergedBySlug.values()].sort((a, b) => {
+    const aOwn = (handle && a.authorHandle === handle) || ownCards.some((c) => c.slug === a.slug) ? 0 : 1;
+    const bOwn = (handle && b.authorHandle === handle) || ownCards.some((c) => c.slug === b.slug) ? 0 : 1;
     return aOwn - bOwn;
   });
   const publishedTemplates: PublishableTemplateOption[] = sortedCards.map((card) => ({

@@ -17,6 +17,8 @@ import { getRenderStore } from '@/lib/renders/store';
 export const dynamic = 'force-dynamic';
 const PRIVATE = { 'Cache-Control': 'private, no-store', 'X-Robots-Tag': 'noindex, nofollow', 'X-Content-Type-Options': 'nosniff' };
 const PUBLIC = { 'Cache-Control': 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800', 'X-Content-Type-Options': 'nosniff' };
+/** Signed R2 URLs live 2h (`7200s`), so edge-cached 307 redirects refresh every 30m with >=90m remaining for range seeks. */
+const PUBLIC_REDIRECT = { 'Cache-Control': 'public, max-age=600, s-maxage=1800, stale-while-revalidate=3600', 'X-Content-Type-Options': 'nosniff' };
 const FILE = /^(?:(wrk_[0-9a-f]{32})\.(?:jpg|png|webp|mp4|mov)|(avatar|cover)-([a-z0-9_]{3,20})-[0-9a-f]{16,32}\.jpg)$/;
 
 /** Safari plays a film only from a server that answers byte ranges; one range is all it asks for. */
@@ -43,7 +45,17 @@ export async function GET(request: Request, { params }: { params: Promise<{ file
     let object = await makerMediaObject(sql, null, id);
     if (!object) object = await makerMediaObject(sql, (await getViewer()).userId, id);
     if (!object) return new NextResponse(null, { status: 404, headers: PRIVATE });
-    const bytes = new Uint8Array(await (await getRenderStore()).read(object.key));
+    const store = await getRenderStore();
+    if (object.mime.startsWith('video/')) {
+      const signedUrl = await store.url(object.key, 7200);
+      if (signedUrl) {
+        return NextResponse.redirect(signedUrl, {
+          status: 307,
+          headers: object.publicCache ? PUBLIC_REDIRECT : PRIVATE,
+        });
+      }
+    }
+    const bytes = new Uint8Array(await store.read(object.key));
     return ranged(request, bytes, { ...(object.publicCache ? PUBLIC : PRIVATE), 'Content-Type': object.mime });
   } catch { return new NextResponse(null, { status: 503, headers: PRIVATE }); }
 }
