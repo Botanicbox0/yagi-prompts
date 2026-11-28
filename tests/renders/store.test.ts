@@ -76,9 +76,13 @@ describe('the local render store', () => {
       return new Response('Unsupported', { status: 405 });
     };
 
+    const fallbackDeleted: string[] = [];
     const fallback: RenderStore = {
       name: 'supabase',
       put: async () => {},
+      delete: async (k) => {
+        fallbackDeleted.push(k);
+      },
       read: async (k) => {
         if (k === '33333333-3333-4333-8333-333333333333/selfie.png') return new Uint8Array([9, 8, 7]);
         throw new RenderObjectNotFound(k);
@@ -123,6 +127,14 @@ describe('the local render store', () => {
 
     await r2Store.delete?.(key);
     expect(objects.has(`renders/${key}`)).toBe(false);
+    expect(fallbackDeleted).toEqual([key]);
+
+    // Ephemeral upl_* deletes skip legacyFallback completely
+    const uplKey = `11111111-1111-4111-8111-111111111111/upl_${'a'.repeat(32)}.mp4`;
+    await r2Store.put(uplKey, new Uint8Array([1, 2, 3]), 'video/mp4');
+    await r2Store.delete?.(uplKey);
+    expect(objects.has(`renders/${uplKey}`)).toBe(false);
+    expect(fallbackDeleted).toEqual([key]);
   });
 
   it('resolves getRenderStore() to R2 when R2_PRIVATE_BUCKET is configured in cloud mode', async () => {

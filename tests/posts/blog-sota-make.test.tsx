@@ -30,12 +30,14 @@ import {
   completeMakerWorkUpload,
   MAKER_WORK_VIDEO_MAX_BYTES,
   makerWorkUploadsReady,
+  PRESIGN_HOURLY_LIMIT,
   presignMakerWorkUpload,
   resetPresignRateLimits,
   storeMakerWork,
   sweepExpiredMakerWorkUploads,
   sweepOrphanMakerUploads,
   UPLOAD_ID,
+  UPLOAD_STORAGE_KEY,
   WORK_ID,
 } from '@/lib/makers/works';
 import { createUnlistedMakeCard, normalizeBlogMakePrompt, resetMakeCardRateLimits } from '@/lib/posts/make-card';
@@ -637,9 +639,13 @@ describe('Blog SOTA media (50MB presign) & unlisted inline selfie make-card', ()
     expect((await offStudioRes.arrayBuffer()).byteLength).toBe(16);
   });
 
-  it('enforces durable maker_work_uploads leases across instances, strict /complete consumption, scheduled sweep, and pre-0210 fallback', async () => {
+  it('enforces durable maker_work_uploads leases, 30/hr cap, retryable time-bounded sweep, and fail-closed 0210 check', async () => {
     expect(await makerWorkUploadsReady(h.sql)).toBe(true);
     expect(BLOG_MAKER_WORKS_MAX_BYTES).toBe(500 * 1024 * 1024);
+    expect(PRESIGN_HOURLY_LIMIT).toBe(30);
+    expect(UPLOAD_STORAGE_KEY.test(`${CREATIVE.userId!}/upl_${'a'.repeat(32)}.mp4`)).toBe(true);
+    expect(UPLOAD_STORAGE_KEY.test(`${CREATIVE.userId!}/wrk_${'a'.repeat(32)}.mp4`)).toBe(false);
+    expect(UPLOAD_STORAGE_KEY.test(`${CREATIVE.userId!}/result.mp4`)).toBe(false);
 
     const presignStore: RenderStore = {
       ...store,
@@ -747,13 +753,40 @@ describe('Blog SOTA media (50MB presign) & unlisted inline selfie make-card', ()
       }),
     ).rejects.toMatchObject({ code: 'not_found' });
 
-    // 4. Scheduled user-independent sweep cleans both abandoned uncompleted upl_* AND post-/complete replay PUTs
+    // 4. Transient store.delete errors do NOT stamp swept_at, preserving retry; budgetMs bounds each pass
     const abandonedKey = `${CREATIVE.userId!}/${leases[1]!}.mp4`;
     await store.put(abandonedKey, makeMp4Bytes(2048, 15), 'video/mp4');
     await h.sql.query(`update maker_work_uploads set expires_at = now() - interval '10 minutes'`);
 
+    const failingStore: RenderStore = {
+      ...store,
+      async delete() {
+        throw new Error('transient R2 503');
+      },
+    };
+    const failedSweep = await sweepExpiredMakerWorkUploads(h.sql, failingStore, { graceSeconds: 60 });
+    expect(failedSweep).toEqual({ swept: 0, pruned: 0 });
+    expect((await store.head!(abandonedKey))?.bytes).toBe(2048);
+
+    // Wall-clock budgetMs stops early after 1 deletion when clock advances past deadline
+    let fakeNow = 1_000;
+    const budgetedStore: RenderStore = {
+      ...store,
+      async delete(k) {
+        await store.delete!(k);
+        fakeNow += 6_000;
+      },
+    };
+    const partialSweep = await sweepExpiredMakerWorkUploads(h.sql, budgetedStore, {
+      graceSeconds: 60,
+      budgetMs: 5_000,
+      now: () => fakeNow,
+    });
+    expect(partialSweep).toEqual({ swept: 1, pruned: 0 });
+
+    // Next tick drains the remaining 9 expired rows
     const sweepRes = await sweepExpiredMakerWorkUploads(h.sql, store, { graceSeconds: 60 });
-    expect(sweepRes).toEqual({ swept: 10, pruned: 0 });
+    expect(sweepRes).toEqual({ swept: 9, pruned: 0 });
     expect(await store.head!(abandonedKey)).toBeNull();
     expect(await store.head!(firstRawKey)).toBeNull();
     expect((await store.head!(`${CREATIVE.userId!}/${done.work.id}.mp4`))?.bytes).toBe(oneMb);
@@ -782,24 +815,46 @@ describe('Blog SOTA media (50MB presign) & unlisted inline selfie make-card', ()
       }),
     ).rejects.toMatchObject({ code: 'limit_reached' });
 
-    // 6. Pre-0210 fallback continues working if maker_work_uploads has not been applied yet
+    // 6. Enforces 30/hour PRESIGN_HOURLY_LIMIT even when active leases expire (9 already minted in this hour -> mint 21 more = 30)
+    await h.sql.query(`update maker_work_uploads set expires_at = now() - interval '10 minutes'`);
+    for (let batch = 0; batch < 3; batch += 1) {
+      const countInBatch = batch < 2 ? 10 : 1;
+      for (let i = 0; i < countInBatch; i += 1) {
+        const res = await presignMakerWorkUpload(h.sql, presignStore, {
+          userId: CREATIVE.userId!,
+          mime: 'video/mp4',
+          bytes: 1024,
+        });
+        expect(res.mode).toBe('presigned');
+      }
+      await h.sql.query(`update maker_work_uploads set expires_at = now() - interval '10 minutes'`);
+    }
+    // 31st presign within the hour is blocked even though active = 0
+    await expect(
+      presignMakerWorkUpload(h.sql, presignStore, {
+        userId: CREATIVE.userId!,
+        mime: 'video/mp4',
+        bytes: 1024,
+      }),
+    ).rejects.toMatchObject({ code: 'limit_reached' });
+
+    // 7. Fails closed (WorkError 'unavailable' -> HTTP 503) if 0210 has not been applied yet
     await h.sql.query('drop table public.maker_work_uploads');
     expect(await makerWorkUploadsReady(h.sql)).toBe(false);
     expect(await sweepExpiredMakerWorkUploads(h.sql, store)).toEqual({ swept: 0, pruned: 0 });
-    const fallbackPresign = await presignMakerWorkUpload(h.sql, presignStore, {
-      userId: OTHER_CREATIVE.userId!,
-      mime: 'video/mp4',
-      bytes: 1024,
-    });
-    expect(fallbackPresign.mode).toBe('presigned');
-    if (fallbackPresign.mode === 'presigned') {
-      await store.put(`${OTHER_CREATIVE.userId!}/${fallbackPresign.uploadId}.mp4`, makeMp4Bytes(1024, 21), 'video/mp4');
-      const fallbackComplete = await completeMakerWorkUpload(h.sql, presignStore, {
+    await expect(
+      presignMakerWorkUpload(h.sql, presignStore, {
         userId: OTHER_CREATIVE.userId!,
-        uploadId: fallbackPresign.uploadId,
         mime: 'video/mp4',
-      });
-      expect(WORK_ID.test(fallbackComplete.work.id)).toBe(true);
-    }
+        bytes: 1024,
+      }),
+    ).rejects.toMatchObject({ code: 'unavailable' });
+    await expect(
+      completeMakerWorkUpload(h.sql, presignStore, {
+        userId: OTHER_CREATIVE.userId!,
+        uploadId: `upl_${'1'.repeat(32)}`,
+        mime: 'video/mp4',
+      }),
+    ).rejects.toMatchObject({ code: 'unavailable' });
   });
 });

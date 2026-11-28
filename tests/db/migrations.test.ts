@@ -541,7 +541,21 @@ describe('migrations apply on a fresh database (PLAN §6)', () => {
       db.query(
         `insert into maker_work_uploads (upload_id, user_id, storage_key, mime, bytes, expires_at)
          values ($1, $2, $3, 'video/mp4', 52428801, now() + interval '5 minutes')`,
-        [`upl_${'d'.repeat(32)}`, user, `${user}/bad3.mp4`],
+        [`upl_${'d'.repeat(32)}`, user, `${user}/upl_${'d'.repeat(32)}.mp4`],
+      ),
+    ).rejects.toThrow();
+    await expect(
+      db.query(
+        `insert into maker_work_uploads (upload_id, user_id, storage_key, mime, bytes, expires_at)
+         values ($1, $2, $3, 'video/mp4', 1024, now() + interval '5 minutes')`,
+        [`upl_${'e'.repeat(32)}`, user, `${user}/wrk_${'e'.repeat(32)}.mp4`],
+      ),
+    ).rejects.toThrow();
+    await expect(
+      db.query(
+        `insert into maker_work_uploads (upload_id, user_id, storage_key, mime, bytes, expires_at)
+         values ($1, $2, $3, 'video/mp4', 1024, now() + interval '5 minutes')`,
+        [`upl_${'f'.repeat(32)}`, user, `00000000-0000-4000-8000-000000009999/upl_${'f'.repeat(32)}.mp4`],
       ),
     ).rejects.toThrow();
 

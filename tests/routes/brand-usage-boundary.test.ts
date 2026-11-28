@@ -53,7 +53,12 @@ describe('brand usage edge boundary', () => {
   });
   it('the existing daily tick also runs the usage payment recovery pass', async () => {
     vi.stubEnv('CRON_SECRET', '');
-    mocks.sql.mockResolvedValue({ query: vi.fn() });
+    mocks.sql.mockResolvedValue({
+      query: vi.fn(async (text: string) => {
+        if (text.includes('maker_work_uploads') && text.includes('to_regclass')) return { rows: [{ ready: true }] };
+        return { rows: [] };
+      }),
+    });
     mocks.renderPass.mockResolvedValue({ errors: [] });
     mocks.reconcile.mockResolvedValue({ checked: 3 });
     const r = await tick(new Request('https://twings.app/api/renders/tick'));

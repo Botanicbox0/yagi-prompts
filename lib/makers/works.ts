@@ -31,26 +31,14 @@ export const WORK_TITLE_MAX = 80;
 export const WORK_CAPTION_MAX = 280;
 export const WORK_ID = /^wrk_[0-9a-f]{32}$/;
 export const UPLOAD_ID = /^upl_[0-9a-f]{32}$/;
+export const UPLOAD_STORAGE_KEY = /^[0-9a-f-]{36}\/upl_[0-9a-f]{32}\.(jpg|png|webp|mp4|mov)$/;
 export const UPLOAD_TTL_SECONDS = 300;
 export const ORPHAN_UPLOAD_MAX_AGE_MS = 15 * 60 * 1000;
-const PRESIGN_HOURLY_LIMIT = 30;
-const PRESIGN_PENDING_MAX = 10;
-const presignWindow = new Map<string, number[]>();
-
-function takePresignSlot(userId: string, now = Date.now()): boolean {
-  const cutoff = now - 60 * 60 * 1000;
-  const recent = (presignWindow.get(userId) ?? []).filter((ts) => ts > cutoff);
-  if (recent.length >= PRESIGN_HOURLY_LIMIT) {
-    presignWindow.set(userId, recent);
-    return false;
-  }
-  recent.push(now);
-  presignWindow.set(userId, recent);
-  return true;
-}
+export const PRESIGN_HOURLY_LIMIT = 30;
+export const PRESIGN_PENDING_MAX = 10;
 
 export function resetPresignRateLimits(): void {
-  presignWindow.clear();
+  // Presign limits live durably in `maker_work_uploads` (0210); kept as a test-cleanup hook.
 }
 const WORK_ALLOWED_MIMES = new Set<MakerFileMime>(['image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'video/quicktime']);
 
@@ -226,16 +214,20 @@ export type PresignMakerWorkResult =
 /**
  * Scheduled user-independent sweep (`/api/renders/tick`) for expired `maker_work_uploads`
  * leases (`0210`). Deletes temporary `upl_*` objects after `expires_at` across all creatives
+ * within a bounded wall-clock budget, leaves failed storage deletes unswept for retry,
  * and prunes terminal lease rows older than 7 days.
  */
 export async function sweepExpiredMakerWorkUploads(
   sql: SqlRunner,
   store: RenderStore,
-  options: { limit?: number; graceSeconds?: number } = {},
+  options: { limit?: number; graceSeconds?: number; budgetMs?: number; now?: () => number } = {},
 ): Promise<{ swept: number; pruned: number }> {
   if (!(await makerWorkUploadsReady(sql))) return { swept: 0, pruned: 0 };
-  const limit = Math.max(1, Math.min(options.limit ?? 50, 200));
+  const limit = Math.max(1, Math.min(options.limit ?? 100, 200));
   const graceSeconds = Math.max(0, Math.floor(options.graceSeconds ?? 60));
+  const budgetMs = Math.max(0, Math.floor(options.budgetMs ?? 5_000));
+  const clock = options.now ?? Date.now;
+  const deadline = clock() + budgetMs;
 
   const { rows: expired } = await sql.query<{ upload_id: string; storage_key: string }>(
     `select upload_id, storage_key
@@ -249,7 +241,19 @@ export async function sweepExpiredMakerWorkUploads(
 
   let swept = 0;
   for (const row of expired) {
-    await store.delete?.(row.storage_key).catch(() => undefined);
+    if (clock() >= deadline) break;
+    if (!UPLOAD_STORAGE_KEY.test(row.storage_key)) {
+      console.warn('[maker-works] skipping malformed upload storage key');
+      continue;
+    }
+    if (store.delete) {
+      try {
+        await store.delete(row.storage_key);
+      } catch {
+        console.warn('[maker-works] upload sweep delete failed; will retry next tick');
+        continue;
+      }
+    }
     const updated = await sql.query(
       `update maker_work_uploads
           set swept_at = now()
@@ -260,14 +264,18 @@ export async function sweepExpiredMakerWorkUploads(
     if (updated.rows.length > 0) swept += 1;
   }
 
-  const prunedRes = await sql.query(
-    `delete from maker_work_uploads
-      where swept_at is not null
-        and created_at < now() - interval '7 days'
-      returning upload_id`,
-  );
+  let pruned = 0;
+  if (clock() < deadline) {
+    const prunedRes = await sql.query(
+      `delete from maker_work_uploads
+        where swept_at is not null
+          and created_at < now() - interval '7 days'
+        returning upload_id`,
+    );
+    pruned = prunedRes.rows.length;
+  }
 
-  return { swept, pruned: prunedRes.rows.length };
+  return { swept, pruned };
 }
 
 /** Mints a short-lived R2 PUT URL on an ephemeral `upl_*` key with signed `Content-Length` + `Content-Type`. */
@@ -278,6 +286,7 @@ export async function presignMakerWorkUpload(
 ): Promise<PresignMakerWorkResult> {
   if (!makerBlogOpen()) throw new WorkError('not_found');
   await ready(sql);
+  if (!(await makerWorkUploadsReady(sql))) throw new WorkError('unavailable');
   if (typeof input.mime !== 'string' || !WORK_ALLOWED_MIMES.has(input.mime as MakerFileMime)) {
     throw new WorkError('bad_file');
   }
@@ -290,90 +299,54 @@ export async function presignMakerWorkUpload(
 
   const uploadId = `upl_${randomBytes(16).toString('hex')}`;
   const key = `${input.userId}/${uploadId}.${extensionFor(mime)}`;
-  const hasLeaseTable = await makerWorkUploadsReady(sql);
-
-  if (hasLeaseTable) {
-    await sweepExpiredMakerWorkUploads(sql, store, { limit: 20, graceSeconds: 60 }).catch(() => undefined);
-
-    await sql.transaction(async (tx) => {
-      await tx.query('select id from profiles where id=$1 for update', [input.userId]);
-      const [totalsRes, leaseStatsRes] = await Promise.all([
-        tx.query<{ n: number; total: string }>(
-          'select count(*)::int n, coalesce(sum(bytes),0)::text total from maker_works where user_id=$1',
-          [input.userId],
-        ),
-        tx.query<{ hourly: number; active: number; active_bytes: string }>(
-          `select count(*) filter (where created_at > now() - interval '1 hour')::int as hourly,
-                  count(*) filter (where completed_at is null and swept_at is null and expires_at > now())::int as active,
-                  coalesce(sum(bytes) filter (where completed_at is null and swept_at is null and expires_at > now()), 0)::text as active_bytes
-             from maker_work_uploads
-            where user_id = $1`,
-          [input.userId],
-        ),
-      ]);
-      const totals = totalsRes.rows[0]!;
-      const leases = leaseStatsRes.rows[0]!;
-      if (
-        leases.hourly >= PRESIGN_HOURLY_LIMIT ||
-        leases.active >= PRESIGN_PENDING_MAX ||
-        totals.n + leases.active >= quota.maxWorks ||
-        Number(totals.total) + Number(leases.active_bytes) + size > quota.maxTotalBytes
-      ) {
-        throw new WorkError('limit_reached');
-      }
-      await tx.query(
-        `insert into maker_work_uploads (upload_id, user_id, storage_key, mime, bytes, expires_at)
-         values ($1, $2, $3, $4, $5, now() + ($6::text || ' seconds')::interval)`,
-        [uploadId, input.userId, key, mime, size, String(UPLOAD_TTL_SECONDS)],
-      );
-    });
-
-    let uploadUrl: string | null = null;
-    try {
-      uploadUrl = store.signedUploadUrl
-        ? await store.signedUploadUrl(key, mime, size, UPLOAD_TTL_SECONDS)
-        : null;
-    } catch (err) {
-      await sql.query('delete from maker_work_uploads where upload_id = $1', [uploadId]).catch(() => undefined);
-      throw err;
-    }
-    if (!uploadUrl) {
-      await sql.query('delete from maker_work_uploads where upload_id = $1', [uploadId]).catch(() => undefined);
-      return { mode: 'direct', mime };
-    }
-    return { mode: 'presigned', uploadId, uploadUrl, mime };
-  }
-
-  // Pre-0210 fallback before the cloud migration is applied
-  const { pendingUploads, pendingBytes } = await sweepOrphanMakerUploads(sql, store, input.userId);
-  if (pendingUploads >= PRESIGN_PENDING_MAX) throw new WorkError('limit_reached');
+  if (!UPLOAD_STORAGE_KEY.test(key)) throw new WorkError('invalid');
 
   await sql.transaction(async (tx) => {
     await tx.query('select id from profiles where id=$1 for update', [input.userId]);
-    const totals = (
-      await tx.query<{ n: number; total: string; hourly: number }>(
-        `select count(*)::int n,
-                coalesce(sum(bytes),0)::text total,
-                count(*) filter (where created_at > now() - interval '1 hour')::int hourly
-           from maker_works
-          where user_id=$1`,
+    const [totalsRes, leaseStatsRes] = await Promise.all([
+      tx.query<{ n: number; total: string }>(
+        'select count(*)::int n, coalesce(sum(bytes),0)::text total from maker_works where user_id=$1',
         [input.userId],
-      )
-    ).rows[0]!;
+      ),
+      tx.query<{ hourly: number; active: number; active_bytes: string }>(
+        `select count(*) filter (where created_at > now() - interval '1 hour')::int as hourly,
+                count(*) filter (where completed_at is null and swept_at is null and expires_at > now())::int as active,
+                coalesce(sum(bytes) filter (where completed_at is null and swept_at is null and expires_at > now()), 0)::text as active_bytes
+           from maker_work_uploads
+          where user_id = $1`,
+        [input.userId],
+      ),
+    ]);
+    const totals = totalsRes.rows[0]!;
+    const leases = leaseStatsRes.rows[0]!;
     if (
-      totals.hourly + pendingUploads >= PRESIGN_HOURLY_LIMIT ||
-      totals.n + pendingUploads >= quota.maxWorks ||
-      Number(totals.total) + pendingBytes + size > quota.maxTotalBytes ||
-      !takePresignSlot(input.userId)
+      leases.hourly >= PRESIGN_HOURLY_LIMIT ||
+      leases.active >= PRESIGN_PENDING_MAX ||
+      totals.n + leases.active >= quota.maxWorks ||
+      Number(totals.total) + Number(leases.active_bytes) + size > quota.maxTotalBytes
     ) {
       throw new WorkError('limit_reached');
     }
+    await tx.query(
+      `insert into maker_work_uploads (upload_id, user_id, storage_key, mime, bytes, expires_at)
+       values ($1, $2, $3, $4, $5, now() + ($6::text || ' seconds')::interval)`,
+      [uploadId, input.userId, key, mime, size, String(UPLOAD_TTL_SECONDS)],
+    );
   });
 
-  const uploadUrl = store.signedUploadUrl
-    ? await store.signedUploadUrl(key, mime, size, UPLOAD_TTL_SECONDS)
-    : null;
-  if (!uploadUrl) return { mode: 'direct', mime };
+  let uploadUrl: string | null = null;
+  try {
+    uploadUrl = store.signedUploadUrl
+      ? await store.signedUploadUrl(key, mime, size, UPLOAD_TTL_SECONDS)
+      : null;
+  } catch (err) {
+    await sql.query('delete from maker_work_uploads where upload_id = $1', [uploadId]).catch(() => undefined);
+    throw err;
+  }
+  if (!uploadUrl) {
+    await sql.query('delete from maker_work_uploads where upload_id = $1', [uploadId]).catch(() => undefined);
+    return { mode: 'direct', mime };
+  }
   return { mode: 'presigned', uploadId, uploadUrl, mime };
 }
 
@@ -388,6 +361,7 @@ export async function completeMakerWorkUpload(
 ): Promise<{ work: MakerWork; unchanged: boolean }> {
   if (!makerBlogOpen()) throw new WorkError('not_found');
   await ready(sql);
+  if (!(await makerWorkUploadsReady(sql))) throw new WorkError('unavailable');
   if (typeof input.uploadId !== 'string' || !UPLOAD_ID.test(input.uploadId)) throw new WorkError('invalid');
   if (typeof input.mime !== 'string' || !WORK_ALLOWED_MIMES.has(input.mime as MakerFileMime)) throw new WorkError('bad_file');
   const meta = workMetaOf(input);
@@ -395,37 +369,32 @@ export async function completeMakerWorkUpload(
 
   const uploadId = input.uploadId;
   const declaredMime = input.mime as MakerFileMime;
-  const hasLeaseTable = await makerWorkUploadsReady(sql);
-  let expectedBytes: number | null = null;
-  let rawKey = `${input.userId}/${uploadId}.${extensionFor(declaredMime)}`;
-
-  if (hasLeaseTable) {
-    const lease = (
-      await sql.query<{
-        storage_key: string;
-        mime: string;
-        bytes: number;
-        expired: boolean;
-        done: boolean;
-      }>(
-        `select storage_key,
-                mime,
-                bytes,
-                (expires_at <= now() or swept_at is not null) as expired,
-                (completed_at is not null) as done
-           from maker_work_uploads
-          where upload_id = $1 and user_id = $2`,
-        [uploadId, input.userId],
-      )
-    ).rows[0];
-    if (!lease || lease.expired || lease.done) throw new WorkError('not_found');
-    if (lease.mime !== declaredMime) {
-      await store.delete?.(lease.storage_key).catch(() => undefined);
-      throw new WorkError('bad_file');
-    }
-    rawKey = lease.storage_key;
-    expectedBytes = lease.bytes;
+  const lease = (
+    await sql.query<{
+      storage_key: string;
+      mime: string;
+      bytes: number;
+      expired: boolean;
+      done: boolean;
+    }>(
+      `select storage_key,
+              mime,
+              bytes,
+              (expires_at <= now() or swept_at is not null) as expired,
+              (completed_at is not null) as done
+         from maker_work_uploads
+        where upload_id = $1 and user_id = $2`,
+      [uploadId, input.userId],
+    )
+  ).rows[0];
+  if (!lease || lease.expired || lease.done) throw new WorkError('not_found');
+  if (!UPLOAD_STORAGE_KEY.test(lease.storage_key)) throw new WorkError('invalid');
+  if (lease.mime !== declaredMime) {
+    await store.delete?.(lease.storage_key).catch(() => undefined);
+    throw new WorkError('bad_file');
   }
+  const rawKey = lease.storage_key;
+  const expectedBytes = lease.bytes;
 
   const quota = makerWorkQuota();
   const maxBytes = declaredMime.startsWith('image/') ? quota.maxImageBytes : quota.maxVideoBytes;
@@ -436,7 +405,7 @@ export async function completeMakerWorkUpload(
     if (info && (info.bytes <= 0 || info.bytes > maxBytes)) {
       throw new WorkError(info.bytes > maxBytes ? 'too_large' : 'bad_file');
     }
-    if (info && expectedBytes !== null && info.bytes !== expectedBytes) {
+    if (info && info.bytes !== expectedBytes) {
       throw new WorkError(info.bytes > maxBytes ? 'too_large' : 'bad_file');
     }
 
@@ -454,7 +423,7 @@ export async function completeMakerWorkUpload(
     if (!uploadedBytes.byteLength || uploadedBytes.byteLength > maxBytes) {
       throw new WorkError(uploadedBytes.byteLength > maxBytes ? 'too_large' : 'bad_file');
     }
-    if (expectedBytes !== null && uploadedBytes.byteLength !== expectedBytes) {
+    if (uploadedBytes.byteLength !== expectedBytes) {
       throw new WorkError('bad_file');
     }
 
@@ -485,20 +454,18 @@ export async function completeMakerWorkUpload(
 
     return await sql.transaction(async (tx) => {
       await tx.query('select id from profiles where id=$1 for update', [input.userId]);
-      if (hasLeaseTable) {
-        const claimed = await tx.query(
-          `update maker_work_uploads
-              set completed_at = now()
-            where upload_id = $1
-              and user_id = $2
-              and completed_at is null
-              and swept_at is null
-              and expires_at > now()
-            returning upload_id`,
-          [uploadId, input.userId],
-        );
-        if (claimed.rows.length === 0) throw new WorkError('not_found');
-      }
+      const claimed = await tx.query(
+        `update maker_work_uploads
+            set completed_at = now()
+          where upload_id = $1
+            and user_id = $2
+            and completed_at is null
+            and swept_at is null
+            and expires_at > now()
+          returning upload_id`,
+        [uploadId, input.userId],
+      );
+      if (claimed.rows.length === 0) throw new WorkError('not_found');
 
       const existing = await tx.query<WorkRow>(`select ${COLUMNS} from maker_works where user_id=$1 and sha256=$2`, [input.userId, sha]);
       if (existing.rows[0]) {
@@ -528,7 +495,9 @@ export async function completeMakerWorkUpload(
       }
     });
   } finally {
-    await store.delete?.(rawKey).catch(() => undefined);
+    if (UPLOAD_STORAGE_KEY.test(rawKey)) {
+      await store.delete?.(rawKey).catch(() => undefined);
+    }
   }
 }
 

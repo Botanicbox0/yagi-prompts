@@ -7,8 +7,8 @@
 --   · `/api/makers/works/complete` consumes the matching active row (`completed_at is null` and
 --     `expires_at > now()`) for `(upload_id, user_id, mime)` and verifies the uploaded byte size
 --     matches `bytes`;
---   · `/api/renders/tick` sweeps expired `maker_work_uploads` rows and deletes their
---     `storage_key` from object storage independently of user activity.
+--   · `/api/renders/tick` sweeps expired `maker_work_uploads` rows with a wall-clock budget and
+--     deletes their `storage_key` from object storage independently of user activity.
 
 create table if not exists public.maker_work_uploads (
   upload_id text primary key
@@ -24,7 +24,11 @@ create table if not exists public.maker_work_uploads (
   created_at timestamptz not null default now(),
   expires_at timestamptz not null,
   completed_at timestamptz,
-  swept_at timestamptz
+  swept_at timestamptz,
+  constraint maker_work_uploads_key_check check (
+    storage_key ~ '^[0-9a-f-]{36}/upl_[0-9a-f]{32}\.(jpg|png|webp|mp4|mov)$'
+    and storage_key like (user_id::text || '/' || upload_id || '.%')
+  )
 );
 
 create index if not exists idx_maker_work_uploads_user_created
