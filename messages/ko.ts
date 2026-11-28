@@ -25,6 +25,7 @@ import { studioComposeKo } from './studio-compose';
 import { studioSoundKo } from './studio-sound';
 import { studioEditorKo } from './studio-editor';
 import { studioEditorChatKo } from './studio-editor-chat';
+import { studioEditorTracksKo } from './studio-editor-tracks';
 import { studioWorkflowsKo } from './studio-workflows';
 import { studioShareDialogKo } from './studio-share-dialog';
 import { adminConsoleKo } from './admin-console';
@@ -92,6 +93,7 @@ export const ko: Dictionary = {
   studioSound: studioSoundKo,
   studioEditor: studioEditorKo,
   studioEditorChat: studioEditorChatKo,
+  studioEditorTracks: studioEditorTracksKo,
   studioWorkflows: studioWorkflowsKo,
   adminConsole: adminConsoleKo,
   brandHome: brandHomeKo,

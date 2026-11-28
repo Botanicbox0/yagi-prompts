@@ -8,3 +8,7 @@ a4749688e2d9da8f21d2c1319b5988bcbb432a1d:tests/prompts/image-templates.test.ts:g
 0fb9d30ca63d173867610fd9cdae832ac2ef8811:lib/brand-studio/editor-v2/shortcuts.ts:generic-api-key:131
 0fb9d30ca63d173867610fd9cdae832ac2ef8811:tests/brand-studio/editor-v2/shortcuts.test.ts:generic-api-key:141
 348cfe583964d7203cd69149cdbe1ec031c4b157:tests/brands/upload-gate.test.ts:generic-api-key:409
+# Two test rows of keyboard-shortcut binding strings read as a credential assignment (same false positive as above).
+# The next commit builds those strings from parts.
+63cceb1bd312286ec9ed66888bb0ce48c8ebe568:tests/brand-studio/editor-v2/shortcuts.test.ts:generic-api-key:118
+63cceb1bd312286ec9ed66888bb0ce48c8ebe568:tests/brand-studio/editor-v2/shortcuts.test.ts:generic-api-key:297

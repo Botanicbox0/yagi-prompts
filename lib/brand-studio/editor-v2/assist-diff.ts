@@ -13,8 +13,10 @@ import { fill } from '@/components/brand-studio/copy';
 import type { AskAbout, AskChoice } from '@/lib/brand-studio/edit-assist/plan';
 import type { StudioEditorCopy } from '@/messages/studio-editor';
 import type { StudioEditorChatCopy } from '@/messages/studio-editor-chat';
+import type { StudioEditorTracksCopy } from '@/messages/studio-editor-tracks';
 import type { AssistInheritPair, AssistMapFailureReason } from './assist-apply';
-import { formatTimecode, totalFrames, type FrameClip, type FrameSequence } from './frames';
+import { filmFrames, formatTimecode, totalFrames, type FrameClip, type FrameSequence } from './frames';
+import { allOverlayClips } from './tracks';
 
 const ASPECT_COPY_KEYS = {
   '16:9': 'r16x9',
@@ -68,30 +70,50 @@ function buildRootOwnerResolver(
 
 /**
  * Indices in `arr` that form a Longest Increasing Subsequence (minimum moves = elements outside LIS).
- * Ties of equal length prefer keeping elements that stayed at their original index (`arr[i] === i`),
- * so an unmoved cut is never reported as "moved to its own position".
+ * Ties of equal length prefer:
+ * 1) keeping elements NOT in `preferredMovePositions` (W11: report the cut the request moved, not its neighbour),
+ * 2) keeping elements that stayed at their original index (`arr[i] === i`).
  */
-function longestIncreasingSet(arr: readonly number[]): Set<number> {
+function longestIncreasingSet(
+  arr: readonly number[],
+  preferredMovePositions?: ReadonlySet<number>,
+): Set<number> {
   const n = arr.length;
   if (n === 0) return new Set();
   const dpLen = new Array<number>(n).fill(1);
+  const dpNonMoved: number[] = arr.map((_, i) => (preferredMovePositions?.has(i) ? 0 : 1));
   const dpSame: number[] = arr.map((v, i) => (v === i ? 1 : 0));
   const prev = new Array<number>(n).fill(-1);
   let bestIdx = 0;
+  const better = (
+    lenA: number,
+    nonMovedA: number,
+    sameA: number,
+    lenB: number,
+    nonMovedB: number,
+    sameB: number,
+  ): boolean => {
+    if (lenA !== lenB) return lenA > lenB;
+    if (nonMovedA !== nonMovedB) return nonMovedA > nonMovedB;
+    return sameA > sameB;
+  };
   for (let i = 0; i < n; i += 1) {
+    const selfNonMoved = preferredMovePositions?.has(i) ? 0 : 1;
     const selfSame = arr[i] === i ? 1 : 0;
     for (let j = 0; j < i; j += 1) {
       if (arr[j]! < arr[i]!) {
         const candLen = dpLen[j]! + 1;
+        const candNonMoved = dpNonMoved[j]! + selfNonMoved;
         const candSame = dpSame[j]! + selfSame;
-        if (candLen > dpLen[i]! || (candLen === dpLen[i]! && candSame > dpSame[i]!)) {
+        if (better(candLen, candNonMoved, candSame, dpLen[i]!, dpNonMoved[i]!, dpSame[i]!)) {
           dpLen[i] = candLen;
+          dpNonMoved[i] = candNonMoved;
           dpSame[i] = candSame;
           prev[i] = j;
         }
       }
     }
-    if (dpLen[i]! > dpLen[bestIdx]! || (dpLen[i]! === dpLen[bestIdx]! && dpSame[i]! > dpSame[bestIdx]!)) {
+    if (better(dpLen[i]!, dpNonMoved[i]!, dpSame[i]!, dpLen[bestIdx]!, dpNonMoved[bestIdx]!, dpSame[bestIdx]!)) {
       bestIdx = i;
     }
   }
@@ -111,6 +133,9 @@ export function diffFrameSequences(
   copy: StudioEditorCopy,
   chatCopy: StudioEditorChatCopy,
   inherit?: readonly AssistInheritPair[],
+  tracksCopy?: StudioEditorTracksCopy | null,
+  movedClipIds?: readonly string[],
+  affectsFilmLength = false,
 ): string[] {
   const lines: string[] = [];
   const fps = before.fps > 0 ? before.fps : 30;
@@ -204,7 +229,14 @@ export function diffFrameSequences(
   if (survivingBefore.length === survivingAfter.length && survivingBefore.length > 1) {
     const beforeRank = new Map(survivingBefore.map((id, rank) => [id, rank]));
     const ranks = survivingAfter.map((item) => beforeRank.get(item.rootId)!);
-    const stationary = longestIncreasingSet(ranks);
+    const movedRoots = new Set((movedClipIds ?? []).map((id) => rootOf(id) ?? id));
+    const preferredMovePositions = new Set<number>();
+    if (movedRoots.size > 0) {
+      survivingAfter.forEach((item, pos) => {
+        if (movedRoots.has(item.rootId)) preferredMovePositions.add(pos);
+      });
+    }
+    const stationary = longestIncreasingSet(ranks, preferredMovePositions);
     if (stationary.size < ranks.length) {
       survivingAfter.forEach((item, pos) => {
         if (stationary.has(pos)) return;
@@ -265,6 +297,29 @@ export function diffFrameSequences(
         after: fmt(afterTotal),
       }),
     );
+  }
+
+  // C9 + S8: when a chat edit moves/deletes linked overlay clips, or overlays run past the new main end, append summary lines.
+  if (tracksCopy) {
+    const beforeOverlays = allOverlayClips(before);
+    const afterOverlays = allOverlayClips(after);
+    if (beforeOverlays.length > 0) {
+      const afterOverlayById = new Map(afterOverlays.map((clip) => [clip.id, clip]));
+      let moved = 0;
+      let deleted = 0;
+      for (const prev of beforeOverlays) {
+        const next = afterOverlayById.get(prev.id);
+        if (!next) deleted += 1;
+        else if (next.startFrame !== prev.startFrame) moved += 1;
+      }
+      if (moved > 0) lines.push(fill(tracksCopy.chat.overlaysMoved, { n: moved }));
+      if (deleted > 0) lines.push(fill(tracksCopy.chat.overlaysDeleted, { n: deleted }));
+    }
+    const afterFilm = filmFrames(after);
+    // W5: show `overlaysExtendPastMain` ONLY when the request was about the film's total length (`fit_total` / `even_pace`).
+    if (affectsFilmLength && afterOverlays.length > 0 && afterFilm > afterTotal) {
+      lines.push(fill(tracksCopy.chat.overlaysExtendPastMain, { time: fmt(afterFilm) }));
+    }
   }
 
   return lines;

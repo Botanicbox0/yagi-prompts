@@ -32,6 +32,7 @@ import {
   wholeFrameViolations,
   type FrameSequence,
 } from './frames';
+import { reconcileLinkedOverlays } from './tracks';
 
 /** Half a tenth of a second: matches `EDGE_SEC` in `lib/brand-studio/edit-assist/apply.ts:82`. */
 const EDGE_SEC = 0.05;
@@ -52,7 +53,14 @@ export type AssistMapFailureReason =
 export type AssistInheritPair = readonly [string, string];
 
 export type AssistMapResult =
-  | { ok: true; sequence: FrameSequence; inherit: AssistInheritPair[] }
+  | {
+      ok: true;
+      sequence: FrameSequence;
+      inherit: AssistInheritPair[];
+      movedClipIds?: string[];
+      /** W5: true ONLY when the plan included a total-length step (`fit_total` / `even_pace`). */
+      affectsFilmLength?: boolean;
+    }
   | { ok: false; reason: AssistMapFailureReason; sequence: FrameSequence };
 
 interface FrameApplyState {
@@ -61,6 +69,8 @@ interface FrameApplyState {
   splits: ReadonlyMap<string, { a: string; b: string }>;
   /** Ordered `[newPieceId, parentId]` pairs for `use-editor`'s `remember()` so splits inherit parent metadata/lineage. */
   inherit: AssistInheritPair[];
+  /** Root clip IDs explicitly moved by a `move` step (W11). */
+  movedClipIds: string[];
 }
 
 type FrameStepOutcome =
@@ -202,7 +212,7 @@ function splitStep(state: FrameApplyState, step: Extract<ResolvedStep, { do: 'sp
   if (next === seq) return failStep('too_short');
   const splits = new Map(state.splits);
   splits.set(clip.id, { a: clip.id, b: pieceB });
-  return okState({ sequence: next, splits, inherit: [...state.inherit, [pieceB, clip.id]] });
+  return okState({ sequence: next, splits, inherit: [...state.inherit, [pieceB, clip.id]], movedClipIds: state.movedClipIds });
 }
 
 function removeStep(state: FrameApplyState, step: Extract<ResolvedStep, { do: 'remove' }>): FrameStepOutcome {
@@ -230,7 +240,9 @@ function moveStep(state: FrameApplyState, step: Extract<ResolvedStep, { do: 'mov
     toIndex = 'before' in step.to ? anchorWithout : anchorWithout + 1;
   }
   if (toIndex === index) return okState(state);
-  return okState({ ...state, sequence: moveClip(state.sequence, index, toIndex) });
+  const movedId = state.sequence.clips[index]!.id;
+  const movedClipIds = state.movedClipIds.includes(movedId) ? state.movedClipIds : [...state.movedClipIds, movedId];
+  return okState({ ...state, sequence: moveClip(state.sequence, index, toIndex), movedClipIds });
 }
 
 function soundStep(state: FrameApplyState, step: Extract<ResolvedStep, { do: 'sound' }>): FrameStepOutcome {
@@ -378,28 +390,45 @@ function hasFrameViolations(next: FrameSequence, inputFps: number): boolean {
   return true;
 }
 
+export interface AssistApplyOptions {
+  /** Whether linked overlays follow main-track edits (B2; defaults to `false`). */
+  linkage?: boolean;
+}
+
 /**
  * Applies `assist.plan` resolved steps atomically on `sequence`.
  * Any unsupported step or failed constraint returns `{ ok: false, reason, sequence }` unchanged.
+ * B1: returns the UNADJUSTED `sequence` so `withSequence` is the single place that reconciles linked overlays
+ * (avoiding double-adjustment between preview and apply); reconciliation runs here only to validate constraints.
  */
 export function applyResolvedStepsToSequence(
   sequence: FrameSequence,
   steps: readonly ResolvedStep[],
+  options: AssistApplyOptions = {},
 ): AssistMapResult {
   if (steps.length === 0) return { ok: false, reason: 'no_change', sequence };
-  let state: FrameApplyState = { sequence, splits: new Map(), inherit: [] };
+  let state: FrameApplyState = { sequence, splits: new Map(), inherit: [], movedClipIds: [] };
   for (const step of steps) {
     const outcome = applyOneStep(state, step);
     if (!outcome.ok) return { ok: false, reason: outcome.reason, sequence };
     state = outcome.state;
   }
-  if (hasFrameViolations(state.sequence, sequence.fps)) {
+  const linkageOn = options.linkage ?? false;
+  const reconciled = reconcileLinkedOverlays(sequence, state.sequence, linkageOn, state.inherit).sequence;
+  if (hasFrameViolations(reconciled, sequence.fps)) {
     return { ok: false, reason: 'unmapped_step', sequence };
   }
-  if (sameSequence(state.sequence, sequence)) {
+  if (sameSequence(reconciled, sequence)) {
     return { ok: false, reason: 'no_change', sequence };
   }
-  return { ok: true, sequence: state.sequence, inherit: state.inherit };
+  const affectsFilmLength = steps.some((step) => step.do === 'fit_total' || step.do === 'even_pace');
+  return {
+    ok: true,
+    sequence: state.sequence,
+    inherit: state.inherit,
+    ...(state.movedClipIds.length > 0 ? { movedClipIds: state.movedClipIds } : {}),
+    ...(affectsFilmLength ? { affectsFilmLength: true } : {}),
+  };
 }
 
 /**
@@ -410,6 +439,7 @@ export function applyRulePatchesToSequence(
   sequence: FrameSequence,
   patches: readonly TimelinePatch[],
   baseSequence: FrameSequence,
+  options: AssistApplyOptions = {},
 ): AssistMapResult {
   if (sequence !== baseSequence) {
     return { ok: false, reason: 'stale', sequence };
@@ -419,6 +449,7 @@ export function applyRulePatchesToSequence(
   }
   let working = sequence;
   const inherit: AssistInheritPair[] = [];
+  const movedClipIds: string[] = [];
   for (const patch of patches) {
     switch (patch.op) {
       case 'set_aspect':
@@ -490,6 +521,10 @@ export function applyRulePatchesToSequence(
         if (patch.fromIndex < 0 || patch.fromIndex >= working.clips.length) {
           return { ok: false, reason: 'target_missing', sequence };
         }
+        const movedId = working.clips[patch.fromIndex]!.id;
+        if (patch.fromIndex !== patch.toIndex && !movedClipIds.includes(movedId)) {
+          movedClipIds.push(movedId);
+        }
         working = moveClip(working, patch.fromIndex, patch.toIndex);
         break;
       }
@@ -553,11 +588,18 @@ export function applyRulePatchesToSequence(
         return { ok: false, reason: 'unmapped_step', sequence };
     }
   }
-  if (hasFrameViolations(working, sequence.fps)) {
+  const linkageOn = options.linkage ?? false;
+  const reconciled = reconcileLinkedOverlays(sequence, working, linkageOn, inherit).sequence;
+  if (hasFrameViolations(reconciled, sequence.fps)) {
     return { ok: false, reason: 'unmapped_step', sequence };
   }
-  if (sameSequence(working, sequence)) {
+  if (sameSequence(reconciled, sequence)) {
     return { ok: false, reason: 'no_change', sequence };
   }
-  return { ok: true, sequence: working, inherit };
+  return {
+    ok: true,
+    sequence: working,
+    inherit,
+    ...(movedClipIds.length > 0 ? { movedClipIds } : {}),
+  };
 }

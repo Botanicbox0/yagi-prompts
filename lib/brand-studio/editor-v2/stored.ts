@@ -24,20 +24,35 @@
 import {
   COMPOSE_ASPECTS,
   MAX_COMPOSE_CLIPS,
+  MAX_COMPOSE_OVERLAYS,
   clipPlaybackRate,
   emptyComposerProject,
   normalizeClipBounds,
+  normalizeOverlayClip,
   parseStoredProject,
   serializeProjectForStorage,
   type ComposeAspect,
   type ComposeClip,
+  type ComposeOverlayClip,
   type ComposerProject,
 } from '@/lib/brand-studio/compose/timeline';
-import { captionsOnFrames, cutAnchor, type CutAnchor } from './cut-anchor';
+import { captionsOnFrames, cutAnchor, storedOverlaySeconds, storedSecToFrame, type CutAnchor } from './cut-anchor';
 import { DEFAULT_FILM_FPS, snapFilmFps, sourceFramesOf } from './fps';
 
 export { captionsOnFrames } from './cut-anchor';
 import { clipMaxFrames, mediaFramesOf, type FrameClip, type FrameSequence } from './frames';
+import {
+  MAX_OVERLAY_TRACKS,
+  deriveOverlayStart,
+  hasOwnedOverlays,
+  overlayTracksOf,
+  p1LinkTargetForStart,
+  p6PruneEmptyOverlayTracks,
+  p9DefaultOverlayFraming,
+  type OverlayClip,
+  type OverlayLink,
+  type OverlayTrack,
+} from './tracks';
 import {
   cloneSpeedCurve,
   curveAverageSpeed,
@@ -88,6 +103,39 @@ export interface FrameV2Block {
 }
 
 export type StoredClip = ComposeClip & { frameV2?: FrameV2Block };
+
+/** The seconds an overlay carried when v2 wrote its block, after `normalizeOverlayClip`. */
+export interface OverlayFrameV2Mirror {
+  startSec: number;
+  endSec: number;
+}
+
+/** v2's exact frame data for one video overlay clip, kept on `ComposerProject.overlays[].frameV2` (C3, C4). */
+export interface OverlayFrameV2Block {
+  fps: number;
+  /** 0 = lowest overlay track directly above main; higher index draws on top. */
+  trackIndex: number;
+  trackId?: string;
+  startFrame: number;
+  link: OverlayLink | null;
+  inFrame: number;
+  phase: number;
+  frames: number;
+  speedNum: number;
+  speedDen: number;
+  mediaSpan?: { num: number; den: number };
+  speedCurve?: SpeedCurve;
+  sourceFps: number;
+  sourceFrames: number;
+  srcUrl: string;
+  durationSec: number;
+  volume: number;
+  muted: boolean;
+  from?: string[];
+  mirror: OverlayFrameV2Mirror;
+}
+
+export type StoredOverlayClip = ComposeOverlayClip & { frameV2?: OverlayFrameV2Block };
 
 /** The longest line of parents a cut keeps. */
 export const MAX_LINEAGE = 32;
@@ -167,6 +215,41 @@ export function frameBlockOf(clip: ComposeClip): FrameV2Block | null {
   return block as FrameV2Block;
 }
 
+/** Validated v2 overlay frame block, or `null` for legacy/still/malformed overlays (C3). */
+export function overlayFrameBlockOf(overlay: ComposeOverlayClip): OverlayFrameV2Block | null {
+  if (overlay.mediaKind !== 'video') return null;
+  const block = (overlay as StoredOverlayClip).frameV2 as Partial<OverlayFrameV2Block> | undefined;
+  if (!block || typeof block !== 'object') return null;
+  const { fps, trackIndex, startFrame, inFrame, phase, frames, speedNum, speedDen, sourceFps, sourceFrames, durationSec, volume, muted, mirror, link, mediaSpan, speedCurve } = block;
+  if (block.srcUrl !== overlay.srcUrl) return null;
+  if (!isInt(fps, 1) || !isInt(trackIndex, 0) || !isInt(startFrame, 0)) return null;
+  if (!isInt(inFrame, 0) || !isInt(phase, 0) || !isInt(frames, 1) || !isInt(speedNum, 1) || !isInt(speedDen, 1)) return null;
+  if (phase >= speedDen || !isNum(sourceFps) || sourceFps <= 0 || !isInt(sourceFrames, 1)) return null;
+  if (!isNum(durationSec) || durationSec <= 0 || !isNum(volume) || volume < 0 || volume > 1 || typeof muted !== 'boolean') return null;
+  if (!mirror || typeof mirror !== 'object') return null;
+  const { startSec: mStart, endSec: mEnd } = mirror as Partial<OverlayFrameV2Mirror>;
+  if (!isNum(mStart) || !isNum(mEnd)) return null;
+  if (link !== null && link !== undefined) {
+    if (typeof link !== 'object' || typeof link.clipId !== 'string' || link.clipId === '' || !isInt(link.sourceFrame, 0)) return null;
+  }
+  if (mediaSpan !== undefined && (!mediaSpan || typeof mediaSpan !== 'object' || !isInt(mediaSpan.num, 1) || !isInt(mediaSpan.den, 1))) return null;
+  if (speedCurve !== undefined && !isValidSpeedCurve(speedCurve)) {
+    const { speedCurve: _droppedCurve, ...constantBlock } = block;
+    return constantBlock as OverlayFrameV2Block;
+  }
+  return block as OverlayFrameV2Block;
+}
+
+/** True when a stored film contains at least one video overlay created by editor v2. */
+export function hasStoredOwnedOverlays(project: Pick<ComposerProject, 'overlays'> | null | undefined): boolean {
+  return (project?.overlays ?? []).some((overlay) => overlayFrameBlockOf(overlay) !== null);
+}
+
+/** Count of legacy (non-v2) overlays in a stored film (image overlays or old-editor video overlays; B3). */
+export function legacyOverlayCountOf(project: Pick<ComposerProject, 'overlays'> | null | undefined): number {
+  return (project?.overlays ?? []).filter((overlay) => overlayFrameBlockOf(overlay) === null).length;
+}
+
 function mirrorHolds(clip: ComposeClip, block: FrameV2Block): boolean {
   return (
     block.mirror.trimStartSec === clip.trimStartSec &&
@@ -209,7 +292,7 @@ export function filmFpsOf(project: Pick<ComposerProject, 'clips'>, measured: Mea
 }
 
 /** The footage the browser must measure before this film can be opened on frames. */
-export function sourcesToMeasure(project: Pick<ComposerProject, 'clips'>): string[] {
+export function sourcesToMeasure(project: Pick<ComposerProject, 'clips' | 'overlays'>): string[] {
   const clips = project.clips.slice(0, MAX_COMPOSE_CLIPS);
   const out: string[] = [];
   for (const clip of clips) {
@@ -437,8 +520,13 @@ function sourceOf(clip: ComposeClip, fps: number, measured: MeasuredSources): So
   return { sourceFps: fps, sourceFrames: sourceFramesOf(clip.durationSec, fps), guessed: true };
 }
 
+export interface FromStoredOptions {
+  /** Load editor-created `overlays[].frameV2` into `sequence.overlayTracks` (default `true`). Pass `false` when tracks switch is closed. */
+  loadOverlays?: boolean;
+}
+
 /** The stored film on frames. `measured` holds what the browser measured, by `srcUrl`. */
-export function fromStored(project: ComposerProject, measured: MeasuredSources = {}): StoredFilm {
+export function fromStored(project: ComposerProject, measured: MeasuredSources = {}, options: FromStoredOptions = {}): StoredFilm {
   const { fps, tentative } = filmRateOf(project, measured);
   const exact: string[] = [];
   const derived: string[] = [];
@@ -472,10 +560,84 @@ export function fromStored(project: ComposerProject, measured: MeasuredSources =
     return { ...base, ...source, ...deriveFrames(stored, fps, source) };
   });
   const aspect: ComposeAspect = (COMPOSE_ASPECTS as readonly string[]).includes(project.aspect) ? project.aspect : '9:16';
+  const mainOnly: FrameSequence = { fps, aspect, clips, captions: [] };
+  const mainIds = new Set(clips.map((c) => c.id));
+
+  const mainAnchor = cutAnchor(toStored(mainOnly, project, { writeOverlays: false }), mainOnly);
+
+  // Load ONLY editor-created video overlays carrying a valid `frameV2` block (C3: legacy overlays stay hidden & untouched).
+  let overlayTracks: OverlayTrack[] | undefined;
+  if (options.loadOverlays !== false && project.overlays && project.overlays.length > 0) {
+    const byTrackIndex = new Map<number, { id: string; clips: OverlayClip[] }>();
+    for (const ov of project.overlays.slice(0, MAX_COMPOSE_OVERLAYS)) {
+      const block = overlayFrameBlockOf(ov);
+      if (!block) continue;
+      const ovSec = storedOverlaySeconds(ov);
+      const { startSec: mStart, endSec: mEnd } = block.mirror;
+      const mirrorOk = block.fps === fps && mStart === ovSec.start && mEnd === ovSec.end;
+      const seen = measured[ov.srcUrl];
+      const counted = seen?.counted && isInt(seen.frames, 1) && isNum(seen.fps) && seen.fps > 0 ? seen : null;
+      const source: SourceFields =
+        counted && counted.frames !== block.sourceFrames
+          ? { sourceFps: sameRate(counted.fps, block.sourceFps) ? block.sourceFps : counted.fps, sourceFrames: counted.frames }
+          : { sourceFps: block.sourceFps, sourceFrames: block.sourceFrames };
+      const clampedFields = withinFootage(
+        {
+          ...source,
+          inFrame: block.inFrame,
+          phase: block.phase,
+          frames: block.frames,
+          speedNum: block.speedNum,
+          speedDen: block.speedDen,
+          ...(block.mediaSpan ? { mediaSpan: { ...block.mediaSpan } } : {}),
+          ...(block.speedCurve ? { speedCurve: cloneSpeedCurve(block.speedCurve) } : {}),
+        },
+        fps,
+      );
+      const startFrame = mirrorOk ? block.startFrame : storedSecToFrame(mainAnchor, ovSec.start);
+      const rawLink = mirrorOk ? block.link : p1LinkTargetForStart(mainOnly, startFrame);
+      const safeLink = rawLink && mainIds.has(rawLink.clipId) ? rawLink : p1LinkTargetForStart(mainOnly, startFrame);
+      const overlayClip: OverlayClip = {
+        id: ov.id,
+        label: ov.label,
+        srcUrl: ov.srcUrl,
+        thumbUrl: ov.thumbUrl ?? null,
+        sourceFps: clampedFields.sourceFps,
+        sourceFrames: clampedFields.sourceFrames,
+        inFrame: clampedFields.inFrame,
+        phase: clampedFields.phase,
+        frames: clampedFields.frames,
+        speedNum: clampedFields.speedNum,
+        speedDen: clampedFields.speedDen,
+        ...(clampedFields.mediaSpan ? { mediaSpan: clampedFields.mediaSpan } : {}),
+        ...(clampedFields.speedCurve ? { speedCurve: clampedFields.speedCurve } : {}),
+        volume: block.volume,
+        muted: block.muted,
+        startFrame,
+        link: safeLink,
+      };
+      const tIdx = clamp(block.trackIndex, 0, MAX_OVERLAY_TRACKS - 1);
+      const entry = byTrackIndex.get(tIdx) ?? { id: block.trackId || `ov-${tIdx + 1}`, clips: [] };
+      entry.clips.push(overlayClip);
+      byTrackIndex.set(tIdx, entry);
+    }
+    if (byTrackIndex.size > 0) {
+      const built = p6PruneEmptyOverlayTracks(
+        [...byTrackIndex.entries()]
+          .sort((a, b) => a[0] - b[0])
+          .slice(0, MAX_OVERLAY_TRACKS)
+          .map(([, entry]) => ({
+            id: entry.id,
+            clips: entry.clips.sort((a, b) => a.startFrame - b.startFrame),
+          })),
+      );
+      if (built.length > 0) overlayTracks = built;
+    }
+  }
+
   // The stored captions on these cuts' frames, each at its offset into its cut (spec E, item A).
-  const cuts: FrameSequence = { fps, aspect, clips, captions: [] };
-  const anchor = cutAnchor(toStored(cuts, project), cuts);
-  return { sequence: { ...cuts, captions: captionsOnFrames(project.captions, anchor) }, exact, derived, corrected, rateUnknown, tentative };
+  const cuts: FrameSequence = overlayTracks ? { ...mainOnly, overlayTracks } : mainOnly;
+  return { sequence: { ...cuts, captions: captionsOnFrames(project.captions, mainAnchor) }, exact, derived, corrected, rateUnknown, tentative };
 }
 
 export interface ToStoredOptions {
@@ -488,6 +650,8 @@ export interface ToStoredOptions {
   unmeasuredSources?: readonly string[];
   /** No cut's rate is measured, so the film's own rate is a stand-in: no cut gets frame data. */
   tentative?: boolean;
+  /** When `false` (tracks switch closed), leave `previous.overlays` completely untouched. Defaults to `true`. */
+  writeOverlays?: boolean;
 }
 
 /**
@@ -676,9 +840,82 @@ function storedClipOf(
  * it is, the same list, whatever the cuts look like now. A film that got shorter than a caption hides
  * the caption on screen; storage keeps it (review round 1, item 1). `sequence.captions` is never read.
  */
+function storedOverlayOf(
+  clip: OverlayClip,
+  trackIndex: number,
+  trackId: string,
+  sequence: FrameSequence,
+  previousOverlay: ComposeOverlayClip | undefined,
+  previousMainClip: ComposeClip | undefined,
+  knownClip: ComposeClip | undefined,
+): StoredOverlayClip {
+  const fps = sequence.fps;
+  const resolvedStart = deriveOverlayStart(sequence, clip);
+  const framing = p9DefaultOverlayFraming();
+  const originClip = previousMainClip ?? knownClip;
+  const fallbackMeta = freshClip(clip);
+  const sourceKind: 'asset' | 'output' | 'local' =
+    previousOverlay?.sourceKind ?? originClip?.sourceKind ?? fallbackMeta.sourceKind;
+  const assetId = previousOverlay?.assetId ?? originClip?.assetId ?? fallbackMeta.assetId;
+  const outputId = previousOverlay?.outputId ?? originClip?.outputId ?? fallbackMeta.outputId;
+  const durationSec =
+    (previousOverlay && overlayFrameBlockOf(previousOverlay)?.durationSec) ??
+    originClip?.durationSec ??
+    Math.max(1, clip.sourceFrames / clip.sourceFps);
+  const prevFrom = previousOverlay
+    ? (overlayFrameBlockOf(previousOverlay)?.from ?? [])
+    : originClip
+      ? lineageOf(originClip)
+      : [];
+
+  // C4: rewrite `startSec`/`endSec` from the resolved start on every save, then record post-normalisation mirror.
+  const raw: ComposeOverlayClip = {
+    id: clip.id,
+    label: clip.label,
+    sourceKind,
+    ...(assetId ? { assetId } : {}),
+    ...(outputId ? { outputId } : {}),
+    srcUrl: clip.srcUrl,
+    ...(clip.thumbUrl !== undefined ? { thumbUrl: clip.thumbUrl } : {}),
+    mediaKind: 'video',
+    startSec: resolvedStart / fps,
+    endSec: (resolvedStart + clip.frames) / fps,
+    x: previousOverlay ? previousOverlay.x : framing.x,
+    y: previousOverlay ? previousOverlay.y : framing.y,
+    scale: previousOverlay ? previousOverlay.scale : framing.scale,
+    opacity: previousOverlay ? previousOverlay.opacity : framing.opacity,
+  };
+  const written = normalizeOverlayClip(raw);
+  const writtenSec = storedOverlaySeconds(written);
+  const block: OverlayFrameV2Block = {
+    fps,
+    trackIndex,
+    trackId,
+    startFrame: resolvedStart,
+    link: clip.link ? { clipId: clip.link.clipId, sourceFrame: clip.link.sourceFrame } : null,
+    inFrame: clip.inFrame,
+    phase: clip.phase,
+    frames: clip.frames,
+    speedNum: clip.speedNum,
+    speedDen: clip.speedDen,
+    ...(clip.mediaSpan ? { mediaSpan: { ...clip.mediaSpan } } : {}),
+    ...(clip.speedCurve ? { speedCurve: cloneSpeedCurve(clip.speedCurve) } : {}),
+    sourceFps: clip.sourceFps,
+    sourceFrames: clip.sourceFrames,
+    srcUrl: written.srcUrl,
+    durationSec,
+    volume: clip.volume,
+    muted: clip.muted,
+    ...(prevFrom.length > 0 ? { from: [...prevFrom] } : {}),
+    mirror: { startSec: writtenSec.start, endSec: writtenSec.end },
+  };
+  return { ...written, frameV2: block };
+}
+
 export function toStored(sequence: FrameSequence, previous: ComposerProject, options: ToStoredOptions = {}): ComposerProject {
   const fps = sequence.fps;
   const byId = new Map(previous.clips.map((clip) => [clip.id, clip]));
+  const prevOverlayById = new Map((previous.overlays ?? []).map((ov) => [ov.id, ov]));
   const unmeasured = new Set(options.unmeasuredSources ?? []);
   const clips = sequence.clips.slice(0, MAX_COMPOSE_CLIPS).map((clip) => {
     const own = byId.get(clip.id);
@@ -687,7 +924,58 @@ export function toStored(sequence: FrameSequence, previous: ComposerProject, opt
     const from = own ? lineageOf(own) : known ? lineageOf(known) : [];
     return storedClipOf(clip, fps, own, template, !options.tentative && !unmeasured.has(clip.srcUrl), from);
   });
-  return { ...previous, version: 1, aspect: sequence.aspect, clips, captions: previous.captions };
+
+  // Main-track-only byte-identical guarantee (C3, C6): touch `overlays` ONLY when tracks are written and
+  // either the sequence currently has owned overlays or `previous` previously held owned overlays.
+  const hasSeqOverlays = hasOwnedOverlays(sequence);
+  const hadOwnedOverlays = (previous.overlays ?? []).some((ov) => overlayFrameBlockOf(ov) !== null);
+  if (options.writeOverlays === false || (!hasSeqOverlays && !hadOwnedOverlays)) {
+    return { ...previous, version: 1, aspect: sequence.aspect, clips, captions: previous.captions };
+  }
+
+  // B3: preserve original overlay ORDER (legacy and existing owned overlays stay in their original slots;
+  // newly created owned overlays are appended in track/time order). Never slice silently — add/lift/split
+  // enforce `legacyOverlayCount + ownedCount <= MAX_COMPOSE_OVERLAYS` up front.
+  const ownedList: StoredOverlayClip[] = [];
+  const ownedById = new Map<string, StoredOverlayClip>();
+  overlayTracksOf(sequence).forEach((track, trackIndex) => {
+    for (const clip of track.clips) {
+      const stored = storedOverlayOf(
+        clip,
+        trackIndex,
+        track.id,
+        sequence,
+        prevOverlayById.get(clip.id),
+        byId.get(clip.id),
+        options.known?.[clip.id],
+      );
+      ownedList.push(stored);
+      ownedById.set(stored.id, stored);
+    }
+  });
+  const combined: ComposeOverlayClip[] = [];
+  const emittedOwnedIds = new Set<string>();
+  for (const existing of previous.overlays ?? []) {
+    if (overlayFrameBlockOf(existing) === null) {
+      combined.push(existing);
+    } else {
+      const updated = ownedById.get(existing.id);
+      if (updated) {
+        combined.push(updated);
+        emittedOwnedIds.add(updated.id);
+      }
+    }
+  }
+  for (const owned of ownedList) {
+    if (!emittedOwnedIds.has(owned.id)) {
+      combined.push(owned);
+    }
+  }
+  if (combined.length === 0) {
+    const { overlays: _dropped, ...rest } = previous;
+    return { ...rest, version: 1, aspect: sequence.aspect, clips, captions: previous.captions };
+  }
+  return { ...previous, version: 1, aspect: sequence.aspect, clips, captions: previous.captions, overlays: combined };
 }
 
 /** The stored film as the cuts on screen would store it, and what v2 shows of it. */
@@ -724,7 +1012,16 @@ export function ownedSignature(text: string | null | undefined): string {
   const clips = project.clips
     .slice(0, MAX_COMPOSE_CLIPS)
     .map((clip) => [clip.id, clip.srcUrl, clip.trimStartSec, clip.trimEndSec, clip.playbackRate ?? 1, clip.volume, clip.muted, (clip as StoredClip).frameV2 ?? null]);
-  return JSON.stringify([project.aspect, clips]);
+  // C10: include owned video overlays (carrying `frameV2`) so stale tabs overwriting/stripping upper tracks are detected,
+  // while leaving main-only and legacy-overlay films with the exact prior 2-element signature.
+  const ownedOverlays = (project.overlays ?? [])
+    .slice(0, MAX_COMPOSE_OVERLAYS)
+    .filter((ov) => overlayFrameBlockOf(ov) !== null)
+    .map((ov) => {
+      const sec = storedOverlaySeconds(ov);
+      return [ov.id, ov.srcUrl, sec.start, sec.end, overlayFrameBlockOf(ov)];
+    });
+  return ownedOverlays.length > 0 ? JSON.stringify([project.aspect, clips, ownedOverlays]) : JSON.stringify([project.aspect, clips]);
 }
 
 /**

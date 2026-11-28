@@ -13,6 +13,7 @@ import type {
   ColorGradeSpec,
   GradePresetId,
 } from './color-grade';
+import { isValidSpeedCurve, type SpeedCurve, type SpeedPoint } from '../editor-v2/speed-curve';
 
 export const COMPOSE_ASPECTS = ['9:16', '16:9', '4:5', '1:1'] as const;
 export type ComposeAspect = (typeof COMPOSE_ASPECTS)[number];
@@ -806,11 +807,115 @@ export function normalizeCaptions(captions: readonly ComposeCaption[], totalSec:
   });
 }
 
+function cloneValidOverlaySpeedCurve(curve: SpeedCurve): SpeedCurve {
+  const copyPoint = (pt: SpeedPoint): SpeedPoint => ({
+    pos: pt.pos,
+    speed: pt.speed,
+    ...(pt.slope !== undefined ? { slope: pt.slope } : {}),
+    ...(pt.slopeRight !== undefined ? { slopeRight: pt.slopeRight } : {}),
+  });
+  return {
+    startMedia: curve.startMedia,
+    spanMedia: curve.spanMedia,
+    ...(curve.winStartMedia !== undefined ? { winStartMedia: curve.winStartMedia } : {}),
+    ...(curve.winEndMedia !== undefined ? { winEndMedia: curve.winEndMedia } : {}),
+    ...(curve.leadMedia !== undefined ? { leadMedia: curve.leadMedia } : {}),
+    ...(curve.tailMedia !== undefined ? { tailMedia: curve.tailMedia } : {}),
+    ...(curve.sourceDomain
+      ? {
+          sourceDomain: {
+            startMedia: curve.sourceDomain.startMedia,
+            spanMedia: curve.sourceDomain.spanMedia,
+            points: curve.sourceDomain.points.map(copyPoint),
+          },
+        }
+      : {}),
+    points: curve.points.map(copyPoint),
+  };
+}
+
+function sanitizeOverlayFrameV2(raw: unknown): Record<string, unknown> | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const block = raw as Record<string, unknown>;
+  const isInt = (v: unknown, min: number): v is number => typeof v === 'number' && Number.isInteger(v) && v >= min;
+  const isFin = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+  if (
+    !isInt(block.fps, 1) ||
+    !isInt(block.trackIndex, 0) ||
+    !isInt(block.startFrame, 0) ||
+    !isInt(block.inFrame, 0) ||
+    !isInt(block.phase, 0) ||
+    !isInt(block.frames, 1) ||
+    !isInt(block.speedNum, 1) ||
+    !isInt(block.speedDen, 1) ||
+    block.phase >= block.speedDen ||
+    !isFin(block.sourceFps) ||
+    block.sourceFps <= 0 ||
+    !isInt(block.sourceFrames, 1) ||
+    typeof block.srcUrl !== 'string' ||
+    !isFin(block.durationSec) ||
+    block.durationSec <= 0 ||
+    !isFin(block.volume) ||
+    block.volume < 0 ||
+    block.volume > 1 ||
+    typeof block.muted !== 'boolean'
+  ) {
+    return undefined;
+  }
+  const mirror = block.mirror as Record<string, unknown> | undefined;
+  if (!mirror || typeof mirror !== 'object' || !isFin(mirror.startSec) || !isFin(mirror.endSec)) return undefined;
+  let link: { clipId: string; sourceFrame: number } | null = null;
+  if (block.link !== null && block.link !== undefined) {
+    if (typeof block.link !== 'object' || Array.isArray(block.link)) return undefined;
+    const rawLink = block.link as Record<string, unknown>;
+    if (typeof rawLink.clipId !== 'string' || rawLink.clipId === '' || !isInt(rawLink.sourceFrame, 0)) return undefined;
+    link = { clipId: rawLink.clipId, sourceFrame: rawLink.sourceFrame };
+  }
+  const out: Record<string, unknown> = {
+    fps: block.fps,
+    trackIndex: block.trackIndex,
+    ...(typeof block.trackId === 'string' && block.trackId !== '' ? { trackId: block.trackId } : {}),
+    startFrame: block.startFrame,
+    link,
+    inFrame: block.inFrame,
+    phase: block.phase,
+    frames: block.frames,
+    speedNum: block.speedNum,
+    speedDen: block.speedDen,
+    sourceFps: block.sourceFps,
+    sourceFrames: block.sourceFrames,
+    srcUrl: block.srcUrl,
+    durationSec: block.durationSec,
+    volume: block.volume,
+    muted: block.muted,
+    mirror: { startSec: mirror.startSec, endSec: mirror.endSec },
+  };
+  if (block.mediaSpan && typeof block.mediaSpan === 'object' && !Array.isArray(block.mediaSpan)) {
+    const ms = block.mediaSpan as Record<string, unknown>;
+    if (isInt(ms.num, 1) && isInt(ms.den, 1)) out.mediaSpan = { num: ms.num, den: ms.den };
+  }
+  // B1 + S4: pass any curve accepted by editor-v2's own `isValidSpeedCurve` as a clean deep copy
+  // built strictly from known fields (preserving leadMedia/tailMedia/sourceDomain and up to 64 points,
+  // stripping unknown keys, and breaking shared object references). Drop ONLY curves rejected by
+  // `isValidSpeedCurve` so the overlay falls back to constant speed while staying an owned overlay.
+  if (block.speedCurve !== undefined && isValidSpeedCurve(block.speedCurve)) {
+    out.speedCurve = cloneValidOverlaySpeedCurve(block.speedCurve);
+  }
+  if (Array.isArray(block.from)) {
+    const from = block.from.filter((id): id is string => typeof id === 'string' && id !== '').slice(0, 32);
+    if (from.length > 0) out.from = from;
+  }
+  return out;
+}
+
 /** Clamps one overlay's timing, placement and opacity (shared by patches, local storage and server saves). */
 export function normalizeOverlayClip(overlay: ComposeOverlayClip): ComposeOverlayClip {
   const startSec = clamp(roundTenths(overlay.startSec), 0, 3600);
   const endSec = Math.max(roundTenths(startSec + 0.3), roundTenths(overlay.endSec));
-  return {
+  const rawWithBlock = overlay as ComposeOverlayClip & { frameV2?: unknown };
+  const hasBlockKey = 'frameV2' in rawWithBlock;
+  const cleanBlock = hasBlockKey ? sanitizeOverlayFrameV2(rawWithBlock.frameV2) : undefined;
+  const base: ComposeOverlayClip & { frameV2?: unknown } = {
     ...overlay,
     label: overlay.label.trim().slice(0, 80) || 'Overlay',
     startSec,
@@ -820,6 +925,11 @@ export function normalizeOverlayClip(overlay: ComposeOverlayClip): ComposeOverla
     scale: clamp(roundHundredths(overlay.scale), 0.1, 1.5),
     opacity: clamp(roundHundredths(overlay.opacity), 0, 1),
   };
+  if (hasBlockKey) {
+    if (cleanBlock) base.frameV2 = cleanBlock;
+    else delete base.frameV2;
+  }
+  return base;
 }
 
 /** Clamps one sound effect's timing and volume (shared by patches, local storage and server saves). */
