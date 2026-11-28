@@ -13,6 +13,7 @@ import { RecipePricingError, isRoyalty, quoteRecipeBase, ROYALTY_DEFAULT_KRW } f
 import { parseDisclosure, parsePresentation, recipeSchemaReady, type Disclosure, type Presentation } from './repo';
 import { MAX_RECIPE_BYTES, parseRecipe, recipeCast, recipeMedium, type Recipe, type RecipeIssue, type RecipeMedium } from './schema';
 import { selfPublishFormat, selfPublishOpen } from './self-publish';
+import { makerBlogOpen } from '@/lib/posts/flag';
 import { parseVideoKeyframes, type VideoKeyframe } from '@/lib/prompts/keyframes';
 import { imageTestRecipe } from './test-render';
 
@@ -160,6 +161,9 @@ export async function makerAction(deps: { sql: SqlRunner; store: RenderStore; st
 
   if (input.action === 'publish') {
     demand(selfPublishOpen(), 'not_open');
+    if (input.catalogListed === false) {
+      demand(makerBlogOpen(), 'not_open');
+    }
     const storage = deps.storage;
     demand(storage, 'unavailable');
     return deps.sql.transaction(async (tx) => {

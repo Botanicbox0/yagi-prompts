@@ -29,12 +29,13 @@ import {
   completeMakerWorkUpload,
   MAKER_WORK_VIDEO_MAX_BYTES,
   presignMakerWorkUpload,
+  resetPresignRateLimits,
   storeMakerWork,
   sweepOrphanMakerUploads,
   UPLOAD_ID,
   WORK_ID,
 } from '@/lib/makers/works';
-import { createUnlistedMakeCard, normalizeBlogMakePrompt } from '@/lib/posts/make-card';
+import { createUnlistedMakeCard, normalizeBlogMakePrompt, resetMakeCardRateLimits } from '@/lib/posts/make-card';
 import { findPrimaryBlogPostForTemplate } from '@/lib/posts/public';
 import { PostError } from '@/lib/posts/repo';
 import { publishMakerPost, saveMakerPost } from '@/lib/posts/service';
@@ -114,6 +115,8 @@ describe('Blog SOTA media (50MB presign) & unlisted inline selfie make-card', ()
 
   afterEach(async () => {
     activeSql = null;
+    resetPresignRateLimits();
+    resetMakeCardRateLimits();
     resetRenderStore();
     vi.unstubAllEnvs();
     await h.close();
@@ -240,8 +243,25 @@ describe('Blog SOTA media (50MB presign) & unlisted inline selfie make-card', ()
     expect(swept.swept).toBe(2);
     expect(await store.head!(rawUploadKey)).toBeNull();
     expect(await store.head!(orphanWrkKey)).toBeNull();
-    // Legitimate committed work remains untouched
+    // Legitimate committed work remains untouched, and platform_rate_limits is never polluted by presigns
     expect((await store.head!(finalKey))?.bytes).toBe(videoBytes.byteLength);
+    const rateRows = await h.sql.query<{ n: number }>('select count(*)::int as n from platform_rate_limits');
+    expect(rateRows.rows[0]!.n).toBe(0);
+
+    // Unknown updatedAt is treated as fresh (never deleted prematurely)
+    const unknownTsStore: RenderStore = {
+      ...store,
+      async listFolder() {
+        return [{ key: `${CREATIVE.userId!}/upl_${'c'.repeat(32)}.mp4`, bytes: 128, updatedAt: null }];
+      },
+    };
+    const deletedKeys: string[] = [];
+    unknownTsStore.delete = async (k) => {
+      deletedKeys.push(k);
+    };
+    const unknownSweep = await sweepOrphanMakerUploads(h.sql, unknownTsStore, CREATIVE.userId!);
+    expect(unknownSweep).toEqual({ swept: 0, pendingUploads: 1, pendingBytes: 128 });
+    expect(deletedKeys).toHaveLength(0);
   });
 
   it('routes createUnlistedMakeCard through selfPublishFormat with kill switch, media-kind check, test gate, and 3/day cap', async () => {
@@ -355,6 +375,20 @@ describe('Blog SOTA media (50MB presign) & unlisted inline selfie make-card', ()
       "update render_jobs set status='succeeded', result_key=$2, result_mime='image/jpeg', share_token=id::text, share_expires_at=now(), finished_at=now() where id=$1",
       [renderId, `${renderId}/result.jpg`],
     );
+
+    // Attempting to swap the tested draft's prompt while publishing via formatId is rejected with test_required
+    await expect(
+      createUnlistedMakeCard({ sql: h.sql, store, storage }, CREATIVE.userId!, {
+        formatId: testedFormatId,
+        title: 'Tested Image Scene',
+        workId: imageWork.work.id,
+        kind: 'image',
+        prompt: 'Completely different untested prompt starring [내 사진] in snow.',
+        aspect: '4:5',
+        royaltyKrw: 500,
+        rightsConfirmed: true,
+      }),
+    ).rejects.toMatchObject({ code: 'test_required' });
 
     const publishedImageCard = await createUnlistedMakeCard(
       { sql: h.sql, store, storage },
@@ -555,8 +589,17 @@ describe('Blog SOTA media (50MB presign) & unlisted inline selfie make-card', ()
     });
     expect(onRes.status).toBe(307);
 
-    // Flip TWINGS_MAKER_BLOG off -> presign, complete, make-card return 404; media routes stream 200/206 bytes directly
+    // Flip TWINGS_MAKER_BLOG off -> presign, complete, make-card, and makerAction(catalogListed:false) are gated off
     vi.stubEnv('TWINGS_MAKER_BLOG', 'off');
+
+    await expect(
+      makerAction(
+        { sql: h.sql, store, storage: createLocalStorageDriver(join(root, 'pub2')) },
+        CREATIVE,
+        { action: 'publish', id: randomUUID(), rights: true, catalogListed: false },
+        { creators: true },
+      ),
+    ).rejects.toMatchObject({ code: 'not_open' });
 
     const reqInit = {
       method: 'POST',

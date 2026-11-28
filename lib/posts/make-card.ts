@@ -26,6 +26,23 @@ import { POST_PROMPT_MAX, POST_PROMPT_MIN } from './schema';
 const SELFIE_ALIASES = /(?:\{\{\s*selfie\s*\}\}|@Image\s*1\b|\[내\s*사진\]|\[My\s*photo\])/gi;
 const HAS_SELFIE_TOKEN = /\{\{selfie\}\}/;
 const MAKE_CARD_HOURLY_LIMIT = 12;
+const makeCardWindow = new Map<string, number[]>();
+
+function takeMakeCardSlot(userId: string, now = Date.now()): boolean {
+  const cutoff = now - 60 * 60 * 1000;
+  const recent = (makeCardWindow.get(userId) ?? []).filter((ts) => ts > cutoff);
+  if (recent.length >= MAKE_CARD_HOURLY_LIMIT) {
+    makeCardWindow.set(userId, recent);
+    return false;
+  }
+  recent.push(now);
+  makeCardWindow.set(userId, recent);
+  return true;
+}
+
+export function resetMakeCardRateLimits(): void {
+  makeCardWindow.clear();
+}
 
 export const CreateBlogMakeCardInput = z
   .object({
@@ -167,26 +184,19 @@ export async function createUnlistedMakeCard(
     return await deps.sql.transaction(async (tx) => {
       await lockUser(tx, userId);
 
-      const rate = await tx.query(
-        `insert into platform_rate_limits(user_id, window_start, hits)
-         values ($1, date_trunc('hour', now()), 1)
-         on conflict (user_id, window_start)
-         do update set hits = platform_rate_limits.hits + 1
-         where platform_rate_limits.hits < $2
-         returning hits`,
-        [userId, MAKE_CARD_HOURLY_LIMIT],
-      );
-      if (rate.rows.length === 0) throw new PostError('limit_reached', 'make_limit_reached');
-      await tx.query(
-        "delete from platform_rate_limits where user_id = $1 and window_start < now() - interval '2 hours'",
+      const hourlyFormats = await tx.query<{ n: number }>(
+        "select count(*)::int as n from platform_formats where user_id = $1 and updated_at > now() - interval '1 hour'",
         [userId],
       );
+      if ((hourlyFormats.rows[0]?.n ?? 0) >= MAKE_CARD_HOURLY_LIMIT || !takeMakeCardSlot(userId)) {
+        throw new PostError('limit_reached', 'make_limit_reached');
+      }
 
       let formatId: string;
       if (input.formatId) {
         const existing = (
-          await tx.query<{ id: string; user_id: string; status: string }>(
-            'select id, user_id, status from platform_formats where id = $1 for update',
+          await tx.query<{ id: string; user_id: string; status: string; recipe_v2: unknown }>(
+            'select id, user_id, status, recipe_v2 from platform_formats where id = $1 for update',
             [input.formatId],
           )
         ).rows[0];
@@ -194,17 +204,19 @@ export async function createUnlistedMakeCard(
         if (existing.status !== 'draft' && existing.status !== 'submitted') {
           throw new PostError('invalid');
         }
+        // Do not overwrite a tested draft's recipe in one publish call: require the saved recipe to match.
+        const existingChecked = parseRecipe(existing.recipe_v2);
+        if (!existingChecked.ok || JSON.stringify(existingChecked.recipe) !== JSON.stringify(recipe)) {
+          throw new PostError('test_required');
+        }
         formatId = existing.id;
         await tx.query(
           `update platform_formats
               set title = $2,
                   title_ko = $3,
-                  recipe = $4,
-                  recipe_v2 = $5::jsonb,
-                  medium = $6,
-                  disclosure = $7::jsonb,
+                  disclosure = $4::jsonb,
                   presentation = 'story-first',
-                  royalty_krw = $8,
+                  royalty_krw = $5,
                   rights_at = now(),
                   catalog_listed = false,
                   updated_at = now()
@@ -213,9 +225,6 @@ export async function createUnlistedMakeCard(
             formatId,
             input.title,
             titleKo,
-            primary.prompt,
-            JSON.stringify(recipe),
-            primary.kind,
             JSON.stringify(disclosure),
             input.royaltyKrw,
           ],

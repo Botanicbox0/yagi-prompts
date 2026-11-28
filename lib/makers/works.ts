@@ -34,6 +34,24 @@ export const UPLOAD_ID = /^upl_[0-9a-f]{32}$/;
 export const UPLOAD_TTL_SECONDS = 300;
 export const ORPHAN_UPLOAD_MAX_AGE_MS = 15 * 60 * 1000;
 const PRESIGN_HOURLY_LIMIT = 30;
+const PRESIGN_PENDING_MAX = 10;
+const presignWindow = new Map<string, number[]>();
+
+function takePresignSlot(userId: string, now = Date.now()): boolean {
+  const cutoff = now - 60 * 60 * 1000;
+  const recent = (presignWindow.get(userId) ?? []).filter((ts) => ts > cutoff);
+  if (recent.length >= PRESIGN_HOURLY_LIMIT) {
+    presignWindow.set(userId, recent);
+    return false;
+  }
+  recent.push(now);
+  presignWindow.set(userId, recent);
+  return true;
+}
+
+export function resetPresignRateLimits(): void {
+  presignWindow.clear();
+}
 const WORK_ALLOWED_MIMES = new Set<MakerFileMime>(['image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'video/quicktime']);
 
 function makerWorkQuota() {
@@ -175,7 +193,8 @@ export async function sweepOrphanMakerUploads(
   for (const entry of entries) {
     const base = entry.key.slice(entry.key.lastIndexOf('/') + 1);
     const stem = base.slice(0, base.lastIndexOf('.'));
-    const age = entry.updatedAt ? now - entry.updatedAt.getTime() : maxAgeMs;
+    // Treat unknown timestamps as fresh so a store that omits LastModified never deletes an active upload.
+    const age = entry.updatedAt ? now - entry.updatedAt.getTime() : 0;
     if (UPLOAD_ID.test(stem)) {
       if (age >= maxAgeMs) {
         await store.delete(entry.key).catch(() => undefined);
@@ -215,30 +234,25 @@ export async function presignMakerWorkUpload(
   if (size > maxBytes) throw new WorkError('too_large');
 
   const { pendingUploads, pendingBytes } = await sweepOrphanMakerUploads(sql, store, input.userId);
+  if (pendingUploads >= PRESIGN_PENDING_MAX) throw new WorkError('limit_reached');
 
   await sql.transaction(async (tx) => {
     await tx.query('select id from profiles where id=$1 for update', [input.userId]);
-    const rate = await tx.query(
-      `insert into platform_rate_limits(user_id, window_start, hits)
-       values ($1, date_trunc('hour', now()), 1)
-       on conflict (user_id, window_start)
-       do update set hits = platform_rate_limits.hits + 1
-       where platform_rate_limits.hits < $2
-       returning hits`,
-      [input.userId, PRESIGN_HOURLY_LIMIT],
-    );
-    if (rate.rows.length === 0) throw new WorkError('limit_reached');
-    await tx.query("delete from platform_rate_limits where user_id=$1 and window_start<now()-interval '2 hours'", [input.userId]);
-
     const totals = (
-      await tx.query<{ n: number; total: string }>(
-        'select count(*)::int n, coalesce(sum(bytes),0)::text total from maker_works where user_id=$1',
+      await tx.query<{ n: number; total: string; hourly: number }>(
+        `select count(*)::int n,
+                coalesce(sum(bytes),0)::text total,
+                count(*) filter (where created_at > now() - interval '1 hour')::int hourly
+           from maker_works
+          where user_id=$1`,
         [input.userId],
       )
     ).rows[0]!;
     if (
+      totals.hourly + pendingUploads >= PRESIGN_HOURLY_LIMIT ||
       totals.n + pendingUploads >= quota.maxWorks ||
-      Number(totals.total) + pendingBytes + size > quota.maxTotalBytes
+      Number(totals.total) + pendingBytes + size > quota.maxTotalBytes ||
+      !takePresignSlot(input.userId)
     ) {
       throw new WorkError('limit_reached');
     }
