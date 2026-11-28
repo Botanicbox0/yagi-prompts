@@ -916,6 +916,7 @@ export const STUDIO_OPERATIONS = [
   'revise.plan',
   'revise.mark',
   'revise.talk',
+  'video.understand',
   'asset.reserve',
   'asset.complete',
   'asset.update',
@@ -1578,3 +1579,133 @@ export type StudioAssetReserved = { ok: true; id: string; direct: boolean; url?:
 export type StudioAssetSaved = { ok: true; asset: StudioAssetView; roleCheck?: true };
 export type StudioHandoffDone = { ok: true; projectId: string; href: string };
 export type StudioDone = { ok: true };
+
+/* ------------------------------------------------------------------ video.understand (VM-2 Batch B) */
+
+export const STUDIO_VIDEO_UNDERSTAND_MODES = ['re_architect', 'motion_transfer'] as const;
+export type StudioVideoUnderstandMode = (typeof STUDIO_VIDEO_UNDERSTAND_MODES)[number];
+
+/** Counting scheme inferred from earlier unambiguous phrases in the session (`position` vs `perKind`). */
+export const STUDIO_VIDEO_COUNTING_SCHEMES = ['position', 'perKind'] as const;
+export type StudioVideoCountingScheme = (typeof STUDIO_VIDEO_COUNTING_SCHEMES)[number];
+
+export const STUDIO_VIDEO_UNDERSTAND_KINDS = [
+  'plan',
+  'correction',
+  'answer',
+  'confirm',
+  'withdraw',
+  'tool_question',
+  'unreadable',
+  'not_possible',
+  'reading',
+] as const;
+export type StudioVideoUnderstandKind = (typeof STUDIO_VIDEO_UNDERSTAND_KINDS)[number];
+
+export const VideoUnderstandSwapSchema = z.object({
+  refIndex: z.number().int().min(1).max(STUDIO_LIMITS.referencesMax),
+  role: z.enum(STUDIO_ASSET_ROLES),
+  label: z.string().trim().min(1).max(80),
+  use: z.string().trim().max(STUDIO_LIMITS.noteMax).default(''),
+  avoid: z.string().trim().max(STUDIO_LIMITS.noteMax).default(''),
+});
+export type VideoUnderstandSwap = z.infer<typeof VideoUnderstandSwapSchema>;
+
+export const VideoUnderstandQuestionSchema = z.object({
+  point: z.string().trim().min(1).max(60),
+  text: z.string().trim().min(1).max(240),
+  options: z
+    .array(
+      z.object({
+        label: z.string().trim().min(1).max(80),
+        /** Optional 1-based per-kind image index when this option represents a specific attached picture. */
+        refIndex: z.number().int().min(1).max(STUDIO_LIMITS.referencesMax).optional(),
+      }),
+    )
+    .max(3)
+    .default([]),
+  answer: z.string().trim().max(240).nullable().optional(),
+  skipped: z.boolean().optional(),
+});
+export type VideoUnderstandQuestion = z.infer<typeof VideoUnderstandQuestionSchema>;
+
+export const VideoUnderstandCardSchema = z.object({
+  swaps: z.array(VideoUnderstandSwapSchema).max(STUDIO_LIMITS.referencesMax).default([]),
+  changeText: z.string().trim().max(STUDIO_LIMITS.promptMax).default(''),
+  requestText: z.string().trim().max(STUDIO_LIMITS.promptMax).default(''),
+  seconds: z.number().int().min(1).max(60),
+  clipCount: z.number().int().min(1).max(4).default(1),
+  targetTotalSeconds: z.number().int().min(1).max(120).nullable().default(null),
+  audio: z.enum(STUDIO_AUDIO_MODES),
+});
+export type VideoUnderstandCard = z.infer<typeof VideoUnderstandCardSchema>;
+
+export const VideoUnderstandSchema = z.object({
+  organizationId: Id,
+  mode: z.enum(STUDIO_VIDEO_UNDERSTAND_MODES),
+  model: z.string().trim().min(1).max(60).default('seedance-2.5'),
+  message: z.string().trim().max(STUDIO_LIMITS.promptMax).default(''),
+  videoAssetId: Id.optional(),
+  references: z
+    .array(
+      z.object({
+        /** 1-based per-kind index (`@image1`, `@video1`, `@audio1`). */
+        index: z.number().int().min(1).max(STUDIO_LIMITS.referencesMax),
+        /** 1-based order in the tray across all kinds (for position-based phrases like `2번 이미지`). */
+        position: z.number().int().min(1).max(STUDIO_LIMITS.referencesMax).optional(),
+        /** Mention token shown in the prompt bar (`@image1`, `@video1`, `@audio1`). */
+        mention: z.string().trim().min(1).max(20).optional(),
+        kind: z.enum(['image', 'video', 'audio']),
+        name: z.string().trim().max(STUDIO_LIMITS.nameMax).default(''),
+        seconds: z.number().finite().positive().max(3600).nullable().optional(),
+        role: z.enum(STUDIO_ASSET_ROLES).nullable().optional(),
+        use: z.string().trim().max(STUDIO_LIMITS.noteMax).optional(),
+        avoid: z.string().trim().max(STUDIO_LIMITS.noteMax).optional(),
+      }),
+    )
+    .max(STUDIO_LIMITS.referencesMax)
+    .default([]),
+  current: z.object({
+    seconds: z.number().int().min(1).max(60).default(5),
+    clipCount: z.number().int().min(1).max(4).default(1),
+    targetTotalSeconds: z.number().int().min(1).max(120).nullable().optional(),
+    audio: z.enum(STUDIO_AUDIO_MODES).default('ambient'),
+    changeText: z.string().trim().max(STUDIO_LIMITS.promptMax).default(''),
+  }),
+  previous: z
+    .object({
+      card: VideoUnderstandCardSchema,
+      questions: z.array(VideoUnderstandQuestionSchema).max(3).default([]),
+      turns: z
+        .array(
+          z.object({
+            who: z.enum(['customer', 'studio']),
+            text: z.string().trim().min(1).max(STUDIO_LIMITS.promptMax),
+          }),
+        )
+        .max(12)
+        .default([]),
+      /** Session counting scheme established by an earlier unambiguous turn (validated server-side; forged values ignored). */
+      countingScheme: z.unknown().optional(),
+    })
+    .nullable()
+    .default(null),
+  answering: z
+    .object({
+      option: z.number().int().min(0).max(2).optional(),
+    })
+    .optional(),
+});
+
+/** `video.understand` response: carries NO `keep`/`keepLine` and NO `mode` field. */
+export interface StudioVideoUnderstand {
+  ok: true;
+  kind: StudioVideoUnderstandKind | null;
+  reply: string | null;
+  card: VideoUnderstandCard;
+  questions: VideoUnderstandQuestion[];
+  openQuestion: number | null;
+  readyToMake: boolean;
+  countingScheme?: StudioVideoCountingScheme | null;
+  failed?: true;
+}

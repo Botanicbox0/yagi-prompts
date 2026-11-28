@@ -6,14 +6,14 @@
  * opens a small popover for its role, what to take and what to leave out, and in a video run whether a
  * picture opens or closes the shot. Drops of new references land on the whole bar.
  */
-import { useEffect, useId, useLayoutEffect, useRef, useState, type DragEvent } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type DragEvent, type ReactNode } from "react";
 import { STUDIO_LIMITS } from "@/lib/brand-studio/contracts";
 import type { StudioMedium } from "@/lib/brand-studio/models";
 import { studioVideoEn, studioVideoKo } from "@/messages/studio-video";
 import { virtualMentionTag } from "./at-mention-menu";
 import { fill, type StudioCopy } from "./copy";
 import { StudioIcon } from "./icons";
-import { TRAY_MOVE_TYPE, trayNumbers, type TrayItem } from "./refs";
+import { TRAY_MOVE_TYPE, trayNumbers, trayThumbSrc, type TrayItem } from "./refs";
 import { RoleChips } from "./role-chips";
 import w from "./video/video-workspace.module.css";
 
@@ -38,6 +38,11 @@ export interface TrayProps {
   /** Optional segment & crop trigger for `@video1` on the video screen. */
   onTrimVideo?(item: TrayItem): void;
   trimLabel?: string;
+  /** Optional compact 1-line pending-video prompt rendered inside `.bs-tray-list` (VM-2 switch open only). */
+  needVideoSlot?: ReactNode;
+  /** Optional Re-Architect film-reading state badge on the first video thumbnail (VM-2 W1). */
+  videoReadState?: "loading" | "read" | "unreadable" | null;
+  videoReadLabels?: { loading: string; read: string; unreadable: string };
   onUpdate(key: string, patch: Partial<Pick<TrayItem, "role" | "use" | "avoid" | "frame">>): void;
   onRemove(key: string): void;
   onMove(from: number, to: number): void;
@@ -45,7 +50,7 @@ export interface TrayProps {
 }
 
 function ThumbMedia({ item }: { item: TrayItem }) {
-  if (item.thumbUrl || item.kind === "image") return <img src={item.thumbUrl ?? item.url} alt="" draggable={false} />;
+  if (item.thumbUrl || item.kind === "image") return <img src={trayThumbSrc(item)} alt="" draggable={false} />;
   if (item.kind === "video") return <video src={`${item.url}#t=0.1`} muted playsInline preload="metadata" tabIndex={-1} aria-hidden="true" />;
   return <span className="bs-thumb-audio" aria-hidden="true" />;
 }
@@ -64,6 +69,9 @@ export function Tray({
   onLink,
   onTrimVideo,
   trimLabel,
+  needVideoSlot,
+  videoReadState = null,
+  videoReadLabels,
   onUpdate,
   onRemove,
   onMove,
@@ -163,6 +171,29 @@ export function Tray({
                     <StudioIcon name={item.kind === "video" ? "play" : "spark"} />
                   </span>
                 )}
+                {medium === "video" &&
+                  item.kind === "video" &&
+                  numbers[i] === 1 &&
+                  videoReadState &&
+                  videoReadLabels && (
+                    <span
+                      className="bs-thumb-read"
+                      data-video-read-state={videoReadState}
+                      data-film-state={videoReadState}
+                      role="status"
+                      aria-label={videoReadLabels[videoReadState]}
+                      title={videoReadLabels[videoReadState]}
+                    >
+                      {videoReadState === "read" ? (
+                        <StudioIcon name="check" />
+                      ) : videoReadState === "loading" ? (
+                        <span className="bs-thumb-read-dot" aria-hidden="true" />
+                      ) : (
+                        <span aria-hidden="true">!</span>
+                      )}
+                      <span className="bs-sr">{videoReadLabels[videoReadState]}</span>
+                    </span>
+                  )}
                 {medium === "video" && item.kind === "image" && item.frame && (
                   <span className={w.trayFrameBadge} data-tray-frame={item.frame} aria-hidden="true">
                     {item.frame}
@@ -230,10 +261,14 @@ export function Tray({
             <StudioIcon name="plus" />
           </button>
         </li>
-        {(empty || dropReady) && (
-          <li className="bs-tray-hint" data-tray-drop-hint={dropReady ? "" : undefined}>
-            {dropActive ? t.drop : medium === "video" ? t.hintVideo : t.hint}
-          </li>
+        {needVideoSlot ? (
+          needVideoSlot
+        ) : (
+          (empty || dropReady) && (
+            <li className="bs-tray-hint" data-tray-drop-hint={dropReady ? "" : undefined}>
+              {dropActive ? t.drop : medium === "video" ? t.hintVideo : t.hint}
+            </li>
+          )
         )}
       </ul>
       <span id={`${base}-move`} className="bs-sr">

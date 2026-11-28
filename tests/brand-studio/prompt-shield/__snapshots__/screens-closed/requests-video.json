@@ -17,7 +17,7 @@
       ],
       "aspect": "4:3",
       "resolution": "draft",
-      "audio": "native",
+      "audio": "ambient",
       "seconds": 5
     }
   },
@@ -40,7 +40,7 @@
       ],
       "aspect": "4:3",
       "resolution": "draft",
-      "audio": "native",
+      "audio": "ambient",
       "seconds": 5
     }
   },

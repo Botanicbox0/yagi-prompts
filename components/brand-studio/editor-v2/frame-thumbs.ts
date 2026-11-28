@@ -32,11 +32,17 @@ const keyOf = (src: string, sourceFrame: number, height?: number) => {
   return h === THUMB_HEIGHT ? `${src}#${sourceFrame}` : `${src}#${sourceFrame}@${h}`;
 };
 
+export interface FrameThumbsOptions {
+  /** Optional CORS attribute on internal probe `<video>` elements (e.g. `'anonymous'` for canvas draw on R2 media). */
+  crossOrigin?: string;
+}
+
 export class FrameThumbs {
   private readonly cache = new Map<string, string>();
   private readonly videos = new Map<string, HTMLVideoElement>();
   private readonly ratios = new Map<string, number>();
   private readonly listeners = new Set<() => void>();
+  private readonly crossOrigin?: string;
   private queue: ThumbRequest[] = [];
   private running = false;
   private disposed = false;
@@ -45,6 +51,10 @@ export class FrameThumbs {
   private bytes = 0;
   private tallBytes = 0;
   private readonly sizes = new Map<string, { bytes: number; tall: boolean }>();
+
+  constructor(options?: FrameThumbsOptions) {
+    this.crossOrigin = options?.crossOrigin;
+  }
 
   /** Natural aspect ratio tracking is enabled only when the customer has set a custom video lane height. */
   setTrackRatios(enabled: boolean): void {
@@ -138,6 +148,7 @@ export class FrameThumbs {
     let video = this.videos.get(src);
     if (!video) {
       video = document.createElement('video');
+      if (this.crossOrigin) video.crossOrigin = this.crossOrigin;
       video.muted = true;
       video.playsInline = true;
       video.preload = 'auto';

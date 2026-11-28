@@ -73,7 +73,7 @@ export function emptyDraft(model: StudioVideoModel = reverseModel()): ReverseDra
     change: { product: "", person: "", place: "" },
     images: [],
     keep: defaultKeep("blueprint"),
-    audio: "native",
+    audio: "ambient",
     seconds: model.defaultSeconds,
     aspect: model.aspects.includes("9:16") ? "9:16" : model.aspects[0]!,
     note: "",
