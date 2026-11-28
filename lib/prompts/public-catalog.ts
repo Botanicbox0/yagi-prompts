@@ -7,6 +7,9 @@ import { getSqlRunner } from '@/lib/db/connect';
 import { readPublicProjection } from '@/lib/db/read-policy';
 import { coupleTemplatesOpen, petTemplatesOpen, templateLookOpen } from '@/lib/flags';
 import { EMPTY_PROMPT_CATALOG, loadPromptCatalog, type PromptCatalog } from './catalog';
+import { PROMPT_CATALOG_CACHE_VERSION } from './cache-version';
+
+export { PROMPT_CATALOG_CACHE_VERSION };
 
 /**
  * PLAN §13.2 — the cached prompt catalog.
@@ -64,8 +67,7 @@ async function readPromptCatalog(): Promise<PromptCatalog> {
 /** 2026-11-24 (`v16-template-styling`): `PromptCard.styling` (docs/PERSONAL-STUDIO.md §3.4.9, S2), read from the prompts the compile reads. */
 /** 2026-11-25 (`v17-template-look`): `PromptCard.look` (docs/PERSONAL-STUDIO.md §3.4.10), only while `TWINGS_TEMPLATE_LOOK=on` (part of the key). */
 /** 2026-11-25 (`v18-edits-closed`): `PromptCard.editsClosed`, a template whose text leaves no room for a buyer's edits (lib/prompts/prompt-length.ts). */
-/** 2026-11-28 (`v19-catalog-listed`): `prompt_items.catalog_listed` (0208) omits unlisted blog-make formats from the public storefront catalog. */
-export const PROMPT_CATALOG_CACHE_VERSION = 'v19-catalog-listed';
+/** 2026-11-28 (`v19-catalog-listed`): `prompt_items.catalog_listed` (0208) omits unlisted blog-make formats from the public storefront catalog (`./cache-version.ts`). */
 
 /** The cache key: every input that changes the projection's shape, so a flag flip never serves the other shape. */
 export function promptCatalogCacheKey(): string[] {
