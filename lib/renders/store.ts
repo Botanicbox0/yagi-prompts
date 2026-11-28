@@ -346,9 +346,12 @@ export function createR2RenderStore(
     },
     async delete(key) {
       const signed = await r2.sign(new Request(urlFor(key), { method: 'DELETE' }));
-      const res = await fetcher(signed);
+      const res = await fetcher(new Request(signed, { signal: AbortSignal.timeout(8_000) }));
       if (!res.ok && res.status !== 404) throw new Error('private edit reference deletion failed');
-      await options.legacyFallback?.delete?.(key).catch(() => undefined);
+      const name = key.slice(key.lastIndexOf('/') + 1);
+      if (!/^upl_[0-9a-f]{32}\./i.test(name)) {
+        await options.legacyFallback?.delete?.(key).catch(() => undefined);
+      }
     },
     async url(key, ttlSeconds, signOptions = {}) {
       const expiresIn = Math.max(1, Math.min(Math.floor(ttlSeconds), 604800));
