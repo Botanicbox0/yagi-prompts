@@ -1,36 +1,35 @@
 import { randomUUID } from 'node:crypto';
-import sharp from 'sharp';
 import { z } from 'zod';
 import type { SqlRunner } from '@/lib/db/sql-runner';
-import { AssetRefSchema } from '@/lib/content/schemas';
+import { PlatformError } from '@/lib/creator-platform/contract';
 import { approvedCreator, lockUser } from '@/lib/creator-platform/service';
-import { isVideoAspect } from '@/lib/images/engines';
+import { isImageAspect, isVideoAspect } from '@/lib/images/engines';
 import { WORK_ID } from '@/lib/makers/works';
-import { probeVideoDurationSeconds, promptStagingKey, publishPromptMedia, sha256Hex } from '@/lib/prompts/media';
-import { insertPrompt } from '@/lib/prompts/repo';
-import { centsForKrw, isRoyalty, price1080KrwFor, quoteRecipeBase } from '@/lib/recipes/pricing';
+import { catalogListedReady } from '@/lib/prompts/repo';
+import { MAKER_DRAFTS_PER_DAY } from '@/lib/recipes/maker';
+import { isRoyalty } from '@/lib/recipes/pricing';
 import { recipeSchemaReady } from '@/lib/recipes/repo';
 import {
-  legacyPromptText,
+  makerEnginesFor,
   parseRecipe,
   primaryStep,
-  recipeCast,
   SELFIE_SLOT,
   type Recipe,
 } from '@/lib/recipes/schema';
-import { selfPublishSlug } from '@/lib/recipes/self-publish';
+import { selfPublishFormat, selfPublishOpen, type SelfPublishRow } from '@/lib/recipes/self-publish';
 import type { RenderStore } from '@/lib/renders/store';
 import type { StorageDriver } from '@/lib/storage';
+import { makerBlogOpen } from './flag';
 import { PostError } from './repo';
 import { POST_PROMPT_MAX, POST_PROMPT_MIN } from './schema';
 
 const SELFIE_ALIASES = /(?:\{\{\s*selfie\s*\}\}|@Image\s*1\b|\[내\s*사진\]|\[My\s*photo\])/gi;
 const HAS_SELFIE_TOKEN = /\{\{selfie\}\}/;
-
-const IMAGE_ASPECTS = ['1:1', '4:5', '3:4', '4:3', '16:9', '9:16'] as const;
+const MAKE_CARD_HOURLY_LIMIT = 12;
 
 export const CreateBlogMakeCardInput = z
   .object({
+    formatId: z.uuid().optional(),
     title: z.string().trim().min(3).max(120),
     titleKo: z.string().trim().max(120).nullable().optional(),
     workId: z.string().regex(WORK_ID),
@@ -61,16 +60,19 @@ export function normalizeBlogMakePrompt(raw: string): string | null {
 
 /**
  * Mints an unlisted (`catalog_listed = false`, `status = 'published'`) runnable creator format
- * directly from a blog post's prompt + uploaded `maker_works` item so readers can generate with
- * their own selfie inside TWINGS and the creator earns royalties without official catalog placement.
+ * through the canonical `selfPublishFormat` gate — enforcing `TWINGS_MAKER_SELF_PUBLISH`, hourly
+ * and 3-per-day format limits, media kind match, `rights_at`, and `maker_test` verification.
  */
 export async function createUnlistedMakeCard(
   deps: { sql: SqlRunner; store: RenderStore; storage: StorageDriver },
   userId: string,
   rawInput: unknown,
 ): Promise<CreatedBlogMakeCard> {
+  if (!makerBlogOpen() || !selfPublishOpen()) throw new PostError('not_open');
   if (!(await approvedCreator(deps.sql, userId))) throw new PostError('forbidden');
-  if (!(await recipeSchemaReady(deps.sql))) throw new PostError('unavailable');
+  if (!(await recipeSchemaReady(deps.sql)) || !(await catalogListedReady(deps.sql))) {
+    throw new PostError('unavailable');
+  }
 
   const parsed = CreateBlogMakeCardInput.safeParse(rawInput);
   if (!parsed.success) {
@@ -84,12 +86,17 @@ export async function createUnlistedMakeCard(
   const normalizedPrompt = normalizeBlogMakePrompt(input.prompt);
   if (!normalizedPrompt) throw new PostError('invalid', 'selfie_slot_required');
 
+  const videoEngines = makerEnginesFor('video');
+  const imageEngines = makerEnginesFor('image');
+  const videoEngine = videoEngines.includes('seedance-2.5') ? 'seedance-2.5' : videoEngines[0]!;
+  const imageEngine = imageEngines[0]!;
+
   const aspect =
     input.kind === 'video'
       ? input.aspect && isVideoAspect(input.aspect)
         ? input.aspect
         : '16:9'
-      : input.aspect && (IMAGE_ASPECTS as readonly string[]).includes(input.aspect)
+      : input.aspect && isImageAspect(input.aspect)
         ? input.aspect
         : '4:5';
   const duration = input.kind === 'video' ? (input.duration ?? 10) : undefined;
@@ -103,7 +110,7 @@ export async function createUnlistedMakeCard(
             {
               id: 'film',
               kind: 'video',
-              engine: 'seedance-2.5',
+              engine: videoEngine,
               inputs: [SELFIE_SLOT],
               prompt: normalizedPrompt,
               params: { aspect, duration: duration!, resolution: '720p' },
@@ -118,7 +125,7 @@ export async function createUnlistedMakeCard(
             {
               id: 'still',
               kind: 'image',
-              engine: 'nano-banana-pro',
+              engine: imageEngine,
               inputs: [SELFIE_SLOT],
               prompt: normalizedPrompt,
               params: { aspect },
@@ -141,116 +148,148 @@ export async function createUnlistedMakeCard(
     userId,
   ]);
   const work = workRows[0];
-  if (!work) throw new PostError('invalid_work');
+  if (!work || work.kind !== input.kind) throw new PostError('invalid_work');
 
-  const bytes = await deps.store.read(work.storage_key).catch(() => {
-    throw new PostError('invalid_work');
-  });
-
-  const templateId = randomUUID();
-  const formatId = randomUUID();
-  const ext =
-    work.mime === 'image/png'
-      ? 'png'
-      : work.mime === 'image/webp'
-        ? 'webp'
-        : work.mime === 'video/quicktime'
-          ? 'mov'
-          : work.kind === 'video'
-            ? 'mp4'
-            : 'jpg';
-  const stagingKey = promptStagingKey(templateId, ext);
-  await deps.storage.putStaging(stagingKey, bytes, work.mime);
-
-  let mediaRef;
-  if (work.kind === 'image') {
-    const meta = await sharp(bytes).metadata().catch(() => null);
-    mediaRef = AssetRefSchema.parse({
-      staging_key: stagingKey,
-      sha256: sha256Hex(bytes),
-      mime: work.mime,
-      ...(meta?.width && meta?.height ? { w: meta.width, h: meta.height } : {}),
-    });
+  if (deps.store.head) {
+    const info = await deps.store.head(work.storage_key).catch(() => null);
+    if (!info) throw new PostError('invalid_work');
   } else {
-    const seconds = probeVideoDurationSeconds(bytes, work.mime);
-    mediaRef = AssetRefSchema.parse({
-      staging_key: stagingKey,
-      sha256: sha256Hex(bytes),
-      mime: work.mime,
-      ...(seconds ? { duration_s: Math.round(seconds * 100) / 100 } : {}),
+    await deps.store.read(work.storage_key).catch(() => {
+      throw new PostError('invalid_work');
     });
   }
-  const { media } = await publishPromptMedia(
-    deps.storage,
-    work.kind === 'image' ? { poster: mediaRef } : { video: mediaRef },
-  );
 
   const primary = primaryStep(recipe);
-  const film = recipe.steps.find((step) => step.kind === 'video');
-  const priceKrw = quoteRecipeBase(recipe, input.royaltyKrw).proposedKrw;
-  const price1080Krw = price1080KrwFor(recipe, priceKrw);
-  const slug = selfPublishSlug(input.title, templateId);
   const titleKo = input.titleKo?.trim() ? input.titleKo.trim() : input.title;
   const disclosure = { prompts: true, assets: false };
 
-  await deps.sql.transaction(async (tx) => {
-    await lockUser(tx, userId);
-    await insertPrompt(tx, {
-      id: templateId,
-      slug,
-      source: 'yagi',
-      authorId: userId,
-      authorHandle: null,
-      status: 'published',
-      publishedAt: 'now',
-      models: [primary.engine],
-      title: input.title,
-      titleKo,
-      promptText: legacyPromptText(recipe),
-      textVisibility: 'hidden',
-      media,
-      useCase: [],
-      featured: false,
-      medium: primary.kind,
-      engine: primary.engine,
-      aspectDefault: primary.params.aspect,
-      runtimeSeconds: film?.kind === 'video' ? film.params.duration : null,
-      priceKrw,
-      priceCents: centsForKrw(priceKrw),
-      ...(price1080Krw > 0 ? { price1080Krw, price1080Cents: centsForKrw(price1080Krw) } : {}),
-      cast: recipeCast(recipe),
-    });
-    await tx.query(
-      "update prompt_items set recipe = $2::jsonb, disclosure = $3::jsonb, presentation = 'story-first' where id = $1",
-      [templateId, JSON.stringify(recipe), JSON.stringify(disclosure)],
-    );
-    try {
-      await tx.query('update prompt_items set catalog_listed = false where id = $1', [templateId]);
-    } catch {
-      // Pre-0208 schema fallback
-    }
-    await tx.query(
-      `insert into platform_formats (id, user_id, title, title_ko, recipe, recipe_v2, example_url, medium, status, template_id, disclosure, presentation, royalty_krw)
-       values ($1, $2, $3, $4, $5, $6::jsonb, null, $7, 'accepted', $8, $9::jsonb, 'story-first', $10)`,
-      [
-        formatId,
-        userId,
-        input.title,
-        titleKo,
-        primary.prompt,
-        JSON.stringify(recipe),
-        primary.kind,
-        templateId,
-        JSON.stringify(disclosure),
-        input.royaltyKrw,
-      ],
-    );
-    try {
-      await tx.query('update platform_formats set catalog_listed = false where id = $1', [formatId]);
-    } catch {
-      // Pre-0208 schema fallback
-    }
-  });
+  try {
+    return await deps.sql.transaction(async (tx) => {
+      await lockUser(tx, userId);
 
-  return { formatId, templateId, slug, priceKrw };
+      const rate = await tx.query(
+        `insert into platform_rate_limits(user_id, window_start, hits)
+         values ($1, date_trunc('hour', now()), 1)
+         on conflict (user_id, window_start)
+         do update set hits = platform_rate_limits.hits + 1
+         where platform_rate_limits.hits < $2
+         returning hits`,
+        [userId, MAKE_CARD_HOURLY_LIMIT],
+      );
+      if (rate.rows.length === 0) throw new PostError('limit_reached', 'make_limit_reached');
+      await tx.query(
+        "delete from platform_rate_limits where user_id = $1 and window_start < now() - interval '2 hours'",
+        [userId],
+      );
+
+      let formatId: string;
+      if (input.formatId) {
+        const existing = (
+          await tx.query<{ id: string; user_id: string; status: string }>(
+            'select id, user_id, status from platform_formats where id = $1 for update',
+            [input.formatId],
+          )
+        ).rows[0];
+        if (!existing || existing.user_id !== userId) throw new PostError('not_found');
+        if (existing.status !== 'draft' && existing.status !== 'submitted') {
+          throw new PostError('invalid');
+        }
+        formatId = existing.id;
+        await tx.query(
+          `update platform_formats
+              set title = $2,
+                  title_ko = $3,
+                  recipe = $4,
+                  recipe_v2 = $5::jsonb,
+                  medium = $6,
+                  disclosure = $7::jsonb,
+                  presentation = 'story-first',
+                  royalty_krw = $8,
+                  rights_at = now(),
+                  catalog_listed = false,
+                  updated_at = now()
+            where id = $1`,
+          [
+            formatId,
+            input.title,
+            titleKo,
+            primary.prompt,
+            JSON.stringify(recipe),
+            primary.kind,
+            JSON.stringify(disclosure),
+            input.royaltyKrw,
+          ],
+        );
+      } else {
+        const daily = await tx.query<{ n: number }>(
+          "select count(*)::int as n from platform_formats where user_id = $1 and created_at > now() - interval '1 day'",
+          [userId],
+        );
+        if ((daily.rows[0]?.n ?? 0) >= MAKER_DRAFTS_PER_DAY) {
+          throw new PostError('limit_reached', 'make_limit_reached');
+        }
+        formatId = randomUUID();
+        await tx.query(
+          `insert into platform_formats (
+             id, user_id, title, title_ko, recipe, recipe_v2, example_url,
+             medium, status, disclosure, presentation, royalty_krw, rights_at, catalog_listed
+           )
+           values ($1, $2, $3, $4, $5, $6::jsonb, null, $7, 'draft', $8::jsonb, 'story-first', $9, now(), false)`,
+          [
+            formatId,
+            userId,
+            input.title,
+            titleKo,
+            primary.prompt,
+            JSON.stringify(recipe),
+            primary.kind,
+            JSON.stringify(disclosure),
+            input.royaltyKrw,
+          ],
+        );
+      }
+
+      const formatRow: SelfPublishRow = {
+        id: formatId,
+        user_id: userId,
+        status: 'draft',
+        title: input.title,
+        title_ko: titleKo,
+        recipe_v2: recipe,
+        disclosure,
+        presentation: 'story-first',
+        royalty_krw: input.royaltyKrw,
+      };
+
+      const published = await selfPublishFormat(
+        tx,
+        { store: deps.store, storage: deps.storage },
+        userId,
+        formatRow,
+        recipe,
+        {
+          catalogListed: false,
+          example: { storage_key: work.storage_key, mime: work.mime, kind: work.kind },
+        },
+      );
+
+      return {
+        formatId: published.id,
+        templateId: published.templateId,
+        slug: published.slug,
+        priceKrw: published.priceKrw,
+      };
+    });
+  } catch (error) {
+    if (error instanceof PostError) throw error;
+    if (error instanceof PlatformError) {
+      if (error.code === 'test_required') throw new PostError('test_required');
+      if (error.code === 'example_file_required' || error.code === 'example_film_required') {
+        throw new PostError('invalid_work');
+      }
+      if (error.code === 'unavailable') throw new PostError('unavailable');
+      throw new PostError('invalid');
+    }
+    throw error;
+  }
 }

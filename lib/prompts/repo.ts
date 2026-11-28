@@ -118,16 +118,19 @@ const PRICE_1080_COLUMNS = `coalesce((to_jsonb(prompt_items.*)->>'price_1080_cen
  * a database without 0078 serves every template as `solo`, which is what every row was before it.
  */
 const CAST_COLUMN = `coalesce(to_jsonb(prompt_items.*)->>'cast_kind', 'solo') as cast_kind`;
-const CATALOG_LISTED_COLUMN = `coalesce((to_jsonb(prompt_items.*)->>'catalog_listed')::boolean, true) as catalog_listed`;
+const CATALOG_LISTED_FALLBACK_COLUMN = `coalesce((to_jsonb(prompt_items.*)->>'catalog_listed')::boolean, true) as catalog_listed`;
 
-const COLUMNS = `id, audience, slug, source, author_id, author_handle, status, models, title, title_ko,
+function baseColumns(hasCatalogListed: boolean): string {
+  const catalogCol = hasCatalogListed ? 'catalog_listed' : CATALOG_LISTED_FALLBACK_COLUMN;
+  return `id, audience, slug, source, author_id, author_handle, status, models, title, title_ko,
                  prompt_text, process_md, process_md_ko, source_url,
                  text_visibility::text as text_visibility, media, use_case, featured,
                  medium, price_cents, price_krw, runtime_seconds, engine, aspect_default,
                  ${PRICE_1080_COLUMNS},
                  ${CAST_COLUMN},
-                 ${CATALOG_LISTED_COLUMN},
+                 ${catalogCol},
                  reject_reason, created_at, published_at, announced_at`;
+}
 
 /**
  * docs/PERSONAL-STUDIO.md §3.4.10 — who the template is written for (0190), read through the row's JSON like the cast,
@@ -137,8 +140,22 @@ const COLUMNS = `id, audience, slug, source, author_id, author_handle, status, m
 const LOOK_COLUMN = `coalesce(to_jsonb(prompt_items.*)->>'look', 'any') as look`;
 
 /** The select list, decided per query so the switch is read at call time (the tests flip it per case). */
-function columns(): string {
-  return templateLookOpen() ? `${COLUMNS},\n                 ${LOOK_COLUMN}` : COLUMNS;
+function columns(hasCatalogListed = false): string {
+  const cols = baseColumns(hasCatalogListed);
+  return templateLookOpen() ? `${cols},\n                 ${LOOK_COLUMN}` : cols;
+}
+
+/** Whether migration 0208 (`catalog_listed` on `prompt_items` and `platform_formats`) is applied. */
+export async function catalogListedReady(sql: SqlRunner): Promise<boolean> {
+  const { rows } = await sql.query<{ ready: boolean }>(
+    `select (
+       select count(*) from pg_attribute
+        where attrelid in (to_regclass('public.prompt_items'), to_regclass('public.platform_formats'))
+          and attname = 'catalog_listed'
+          and not attisdropped
+     ) = 2 as ready`,
+  );
+  return rows[0]?.ready === true;
 }
 
 /** §13.2 — the one ordering, so the gallery, the admin list and the sitemap never disagree. */
@@ -193,11 +210,12 @@ function toRow(raw: RawRow): PromptRow {
 
 /** Every PUBLISHED & catalog-listed item, both rails, in rail order. The gallery's single query. */
 export async function loadPublishedPrompts(sql: SqlRunner): Promise<PromptRow[]> {
+  const hasCatalogListed = await catalogListedReady(sql);
+  const listedClause = hasCatalogListed ? '\n        and catalog_listed = true' : '';
   const { rows } = await sql.query<RawRow>(
-    `select ${columns()} from prompt_items
+    `select ${columns(hasCatalogListed)} from prompt_items
       where status = 'published'
-        and audience = 'public'
-        and coalesce((to_jsonb(prompt_items.*)->>'catalog_listed')::boolean, true) = true
+        and audience = 'public'${listedClause}
       order by ${RAIL_ORDER}`,
   );
   return rows.map(toRow);
@@ -278,12 +296,13 @@ export async function loadRelatedPrompts(
   item: { id: string; source: PromptSource; useCase: string[] },
   limit = 4,
 ): Promise<PromptRow[]> {
+  const hasCatalogListed = await catalogListedReady(sql);
+  const listedClause = hasCatalogListed ? '\n        and catalog_listed = true' : '';
   const { rows } = await sql.query<RawRow & { shared: boolean }>(
-    `select ${columns()}, (use_case && $2::text[]) as shared
+    `select ${columns(hasCatalogListed)}, (use_case && $2::text[]) as shared
        from prompt_items
       where status = 'published'
-        and audience = 'public'
-        and coalesce((to_jsonb(prompt_items.*)->>'catalog_listed')::boolean, true) = true
+        and audience = 'public'${listedClause}
         and id <> $1
       order by (use_case && $2::text[]) desc,
                (source = $3) desc,

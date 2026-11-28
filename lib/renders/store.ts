@@ -1,4 +1,4 @@
-import { access, mkdir, open, readFile, rm, stat, writeFile, unlink } from 'node:fs/promises';
+import { access, mkdir, open, readdir, readFile, rm, stat, writeFile, unlink } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { AwsClient } from 'aws4fetch';
@@ -42,7 +42,9 @@ export interface RenderStore {
    */
   url(key: string, ttlSeconds: number, options?: { download?: string }): Promise<string | null>;
   /** Direct browser-to-object-storage PUT URL (`null` on local driver where body upload is used). */
-  signedUploadUrl?(key: string, contentType: string, ttlSeconds?: number): Promise<string | null>;
+  signedUploadUrl?(key: string, contentType: string, contentLength: number, ttlSeconds?: number): Promise<string | null>;
+  /** Lists objects inside a single owner folder (`{uuid}` or `social/{uuid}`) for orphan upload sweeping. */
+  listFolder?(folder: string): Promise<Array<{ key: string; bytes: number; updatedAt: Date | null }>>;
   /** Lightweight metadata check without buffering object bytes. */
   head?(key: string): Promise<{ bytes: number; contentType: string | null } | null>;
   /** Inclusive byte-range read (`bytes=start-end`) for magic-number header sniffing. */
@@ -63,7 +65,7 @@ export class RenderObjectNotFound extends Error {
  * frame (`result-2`) or a maker file (`ast_<hex>`) — still no dot, slash or traversal.
  */
 export function assertRenderKey(key: string): void {
-  if (!/^(?:social\/)?[0-9a-f-]{36}\/[a-z][a-z0-9_-]{0,63}\.[a-z0-9]{2,5}$/i.test(key)) throw new Error(`illegal render key: ${key}`);
+  if (!/^(?:social\/)?[0-9a-f-]{36}\/[a-z][a-z0-9_-]{0,47}\.[a-z0-9]{2,5}$/i.test(key)) throw new Error(`illegal render key: ${key}`);
 }
 
 /** One owner's folder: `{uuid}` or `social/{uuid}`. Nothing broader can be named, so nothing broader can be removed. */
@@ -111,6 +113,24 @@ export function createLocalRenderStore(rootDir?: string): RenderStore {
     },
     async signedUploadUrl() {
       return null;
+    },
+    async listFolder(folder) {
+      assertRenderFolder(folder);
+      const dir = join(root, folder);
+      if (!(await fileExists(dir))) return [];
+      const names = await readdir(dir).catch(() => [] as string[]);
+      const out: Array<{ key: string; bytes: number; updatedAt: Date | null }> = [];
+      for (const name of names) {
+        const key = `${folder}/${name}`;
+        try {
+          assertRenderKey(key);
+          const info = await stat(join(dir, name));
+          if (info.isFile()) out.push({ key, bytes: info.size, updatedAt: info.mtime });
+        } catch {
+          // Ignore unexpected directory entries
+        }
+      }
+      return out;
     },
     async head(key) {
       const path = pathOf(key);
@@ -202,9 +222,30 @@ export function createSupabaseRenderStore(client?: SupabaseClient): RenderStore 
     },
     async signedUploadUrl(key) {
       assertRenderKey(key);
-      const { data, error } = await (await db()).storage.from(RENDERS_BUCKET).createSignedUploadUrl(key, { upsert: true });
+      const { data, error } = await (await db()).storage.from(RENDERS_BUCKET).createSignedUploadUrl(key);
       if (error || !data) throw new Error(`render upload sign failed: ${key} — ${error?.message ?? 'no url'}`);
       return data.signedUrl;
+    },
+    async listFolder(folder) {
+      assertRenderFolder(folder);
+      const bucket = (await db()).storage.from(RENDERS_BUCKET);
+      const { data, error } = await bucket.list(folder, { limit: 200 });
+      if (error) {
+        if (isMissing(error)) return [];
+        throw new Error(`render folder listing failed: ${folder} — ${error.message}`);
+      }
+      return (data ?? [])
+        .filter((entry) => entry.id !== null)
+        .map((entry) => {
+          const meta = (entry.metadata ?? {}) as { size?: unknown };
+          const bytes = typeof meta.size === 'number' ? meta.size : Number(meta.size ?? 0);
+          const updatedAt = entry.updated_at ? new Date(entry.updated_at) : entry.created_at ? new Date(entry.created_at) : null;
+          return {
+            key: `${folder}/${entry.name}`,
+            bytes: Number.isFinite(bytes) ? bytes : 0,
+            updatedAt,
+          };
+        });
     },
     async head(key) {
       assertRenderKey(key);
@@ -324,15 +365,46 @@ export function createR2RenderStore(
       });
       return signed.url;
     },
-    async signedUploadUrl(key, contentType, ttlSeconds = 900) {
+    async signedUploadUrl(key, contentType, contentLength, ttlSeconds = 300) {
       assertRenderKey(key);
-      const expiresIn = Math.max(60, Math.min(Math.floor(ttlSeconds), 3600));
+      const size = Math.floor(contentLength);
+      if (!Number.isFinite(size) || size <= 0) {
+        throw new Error(`invalid upload contentLength: ${contentLength}`);
+      }
+      const expiresIn = Math.max(60, Math.min(Math.floor(ttlSeconds), 900));
       const params = new URLSearchParams({ 'X-Amz-Expires': String(expiresIn) });
       const signed = await r2.sign(
-        new Request(urlFor(key, params), { method: 'PUT', headers: { 'Content-Type': contentType } }),
-        { aws: { signQuery: true } },
+        new Request(urlFor(key, params), {
+          method: 'PUT',
+          headers: {
+            'Content-Type': contentType,
+            'Content-Length': String(size),
+          },
+        }),
+        { aws: { signQuery: true, allHeaders: true } },
       );
       return signed.url;
+    },
+    async listFolder(folder) {
+      assertRenderFolder(folder);
+      const prefix = `${RENDERS_BUCKET}/${folder}/`;
+      const params = new URLSearchParams({ 'list-type': '2', prefix, 'max-keys': '200' });
+      const signed = await r2.sign(new Request(`${baseUrl}?${params.toString()}`, { method: 'GET' }));
+      const res = await fetcher(signed);
+      if (!res.ok) throw new Error(`r2 render list failed: ${folder} — status ${res.status}`);
+      const xml = await res.text();
+      const items: Array<{ key: string; bytes: number; updatedAt: Date | null }> = [];
+      for (const match of xml.matchAll(/<Contents>([\s\S]*?)<\/Contents>/g)) {
+        const block = match[1]!;
+        const rawKey = /<Key>([\s\S]*?)<\/Key>/.exec(block)?.[1]?.replace(/&amp;/g, '&') ?? '';
+        if (!rawKey.startsWith(`${RENDERS_BUCKET}/`)) continue;
+        const relKey = rawKey.slice(`${RENDERS_BUCKET}/`.length);
+        const bytes = Number(/<Size>(\d+)<\/Size>/.exec(block)?.[1] ?? '0');
+        const lastMod = /<LastModified>([^<]+)<\/LastModified>/.exec(block)?.[1];
+        const updatedAt = lastMod ? new Date(lastMod) : null;
+        items.push({ key: relKey, bytes: Number.isFinite(bytes) ? bytes : 0, updatedAt });
+      }
+      return items;
     },
     async head(key) {
       const signed = await r2.sign(new Request(urlFor(key), { method: 'HEAD' }));

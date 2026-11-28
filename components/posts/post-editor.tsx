@@ -95,6 +95,7 @@ export function PostEditor({
   handle,
   publicProfile = true,
   worksAvailable = false,
+  selfPublishEnabled = true,
   initialPost,
   works,
   importableTemplates,
@@ -108,6 +109,7 @@ export function PostEditor({
   handle: string | null;
   publicProfile?: boolean;
   worksAvailable?: boolean;
+  selfPublishEnabled?: boolean;
   initialPost: MakerPost | null;
   works: readonly MakerWork[];
   importableTemplates: readonly MakerImportableTemplate[];
@@ -133,7 +135,9 @@ export function PostEditor({
   const [previewMode, setPreviewMode] = useState<boolean>(false);
   const [busy, setBusy] = useState<'save' | 'publish' | 'unpublish' | 'delete' | null>(null);
   const [uploadingTarget, setUploadingTarget] = useState<'cover' | 'block' | null>(null);
-  const [makeBuilderWorkId, setMakeBuilderWorkId] = useState<string>(() => initialPost?.coverWorkId || works[0]?.id || '');
+  const [makeBuilderWorkId, setMakeBuilderWorkId] = useState<string>(
+    () => works.find((work) => work.kind === 'video')?.id ?? '',
+  );
   const [makeBuilderAspect, setMakeBuilderAspect] = useState<string>('16:9');
   const [makeBuilderDuration, setMakeBuilderDuration] = useState<number>(10);
   const [makeBuilderRoyalty, setMakeBuilderRoyalty] = useState<number>(0);
@@ -143,6 +147,7 @@ export function PostEditor({
   const [feedback, setFeedback] = useState<{ tone: 'ok' | 'error'; message: string } | null>(null);
 
   const worksById = useMemo(() => new Map(localWorks.map((work) => [work.id, work])), [localWorks]);
+  const videoWorks = useMemo(() => localWorks.filter((work) => work.kind === 'video'), [localWorks]);
   const templatesBySlug = useMemo(
     () => new Map(localTemplates.map((item) => [item.slug, item])),
     [localTemplates],
@@ -260,7 +265,7 @@ export function PostEditor({
       }
 
       setLocalWorks((prev) => (prev.some((w) => w.id === uploadedWork!.id) ? prev : [...prev, uploadedWork!]));
-      if (!makeBuilderWorkId) setMakeBuilderWorkId(uploadedWork.id);
+      if (uploadedWork.kind === 'video' && !makeBuilderWorkId) setMakeBuilderWorkId(uploadedWork.id);
       if (target === 'cover') {
         setCoverWorkId(uploadedWork.id);
       } else if (typeof blockIdx === 'number') {
@@ -279,12 +284,12 @@ export function PostEditor({
 
   async function handleCreateMakeCardFromPrompt(promptBlockIndex: number) {
     const block = blocks[promptBlockIndex];
-    if (!block || block.type !== 'prompt' || locked || creatingMakeCard) return;
+    if (!block || block.type !== 'prompt' || block.kind !== 'video' || locked || creatingMakeCard) return;
     if (!rightsConfirmed) {
       setFeedback({ tone: 'error', message: blogCopy.errors.rights_required });
       return;
     }
-    const chosenWorkId = makeBuilderWorkId || coverWorkId || localWorks[0]?.id || '';
+    const chosenWorkId = makeBuilderWorkId || videoWorks[0]?.id || '';
     if (!chosenWorkId) {
       setFeedback({ tone: 'error', message: blogCopy.errors.invalid_work });
       return;
@@ -1243,102 +1248,108 @@ export function PostEditor({
                         />
                       </div>
 
-                      <div
-                        data-post-make-builder
-                        className="space-y-3 rounded-2xl border border-hairline bg-[#F4F4F5]/75 p-4"
-                      >
-                        <div className="space-y-1">
-                          <h3 className="text-sm font-semibold text-[#09090B]">{blogCopy.makeBuilderHeading}</h3>
-                          <p className="text-xs leading-relaxed break-keep text-[#52525B]">{blogCopy.makeBuilderHint}</p>
-                        </div>
-                        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                          <div>
-                            <label htmlFor="make-builder-work" className="block text-xs font-medium text-[#09090B]">
-                              {blogCopy.makeBuilderWorkLabel}
-                            </label>
-                            <select
-                              id="make-builder-work"
-                              disabled={locked || localWorks.length === 0}
-                              value={makeBuilderWorkId}
-                              onChange={(event) => setMakeBuilderWorkId(event.target.value)}
-                              className={FIELD}
-                            >
-                              {localWorks.map((work) => (
-                                <option key={work.id} value={work.id}>
-                                  {workLabel(work)}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                          <div>
-                            <label htmlFor="make-builder-aspect" className="block text-xs font-medium text-[#09090B]">
-                              {blogCopy.makeBuilderAspectLabel}
-                            </label>
-                            <select
-                              id="make-builder-aspect"
-                              disabled={locked}
-                              value={makeBuilderAspect}
-                              onChange={(event) => setMakeBuilderAspect(event.target.value)}
-                              className={FIELD}
-                            >
-                              {['16:9', '9:16', '4:3', '3:4', '4:5', '1:1'].map((ratio) => (
-                                <option key={ratio} value={ratio}>
-                                  {ratio}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                          {selectedBlock.kind === 'video' ? (
-                            <div>
-                              <label htmlFor="make-builder-duration" className="block text-xs font-medium text-[#09090B]">
-                                {blogCopy.makeBuilderDurationLabel}
-                              </label>
-                              <select
-                                id="make-builder-duration"
-                                disabled={locked}
-                                value={makeBuilderDuration}
-                                onChange={(event) => setMakeBuilderDuration(Number(event.target.value))}
-                                className={FIELD}
-                              >
-                                {[5, 8, 10, 12, 15].map((sec) => (
-                                  <option key={sec} value={sec}>
-                                    {sec}
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
-                          ) : null}
-                          <div>
-                            <label htmlFor="make-builder-royalty" className="block text-xs font-medium text-[#09090B]">
-                              {blogCopy.makeBuilderRoyaltyLabel}
-                            </label>
-                            <select
-                              id="make-builder-royalty"
-                              disabled={locked}
-                              value={makeBuilderRoyalty}
-                              onChange={(event) => setMakeBuilderRoyalty(Number(event.target.value))}
-                              className={FIELD}
-                            >
-                              {[0, 500, 1000, 1500, 2000, 3000, 5000].map((krw) => (
-                                <option key={krw} value={krw}>
-                                  {krw.toLocaleString()}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                        </div>
-                        <div>
-                          <button
-                            type="button"
-                            data-post-make-builder-cta
-                            disabled={locked || creatingMakeCard || localWorks.length === 0}
-                            onClick={() => void handleCreateMakeCardFromPrompt(selectedIndex)}
-                            className={BUTTON_OUTLINE}
+                      {selfPublishEnabled ? (
+                        selectedBlock.kind === 'video' ? (
+                          <div
+                            data-post-make-builder
+                            className="space-y-3 rounded-2xl border border-hairline bg-[#F4F4F5]/75 p-4"
                           >
-                            {creatingMakeCard ? blogCopy.makeBuilderCreating : blogCopy.makeBuilderCreateCta}
-                          </button>
-                        </div>
-                      </div>
+                            <div className="space-y-1">
+                              <h3 className="text-sm font-semibold text-[#09090B]">{blogCopy.makeBuilderHeading}</h3>
+                              <p className="text-xs leading-relaxed break-keep text-[#52525B]">{blogCopy.makeBuilderHint}</p>
+                            </div>
+                            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                              <div>
+                                <label htmlFor="make-builder-work" className="block text-xs font-medium text-[#09090B]">
+                                  {blogCopy.makeBuilderWorkLabel}
+                                </label>
+                                <select
+                                  id="make-builder-work"
+                                  disabled={locked || videoWorks.length === 0}
+                                  value={makeBuilderWorkId}
+                                  onChange={(event) => setMakeBuilderWorkId(event.target.value)}
+                                  className={FIELD}
+                                >
+                                  {videoWorks.map((work) => (
+                                    <option key={work.id} value={work.id}>
+                                      {workLabel(work)}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div>
+                                <label htmlFor="make-builder-aspect" className="block text-xs font-medium text-[#09090B]">
+                                  {blogCopy.makeBuilderAspectLabel}
+                                </label>
+                                <select
+                                  id="make-builder-aspect"
+                                  disabled={locked}
+                                  value={makeBuilderAspect}
+                                  onChange={(event) => setMakeBuilderAspect(event.target.value)}
+                                  className={FIELD}
+                                >
+                                  {['16:9', '9:16', '4:3', '3:4', '1:1'].map((ratio) => (
+                                    <option key={ratio} value={ratio}>
+                                      {ratio}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div>
+                                <label htmlFor="make-builder-duration" className="block text-xs font-medium text-[#09090B]">
+                                  {blogCopy.makeBuilderDurationLabel}
+                                </label>
+                                <select
+                                  id="make-builder-duration"
+                                  disabled={locked}
+                                  value={makeBuilderDuration}
+                                  onChange={(event) => setMakeBuilderDuration(Number(event.target.value))}
+                                  className={FIELD}
+                                >
+                                  {[5, 8, 10, 12, 15].map((sec) => (
+                                    <option key={sec} value={sec}>
+                                      {sec}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div>
+                                <label htmlFor="make-builder-royalty" className="block text-xs font-medium text-[#09090B]">
+                                  {blogCopy.makeBuilderRoyaltyLabel}
+                                </label>
+                                <select
+                                  id="make-builder-royalty"
+                                  disabled={locked}
+                                  value={makeBuilderRoyalty}
+                                  onChange={(event) => setMakeBuilderRoyalty(Number(event.target.value))}
+                                  className={FIELD}
+                                >
+                                  {[0, 500, 1000, 1500, 2000, 3000, 5000].map((krw) => (
+                                    <option key={krw} value={krw}>
+                                      {krw.toLocaleString()}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            </div>
+                            <div>
+                              <button
+                                type="button"
+                                data-post-make-builder-cta
+                                disabled={locked || creatingMakeCard || videoWorks.length === 0}
+                                onClick={() => void handleCreateMakeCardFromPrompt(selectedIndex)}
+                                className={BUTTON_OUTLINE}
+                              >
+                                {creatingMakeCard ? blogCopy.makeBuilderCreating : blogCopy.makeBuilderCreateCta}
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="rounded-xl bg-[#F4F4F5] px-4 py-3 text-xs leading-relaxed break-keep text-[#52525B]">
+                            {blogCopy.makeBuilderImageHint}
+                          </p>
+                        )
+                      ) : null}
                     </div>
                   ) : null}
 

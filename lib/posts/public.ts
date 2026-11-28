@@ -459,7 +459,10 @@ export async function loadTemplateOriginalInstagram(
   return url ? parseInstagramPost(url) : null;
 }
 
-/** Finds the newest published creator blog post embedding `templateSlug` (used to redirect blog-only templates). */
+/**
+ * Finds the newest published creator blog post written by the template's own author (or studio)
+ * that embeds `templateSlug`. Prevents third-party posts from hijacking `/t/[slug]` redirects.
+ */
 export async function findPrimaryBlogPostForTemplate(
   sql: SqlRunner,
   templateSlug: string,
@@ -472,7 +475,17 @@ export async function findPrimaryBlogPostForTemplate(
        join creator_posts cp on cp.id = cpt.post_id
        join platform_creators pc on pc.user_id = cp.user_id
       where pi.slug = $1
+        and pi.status = 'published'
+        and pi.audience = 'public'
         and ${PUBLIC_POST_SQL_FILTER}
+        and (
+          pi.author_id = cp.user_id
+          or exists (
+            select 1 from platform_formats f
+             where f.template_id = pi.id and f.user_id = cp.user_id and f.status = 'accepted'
+          )
+          or (pi.author_id is null and pi.source = 'yagi' and to_jsonb(pc.*)->>'payout' = 'company')
+        )
       order by cp.published_at desc nulls last, cp.updated_at desc
       limit 1`,
     [templateSlug],

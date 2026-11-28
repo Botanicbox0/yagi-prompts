@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getViewer } from '@/lib/auth/viewer';
 import { getSqlRunner } from '@/lib/db/connect';
 import { makerMediaObject } from '@/lib/makers/works';
+import { makerBlogOpen } from '@/lib/posts/flag';
 import { getRenderStore } from '@/lib/renders/store';
 
 /**
@@ -38,7 +39,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     if (!object) object = await makerMediaObject(sql, (await getViewer()).userId, id);
     if (!object) return new NextResponse(null, { status: 404, headers: PRIVATE });
     const store = await getRenderStore();
-    if (object.mime.startsWith('video/')) {
+    if (makerBlogOpen() && object.mime.startsWith('video/')) {
       const signedUrl = await store.url(object.key, 7200);
       if (signedUrl) {
         return NextResponse.redirect(signedUrl, {

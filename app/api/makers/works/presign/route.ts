@@ -4,6 +4,7 @@ import { getSqlRunner } from '@/lib/db/connect';
 import { isSameOrigin } from '@/lib/billing/toss-runtime';
 import { readBoundedBody } from '@/lib/creator-subscriptions/http';
 import { creativeGate } from '@/lib/makers/access';
+import { makerBlogOpen } from '@/lib/posts/flag';
 import { getRenderStore } from '@/lib/renders/store';
 import { presignMakerWorkUpload, WorkError } from '@/lib/makers/works';
 
@@ -23,6 +24,7 @@ const STATUS: Record<string, number> = {
 };
 
 export async function POST(request: Request) {
+  if (!makerBlogOpen()) return json({ code: 'not_open' }, 404);
   if (!isSameOrigin(request)) return json({ code: 'forbidden' }, 403);
   const viewer = await getViewer();
   if (!viewer.userId) return json({ code: 'sign_in_required' }, 401);

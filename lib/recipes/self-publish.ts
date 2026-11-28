@@ -5,7 +5,7 @@ import type { RenderStore } from '@/lib/renders/store';
 import type { StorageDriver } from '@/lib/storage';
 import { demand } from '@/lib/creator-platform/contract';
 import { lockUser } from '@/lib/creator-platform/service';
-import { insertPrompt } from '@/lib/prompts/repo';
+import { catalogListedReady, insertPrompt } from '@/lib/prompts/repo';
 import { probeVideoDurationSeconds, promptStagingKey, publishPromptMedia, sha256Hex } from '@/lib/prompts/media';
 import { AssetRefSchema } from '@/lib/content/schemas';
 import { centsForKrw, isRoyalty, price1080KrwFor, quoteRecipeBase } from './pricing';
@@ -58,14 +58,26 @@ export async function selfPublishFormat(
   userId: string,
   row: SelfPublishRow,
   recipe: Recipe,
-  options: { catalogListed?: boolean } = {},
+  options: {
+    catalogListed?: boolean;
+    example?: { storage_key: string; mime: string; kind: 'image' | 'video' };
+  } = {},
 ): Promise<SelfPublished> {
   await lockUser(tx, userId);
   demand(row.royalty_krw !== null && isRoyalty(row.royalty_krw), 'invalid');
+  const unlist = options.catalogListed === false;
+  if (unlist) {
+    demand(await catalogListedReady(tx), 'unavailable');
+  }
   // In the order a creative meets them: the example file, then a test render that worked.
-  const { rows: files } = await tx.query<{ storage_key: string; mime: string; kind: 'image' | 'video' }>(
-    "select storage_key,mime,kind from platform_format_assets where format_id=$1 and role='example' order by created_at desc limit 1", [row.id]);
-  const example = files[0];
+  let example = options.example;
+  if (!example) {
+    const { rows: files } = await tx.query<{ storage_key: string; mime: string; kind: 'image' | 'video' }>(
+      "select storage_key,mime,kind from platform_format_assets where format_id=$1 and role='example' order by created_at desc limit 1",
+      [row.id],
+    );
+    example = files[0];
+  }
   demand(example, 'example_file_required');
   if (imageTestRecipe(recipe).ok) {
     const tested = await tx.query(`select 1 from render_job_recipes r join render_jobs j on j.id=r.render_id
@@ -109,12 +121,8 @@ export async function selfPublishFormat(
   // Written before the format links to the row, so 0059's guard freezes it from then on (as at acceptance).
   await tx.query('update prompt_items set recipe=$2::jsonb,disclosure=$3::jsonb,presentation=$4 where id=$1',
     [templateId, JSON.stringify(recipe), JSON.stringify(parseDisclosure(row.disclosure)), parsePresentation(row.presentation)]);
-  if (options.catalogListed === false) {
-    try {
-      await tx.query('update prompt_items set catalog_listed = false where id = $1', [templateId]);
-    } catch {
-      // Pre-0208 fallback
-    }
+  if (unlist) {
+    await tx.query('update prompt_items set catalog_listed = false where id = $1', [templateId]);
   }
   if (film?.kind === 'video') {
     try {
@@ -129,12 +137,8 @@ export async function selfPublishFormat(
     }
   }
   await tx.query("update platform_formats set status='accepted',template_id=$2,rights_at=coalesce(rights_at,now()),updated_at=now() where id=$1", [row.id, templateId]);
-  if (options.catalogListed === false) {
-    try {
-      await tx.query('update platform_formats set catalog_listed = false where id = $1', [row.id]);
-    } catch {
-      // Pre-0208 fallback
-    }
+  if (unlist) {
+    await tx.query('update platform_formats set catalog_listed = false where id = $1', [row.id]);
   }
   return { id: row.id, templateId, slug, priceKrw };
 }

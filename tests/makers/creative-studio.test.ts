@@ -9,7 +9,7 @@ vi.mock('next/cache', () => ({ revalidatePath: () => undefined, revalidateTag: (
 import { administerPlatform } from '@/lib/creator-platform/admin';
 import { creativeProfilesReady, loadMakerSettings, patchMakerProfile, saveMakerProfile } from '@/lib/makers/profile';
 import {
-  COVER_HEIGHT, COVER_WIDTH, MAKER_WORKS_MAX, WorkError, deleteMakerAvatar, deleteMakerCover, deleteMakerWork, listMakerWorks, listPublicWorks, makerMediaObject, reorderMakerWorks,
+  COVER_HEIGHT, COVER_WIDTH, WorkError, deleteMakerAvatar, deleteMakerCover, deleteMakerWork, listMakerWorks, listPublicWorks, makerMediaObject, reorderMakerWorks,
   storeMakerAvatar, storeMakerCover, storeMakerWork, updateMakerWork,
 } from '@/lib/makers/works';
 import { createMakerToken, listMakerTokens, resolveMakerToken, revokeMakerToken, MAKER_TOKENS_MAX } from '@/lib/makers/tokens';
@@ -102,9 +102,9 @@ describe('AI creative studio (0065)', () => {
     expect(await code(deleteMakerWork(h.sql, store, CREATIVE.userId!, first.work.id))).toBe('not_found');
   });
 
-  it('caps a creative at MAKER_WORKS_MAX works', async () => {
-    for (let i = 0; i < MAKER_WORKS_MAX; i++) await storeMakerWork(h.sql, store, { userId: CREATIVE.userId!, bytes: await jpeg(32 + i, 32) });
-    const error = await storeMakerWork(h.sql, store, { userId: CREATIVE.userId!, bytes: await jpeg(240, 64) }).catch((e: unknown) => e);
+  it('caps a creative at twelve works', async () => {
+    for (let i = 0; i < 12; i++) await storeMakerWork(h.sql, store, { userId: CREATIVE.userId!, bytes: await jpeg(64 + i, 64) });
+    const error = await storeMakerWork(h.sql, store, { userId: CREATIVE.userId!, bytes: await jpeg(200, 64) }).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(WorkError);
     expect((error as WorkError).code).toBe('limit_reached');
   });

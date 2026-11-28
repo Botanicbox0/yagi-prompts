@@ -17,6 +17,7 @@ import { makerBlogOpen } from '@/lib/posts/flag';
 import { postEditorHref } from '@/lib/posts/links';
 import { postsReady, UUID_PATTERN } from '@/lib/posts/repo';
 import { loadMakerPost, loadMakerTemplatesForImport } from '@/lib/posts/service';
+import { selfPublishOpen } from '@/lib/recipes/self-publish';
 import { PostEditor, type PublishableTemplateOption } from '@/components/posts/post-editor';
 
 export const dynamic = 'force-dynamic';
@@ -130,6 +131,7 @@ export default async function MakerPostEditorPage({ params }: RouteParams) {
           handle={handle}
           publicProfile={settings?.publicProfile === true}
           worksAvailable={settings?.extended === true}
+          selfPublishEnabled={selfPublishOpen()}
           initialPost={post}
           works={works}
           importableTemplates={importableTemplates}

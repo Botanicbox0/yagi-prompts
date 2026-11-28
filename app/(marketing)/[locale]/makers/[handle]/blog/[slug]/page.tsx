@@ -116,7 +116,7 @@ export default async function MakerBlogPostPage({ params }: RouteParams) {
     }
   }
   for (const card of referencedCards) {
-    if (!templatesBySlug.has(card.slug)) {
+    if (!templatesBySlug.has(card.slug) && (card.authorHandle === post.author.handle || card.origin === 'studio')) {
       templatesBySlug.set(card.slug, card);
     }
   }

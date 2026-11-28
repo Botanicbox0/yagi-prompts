@@ -6,6 +6,7 @@ import { readBoundedBody } from '@/lib/creator-subscriptions/http';
 import { revalidateMakerProfile } from '@/lib/cache';
 import { creativeGate } from '@/lib/makers/access';
 import { loadMakerSettings } from '@/lib/makers/profile';
+import { makerBlogOpen } from '@/lib/posts/flag';
 import { getRenderStore } from '@/lib/renders/store';
 import { completeMakerWorkUpload, WorkError } from '@/lib/makers/works';
 
@@ -25,6 +26,7 @@ const STATUS: Record<string, number> = {
 };
 
 export async function POST(request: Request) {
+  if (!makerBlogOpen()) return json({ code: 'not_open' }, 404);
   if (!isSameOrigin(request)) return json({ code: 'forbidden' }, 403);
   const viewer = await getViewer();
   if (!viewer.userId) return json({ code: 'sign_in_required' }, 401);

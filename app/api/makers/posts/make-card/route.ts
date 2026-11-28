@@ -11,6 +11,7 @@ import { makerBlogOpen } from '@/lib/posts/flag';
 import { createUnlistedMakeCard } from '@/lib/posts/make-card';
 import { PostError } from '@/lib/posts/repo';
 import { loadPromptCardsBySlugs } from '@/lib/prompts/catalog';
+import { selfPublishOpen } from '@/lib/recipes/self-publish';
 import { getRenderStore } from '@/lib/renders/store';
 import { getStorage } from '@/lib/storage';
 
@@ -28,11 +29,13 @@ const STATUS: Record<string, number> = {
   invalid: 400,
   rights_required: 400,
   invalid_work: 400,
+  test_required: 409,
+  limit_reached: 429,
   unavailable: 503,
 };
 
 export async function POST(request: Request) {
-  if (!makerBlogOpen()) return json({ ok: false, code: 'not_open' }, 404);
+  if (!makerBlogOpen() || !selfPublishOpen()) return json({ ok: false, code: 'not_open' }, 404);
   if (!isSameOrigin(request)) return json({ ok: false, code: 'forbidden' }, 403);
 
   const viewer = await getViewer();

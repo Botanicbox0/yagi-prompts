@@ -7,6 +7,7 @@ import { readPublicProjection } from '@/lib/db/read-policy';
 import { coupleTemplatesOpen, petTemplatesOpen, templateLookOpen } from '@/lib/flags';
 import { resolveRuntimeMode } from '@/lib/runtime-mode';
 import { loadPromptCardsBySlugs, type PromptCard } from './catalog';
+import { PROMPT_CATALOG_CACHE_VERSION } from './public-catalog';
 
 const cachedBySlugs = unstable_cache(
   async (sortedKey: string): Promise<PromptCard[]> => {
@@ -21,6 +22,7 @@ const cachedBySlugs = unstable_cache(
   },
   [
     'prompt-cards-by-slugs-v1',
+    PROMPT_CATALOG_CACHE_VERSION,
     resolveRuntimeMode(),
     publicMediaCacheKey(),
     coupleTemplatesOpen() ? 'couple-on' : 'couple-off',

@@ -17,8 +17,8 @@ import {
 export const MAKER_HANDLE_PATTERN = /^[a-z0-9_]{3,20}$/;
 export const MAKER_BIO_MAX = 200;
 
-/** Names that would read as the studio speaking. Not a moderation list — just no impersonation (`@yagi` is the founder's own creative handle). */
-const RESERVED_HANDLES = new Set(['admin', 'administrator', 'twings', 'yagiworkshop', 'studio', 'official', 'support', 'help', 'staff', 'makers', 'maker', 'creative', 'creatives']);
+/** Names that would read as the studio speaking. Not a moderation list — just no impersonation (`@yagi` remains reserved and editable only by its existing owner). */
+const RESERVED_HANDLES = new Set(['admin', 'administrator', 'twings', 'yagi', 'yagiworkshop', 'studio', 'official', 'support', 'help', 'staff', 'makers', 'maker', 'creative', 'creatives']);
 
 export type MakerProfileErrorCode =
   | 'invalid_handle' | 'reserved_handle' | 'invalid_bio' | 'handle_required' | 'handle_taken' | 'not_maker' | 'unavailable'

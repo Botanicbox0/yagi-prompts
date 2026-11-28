@@ -156,9 +156,9 @@ async function assertOwnWorks(tx: SqlRunner, userId: string, workIds: readonly s
   }
 }
 
-async function assertPublishedTemplates(tx: SqlRunner, slugs: readonly string[]): Promise<void> {
+async function assertPublishedTemplates(tx: SqlRunner, slugs: readonly string[], makerId: string): Promise<void> {
   if (slugs.length === 0) return;
-  const resolved = await resolvePublicTemplateIds(tx, slugs);
+  const resolved = await resolvePublicTemplateIds(tx, slugs, makerId);
   if (resolved.size !== slugs.length) {
     throw new PostError('invalid_template');
   }
@@ -262,7 +262,7 @@ export async function saveMakerPost(
       }
       if (existing.status === 'published') {
         if (blocks.length === 0) throw new PostError('empty_blocks');
-        await assertPublishedTemplates(tx, templateSlugs);
+        await assertPublishedTemplates(tx, templateSlugs, makerId);
       }
 
       const { rows } = await tx.query<PostRow>(
@@ -278,7 +278,7 @@ export async function saveMakerPost(
         [input.id, input.title, input.summary, input.coverWorkId, JSON.stringify(blocks), makerId],
       );
       const saved = rows[0]!;
-      const invalidatedTemplates = await syncPostTemplates(tx, saved.id, blocks);
+      const invalidatedTemplates = await syncPostTemplates(tx, saved.id, blocks, makerId);
       return { post: toMakerPost(saved), created: false, invalidatedTemplates };
     }
 
@@ -306,7 +306,7 @@ export async function saveMakerPost(
       [id, makerId, slug, input.title, input.summary, input.coverWorkId, JSON.stringify(blocks)],
     );
     const created = rows[0]!;
-    const invalidatedTemplates = await syncPostTemplates(tx, created.id, blocks);
+    const invalidatedTemplates = await syncPostTemplates(tx, created.id, blocks, makerId);
     return { post: toMakerPost(created), created: true, invalidatedTemplates };
   });
 
@@ -353,7 +353,7 @@ export async function publishMakerPost(
     if (blocks.length === 0) throw new PostError('empty_blocks');
 
     await assertOwnWorks(tx, makerId, extractMediaWorkIds(existing.cover_work_id, blocks));
-    await assertPublishedTemplates(tx, extractTemplateSlugs(blocks));
+    await assertPublishedTemplates(tx, extractTemplateSlugs(blocks), makerId);
 
     const { rows } = await tx.query<PostRow>(
       `update creator_posts
@@ -366,7 +366,7 @@ export async function publishMakerPost(
       [postId, transition.nextStatus, makerId],
     );
     const published = rows[0]!;
-    const invalidatedTemplates = await syncPostTemplates(tx, published.id, blocks);
+    const invalidatedTemplates = await syncPostTemplates(tx, published.id, blocks, makerId);
     return { post: toMakerPost(published), invalidatedTemplates };
   });
 
