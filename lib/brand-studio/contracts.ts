@@ -673,6 +673,51 @@ export type StudioMusicDesign = {
   ok: true;
   design: { mode: 'describe' | 'custom'; style: string; title: string; notes: string | null; source: 'model' | 'fallback' };
 };
+
+export const MUSIC_MODEL_IDS = ['suno-v6', 'suno-v6-wild', 'minimax-music-3'] as const;
+
+/** `music.design` for organizations with Sound Studio composer v2 open (`brandSoundComposerV2For`). */
+export const MusicDesignV2Schema = z
+  .object({
+    organizationId: Id,
+    model: z.enum(MUSIC_MODEL_IDS).default('suno-v6'),
+    composerMode: z.enum(['simple', 'advanced']).optional(),
+    prompt: z.string().trim().min(1).max(2000),
+    vocal: z.boolean().default(false),
+    lyrics: z.string().max(3500).optional(),
+    careful: z.boolean().optional(),
+    language: z.enum(['ko', 'en']).optional(),
+    structure: z.enum(LYRIC_STRUCTURES).optional(),
+    avoid: z.boolean().optional(),
+    words: z
+      .object({
+        brand: z.object({ name: z.string().trim().min(1).max(60), readAs: z.string().trim().max(60).optional() }).strict().optional(),
+        mustInclude: z.array(z.string().trim().min(1).max(40)).max(5).optional(),
+      })
+      .strict()
+      .optional(),
+    videoAssetId: Id.optional(),
+    targetSeconds: z.number().int().min(5).max(240).optional(),
+    durationSeconds: z.number().int().min(1).max(75).optional(),
+    bpm: z.number().int().min(60).max(160).optional(),
+    lyricsBy: z.object({ flow: z.enum(['topic', 'polish']), model: z.string().max(40) }).strict().optional(),
+  })
+  .strict()
+  .superRefine((v, ctx) => {
+    const minimax = v.model === 'minimax-music-3';
+    if (!minimax && v.prompt.length > 1000) {
+      ctx.addIssue({ code: 'custom', path: ['prompt'], message: 'prompt over 1000 characters' });
+    }
+    if (!minimax && v.lyrics && v.lyrics.length > 3000) {
+      ctx.addIssue({ code: 'custom', path: ['lyrics'], message: 'lyrics over 3000 characters' });
+    }
+    if (!minimax && v.durationSeconds !== undefined) {
+      ctx.addIssue({ code: 'custom', path: ['durationSeconds'], message: 'durationSeconds is MiniMax-only' });
+    }
+    if (minimax && v.careful === true) {
+      ctx.addIssue({ code: 'custom', path: ['careful'], message: 'careful is not supported on MiniMax' });
+    }
+  });
 /** `output.waveform`: the first browser that decodes an audio result keeps its peaks (docs/BRAND-SOUND-STUDIO.md §7.4). */
 export const OutputWaveformSchema = z
   .object({ organizationId: Id, outputId: Id, peaks: z.array(z.number().min(0).max(1)).min(1).max(1000) })
@@ -1092,6 +1137,8 @@ export interface StudioJobView {
   purpose?: 'fill';
   /** Music only (docs/BRAND-SOUND-STUDIO.md §7.2): the list name and what the customer chose. */
   music?: { title: string; vocal: boolean; mode: 'describe' | 'custom'; careful: boolean; lyrics: string | null; targetSeconds?: number | null };
+  /** Present (`true`) when a MiniMax blank-lyrics vocal run ended `failed` at 0 credits because its lyric draft failed. */
+  lyricsDraftFailed?: boolean;
   /** Remix only: how the reference video was used, what was kept and what was changed. */
   method: StudioRemixMethod | null;
   keep: StudioKeepKey[];

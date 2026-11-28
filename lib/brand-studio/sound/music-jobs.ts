@@ -21,8 +21,9 @@
 import { z } from 'zod';
 import type { Viewer } from '@/lib/auth/identity';
 import { assertBrandFeature, BrandFeatureDenied } from '@/lib/brands/entitlements';
+import { brandSoundComposerV2For } from '@/lib/flags';
 import { lockOrganization, requireCreate, StudioDenied, studioSeat } from '../access';
-import { STUDIO_LIMITS, type StudioFailure, type StudioJobCreated } from '../contracts';
+import { MUSIC_MODEL_IDS, STUDIO_LIMITS, type StudioFailure, type StudioJobCreated } from '../contracts';
 import { routeJob } from '../lanes';
 import { failure, guarded } from '../outcome';
 import type { SqlRunner } from '@/lib/db/sql-runner';
@@ -32,7 +33,7 @@ import { brandProjectFiling, brandProjectForNew, fileStudioJob, hasBrandProjectF
 import type { JobRow, OutputRow, StudioDeps, StudioJobParams } from '../types';
 import { usageKrw } from '../usage-rate';
 import { loadAllowance, reserveAllowance } from '../usage';
-import { musicEngine, type MusicEngine, type MusicRequest } from './engine';
+import { musicEngine, musicEngineOfModel, type MusicEngine, type MusicModelId, type MusicRequest } from './engine';
 import { MUSIC_LIMITS, musicQuoteKrw } from './music-limits';
 import { describeSentence, musicTitle } from './music-text';
 
@@ -41,9 +42,20 @@ import { namedArtist } from './names';
 import { planRecord, sungPlan } from './length-plan';
 import { LYRIC_STRUCTURES, LYRICS_LIMITS, markLyrics, musicWay, ownLyrics } from './lyrics';
 import { LYRICS_MODELS, lyricsGeminiConfig } from './lyrics-model';
+import { parseRequestedSeconds } from './requested-seconds';
 import { videoFitOf, videoStructure, videoTargetSeconds, type MusicVideoFit } from './video-fit';
 import { FAKE_EXISTING, judgeExistingLyrics, logMusicBlock, musicPaused, noteMusicBlock, strictMusicChecks, type MusicBlockRecord } from './warnings';
-import { DESIGN_LIMITS, designMeta, fallbackDesign, reviewedDesign, type MusicDesign, type MusicDesignInput, type MusicWords } from './architect';
+import {
+  DESIGN_LIMITS,
+  designMeta,
+  fallbackDesign,
+  markMinimaxLyrics,
+  minimaxFallbackDesign,
+  reviewedDesign,
+  type MusicDesign,
+  type MusicDesignInput,
+  type MusicWords,
+} from './architect';
 
 export { MUSIC_LIMITS, musicQuoteKrw };
 
@@ -103,6 +115,75 @@ export const MusicJobCreateSchema = z
   })
   .strict();
 export type MusicJobCreate = z.infer<typeof MusicJobCreateSchema>;
+
+export const V2_MUSIC_FIELDS = ['model', 'composerMode', 'durationSeconds', 'title'] as const;
+
+export function hasV2MusicFields(raw: unknown): boolean {
+  if (!raw || typeof raw !== 'object') return false;
+  return V2_MUSIC_FIELDS.some((field) => field in raw);
+}
+
+const MINIMAX_PROMPT_MAX = 2000;
+const MINIMAX_LYRICS_MAX = 3500;
+const MINIMAX_DURATION_RANGE = { min: 1, max: 75 } as const;
+const MINIMAX_DEFAULT_DURATION = 60;
+
+/**
+ * `job.create` (`kind: 'music'`) for organizations listed in `BRAND_SOUND_COMPOSER_V2_ORGS`, used ONLY when the
+ * request actually carries at least one v2 field (`hasV2MusicFields`). Requests without v2 fields continue to take
+ * `MusicJobCreateSchema` unchanged even for listed organizations.
+ */
+export const MusicJobCreateV2Schema = z
+  .object({
+    kind: z.literal('music'),
+    organizationId: Id,
+    requestId: RequestId,
+    model: z.enum(MUSIC_MODEL_IDS).default('suno-v6'),
+    composerMode: z.enum(['simple', 'advanced']).optional(),
+    mode: z.enum(['describe', 'custom']).optional(),
+    prompt: z.string().trim().min(1).max(MINIMAX_PROMPT_MAX),
+    title: z.string().trim().max(MUSIC_LIMITS.titleMax).optional(),
+    vocal: z.boolean().default(false),
+    lyrics: z.string().max(MINIMAX_LYRICS_MAX).optional(),
+    structure: z.enum(LYRIC_STRUCTURES).optional(),
+    targetSeconds: z.number().int().min(5).max(240).optional(),
+    durationSeconds: z.number().int().min(MINIMAX_DURATION_RANGE.min).max(MINIMAX_DURATION_RANGE.max).optional(),
+    videoAssetId: z.uuid().optional(),
+    lyricsBy: z.object({ flow: z.enum(['topic', 'polish']), model: z.enum([...LYRICS_MODELS, 'local']) }).strict().optional(),
+    words: z
+      .object({
+        brand: z.object({ name: z.string().trim().min(1).max(60), readAs: z.string().trim().max(60).optional() }).strict().optional(),
+        mustInclude: z.array(z.string().trim().min(1).max(40)).max(5).optional(),
+      })
+      .strict()
+      .optional(),
+    bpm: z.number().int().min(60).max(160).optional(),
+    careful: z.boolean().optional(),
+    language: z.enum(['ko', 'en']).optional(),
+    architect: z.boolean().default(true),
+    designed: z.object({ style: z.string().max(MINIMAX_PROMPT_MAX), title: z.string().max(80).optional() }).strict().optional(),
+  })
+  .strict()
+  .superRefine((v, ctx) => {
+    const minimax = v.model === 'minimax-music-3';
+    if (!minimax) {
+      if (v.prompt.length > MUSIC_LIMITS.promptMax) {
+        ctx.addIssue({ code: 'custom', path: ['prompt'], message: `prompt over ${MUSIC_LIMITS.promptMax} characters` });
+      }
+      if (v.lyrics && v.lyrics.length > LYRICS_LIMITS.max) {
+        ctx.addIssue({ code: 'custom', path: ['lyrics'], message: `lyrics over ${LYRICS_LIMITS.max} characters` });
+      }
+      if (v.designed && v.designed.style.length > DESIGN_LIMITS.styleHardMax) {
+        ctx.addIssue({ code: 'custom', path: ['designed', 'style'], message: `style over ${DESIGN_LIMITS.styleHardMax} characters` });
+      }
+      if (v.durationSeconds !== undefined) {
+        ctx.addIssue({ code: 'custom', path: ['durationSeconds'], message: 'durationSeconds is only supported on MiniMax Music 3.0' });
+      }
+    } else if (v.careful === true) {
+      ctx.addIssue({ code: 'custom', path: ['careful'], message: 'careful mode is not supported on MiniMax Music 3.0' });
+    }
+  });
+export type MusicJobCreateV2 = z.infer<typeof MusicJobCreateV2Schema>;
 
 /** An edited design that breaks the hard checks (a name stops it like a name in the description). */
 export class MusicDesignRefused extends Error {
@@ -171,36 +252,267 @@ export function wordsText(words: MusicJobCreate['words']): string {
   return [words?.brand?.name ?? '', words?.brand?.readAs ?? '', ...(words?.mustInclude ?? [])].join('\n');
 }
 
+export type MusicPlanInput = Omit<MusicJobCreate, 'architect'> & {
+  architect?: boolean;
+  video?: MusicVideoFit | null;
+  model?: MusicModelId;
+  composerMode?: 'simple' | 'advanced';
+  durationSeconds?: number;
+  title?: string;
+  v2?: boolean;
+};
+
+function clampMinimaxDuration(seconds: number): number {
+  return Math.min(MINIMAX_DURATION_RANGE.max, Math.max(MINIMAX_DURATION_RANGE.min, Math.round(seconds)));
+}
+
 /**
  * Pure: the request, the name, the quote and what the row keeps. Throws `StudioDenied('invalid')` on a request the
  * engine refuses, and `MusicDesignRefused` on an edited design that breaks the hard checks.
  */
 export function planMusic(
-  input: Omit<MusicJobCreate, 'architect'> & { architect?: boolean; video?: MusicVideoFit | null },
+  input: MusicPlanInput,
   screenLocale: 'ko' | 'en',
-  engine: MusicEngine = musicEngine(process.env),
+  explicitEngine?: MusicEngine,
 ): MusicPlan {
+  const engine =
+    explicitEngine ??
+    (input.model !== undefined
+      ? (() => {
+          const found = musicEngineOfModel(input.model);
+          if (!found) throw new StudioDenied('invalid');
+          return found;
+        })()
+      : musicEngine(process.env));
+
+  const isMinimax = engine.model.id === 'minimax-music-3';
+  const isV2 =
+    input.v2 === true ||
+    input.model !== undefined ||
+    input.composerMode !== undefined ||
+    input.durationSeconds !== undefined ||
+    input.title !== undefined;
+  const architect = input.composerMode === 'simple' ? true : input.architect;
+
+  if (isMinimax) {
+    if (input.careful === true) throw new StudioDenied('invalid');
+    if (
+      input.durationSeconds !== undefined &&
+      (!Number.isInteger(input.durationSeconds) ||
+        input.durationSeconds < MINIMAX_DURATION_RANGE.min ||
+        input.durationSeconds > MINIMAX_DURATION_RANGE.max)
+    ) {
+      throw new StudioDenied('invalid');
+    }
+
+    let durationSeconds: number;
+    let durationSource: 'customer' | 'sentence' | 'default';
+    if (input.durationSeconds !== undefined) {
+      durationSeconds = input.durationSeconds;
+      durationSource = 'customer';
+    } else if (input.video) {
+      durationSeconds = clampMinimaxDuration(videoTargetSeconds(input.video));
+      durationSource = 'customer';
+    } else {
+      const fromSentence = parseRequestedSeconds(input.prompt);
+      if (fromSentence !== null) {
+        durationSeconds = clampMinimaxDuration(fromSentence);
+        durationSource = 'sentence';
+      } else {
+        durationSeconds = MINIMAX_DEFAULT_DURATION;
+        durationSource = 'default';
+      }
+    }
+
+    const language = input.language ?? screenLocale;
+    const lyrics = input.vocal ? ownLyrics(input.lyrics) : '';
+    const way = musicWay({ vocal: input.vocal, lyrics, careful: false });
+    const designInput: MusicDesignInput = { ...designInputOf(input, screenLocale), plan: null };
+    let design: MusicDesign;
+    if (input.designed) {
+      const reviewed = reviewedDesign(designInput, input.designed, {
+        styleMax: engine.capabilities.limits.style,
+        keepLineBreaks: true,
+      });
+      if ('problems' in reviewed) throw new MusicDesignRefused(reviewed.named);
+      design = { ...reviewed, lyrics: lyrics ? markMinimaxLyrics(lyrics, input.structure ?? null) : '' };
+    } else {
+      design = minimaxFallbackDesign(designInput, architect === false ? 'off' : undefined);
+    }
+
+    const explicitTitle = input.title?.trim() ?? '';
+    if (explicitTitle.length > engine.capabilities.limits.title) throw new StudioDenied('invalid');
+    const title = explicitTitle || (input.designed ? design.title : '') || musicTitle(input.prompt);
+
+    // N1: a MiniMax vocal run with blank customer lyrics ALWAYS drafts its lyrics in prepare, even if `architect` is off
+    // or a style `designed` block was reviewed.
+    const needsLyricsDraft = input.vocal && !lyrics;
+    const prepared = needsLyricsDraft ? false : Boolean(input.designed) || architect === false;
+    const markedLyrics = lyrics ? markMinimaxLyrics(lyrics, input.structure ?? null) : '';
+    const request: MusicRequest = {
+      mode: way,
+      prompt: design.style,
+      vocal: input.vocal,
+      durationSeconds,
+      ...(input.vocal && markedLyrics ? { lyrics: markedLyrics } : {}),
+    };
+
+    let endpoint: string;
+    try {
+      endpoint = engine.request(needsLyricsDraft ? { ...request, lyrics: '[Verse]\n_' } : request).endpoint;
+    } catch {
+      throw new StudioDenied('invalid');
+    }
+
+    const estimateUsd = engine.quoteUsd(request);
+    return {
+      engine,
+      request,
+      title,
+      design,
+      prepared,
+      estimateUsd,
+      estimateKrw: usageKrw(estimateUsd, 'audio'),
+      params: {
+        aspect: null,
+        resolution: null,
+        seconds: null,
+        audio: null,
+        count: 1,
+        locale: screenLocale,
+        music: {
+          mode: way,
+          vocal: input.vocal,
+          language,
+          title,
+          careful: false,
+          ...(input.composerMode ? { composerMode: input.composerMode } : {}),
+          durationSeconds,
+          durationSource,
+          ...(lyrics ? { lyrics } : {}),
+          ...(lyrics && input.structure ? { structure: input.structure } : {}),
+          ...(input.video ? { video: input.video } : {}),
+          ...(designInput.words ? { words: designInput.words } : {}),
+          ...(lyrics
+            ? {
+                lyricsBy: input.lyricsBy
+                  ? { flow: input.lyricsBy.flow, model: input.lyricsBy.model }
+                  : { flow: 'own' as const, model: null },
+              }
+            : {}),
+          made: { engine: engine.id, endpoint, terms: SOUND_TERMS_VERSION },
+        },
+      },
+    };
+  }
+
+  if (input.durationSeconds !== undefined) throw new StudioDenied('invalid');
+
+  // Closed / non-v2 path: byte-identical to today.
+  if (!isV2) {
+    const language = input.language ?? screenLocale;
+    const lyrics = input.vocal ? ownLyrics(input.lyrics) : '';
+    const careful = input.careful === true;
+    const way = musicWay({ vocal: input.vocal, lyrics, careful });
+    const designInput = designInputOf(input, screenLocale);
+    let design: MusicDesign;
+    if (input.designed) {
+      const reviewed = reviewedDesign(designInput, input.designed);
+      if ('problems' in reviewed) throw new MusicDesignRefused(reviewed.named);
+      design = reviewed;
+    } else {
+      design = fallbackDesign(designInput, input.architect === false ? 'off' : undefined);
+    }
+    // With the Architect on and nothing reviewed, the prepare step designs it; the fallback stands in until then.
+    const prepared = Boolean(input.designed) || input.architect === false;
+    // The list name: the reviewed title, or the request's first words until the prepare step names it (../repo.ts).
+    const title = design.title || musicTitle(input.prompt);
+    const request: MusicRequest =
+      way === 'describe'
+        ? { mode: 'describe', prompt: design.style, vocal: input.vocal }
+        : { mode: 'custom', prompt: design.style, vocal: input.vocal, title: design.title, lyrics: markLyrics(lyrics, input.structure ?? null, designInput.plan?.form ?? null), careful };
+    let endpoint: string;
+    try {
+      endpoint = engine.request(request).endpoint;
+    } catch {
+      throw new StudioDenied('invalid');
+    }
+    const estimateUsd = engine.quoteUsd(request);
+    return {
+      engine,
+      request,
+      title,
+      design,
+      prepared,
+      estimateUsd,
+      estimateKrw: usageKrw(estimateUsd, 'audio'),
+      params: {
+        // The studio's common fields, empty for a sound run, so every reader of a job row stays as it is.
+        aspect: null,
+        resolution: null,
+        seconds: null,
+        audio: null,
+        count: 1,
+        locale: screenLocale,
+        music: {
+          mode: way,
+          vocal: input.vocal,
+          language,
+          title,
+          careful: way === 'custom' && careful,
+          // What the customer typed (marks are added when sent), so "설정 다시 쓰기" gives it back as written.
+          ...(lyrics ? { lyrics } : {}),
+          ...(lyrics && input.structure ? { structure: input.structure } : {}),
+          ...(lyrics && input.targetSeconds ? { targetSeconds: input.targetSeconds } : {}),
+          ...(input.video ? { video: input.video } : {}),
+          ...(designInput.words ? { words: designInput.words } : {}),
+          // The plan, kept to send the same form and to fit the coefficients again against the measured lengths.
+          ...(designInput.plan ? { plan: planRecord(designInput.plan) } : {}),
+          ...(lyrics ? { lyricsBy: input.lyricsBy ? { flow: input.lyricsBy.flow, model: input.lyricsBy.model } : { flow: 'own' as const, model: null } } : {}),
+          // The conditions the track was made under (§7.2): which engine and endpoint, which version of our terms.
+          made: { engine: engine.id, endpoint, terms: SOUND_TERMS_VERSION },
+        },
+      },
+    };
+  }
+
+  // Suno v6 / Suno v6 Wild on the v2 path: sentence-stated length feeds `sungPlan` (when sung lyrics exist)
+  // and `targetSeconds` (for `closestFirst` version ordering) unless an explicit target or video was chosen.
   const language = input.language ?? screenLocale;
   const lyrics = input.vocal ? ownLyrics(input.lyrics) : '';
   const careful = input.careful === true;
   const way = musicWay({ vocal: input.vocal, lyrics, careful });
-  const designInput = designInputOf(input, screenLocale);
+  const sentenceSeconds = parseRequestedSeconds(input.prompt);
+  const clampedSentenceTarget =
+    sentenceSeconds !== null ? Math.min(240, Math.max(5, sentenceSeconds)) : undefined;
+  const resolvedTargetSeconds =
+    input.targetSeconds ?? (input.video ? videoTargetSeconds(input.video) : clampedSentenceTarget);
+  const designInput = designInputOf({ ...input, targetSeconds: resolvedTargetSeconds }, screenLocale);
   let design: MusicDesign;
   if (input.designed) {
     const reviewed = reviewedDesign(designInput, input.designed);
     if ('problems' in reviewed) throw new MusicDesignRefused(reviewed.named);
     design = reviewed;
   } else {
-    design = fallbackDesign(designInput, input.architect === false ? 'off' : undefined);
+    design = fallbackDesign(designInput, architect === false ? 'off' : undefined);
   }
-  // With the Architect on and nothing reviewed, the prepare step designs it; the fallback stands in until then.
-  const prepared = Boolean(input.designed) || input.architect === false;
-  // The list name: the reviewed title, or the request's first words until the prepare step names it (../repo.ts).
-  const title = design.title || musicTitle(input.prompt);
+  const explicitTitle = input.title?.trim() ?? '';
+  if (explicitTitle.length > engine.capabilities.limits.title) throw new StudioDenied('invalid');
+  if (explicitTitle) design = { ...design, title: explicitTitle };
+
+  const prepared = Boolean(input.designed) || architect === false;
+  const title = explicitTitle || design.title || musicTitle(input.prompt);
   const request: MusicRequest =
     way === 'describe'
       ? { mode: 'describe', prompt: design.style, vocal: input.vocal }
-      : { mode: 'custom', prompt: design.style, vocal: input.vocal, title: design.title, lyrics: markLyrics(lyrics, input.structure ?? null, designInput.plan?.form ?? null), careful };
+      : {
+          mode: 'custom',
+          prompt: design.style,
+          vocal: input.vocal,
+          title: design.title,
+          lyrics: markLyrics(lyrics, input.structure ?? null, designInput.plan?.form ?? null),
+          careful,
+        };
   let endpoint: string;
   try {
     endpoint = engine.request(request).endpoint;
@@ -217,7 +529,6 @@ export function planMusic(
     estimateUsd,
     estimateKrw: usageKrw(estimateUsd, 'audio'),
     params: {
-      // The studio's common fields, empty for a sound run, so every reader of a job row stays as it is.
       aspect: null,
       resolution: null,
       seconds: null,
@@ -230,16 +541,20 @@ export function planMusic(
         language,
         title,
         careful: way === 'custom' && careful,
-        // What the customer typed (marks are added when sent), so "설정 다시 쓰기" gives it back as written.
+        ...(input.composerMode ? { composerMode: input.composerMode } : {}),
         ...(lyrics ? { lyrics } : {}),
         ...(lyrics && input.structure ? { structure: input.structure } : {}),
-        ...(lyrics && input.targetSeconds ? { targetSeconds: input.targetSeconds } : {}),
+        ...(resolvedTargetSeconds ? { targetSeconds: resolvedTargetSeconds } : {}),
         ...(input.video ? { video: input.video } : {}),
         ...(designInput.words ? { words: designInput.words } : {}),
-        // The plan, kept to send the same form and to fit the coefficients again against the measured lengths.
         ...(designInput.plan ? { plan: planRecord(designInput.plan) } : {}),
-        ...(lyrics ? { lyricsBy: input.lyricsBy ? { flow: input.lyricsBy.flow, model: input.lyricsBy.model } : { flow: 'own' as const, model: null } } : {}),
-        // The conditions the track was made under (§7.2): which engine and endpoint, which version of our terms.
+        ...(lyrics
+          ? {
+              lyricsBy: input.lyricsBy
+                ? { flow: input.lyricsBy.flow, model: input.lyricsBy.model }
+                : { flow: 'own' as const, model: null },
+            }
+          : {}),
         made: { engine: engine.id, endpoint, terms: SOUND_TERMS_VERSION },
       },
     },
@@ -268,11 +583,28 @@ export async function createMusicJob(deps: StudioDeps, viewer: Viewer, raw: unkn
   // `brandProjectId` stays in and is refused like any unknown field (today's answer); open, it is taken off here
   // and judged after the seat. Anyone the seat refuses while carrying it gets today's answer (`invalid`), so a
   // request tells nobody outside the workspace whether the spine is open.
-  const filing = await brandProjectFiling(deps.sql, (raw as { organizationId?: unknown } | null)?.organizationId, raw);
+  const rawOrgId = (raw as { organizationId?: unknown } | null)?.organizationId;
+  const filing = await brandProjectFiling(deps.sql, rawOrgId, raw);
   const carried = filing.open && hasBrandProjectField(raw);
-  const parsed = MusicJobCreateSchema.safeParse(filing.open ? withoutBrandProjectField(raw) : raw);
-  if (!parsed.success) return failure('invalid');
-  const asked = parsed.data;
+  const bodyForSchema = filing.open ? withoutBrandProjectField(raw) : raw;
+  const v2Open = typeof rawOrgId === 'string' && brandSoundComposerV2For(rawOrgId, process.env);
+  const carriedV2 = v2Open && hasV2MusicFields(bodyForSchema);
+
+  let asked: MusicPlanInput & { organizationId: string; requestId: string };
+  if (carriedV2) {
+    const parsedV2 = MusicJobCreateV2Schema.safeParse(bodyForSchema);
+    if (!parsedV2.success) return failure('invalid');
+    asked = {
+      ...parsedV2.data,
+      architect: parsedV2.data.composerMode === 'simple' ? true : parsedV2.data.architect,
+      v2: true,
+    };
+  } else {
+    const parsed = MusicJobCreateSchema.safeParse(bodyForSchema);
+    if (!parsed.success) return failure('invalid');
+    asked = parsed.data;
+  }
+
   const locale: 'ko' | 'en' = viewer.locale === 'en' ? 'en' : 'ko';
   const now = deps.now?.() ?? new Date();
   const org = asked.organizationId;
@@ -296,6 +628,11 @@ export async function createMusicJob(deps: StudioDeps, viewer: Viewer, raw: unkn
       return await seated(sql);
     } catch (error) {
       if (carried && error instanceof StudioDenied) throw new StudioDenied('invalid');
+      // Sandboxed / generation-blocked organizations (`feature_unavailable` -> 404) always stay 404 even when listed;
+      // non-member/guest/viewer probes carrying v2 fields answer `invalid` (400), matching an unlisted organization.
+      if (carriedV2 && error instanceof StudioDenied && error.code !== 'feature_unavailable') {
+        throw new StudioDenied('invalid');
+      }
       throw error;
     }
   };
@@ -317,6 +654,7 @@ export async function createMusicJob(deps: StudioDeps, viewer: Viewer, raw: unkn
       if (prior) return prior;
       if (musicPaused(org, now.getTime())) return { paused: true as const };
       if (namedArtist(asked.prompt)) return { blocked: 'name' as const };
+      if (asked.title && namedArtist(asked.title)) return { blocked: 'name' as const };
       if (asked.vocal && asked.lyrics && namedArtist(asked.lyrics)) return { blocked: 'lyrics' as const };
       if (asked.words && namedArtist(wordsText(asked.words))) return { blocked: 'name' as const };
       // "더 고르게 만들기" hidden by the server setting: a request still carrying it is refused, nothing reserved.
@@ -328,7 +666,7 @@ export async function createMusicJob(deps: StudioDeps, viewer: Viewer, raw: unkn
         video = await videoFitOf(sql, { organizationId: org, assetId: asked.videoAssetId, locale, now });
         if (!video) throw new StudioDenied('invalid');
       }
-      const strictInput: MusicJobCreate = strict ? { ...asked, architect: true, designed: undefined } : asked;
+      const strictInput = strict ? { ...asked, architect: true, designed: undefined } : asked;
       const v = video ? { ...strictInput, video, targetSeconds: videoTargetSeconds(video), structure: strictInput.structure ?? videoStructure(video) } : strictInput;
       let plan: MusicPlan;
       try {
@@ -400,6 +738,11 @@ export async function createMusicJob(deps: StudioDeps, viewer: Viewer, raw: unkn
         stick: null,
         place: null,
       });
+      const initialWork = plan.prepared
+        ? { prepared: true, enhancer: designMeta(plan.design) }
+        : plan.design.source === 'reviewed'
+          ? { enhancer: designMeta(plan.design) }
+          : {};
       const job = (
         await sql.query<JobRow>(
           `insert into brand_studio_jobs (organization_id, created_by, request_id, kind, status, lane, model, prompt, final_prompt, enhance, params, refs,
@@ -417,7 +760,7 @@ export async function createMusicJob(deps: StudioDeps, viewer: Viewer, raw: unkn
             JSON.stringify(plan.params),
             Math.round(plan.estimateUsd * 10_000) / 10_000,
             plan.estimateKrw,
-            JSON.stringify(plan.prepared ? { prepared: true, enhancer: designMeta(plan.design) } : {}),
+            JSON.stringify(initialWork),
             // "보낸 문장 보기" shows what went whenever the Architect took part (designed here or in the dock).
             v.architect !== false,
           ],

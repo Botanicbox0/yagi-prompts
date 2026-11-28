@@ -1,8 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { creditsOf, STUDIO_CREDIT_KRW } from '@/lib/brand-studio/credits';
 import { advanceStudioJobsWith } from '@/lib/brand-studio/engine';
+import { studioEnv } from '@/lib/brand-studio/env';
 import { sniffMime } from '@/lib/brand-studio/files';
+import { createStudioJob } from '@/lib/brand-studio/jobs';
 import { STUDIO_MEDIA_KEY } from '@/lib/brand-studio/media-store';
 import { synthesizePreviewMusicWav } from '@/lib/brand-studio/music/synth';
 import { createFakeStudioProvider } from '@/lib/brand-studio/provider/fake';
@@ -23,7 +25,7 @@ import { musicQuoteCredits, musicQuoteForModel, musicQuoteKrw } from '@/lib/bran
 import type { JobRow, OutputRow, StudioDeps } from '@/lib/brand-studio/types';
 import { loadAllowance } from '@/lib/brand-studio/usage';
 import { parseSunraQueueResult, type SunraClient } from '@/lib/sunra/client';
-import { requestId, studioDeps, studioFixture } from '../server/helpers';
+import { requestId, studioDeps, studioFixture, viewerOf } from '../server/helpers';
 
 /**
  * Mirrors the exact OpenAPI 3.0 request schemas:
@@ -696,6 +698,141 @@ describe('Batch B1: parseSunraQueueResult parity and WAV byte re-sniffing when c
       expect(out.storage_key).toMatch(/^st\/[0-9a-f]{64}\.wav$/);
       expect(out.duration_ms).toBe(6000);
     } finally {
+      await f.db.close();
+    }
+  });
+});
+
+describe('Batch B1 review fixes (part of B2): exact MiniMax prefix, 75 s WAV, careful quote throw, end-to-end durationSeconds', () => {
+  it('1. matches MiniMax music only on minimax/minimax-music3/* so other minimax/* endpoints stay video or image', async () => {
+    const fake = createFakeStudioProvider({ pollsBeforeDone: 1 });
+
+    const videoTask = await fake.submit({
+      endpoint: 'minimax/hailuo-02/text-to-video',
+      body: { prompt: 'A calm ocean wave', duration: 6 },
+    });
+    const videoStatus = await fake.status(videoTask.taskId);
+    expect(videoStatus).toMatchObject({
+      state: 'succeeded',
+      outputs: [{ mime: 'video/mp4' }],
+    });
+
+    const imageTask = await fake.submit({
+      endpoint: 'minimax/image-01/text-to-image',
+      body: { prompt: 'Minimal perfume bottle', aspect_ratio: '1:1' },
+    });
+    const imageStatus = await fake.status(imageTask.taskId);
+    expect(imageStatus).toMatchObject({
+      state: 'succeeded',
+      outputs: [{ mime: 'image/png' }],
+    });
+
+    const musicTask = await fake.submit({
+      endpoint: 'minimax/minimax-music3/text-to-music',
+      body: { prompt: 'Warm Rhodes', duration: 25, is_instrumental: true },
+    });
+    const musicStatus = await fake.status(musicTask.taskId);
+    expect(musicStatus).toEqual({
+      state: 'succeeded',
+      costUsd: 0.16,
+      outputs: [{ url: expect.stringMatching(/^fake:\/\/wav\/25\//), mime: 'audio/wav' }],
+    });
+  });
+
+  it('2. returns a valid RIFF/WAVE file of the requested duration up to 75 s (including 61..75 s)', async () => {
+    const fake = createFakeStudioProvider({ pollsBeforeDone: 1 });
+    const submitted = await fake.submit({
+      endpoint: 'minimax/minimax-music3/text-to-music',
+      body: { prompt: 'Ambient score', duration: 75, is_instrumental: true },
+    });
+    const status = await fake.status(submitted.taskId);
+    if (status.state !== 'succeeded') throw new Error('expected succeeded');
+    const downloaded = await fake.download(status.outputs[0]!.url);
+    expect(sniffMime(downloaded.bytes)).toBe('audio/wav');
+    expect(audioSeconds(downloaded.bytes, 'audio/wav')).toBe(75);
+  });
+
+  it('3. throws MusicRequestError from musicQuoteForModel when careful is asked on MiniMax', () => {
+    expect(() => musicQuoteForModel('minimax-music-3', { mode: 'custom', careful: true })).toThrow(MusicRequestError);
+    expect(() => musicQuoteForModel('minimax-music-3', { mode: 'describe', careful: true })).toThrow(
+      'careful mode is not supported on MiniMax Music 3.0',
+    );
+  });
+
+  it('4. threads durationSeconds end to end on a MiniMax vocal job and refuses invalid requests before any reservation', async () => {
+    const f = await studioFixture();
+    try {
+      vi.stubEnv('BRAND_SOUND_COMPOSER_V2_ORGS', f.orgId);
+      const fake = createFakeStudioProvider({ pollsBeforeDone: 1 });
+      const deps = studioDeps(f.sql, {
+        env: studioEnv({
+          BRAND_STUDIO_PROVIDER: 'fake',
+          BRAND_STUDIO_DEFAULT_LANE: 'sunra_api',
+          BRAND_SOUND_STUDIO: 'on',
+          BRAND_SOUND_MAX_MODE: 'on',
+        }),
+        provider: fake,
+      });
+
+      // Plan-level / create-level refusals happen BEFORE any reservation (0 job rows, usedKrw === 0).
+      const refusedCareful = await createStudioJob(deps, viewerOf(f.ids.owner), {
+        kind: 'music',
+        organizationId: f.orgId,
+        requestId: requestId(),
+        model: 'minimax-music-3',
+        prompt: '상쾌한 브랜드 송',
+        vocal: true,
+        lyrics: '맑은 아침을 열어요',
+        careful: true,
+      });
+      expect(refusedCareful).toEqual({ ok: false, code: 'invalid' });
+
+      const refusedDuration = await createStudioJob(deps, viewerOf(f.ids.owner), {
+        kind: 'music',
+        organizationId: f.orgId,
+        requestId: requestId(),
+        model: 'minimax-music-3',
+        prompt: '상쾌한 브랜드 송',
+        vocal: true,
+        lyrics: '맑은 아침을 열어요',
+        durationSeconds: 300,
+      });
+      expect(refusedDuration).toEqual({ ok: false, code: 'invalid' });
+
+      expect((await f.sql.query('select 1 from brand_studio_jobs where organization_id = $1', [f.orgId])).rows).toHaveLength(0);
+      expect((await loadAllowance(f.sql, f.orgId, deps.env)).usedKrw).toBe(0);
+
+      // Valid MiniMax vocal job with customer-set durationSeconds (72 s, in 61..75 range) succeeds end-to-end.
+      const created = await createStudioJob(deps, viewerOf(f.ids.owner), {
+        kind: 'music',
+        organizationId: f.orgId,
+        requestId: requestId(),
+        model: 'minimax-music-3',
+        prompt: '상쾌한 브랜드 송',
+        vocal: true,
+        lyrics: '맑은 아침을 열어요\n\n우리 함께 걸어요',
+        durationSeconds: 72,
+        architect: false,
+      });
+      if (!('job' in created)) throw new Error(`expected created job, got ${JSON.stringify(created)}`);
+
+      await advanceStudioJobsWith(deps, { jobIds: [created.job.id] });
+
+      const job = (
+        await f.sql.query<JobRow>('select * from brand_studio_jobs where id = $1', [created.job.id])
+      ).rows[0]!;
+      expect(job.status).toBe('succeeded');
+      expect(job.params.music?.durationSeconds).toBe(72);
+      expect(job.params.music?.durationSource).toBe('customer');
+      expect(job.estimate_krw).toBe(260);
+      expect(job.usage_krw).toBe(260);
+
+      const out = (await f.sql.query<OutputRow>('select * from brand_studio_outputs where job_id = $1', [created.job.id])).rows[0]!;
+      expect(out.status).toBe('ready');
+      expect(out.mime).toBe('audio/wav');
+      expect(out.duration_ms).toBe(72_000);
+    } finally {
+      vi.unstubAllEnvs();
       await f.db.close();
     }
   });

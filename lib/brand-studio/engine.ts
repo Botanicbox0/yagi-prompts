@@ -21,6 +21,7 @@ import { claimJobs, releaseJob, saveJob, tokenOf, failPendingOutputs } from './j
 import { closeLane, failoverLane, heartbeatFresh, lanesUp, loadLaneClosures, loadLaneHeartbeats, routeJob } from './lanes';
 import { studioModel, type StudioLane, type StudioModel } from './models';
 import { MUSIC_WAIT_CEILING_MS, musicEngineOfModel } from './sound/engine';
+import { MINIMAX_LYRICS_DRAFT_FAILED_DETAIL } from './sound/prepare-music';
 import { PrepareFailure, prepareJob, providerUrl, sendPrompt } from './prepare';
 import { buildStudioRequest, StudioRequestError, type StudioRequestInput } from './provider/requests';
 import { StudioProviderError } from './provider/types';
@@ -55,6 +56,12 @@ export function requestInputOf(deps: Pick<StudioDeps, 'media' | 'env'>, job: Job
     regionCrop: region ? { url: providerUrl(deps, deps.media.url(region.cropKey)), aspect: region.plan.aspect } : null,
     draftTaskId: job.work.draftTaskId ?? null,
     ...(job.kind === 'music' && job.work.enhancer && 'title' in job.work.enhancer ? { designedTitle: job.work.enhancer.title ?? null } : {}),
+    ...(job.kind === 'music' && job.work.enhancer && 'lyrics' in job.work.enhancer && job.work.enhancer.lyrics !== undefined
+      ? { draftedLyrics: job.work.enhancer.lyrics ?? null }
+      : {}),
+    ...(job.kind === 'music' && job.work.enhancer && 'durationSeconds' in job.work.enhancer && job.work.enhancer.durationSeconds !== undefined
+      ? { designedDuration: job.work.enhancer.durationSeconds ?? null }
+      : {}),
   };
 }
 
@@ -222,7 +229,13 @@ async function step(deps: StudioDeps, job: JobRow, token: string): Promise<JobRo
           const prepared = await prepareJob(deps, job);
           return await saveJob(deps.sql, job, token, { final_prompt: prepared.finalPrompt, work: prepared.work });
         } catch (error) {
-          if (error instanceof PrepareFailure) return failJob(deps, job, token, error.code, error.detail);
+          if (error instanceof PrepareFailure) {
+            const withFlag =
+              error.detail === MINIMAX_LYRICS_DRAFT_FAILED_DETAIL
+                ? (await saveJob(deps.sql, job, token, { work: { ...job.work, lyricsDraftFailed: true } })) ?? job
+                : job;
+            return failJob(deps, withFlag, token, error.code, error.detail);
+          }
           throw error;
         }
       }

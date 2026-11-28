@@ -91,6 +91,12 @@ export interface MusicEnhanceMeta {
   /** The track's name: sent to the engine in custom mode, and the list name in both modes. */
   title?: string;
   notes?: string | null;
+  /** MiniMax vocal runs with blank customer lyrics: the studio-drafted lyrics (with bare section tags) sent to the engine. */
+  lyrics?: string;
+  /** Which text model drafted `lyrics` (`'local'` in fake mode without a key). */
+  lyricsModel?: string | null;
+  /** MiniMax runs: optional duration in seconds suggested by the Architect when customer/sentence left duration at default. */
+  durationSeconds?: number | null;
 }
 
 export function designMeta(design: MusicDesign): MusicEnhanceMeta {
@@ -104,6 +110,55 @@ export function designMeta(design: MusicDesign): MusicEnhanceMeta {
     title: design.title,
     notes: design.notes,
   };
+}
+
+/** Open-weights MiniMax Music 3.0 section tag allow-list (bare `[Tag]` on its own line; no inline directions). */
+export const MINIMAX_BARE_TAGS = [
+  'Intro',
+  'Verse',
+  'Pre-Chorus',
+  'Chorus',
+  'Post-Chorus',
+  'Bridge',
+  'Instrumental',
+  'Solo',
+  'Outro',
+] as const;
+
+const MINIMAX_SEQUENCES: Readonly<Record<LyricStructure, readonly string[]>> = {
+  hook: ['[Chorus]'],
+  'hook-verse': ['[Chorus]', '[Verse]', '[Chorus]'],
+  full: ['[Verse]', '[Chorus]', '[Verse]', '[Chorus]', '[Bridge]', '[Chorus]'],
+};
+
+const OWN_SECTION_MARK = /^\s*\[[^\]\n]{1,40}\]\s*$/m;
+
+/**
+ * Marks lyrics for MiniMax Music 3.0 (`minimax/minimax-music3/text-to-music`):
+ *  - Customer lyrics that already carry section tags go byte-for-byte untouched.
+ *  - Untagged stanzas receive bare tags from the 9-tag open-weights set (`[Verse]`, `[Chorus]`, `[Outro]`, ...),
+ *    never Suno's `[Verse 1]`, `[Instrumental Break]`, `[End]`, or bar-length `formLyrics` padding.
+ *  - Every sung line stays byte-for-byte untouched (`withoutAddedLines` returns `ownLyrics(lyrics)`).
+ */
+export function markMinimaxLyrics(lyrics: string, structure: LyricStructure | null): string {
+  const text = ownLyrics(lyrics);
+  if (!text.trim()) return '';
+  if (OWN_SECTION_MARK.test(text)) return text;
+  const lines = text.split('\n');
+  const starts: number[] = [];
+  lines.forEach((line, i) => {
+    if (line.trim() && (i === 0 || !lines[i - 1]!.trim())) starts.push(i);
+  });
+  const seq = MINIMAX_SEQUENCES[structure ?? 'full'];
+  const marks = Array.from({ length: starts.length }, (_, i) => seq[Math.min(i, seq.length - 1)]!);
+  if (starts.length >= 2) marks[starts.length - 1] = '[Outro]';
+  const out: string[] = [];
+  let next = 0;
+  lines.forEach((line, i) => {
+    if (starts[next] === i) out.push(marks[next++]!);
+    out.push(line);
+  });
+  return out.join('\n');
 }
 
 function wayOf(input: MusicDesignInput): MusicWay {
@@ -159,6 +214,39 @@ export function fallbackDesign(input: MusicDesignInput, reason?: string): MusicD
     style: style.slice(0, DESIGN_LIMITS.styleHardMax),
     title: musicTitle(input.prompt),
     lyrics: markLyrics(lyrics, input.structure ?? null, input.plan?.form ?? null),
+    notes: null,
+    source: 'fallback',
+    ...(reason ? { fallbackReason: reason } : {}),
+    profileVersion: MUSIC_PROFILE_VERSION,
+    llmModel: null,
+  };
+}
+
+const MINIMAX_STYLE_HARD_MAX = 2000;
+const MINIMAX_SUNG_IN: Readonly<Record<'ko' | 'en', string>> = {
+  ko: 'Vocals sung in Korean.',
+  en: 'Vocals sung in English.',
+};
+
+/** Deterministic fallback for MiniMax Music 3.0: up to 2,000 chars, preserves line breaks, no Suno form sentence or Suno marks. */
+export function minimaxFallbackDesign(input: MusicDesignInput, reason?: string): MusicDesign {
+  const lyrics = input.vocal ? ownLyrics(input.lyrics) : '';
+  const mode = musicWay({ vocal: input.vocal, lyrics, careful: false });
+  const base = input.prompt.replace(/\r\n?/g, '\n').trim();
+  const suffix = [
+    input.vocal && !lyrics ? MINIMAX_SUNG_IN[input.language] : '',
+    sungWithoutLyrics(input) ? wordsLine(wordsOf(input)) : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+  const style = suffix
+    ? `${base.slice(0, Math.max(1, MINIMAX_STYLE_HARD_MAX - suffix.length - 1)).trim()} ${suffix}`
+    : base.slice(0, MINIMAX_STYLE_HARD_MAX);
+  return {
+    mode,
+    style: style.slice(0, MINIMAX_STYLE_HARD_MAX),
+    title: musicTitle(input.prompt),
+    lyrics: lyrics ? markMinimaxLyrics(lyrics, input.structure ?? null) : '',
     notes: null,
     source: 'fallback',
     ...(reason ? { fallbackReason: reason } : {}),
@@ -372,14 +460,21 @@ export async function designMusic(input: MusicDesignInput, deps: DesignDeps): Pr
 }
 
 /** A design the customer read (and may have edited) in the dock, sent as it is after the same check. */
-export function reviewedDesign(input: MusicDesignInput, edited: { style: string; title?: string | null }): MusicDesign | { problems: string[]; named: boolean } {
+export function reviewedDesign(
+  input: MusicDesignInput,
+  edited: { style: string; title?: string | null },
+  options?: { styleMax?: number; keepLineBreaks?: boolean },
+): MusicDesign | { problems: string[]; named: boolean } {
   const mode = wayOf(input);
-  const style = edited.style.replace(/\s+/g, ' ').trim();
+  const styleMax = options?.styleMax ?? DESIGN_LIMITS.styleHardMax;
+  const style = options?.keepLineBreaks
+    ? edited.style.replace(/\r\n?/g, '\n').trim()
+    : edited.style.replace(/\s+/g, ' ').trim();
   const title = (edited.title ?? '').trim() || musicTitle(input.prompt);
   // The customer's own wording may be short, in Korean, or say "no X": only the hard limits and names stop it.
   const problems: string[] = [];
   if (!style) problems.push('the style is empty');
-  if (style.length > DESIGN_LIMITS.styleHardMax) problems.push(`the style is over ${DESIGN_LIMITS.styleHardMax} characters`);
+  if (style.length > styleMax) problems.push(`the style is over ${styleMax} characters`);
   if (mode === 'custom' && title.length > 80) problems.push('the title is over 80 characters');
   const named = Boolean(namedArtist(style) || namedArtist(title));
   if (named) problems.push('a real artist or song is named');

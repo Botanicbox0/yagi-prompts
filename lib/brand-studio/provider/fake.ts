@@ -68,13 +68,38 @@ interface FakeTask {
   polls: number;
 }
 
+const MINIMAX_MUSIC_PREFIX = 'minimax/minimax-music3/';
+const MINIMAX_WAV_MAX_SECONDS = 75;
+const SYNTH_MAX_SECONDS = 60;
 const fakeWavCache = new Map<number, Uint8Array>();
 
+function concatSynthesizedWav(first: Uint8Array, second: Uint8Array): Uint8Array {
+  const data1 = first.subarray(44);
+  const data2 = second.subarray(44);
+  const totalDataBytes = data1.byteLength + data2.byteLength;
+  const combined = new Uint8Array(44 + totalDataBytes);
+  combined.set(first.subarray(0, 44), 0);
+  combined.set(data1, 44);
+  combined.set(data2, 44 + data1.byteLength);
+  const view = new DataView(combined.buffer, combined.byteOffset, combined.byteLength);
+  view.setUint32(4, 36 + totalDataBytes, true);
+  view.setUint32(40, totalDataBytes, true);
+  return combined;
+}
+
 function fakeMusicWavBytes(durationSec: number): Uint8Array {
-  const clamped = Math.max(1, Math.min(60, Math.round(durationSec)));
+  const clamped = Math.max(1, Math.min(MINIMAX_WAV_MAX_SECONDS, Math.round(durationSec)));
   let cached = fakeWavCache.get(clamped);
   if (!cached) {
-    cached = synthesizePreviewMusicWav({ bpm: 112, keySignature: 'Cm', durationSec: clamped }).bytes;
+    if (clamped <= SYNTH_MAX_SECONDS) {
+      cached = synthesizePreviewMusicWav({ bpm: 112, keySignature: 'Cm', durationSec: clamped }).bytes;
+    } else {
+      // `synthesizePreviewMusicWav` internally caps one pass at 60 s; stitch a 60 s pass + remainder (up to 15 s)
+      // so MiniMax's 61..75 s range yields a genuine RIFF/WAVE file of the exact requested length.
+      const head = fakeMusicWavBytes(SYNTH_MAX_SECONDS);
+      const tail = fakeMusicWavBytes(clamped - SYNTH_MAX_SECONDS);
+      cached = concatSynthesizedWav(head, tail);
+    }
     fakeWavCache.set(clamped, cached);
   }
   return new Uint8Array(cached);
@@ -88,11 +113,11 @@ export function createFakeStudioProvider(options: { pollsBeforeDone?: number } =
     tasks,
     async submit(request: StudioProviderRequest) {
       const video = /-to-video$/.test(request.endpoint);
-      const minimax = request.endpoint.startsWith('minimax/');
+      const minimax = request.endpoint.startsWith(MINIMAX_MUSIC_PREFIX);
       const music = request.endpoint.startsWith('suno/') || minimax;
       const wavSeconds =
         minimax && typeof request.body.duration === 'number' && Number.isFinite(request.body.duration)
-          ? Math.max(1, Math.min(60, Math.round(request.body.duration)))
+          ? Math.max(1, Math.min(MINIMAX_WAV_MAX_SECONDS, Math.round(request.body.duration)))
           : 8;
       const prompt = ['prompt', 'style', 'lyrics', 'title'].map((k) => (typeof request.body[k] === 'string' ? request.body[k] : '')).join(' ');
       const size = fakeImageSize(request.body.aspect_ratio);
@@ -158,7 +183,7 @@ export function createFakeStudioProvider(options: { pollsBeforeDone?: number } =
       if (url.startsWith('fake://video/')) return { bytes: fakeClipBytes(), mime: 'video/mp4' };
       if (url.startsWith('fake://wav/')) {
         const wav = /^fake:\/\/wav\/(\d{1,3})\//.exec(url);
-        const seconds = wav ? Math.max(1, Math.min(60, Number(wav[1]))) : 8;
+        const seconds = wav ? Math.max(1, Math.min(MINIMAX_WAV_MAX_SECONDS, Number(wav[1]))) : 8;
         return { bytes: fakeMusicWavBytes(seconds), mime: 'audio/wav' };
       }
       const audio = /^fake:\/\/audio\/(\d)\//.exec(url);

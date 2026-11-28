@@ -276,6 +276,8 @@ export interface StudioJobWork {
   sheet?: FilmSheet | null;
   /** Failed as `reference_unreadable` (a blueprint with nothing to make it from); the column keeps `failed`. */
   referenceUnreadable?: boolean;
+  /** MiniMax vocal run with blank customer lyrics whose prepare-step lyric draft failed; ends `failed` with 0 credits. */
+  lyricsDraftFailed?: boolean;
   enhanceNotes?: string;
   /** Which rules wrote the sent prompt (lib/brand-studio/enhancer `EnhanceMeta`). Internal; never shown. */
   /** How the prompt was designed: the image/video Architect's record, or the music Architect's (sound/architect.ts). */
@@ -405,6 +407,12 @@ export interface StudioMusicParams {
   title: string;
   /** "더 고르게 만들기" (custom mode only). */
   careful: boolean;
+  /** Sound Studio composer v2 mode when created from v2 (`simple` | `advanced`). */
+  composerMode?: 'simple' | 'advanced';
+  /** MiniMax Music 3.0 (`1..75`): resolved engine `duration` in seconds. */
+  durationSeconds?: number;
+  /** MiniMax Music 3.0: how `durationSeconds` was chosen (`customer` > `sentence` > `default`). */
+  durationSource?: 'customer' | 'sentence' | 'default';
   lyrics?: string;
   /** How the lyrics are marked when sent (SA2, §12.3: 후크만 · 후크와 한 절 · 두 절과 후크). */
   structure?: 'hook' | 'hook-verse' | 'full';

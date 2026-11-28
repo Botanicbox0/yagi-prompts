@@ -5,6 +5,7 @@
 import { creditsOf } from '../credits';
 import { usageKrw } from '../usage-rate';
 import { musicEngine, musicEngineOfModel, type MusicEngine, type MusicModelId, type MusicRequest } from './engine';
+import { MusicRequestError } from './engines/suno-sunra';
 
 /** Our own limits, under the engine's (§7.4). */
 export const MUSIC_LIMITS = { promptMax: 1000, titleMax: 80 } as const;
@@ -19,9 +20,15 @@ export function musicQuoteCredits(request: Pick<MusicRequest, 'mode' | 'careful'
   return creditsOf(musicQuoteKrw(request, engine));
 }
 
-/** The quote in won for a chosen music model (`MusicModelId`); throws on an unknown model id. */
+/**
+ * The quote in won for a chosen music model (`MusicModelId`). Throws on an unknown model id, and throws the same
+ * `MusicRequestError` as the engine when `careful` is asked on a model that has no careful/Max Mode (`minimax-music-3`).
+ */
 export function musicQuoteForModel(modelId: MusicModelId, request: Pick<MusicRequest, 'mode' | 'careful'>): number {
   const engine = musicEngineOfModel(modelId);
   if (!engine) throw new Error(`unknown music model: ${String(modelId)}`);
+  if (request.careful && !engine.capabilities.careful) {
+    throw new MusicRequestError('careful mode is not supported on MiniMax Music 3.0');
+  }
   return musicQuoteKrw(request, engine);
 }
