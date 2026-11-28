@@ -15,6 +15,7 @@ export type PostErrorCode =
   | 'empty_blocks'
   | 'invalid_work'
   | 'invalid_template'
+  | 'test_required'
   | 'unavailable';
 
 export class PostError extends Error {
@@ -38,18 +39,43 @@ export async function postsReady(sql: SqlRunner): Promise<boolean> {
   return rows[0]?.ready === true;
 }
 
-/** Looks up the published public `prompt_items` rows for the slugs referenced in `blocks`. */
+/**
+ * Looks up the published public `prompt_items` rows for the slugs referenced in `blocks`.
+ * Unlisted (`catalog_listed = false`) templates only resolve when owned by `authorUserId` (or studio).
+ */
 export async function resolvePublicTemplateIds(
   sql: SqlRunner,
   slugs: readonly string[],
+  authorUserId?: string | null,
 ): Promise<Map<string, string>> {
   if (slugs.length === 0) return new Map();
   const { rows } = await sql.query<{ id: string; slug: string }>(
     `select id, slug from prompt_items
       where slug = any($1::text[])
         and status = 'published'
-        and audience = 'public'`,
-    [slugs],
+        and audience = 'public'
+        and (
+          coalesce((to_jsonb(prompt_items.*)->>'catalog_listed')::boolean, true) = true
+          or (
+            $2::uuid is not null
+            and (
+              prompt_items.author_id = $2::uuid
+              or exists (
+                select 1 from platform_formats f
+                 where f.template_id = prompt_items.id and f.user_id = $2::uuid and f.status = 'accepted'
+              )
+              or (
+                prompt_items.author_id is null
+                and prompt_items.source = 'yagi'
+                and exists (
+                  select 1 from platform_creators pc
+                   where pc.user_id = $2::uuid and pc.active and to_jsonb(pc.*)->>'payout' = 'company'
+                )
+              )
+            )
+          )
+        )`,
+    [slugs, authorUserId ?? null],
   );
   return new Map(rows.map((row) => [row.slug, row.id]));
 }
@@ -62,6 +88,7 @@ export async function syncPostTemplates(
   tx: SqlRunner,
   postId: string,
   blocks: readonly PostBlock[],
+  authorUserId?: string | null,
 ): Promise<string[]> {
   const previous = (
     await tx.query<{ slug: string }>(
@@ -77,7 +104,7 @@ export async function syncPostTemplates(
   const slugs = extractTemplateSlugs(blocks);
   if (slugs.length === 0) return previous;
 
-  const resolved = await resolvePublicTemplateIds(tx, slugs);
+  const resolved = await resolvePublicTemplateIds(tx, slugs, authorUserId);
   const templateIds = [...resolved.values()];
   if (templateIds.length > 0) {
     await tx.query(

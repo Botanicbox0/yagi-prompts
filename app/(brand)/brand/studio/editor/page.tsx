@@ -17,6 +17,7 @@ import {
   brandStudioEditorV2ChatOpenFor,
   brandStudioEditorV2DefaultFor,
   brandStudioEditorV2Open,
+  brandStudioEditorV2TracksOpenFor,
   brandWorkspacePrototypeLayerOpen,
 } from '@/lib/flags';
 import { NONCE_HEADER } from '@/lib/security/workspace-csp';
@@ -130,6 +131,8 @@ export default async function StudioEditorV2Page({
         }
       : undefined;
 
+  const tracksOpen = brandStudioEditorV2TracksOpenFor(choice.id);
+
   const editor = (
     <EditorV2
       copy={dict.studioEditor}
@@ -152,6 +155,7 @@ export default async function StudioEditorV2Page({
       nonce={nonce}
       {...(spine ? { spine } : {})}
       {...(realChat ? { realChat, chatCopy: dict.studioEditorChat } : {})}
+      {...(tracksOpen ? { tracksOpen: true, tracksCopy: dict.studioEditorTracks } : {})}
     />
   );
 

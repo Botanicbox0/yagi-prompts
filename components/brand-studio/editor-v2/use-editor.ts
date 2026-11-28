@@ -28,7 +28,17 @@ import {
   type AssetRecord,
   type EditorSource,
 } from '@/lib/brand-studio/editor-v2/sources';
-import { fromStored, inheritClip, mergeFilmText, sourcesToMeasure, storedFilmView, type MeasuredSource, type StoredFilmView } from '@/lib/brand-studio/editor-v2/stored';
+import {
+  fromStored,
+  hasStoredOwnedOverlays,
+  inheritClip,
+  legacyOverlayCountOf,
+  mergeFilmText,
+  sourcesToMeasure,
+  storedFilmView,
+  type MeasuredSource,
+  type StoredFilmView,
+} from '@/lib/brand-studio/editor-v2/stored';
 import {
   FIXTURE_MATERIALS,
   FIXTURE_MEASURED_LUFS,
@@ -42,6 +52,7 @@ import {
 import {
   addCaption,
   clipMaxFrames,
+  filmFrames,
   frameStateAt,
   insertClips,
   moveClip as moveClipInSequence,
@@ -57,13 +68,33 @@ import {
   type SpeedPoint,
   spansOf,
   splitAtFrame,
-  totalFrames,
   trimClipEdge,
   updateCaption as updateSequenceCaption,
   type FrameCaption,
   type FrameClip,
   type FrameSequence,
 } from '@/lib/brand-studio/editor-v2/frames';
+import {
+  MAX_OVERLAY_CLIPS,
+  MAX_OVERLAY_TRACKS,
+  allOverlayClips,
+  applyOverlaySpeedCurve,
+  dropOverlayToMain,
+  findOverlayClip,
+  liftMainCutToOverlay,
+  moveClipDownOneTrack,
+  moveClipUpOneTrack,
+  moveOverlayClip,
+  p10DefaultTrackToggles,
+  removeOverlayClips,
+  setOverlayAudio as setSequenceOverlayAudio,
+  setOverlayConstantSpeed as setSequenceOverlayConstantSpeed,
+  splitAllTracksAtFrame,
+  splitOverlayAtFrame,
+  trimOverlayEdge,
+  type TrackRefusal,
+} from '@/lib/brand-studio/editor-v2/tracks';
+import type { StudioEditorTracksCopy } from '@/messages/studio-editor-tracks';
 import { applyChange, mergeWindow, runCurveEdit } from '@/lib/brand-studio/editor-v2/edit-steps';
 import { cloneSpeedCurve } from '@/lib/brand-studio/editor-v2/speed-curve';
 import {
@@ -111,7 +142,7 @@ import type { StudioEditorCopy } from '@/messages/studio-editor';
 import { readFilmText, watchFilmText, writeFilmText } from './film-store';
 import { footageNotFound, readFootage } from './footage-facts';
 import { measureSource } from './measure-fps';
-import { loadShortcutPrefs, saveShortcutPrefs } from './shortcut-store';
+import { loadShortcutPrefs, loadTracksPrefs, saveShortcutPrefs, saveTracksPrefs } from './shortcut-store';
 import {
   DEFAULT_EDITOR_LAYOUT,
   effectiveAssistDock,
@@ -210,6 +241,12 @@ export interface EditorOptions {
   initialWorkspace?: EditorWorkspace;
   /** Default assistant dock when no explicit customer toggle is stored (`'bar'` normally, `'side'` with E-C chat open). */
   defaultAssistDock?: AssistDock;
+  /** Parallel video tracks switch (slice E-T). Default false. */
+  tracksOpen?: boolean;
+  /** Draft dictionary for parallel video tracks (passed only when `tracksOpen` is true). */
+  tracksCopy?: StudioEditorTracksCopy | null;
+  /** UI language for track fallback labels when tracks switch is closed on films carrying v2 overlays. */
+  locale?: 'ko' | 'en';
 }
 
 export type FilmStatus = 'loading' | 'ready';
@@ -297,7 +334,60 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
   /** `0` stopped, `1` playing; `2`/`4` and the negatives are the shuttle (J · K · L). */
   const [rate, setRate] = useState(0);
   const [compare, setCompare] = useState(false);
-  const [magnet, setMagnet] = useState(true);
+  const defaultToggles = p10DefaultTrackToggles();
+  const [magnet, setMagnetState] = useState(defaultToggles.snap);
+  const [linkage, setLinkageState] = useState(defaultToggles.linkage);
+  const [linkageOverlay, setLinkageOverlayState] = useState(defaultToggles.linkageOverlay);
+  const tracksOpen = Boolean(options.tracksOpen && options.tracksCopy);
+  const tracksCopy = tracksOpen ? (options.tracksCopy ?? null) : null;
+  const locale: 'ko' | 'en' = options.locale ?? 'ko';
+  const tracksOpenRef = useRef(tracksOpen);
+  tracksOpenRef.current = tracksOpen;
+  const effectiveOverlayLinkage = tracksOpen && linkage && linkageOverlay;
+  const effectiveOverlayLinkageRef = useRef(effectiveOverlayLinkage);
+  effectiveOverlayLinkageRef.current = effectiveOverlayLinkage;
+  const tracksPrefsRef = useRef({ linkage, linkageOverlay, snap: magnet });
+  tracksPrefsRef.current = { linkage, linkageOverlay, snap: magnet };
+  const setMagnet = useCallback((value: boolean | ((prev: boolean) => boolean)) => {
+    setMagnetState((prev) => {
+      const next = typeof value === 'function' ? value(prev) : value;
+      if (tracksOpenRef.current) {
+        const updated = { ...tracksPrefsRef.current, snap: next };
+        tracksPrefsRef.current = updated;
+        saveTracksPrefs(updated);
+      }
+      return next;
+    });
+  }, []);
+  const setLinkage = useCallback((value: boolean | ((prev: boolean) => boolean)) => {
+    // S7: lock linkage toggles while a chat proposal draft is open so preview and apply cannot disagree.
+    if (draftLockedRef.current) return;
+    setLinkageState((prev) => {
+      const next = typeof value === 'function' ? value(prev) : value;
+      if (tracksOpenRef.current) {
+        const updated = { ...tracksPrefsRef.current, linkage: next };
+        tracksPrefsRef.current = updated;
+        saveTracksPrefs(updated);
+      }
+      return next;
+    });
+  }, []);
+  const setLinkageOverlay = useCallback((value: boolean | ((prev: boolean) => boolean)) => {
+    if (draftLockedRef.current) return;
+    setLinkageOverlayState((prev) => {
+      const next = typeof value === 'function' ? value(prev) : value;
+      if (tracksOpenRef.current) {
+        const updated = { ...tracksPrefsRef.current, linkageOverlay: next };
+        tracksPrefsRef.current = updated;
+        saveTracksPrefs(updated);
+      }
+      return next;
+    });
+  }, []);
+  const [isTracksDragging, setTracksDragging] = useState(false);
+  /** Increments ONLY after explicit parallel-track operations when tracks switch is open (W2 + S5c). */
+  const [trackOpSeq, setTrackOpSeq] = useState(0);
+  const noteTrackOp = useCallback(() => setTrackOpSeq((n) => n + 1), []);
   const [zoomCommand, setZoomCommand] = useState<ZoomCommand>({ kind: 'fit', n: 0 });
   const defaultAssistDock = options.defaultAssistDock ?? 'bar';
   const defaultAssistDockRef = useRef<AssistDock>(defaultAssistDock);
@@ -400,6 +490,15 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
     setShortcutPrefsState(loadShortcutPrefs());
     setMac(/Mac|iPhone|iPad/i.test(navigator.platform || navigator.userAgent));
   }, []);
+  // Parallel-tracks toolbar preferences (linkage switch, Overlay kind, auto snap) loaded only when tracks switch is open (C6).
+  useEffect(() => {
+    if (!tracksOpen) return;
+    const loaded = loadTracksPrefs();
+    tracksPrefsRef.current = loaded;
+    setLinkageState(loaded.linkage);
+    setLinkageOverlayState(loaded.linkageOverlay);
+    setMagnetState(loaded.snap);
+  }, [tracksOpen]);
   const setAssistDock = useCallback((dock: AssistDock) => {
     const next = withAssistDock(layoutRef.current, dock, defaultAssistDockRef.current);
     if (next === layoutRef.current) return;
@@ -440,6 +539,12 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
   // On a real film the cuts come from the document (and its undo history), the captions from the stored
   // film: all of them, each at its offset into its cut (spec E, item A); one past the end is not shown.
   // The same view feeds the preview, the lanes, the lists and the export (`filmForExport`).
+  const storedHasOwnedOverlays = useMemo(() => hasStoredOwnedOverlays(storedFilm), [storedFilm]);
+  const legacyOverlayCount = useMemo(() => legacyOverlayCountOf(storedFilm), [storedFilm]);
+  const maxOwnedOverlays = Math.max(0, MAX_OVERLAY_CLIPS - legacyOverlayCount);
+  const maxOwnedOverlaysRef = useRef(maxOwnedOverlays);
+  maxOwnedOverlaysRef.current = maxOwnedOverlays;
+
   const docSequence = doc.sequence;
   const filmView = useMemo(
     (): StoredFilmView | null =>
@@ -448,10 +553,11 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
             known: catalogue.current,
             unmeasuredSources: unmeasuredSources(),
             tentative,
+            writeOverlays: tracksOpen,
           })
         : null,
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the catalogue and the unmeasured list change with these
-    [isReal, docSequence, storedFilm, tentative, unknownRates, variableRates],
+    [isReal, docSequence, storedFilm, tentative, unknownRates, variableRates, tracksOpen],
   );
   /**
    * Read-only `StoredFilmView` for an unapplied chat draft (S1): includes `inheritClip` entries for
@@ -473,15 +579,16 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
         known,
         unmeasuredSources: unmeasuredSources(),
         tentative,
+        writeOverlays: tracksOpen,
       });
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- matches `filmView` dependencies
-    [isReal, storedFilm, tentative, unknownRates, variableRates],
+    [isReal, storedFilm, tentative, unknownRates, variableRates, tracksOpen],
   );
   const sequence = filmView ? filmView.sequence : docSequence;
   const fps = sequence.fps;
   const spans = useMemo(() => spansOf(sequence), [sequence]);
-  const total = useMemo(() => totalFrames(sequence), [sequence]);
+  const total = useMemo(() => filmFrames(sequence), [sequence]);
   const lastFrame = Math.max(0, total - 1);
   const frame = useMemo(() => frameStateAt(sequence, playhead), [sequence, playhead]);
   const activeClip = frame.active;
@@ -504,10 +611,22 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
 
   /** A change to the cuts. `inherit` pairs each new cut with the cut whose look and framing it keeps. */
   const edit = useCallback(
-    (mutate: (current: FrameSequence) => FrameSequence, inherit?: ReadonlyArray<readonly [string, string]>, coalesce?: string) => {
+    (
+      mutate: (current: FrameSequence) => FrameSequence,
+      inherit?: ReadonlyArray<readonly [string, string]>,
+      coalesce?: string,
+      liftedClipIds?: readonly string[],
+    ) => {
       if (isEditLocked()) return;
       if (inherit) remember(inherit);
-      change((current) => withSequence(current, mutate(current.sequence), inherit), coalesce);
+      change(
+        (current) =>
+          withSequence(current, mutate(current.sequence), inherit, {
+            linkage: effectiveOverlayLinkageRef.current,
+            ...(liftedClipIds && liftedClipIds.length > 0 ? { liftedClipIds } : {}),
+          }),
+        coalesce,
+      );
     },
     [change],
   );
@@ -515,15 +634,34 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
   /**
    * Commits a chat proposal in 1 undo step, lifting the draft lock and recording split `inherit` pairs
    * in `catalogue` (B1 + S5). Still respects `blockedRef` (read-only / loading).
+   * Returns the exact reconciled `FrameSequence` stored in history so chat cards track Undo/Redo accurately.
    */
   const commitChatEdit = useCallback(
-    (mutate: (current: FrameSequence) => FrameSequence, inherit?: ReadonlyArray<readonly [string, string]>) => {
-      if (blockedRef.current) return;
+    (
+      mutate: (current: FrameSequence) => FrameSequence,
+      inherit?: ReadonlyArray<readonly [string, string]>,
+    ): FrameSequence | null => {
+      if (blockedRef.current) return null;
       draftLockedRef.current = false;
       if (inherit && inherit.length > 0) remember(inherit);
       const { merge, mark } = mergeWindow(lastChange.current, undefined, Date.now());
       lastChange.current = mark;
-      setStored((current) => applyChange(current, withSequence(current.doc, mutate(current.doc.sequence), inherit), merge));
+      const baseDoc = docRef.current;
+      // Normal path: build once from `baseDoc`; inside `setStored`, reuse `nextDoc` ONLY when `current.doc === baseDoc`,
+      // otherwise rebuild from `current.doc` so a queued, not-yet-rendered edit is never overwritten (S1).
+      const nextDoc = withSequence(baseDoc, mutate(baseDoc.sequence), inherit, {
+        linkage: effectiveOverlayLinkageRef.current,
+      });
+      setStored((current) => {
+        const applied =
+          current.doc === baseDoc
+            ? nextDoc
+            : withSequence(current.doc, mutate(current.doc.sequence), inherit, {
+                linkage: effectiveOverlayLinkageRef.current,
+              });
+        return applyChange(current, applied, merge);
+      });
+      return nextDoc.sequence;
     },
     [],
   );
@@ -606,10 +744,11 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
       const checks = read.slice(toMeasure.length);
       if (sessionRef.current !== session) return;
       const measured: Record<string, MeasuredSource | null> = { ...Object.fromEntries(checks.filter(([, seen]) => seen !== null)), ...Object.fromEntries(entries) };
-      const film = fromStored(project, measured);
+      const film = fromStored(project, measured, { loadOverlays: tracksOpenRef.current });
+      const allLoadedClips = [...film.sequence.clips, ...allOverlayClips(film.sequence)];
       const unknown = film.sequence.clips.filter((clip) => film.rateUnknown.includes(clip.id)).map((clip) => clip.srcUrl);
       const known: Record<string, number> = {};
-      for (const clip of film.sequence.clips) if (!unknown.includes(clip.srcUrl)) known[clip.srcUrl] = clip.sourceFps;
+      for (const clip of allLoadedClips) if (!unknown.includes(clip.srcUrl)) known[clip.srcUrl] = clip.sourceFps;
       const variable = Object.entries(measured).filter(([, seen]) => seen?.variable).map(([src]) => src);
       noteRates(known, unknown, variable);
       noteMissing([...toMeasure, ...toCheck]);
@@ -650,7 +789,13 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
         conflict: setConflict,
         storageFailed: () => setStorageOk(false),
       },
-      merge: (text, sequence) => mergeFilmText(text, sequence, { known: catalogue.current, unmeasuredSources: unmeasuredSources(), tentative: tentativeRef.current }),
+      merge: (text, sequence) =>
+        mergeFilmText(text, sequence, {
+          known: catalogue.current,
+          unmeasuredSources: unmeasuredSources(),
+          tentative: tentativeRef.current,
+          writeOverlays: tracksOpenRef.current,
+        }),
       canEdit: film.canEdit,
     });
     sessionRef.current = session;
@@ -694,7 +839,12 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
     const read = readFilmText(film.organizationId);
     const sequence = docRef.current.sequence;
     const current = (read.ok ? parseStoredProject(read.text) : null) ?? emptyComposerProject(sequence.aspect);
-    return storedFilmView(sequence, current, { known: catalogue.current, unmeasuredSources: unmeasuredSources(), tentative: tentativeRef.current });
+    return storedFilmView(sequence, current, {
+      known: catalogue.current,
+      unmeasuredSources: unmeasuredSources(),
+      tentative: tentativeRef.current,
+      writeOverlays: tracksOpenRef.current,
+    });
   }, []);
 
   /** The bar's two choices when another tab overwrote this screen's cuts. */
@@ -730,7 +880,11 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
   const select = useCallback((clipId: string, additive: boolean) => {
     setSelectedTitleId(null);
     setSelection((current) => {
-      if (!additive) return current.length === 1 && current[0] === clipId ? [] : [clipId];
+      if (!additive) {
+        // W6: with tracks switch open, clicking an already-selected clip keeps it selected (deselect via blank click / Esc / Alt+X).
+        if (tracksOpenRef.current) return [clipId];
+        return current.length === 1 && current[0] === clipId ? [] : [clipId];
+      }
       return current.includes(clipId) ? current.filter((id) => id !== clipId) : [...current, clipId];
     });
     setScopeMode('selected');
@@ -746,19 +900,73 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
     setScopeMode((mode) => (mode === 'selected' ? 'all' : mode));
   }, []);
 
+  const sayTrackRefusal = useCallback(
+    (refused: TrackRefusal | undefined) => {
+      if (!refused) return;
+      if (refused === 'track_limit') {
+        say(tracksCopy ? fill(tracksCopy.toast.trackLimit, { max: MAX_OVERLAY_TRACKS }) : copy.toast.full);
+      } else if (refused === 'overlay_limit') {
+        say(tracksCopy ? fill(tracksCopy.toast.overlayLimit, { max: MAX_OVERLAY_CLIPS }) : copy.toast.full);
+      } else if (refused === 'last_main_cut') {
+        say(tracksCopy ? tracksCopy.toast.cannotLiftLast : copy.toast.lastCut);
+      } else if (refused === 'below_main') {
+        say(tracksCopy ? tracksCopy.toast.cannotDropBelowMain : copy.toast.full);
+      } else if (refused === 'clip_limit') {
+        say(cutLimitLine(copy));
+      }
+    },
+    [tracksCopy, copy, say],
+  );
+
   // ── Cut ──
   const splitAtPlayhead = useCallback(() => {
     if (isEditLocked()) return;
+    if (tracksOpen && selection.length === 1) {
+      const ov = findOverlayClip(sequence, selection[0]!);
+      if (ov) {
+        const id = newId('cut');
+        const outcome = splitOverlayAtFrame(sequence, ov.clip.id, playhead, id, maxOwnedOverlaysRef.current);
+        if (!outcome.ok) {
+          if (outcome.refused === 'overlay_limit') return sayTrackRefusal('overlay_limit');
+          return say(copy.toast.splitNo);
+        }
+        edit(() => outcome.seq, outcome.inherit);
+        return;
+      }
+    }
     if (sequence.clips.length >= MAX_COMPOSE_CLIPS) return say(cutLimitLine(copy));
     const parent = frameStateAt(sequence, playhead).active;
     if (!parent || parent.offset === 0) return say(copy.toast.splitNo);
     const id = newId('cut');
     edit((current) => splitAtFrame(current, playhead, id), [[id, parent.clip.id]]);
-  }, [sequence, playhead, edit, say, copy]);
+  }, [tracksOpen, selection, sequence, playhead, edit, say, sayTrackRefusal, copy]);
+
+  const splitAllAtPlayhead = useCallback(() => {
+    if (!tracksOpen || isEditLocked()) return;
+    const outcome = splitAllTracksAtFrame(sequence, playhead, () => newId('cut'), MAX_COMPOSE_CLIPS, maxOwnedOverlaysRef.current);
+    if (!outcome.ok) {
+      if (outcome.refused === 'overlay_limit') return sayTrackRefusal('overlay_limit');
+      return say(tracksCopy?.toast.splitAllNo ?? copy.toast.splitNo);
+    }
+    edit(() => outcome.seq, outcome.inherit);
+  }, [tracksOpen, tracksCopy, sequence, playhead, edit, say, sayTrackRefusal, copy]);
 
   const trimToPlayhead = useCallback(
     (edge: 'start' | 'end') => {
       if (isEditLocked()) return;
+      if (tracksOpen && selection.length === 1) {
+        const ov = findOverlayClip(sequence, selection[0]!);
+        if (ov) {
+          const offset = playhead - ov.clip.startFrame;
+          if (offset <= 0 || offset >= ov.clip.frames) return;
+          if (edge === 'start') {
+            edit((current) => trimOverlayEdge(current, ov.clip.id, 'start', offset).seq);
+          } else {
+            edit((current) => trimOverlayEdge(current, ov.clip.id, 'end', offset - ov.clip.frames).seq);
+          }
+          return;
+        }
+      }
       const active = frameStateAt(sequence, playhead).active;
       if (!active || active.offset === 0) return;
       if (edge === 'start') {
@@ -768,25 +976,137 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
         edit((current) => trimClipEdge(current, active.index, 'end', active.offset - active.clip.frames).seq);
       }
     },
-    [sequence, playhead, edit, seek],
+    [tracksOpen, selection, sequence, playhead, edit, seek],
   );
 
   const trimEdge = useCallback(
     (index: number, edge: 'start' | 'end', delta: number) => edit((current) => trimClipEdge(current, index, edge, delta).seq),
     [edit],
   );
+  const trimOverlay = useCallback(
+    (clipId: string, edge: 'start' | 'end', delta: number) => {
+      if (!tracksOpen || isEditLocked()) return;
+      noteTrackOp();
+      edit((current) => trimOverlayEdge(current, clipId, edge, delta).seq);
+    },
+    [tracksOpen, edit, noteTrackOp],
+  );
   const moveClip = useCallback((from: number, to: number) => edit((current) => moveClipInSequence(current, from, to)), [edit]);
+
+  const liftToOverlay = useCallback(
+    (
+      mainIndex: number,
+      target: { kind: 'overlay-row'; trackIndex: number } | { kind: 'new-track'; insertTrackIndex: number },
+      dropFrame: number,
+    ) => {
+      if (!tracksOpen || isEditLocked()) return false;
+      const lifted = docRef.current.sequence.clips[mainIndex];
+      if (!lifted) return false;
+      const outcome = liftMainCutToOverlay(docRef.current.sequence, mainIndex, target, dropFrame, {
+        linkage: effectiveOverlayLinkageRef.current,
+        maxOwnedOverlays: maxOwnedOverlaysRef.current,
+      });
+      if (!outcome.ok) {
+        sayTrackRefusal(outcome.refused);
+        return false;
+      }
+      noteTrackOp();
+      edit(() => outcome.seq, undefined, undefined, [lifted.id]);
+      return true;
+    },
+    [tracksOpen, edit, sayTrackRefusal, noteTrackOp],
+  );
+
+  const dropToMain = useCallback(
+    (clipId: string, insertIndex: number) => {
+      if (!tracksOpen || isEditLocked()) return false;
+      const outcome = dropOverlayToMain(docRef.current.sequence, clipId, insertIndex, MAX_COMPOSE_CLIPS);
+      if (!outcome.ok) {
+        sayTrackRefusal(outcome.refused);
+        return false;
+      }
+      noteTrackOp();
+      edit(() => outcome.seq);
+      return true;
+    },
+    [tracksOpen, edit, sayTrackRefusal, noteTrackOp],
+  );
+
+  const moveOverlay = useCallback(
+    (
+      clipId: string,
+      target: { kind: 'overlay-row'; trackIndex: number } | { kind: 'new-track'; insertTrackIndex: number },
+      startFrame: number,
+    ) => {
+      if (!tracksOpen || isEditLocked()) return false;
+      const outcome = moveOverlayClip(docRef.current.sequence, clipId, target, startFrame);
+      if (!outcome.ok) {
+        sayTrackRefusal(outcome.refused);
+        return false;
+      }
+      noteTrackOp();
+      edit(() => outcome.seq);
+      return true;
+    },
+    [tracksOpen, edit, sayTrackRefusal, noteTrackOp],
+  );
+
+  const moveSelectedUp = useCallback(() => {
+    if (!tracksOpen || isEditLocked()) return false;
+    const seqNow = docRef.current.sequence;
+    const targetId =
+      selection.length === 1 ? selection[0]! : frameStateAt(seqNow, playhead).active?.clip.id ?? null;
+    if (!targetId) return false;
+    const wasMain = seqNow.clips.some((c) => c.id === targetId);
+    const outcome = moveClipUpOneTrack(seqNow, targetId, {
+      linkage: effectiveOverlayLinkageRef.current,
+      maxOwnedOverlays: maxOwnedOverlaysRef.current,
+    });
+    if (!outcome.ok) {
+      sayTrackRefusal(outcome.refused);
+      return false;
+    }
+    noteTrackOp();
+    edit(() => outcome.seq, undefined, undefined, wasMain ? [targetId] : undefined);
+    setSelection([targetId]);
+    setScopeMode('selected');
+    return true;
+  }, [tracksOpen, selection, playhead, edit, sayTrackRefusal, noteTrackOp]);
+
+  const moveSelectedDown = useCallback(() => {
+    if (!tracksOpen || isEditLocked()) return false;
+    const seqNow = docRef.current.sequence;
+    const targetId = selection.length === 1 ? selection[0]! : null;
+    if (!targetId) return false;
+    const outcome = moveClipDownOneTrack(seqNow, targetId, MAX_COMPOSE_CLIPS);
+    if (!outcome.ok) {
+      sayTrackRefusal(outcome.refused);
+      return false;
+    }
+    noteTrackOp();
+    edit(() => outcome.seq);
+    setSelection([targetId]);
+    setScopeMode('selected');
+    return true;
+  }, [tracksOpen, selection, edit, sayTrackRefusal, noteTrackOp]);
 
   const removeClips = useCallback(
     (ids: readonly string[]) => {
       if (isEditLocked()) return;
-      const hit = sequence.clips.filter((clip) => ids.includes(clip.id));
-      if (hit.length === 0) return;
-      if (hit.length >= sequence.clips.length) return say(copy.toast.lastCut);
-      edit((current) => removeClipsFromSequence(current, ids));
+      const mainHits = sequence.clips.filter((clip) => ids.includes(clip.id));
+      const overlayHits = tracksOpen ? allOverlayClips(sequence).filter((clip) => ids.includes(clip.id)) : [];
+      if (mainHits.length === 0 && overlayHits.length === 0) return;
+      if (mainHits.length > 0 && mainHits.length >= sequence.clips.length) return say(copy.toast.lastCut);
+      if (overlayHits.length > 0) noteTrackOp();
+      edit((current) => {
+        let next = current;
+        if (overlayHits.length > 0) next = removeOverlayClips(next, overlayHits.map((c) => c.id));
+        if (mainHits.length > 0) next = removeClipsFromSequence(next, mainHits.map((c) => c.id));
+        return next;
+      });
       setSelection([]);
     },
-    [sequence, edit, say, copy],
+    [tracksOpen, sequence, edit, say, copy, noteTrackOp],
   );
 
   const addMaterial = useCallback(
@@ -902,7 +1222,7 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
       // A shape the cut cannot take leaves it as it is and says why (audit A2); the refused move still keeps a
       // drag's undo window open, and the retime is worked out once (review item 8, lib/brand-studio/editor-v2/edit-steps.ts).
       const clipKey = speedUndoKey(docRef.current.sequence.clips[index]?.id ?? String(index));
-      runCurveEdit({ doc: docRef.current, change, say: (refused) => say(curveRefusalLine(copy, refused)) }, index, points, coalesce ? clipKey : undefined);
+      runCurveEdit({ doc: docRef.current, change, say: (refused) => say(curveRefusalLine(copy, refused)), linkage: effectiveOverlayLinkageRef.current }, index, points, coalesce ? clipKey : undefined);
     },
     [change, say, copy],
   );
@@ -910,6 +1230,43 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
   const setClipAudio = useCallback(
     (index: number, volume: number, muted: boolean) => edit((current) => setSequenceClipAudio(current, index, volume, muted), undefined, 'clip-volume'),
     [edit],
+  );
+  const setOverlayConstantSpeed = useCallback(
+    (clipId: string, rate: number, coalesce = false) => {
+      if (!tracksOpen) return;
+      edit((current) => setSequenceOverlayConstantSpeed(current, clipId, rate), undefined, coalesce ? speedUndoKey(clipId) : undefined);
+    },
+    [tracksOpen, edit],
+  );
+  const setOverlaySpeedCurve = useCallback(
+    (clipId: string, points: readonly SpeedPoint[], coalesce = false) => {
+      if (!tracksOpen || isEditLocked()) return;
+      const base = docRef.current;
+      const first = applyOverlaySpeedCurve(base.sequence, clipId, points);
+      change(
+        (current) => {
+          const result = current === base ? first : applyOverlaySpeedCurve(current.sequence, clipId, points);
+          return result.refused ? null : withSequence(current, result.seq, [], { linkage: effectiveOverlayLinkageRef.current });
+        },
+        coalesce ? speedUndoKey(clipId) : undefined,
+      );
+      if (first.refused) say(curveRefusalLine(copy, first.refused));
+    },
+    [tracksOpen, change, say, copy],
+  );
+  const resetOverlaySpeed = useCallback(
+    (clipId: string) => {
+      if (!tracksOpen) return;
+      edit((current) => setSequenceOverlayConstantSpeed(current, clipId, 1));
+    },
+    [tracksOpen, edit],
+  );
+  const setOverlayAudio = useCallback(
+    (clipId: string, volume: number, muted: boolean) => {
+      if (!tracksOpen) return;
+      edit((current) => setSequenceOverlayAudio(current, clipId, volume, muted), undefined, 'clip-volume');
+    },
+    [tracksOpen, edit],
   );
   const setAspect = useCallback((aspect: ComposeAspect) => edit((current) => setSequenceAspect(current, aspect)), [edit]);
 
@@ -953,7 +1310,9 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
       }));
       remember(copies.map((made, i) => [made.id, source.clips[i]!.id] as const));
       change((current) => {
-        const next = withSequence(current, insertClips(current.sequence, atIndex, copies));
+        const next = withSequence(current, insertClips(current.sequence, atIndex, copies), undefined, {
+          linkage: effectiveOverlayLinkageRef.current,
+        });
         const looks = { ...next.looks };
         const reframe = { ...next.reframe };
         copies.forEach((made, i) => {
@@ -1269,12 +1628,16 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
       case 'shuttleStop': return shuttle(0);
       case 'shuttleForward': return shuttle(1);
       case 'split': return splitAtPlayhead();
+      case 'splitAll': return tracksOpen ? splitAllAtPlayhead() : undefined;
       case 'trimStart': return trimToPlayhead('start');
       case 'trimEnd': return trimToPlayhead('end');
       case 'remove':
         if (selectedTitleId) return removeTitle(selectedTitleId);
         return settled.selection.length > 0 ? removeClips(settled.selection) : undefined;
       case 'magnet': return setMagnet((on) => !on);
+      case 'toggleLinkage': return tracksOpen ? setLinkage((on) => !on) : undefined;
+      case 'moveTrackUp': return tracksOpen ? void moveSelectedUp() : undefined;
+      case 'moveTrackDown': return tracksOpen ? void moveSelectedDown() : undefined;
       case 'undo': return undo();
       case 'redo': return redo();
       case 'copy': return void copyClips();
@@ -1354,6 +1717,20 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
     shuttle,
     magnet,
     setMagnet,
+    linkage,
+    setLinkage,
+    linkageOverlay,
+    setLinkageOverlay,
+    effectiveOverlayLinkage,
+    tracksOpen,
+    tracksCopy,
+    locale,
+    storedHasOwnedOverlays,
+    maxOwnedOverlays,
+    sayTrackRefusal,
+    isTracksDragging,
+    setTracksDragging,
+    trackOpSeq,
     zoom,
     zoomCommand,
     stats,
@@ -1404,9 +1781,16 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
     setProposal,
     propose,
     splitAtPlayhead,
+    splitAllAtPlayhead,
     trimToPlayhead,
     trimEdge,
+    trimOverlay,
     moveClip,
+    liftToOverlay,
+    dropToMain,
+    moveOverlay,
+    moveSelectedUp,
+    moveSelectedDown,
     removeClips,
     addMaterial,
     setSpeed,
@@ -1414,6 +1798,10 @@ export function useEditor(copy: StudioEditorCopy, options: EditorOptions = {}) {
     setSpeedCurve,
     resetSpeed,
     setClipAudio,
+    setOverlayConstantSpeed,
+    setOverlaySpeedCurve,
+    resetOverlaySpeed,
+    setOverlayAudio,
     setAspect,
     copyClips,
     cutClips,

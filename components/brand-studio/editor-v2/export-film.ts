@@ -56,7 +56,7 @@ import {
 import { cutAnchor, effectStartSec, type CutAnchor } from '@/lib/brand-studio/editor-v2/cut-anchor';
 import { choosePath, codecMeasured, colourAdmitted, cutRatesMatch, decodeGroups, pictureFor, pictureTimes, type ExportPath, type ExportPathOverride } from '@/lib/brand-studio/editor-v2/decode-plan';
 import { CURRENT_EXPORT_BACKGROUND, currentExportFrame } from '@/lib/brand-studio/editor-v2/framing';
-import { totalFrames, type FrameSequence } from '@/lib/brand-studio/editor-v2/frames';
+import { filmFrames, type FrameSequence } from '@/lib/brand-studio/editor-v2/frames';
 import { curveTotalFrames, resampleCurvedAudio, resampleCurvedAudioAsync } from '@/lib/brand-studio/editor-v2/speed-curve';
 import { timingOfFile } from '@/lib/brand-studio/editor-v2/container';
 import { soundTrackOf } from '@/lib/brand-studio/editor-v2/media-probe';
@@ -1102,7 +1102,7 @@ export function givenUp(error: unknown): never {
 export async function exportFilm(options: ExportFilmOptions): Promise<ExportFilmResult> {
   const { sequence, extras = null, reframe = {}, framing = 'reframe', burnCaptions = true, path: override = null, onProgress, signal } = options;
   const started = performance.now();
-  const frames = totalFrames(sequence);
+  const frames = filmFrames(sequence);
   if (frames === 0 || sequence.clips.length === 0) throw new ExportStop('empty', 'the film has no frames');
   if (!canConfirmFrames()) throw new ExportStop('unsupported', 'this browser cannot confirm video frames (requestVideoFrameCallback)');
   if (!browserCanExport()) throw new ExportStop('unsupported', 'this browser has no video or audio encoder');

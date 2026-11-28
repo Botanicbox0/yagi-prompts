@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { SHORTCUT_ACTIONS, SHORTCUT_GROUPS, SHORTCUT_SETS } from '@/lib/brand-studio/editor-v2/shortcuts';
 import { studioEditorEn, studioEditorKo } from '@/messages/studio-editor';
 import { studioEditorChatEn, studioEditorChatKo } from '@/messages/studio-editor-chat';
+import { studioEditorTracksEn, studioEditorTracksKo } from '@/messages/studio-editor-tracks';
 
 /** The editing studio copy names no vendor, tool, engine or reference product, and quotes no money. */
 function leaves(value: unknown, path = ''): Array<[string, string]> {
@@ -83,16 +84,20 @@ describe('studio editor copy hygiene', () => {
     /** The reference editors the shortcut sets are modelled on must never be named on screen. */
     const EDITOR_NAMES = [/capcut/i, /캡컷/, /premiere/i, /프리미어/, /davinci/i, /다빈치/, /final\s*cut/i, /파이널\s*컷/, /vrew/i, /브루/];
 
-    for (const [locale, copy, chatCopy] of [
-      ['ko', studioEditorKo, studioEditorChatKo],
-      ['en', studioEditorEn, studioEditorChatEn],
+    for (const [locale, copy, chatCopy, tracksCopy] of [
+      ['ko', studioEditorKo, studioEditorChatKo, studioEditorTracksKo],
+      ['en', studioEditorEn, studioEditorChatEn, studioEditorTracksEn],
     ] as const) {
       it(`${locale} names a set for every shortcut set and a label for every action and group`, () => {
         expect(Object.keys(copy.shortcuts.sets).sort()).toEqual([...SHORTCUT_SETS].sort());
-        // `focusChat` label lives in the switch-gated `messages/studio-editor-chat.ts` dictionary (BLOCKER #1 + W5).
+        // `focusChat` lives in `messages/studio-editor-chat.ts` and tracks-only actions live in `messages/studio-editor-tracks.ts` so `messages/studio-editor.ts` stays byte-identical while switches are closed.
         const actionKeys = [
           ...Object.keys(copy.shortcuts.actions),
           ...(chatCopy.shortcutFocusChat.trim() ? ['focusChat'] : []),
+          ...(tracksCopy.actions.splitAll.trim() ? ['splitAll'] : []),
+          ...(tracksCopy.actions.toggleLinkage.trim() ? ['toggleLinkage'] : []),
+          ...(tracksCopy.actions.moveUp.trim() ? ['moveTrackUp'] : []),
+          ...(tracksCopy.actions.moveDown.trim() ? ['moveTrackDown'] : []),
         ];
         expect(actionKeys.sort()).toEqual([...SHORTCUT_ACTIONS].sort());
         expect(Object.keys(copy.shortcuts.groups).sort()).toEqual(SHORTCUT_GROUPS.map((group) => group.id).sort());
@@ -103,6 +108,7 @@ describe('studio editor copy hygiene', () => {
           ...leaves(copy.shortcuts, 'shortcuts'),
           ...leaves(copy.timeline, 'timeline'),
           ...leaves(chatCopy, 'studioEditorChat'),
+          ...leaves(tracksCopy, 'studioEditorTracks'),
           ...SHORTCUT_SETS.map((id) => [`shortcuts.sets.${id}`, copy.shortcuts.sets[id]] as [string, string]),
         ];
         expect(strings.length).toBeGreaterThan(40);

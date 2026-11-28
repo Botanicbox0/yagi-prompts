@@ -1,10 +1,11 @@
 import { cache } from 'react';
 import { TemplateRatings } from '@/components/community/ratings';
 import type { Metadata } from 'next';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { DEFAULT_LOCALE, isLocale, type Locale } from '@/lib/i18n/config';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { interpolate, localize } from '@/lib/i18n/format';
+import { cachedPromptCardsBySlugs } from '@/lib/prompts/cached-by-slugs';
 import { getPromptCatalog } from '@/lib/prompts/public-catalog';
 import type { PromptCard, PublicMaker } from '@/lib/prompts/catalog';
 import { USE_CASES } from '@/lib/prompts/schemas';
@@ -59,7 +60,12 @@ import { defaultTimelineKeyframes, splitKeyframes } from '@/lib/prompts/keyframe
 import { cachedPromptKeyframes } from '@/lib/prompts/keyframes-cached';
 import { partRows, templatePartsView } from '@/lib/template-director/parts-view';
 import { makerBlogOpen } from '@/lib/posts/flag';
-import { cachedTemplateOriginalInstagram, cachedTemplateStories } from '@/lib/posts/cached-public';
+import {
+  cachedPrimaryBlogPostForTemplate,
+  cachedTemplateOriginalInstagram,
+  cachedTemplateStories,
+} from '@/lib/posts/cached-public';
+import { makerBlogPostHref } from '@/lib/posts/links';
 import { TemplateStories } from '@/components/posts/template-stories';
 import { InstagramLink } from '@/components/posts/instagram-link';
 
@@ -91,11 +97,21 @@ function localeOf(raw: string): Locale {
 }
 
 /** One resolution per request, shared by `generateMetadata` and the render. */
-const resolve = cache(async (slug: string): Promise<{ card: PromptCard | null; all: PromptCard[]; makers: PublicMaker[] }> => {
-  const catalog = await getPromptCatalog();
-  const all = [...catalog.video, ...catalog.image];
-  return { card: all.find((item) => item.slug === slug) ?? null, all, makers: catalog.makers ?? [] };
-});
+const resolve = cache(
+  async (
+    slug: string,
+  ): Promise<{ card: PromptCard | null; unlisted: boolean; all: PromptCard[]; makers: PublicMaker[] }> => {
+    const catalog = await getPromptCatalog();
+    const all = [...catalog.video, ...catalog.image];
+    const listedCard = all.find((item) => item.slug === slug) ?? null;
+    if (listedCard) {
+      return { card: listedCard, unlisted: false, all, makers: catalog.makers ?? [] };
+    }
+    const unlistedCards = await cachedPromptCardsBySlugs([slug]);
+    const unlistedCard = unlistedCards[0] ?? null;
+    return { card: unlistedCard, unlisted: unlistedCard !== null, all, makers: catalog.makers ?? [] };
+  },
+);
 
 /** Up to four neighbours: same medium first, sharing a use case first, newest first (repo order). */
 function related(card: PromptCard, all: PromptCard[]): PromptCard[] {
@@ -113,20 +129,27 @@ export async function generateMetadata({ params }: RouteParams): Promise<Metadat
   const { locale: raw, slug } = await params;
   const locale = localeOf(raw);
   const dict = getDictionary(locale);
-  const { card } = await resolve(slug);
+  const { card, unlisted } = await resolve(slug);
   if (card === null) return unresolvedTemplateMetadata(dict.meta.siteName);
   const [availability, makeInputs] = await Promise.all([cachedSubscriptionAvailability(), cachedMakeInputs(card.id, card.cast ?? 'solo')]);
   // docs/CAST-CATEGORIES.md §5: a pet-only template asks for no face, and its description says so.
   const petOnly = makeInputs !== null && makeInputs.pet && !makeInputs.selfie;
-  return templateMetadata({ card, locale, description: petOnly ? dict.cast.pet.templateDescription : templateDescription(dict, availability.status === 'open'), siteName: dict.meta.siteName });
+  const baseMeta = templateMetadata({ card, locale, description: petOnly ? dict.cast.pet.templateDescription : templateDescription(dict, availability.status === 'open'), siteName: dict.meta.siteName });
+  return unlisted ? { ...baseMeta, robots: { index: false, follow: false } } : baseMeta;
 }
 
 export default async function TemplatePage({ params }: RouteParams) {
   const { locale: raw, slug } = await params;
   const locale = localeOf(raw);
   const dict = getDictionary(locale);
-  const [{ card, all, makers }, availability, campaignCatalog] = await Promise.all([resolve(slug), cachedSubscriptionAvailability(), getCampaignCatalog()]);
+  const [{ card, unlisted, all, makers }, availability, campaignCatalog] = await Promise.all([resolve(slug), cachedSubscriptionAvailability(), getCampaignCatalog()]);
   if (card === null) notFound();
+  if (unlisted && makerBlogOpen()) {
+    const primaryPost = await cachedPrimaryBlogPostForTemplate(card.slug);
+    if (primaryPost) {
+      redirect(`${makerBlogPostHref(locale, primaryPost.handle, primaryPost.slug)}#make-${card.slug}`);
+    }
+  }
   // Built with the page and refreshed with it (tag `prompts`): the median of recent successful renders
   // for this engine and length, or the engine default below ten (lib/twings/typical-wait.ts).
   const waitMinutes = await cachedTypicalWaitMinutes({ engine: resolveEngine(card.engine, card.medium), medium: card.medium, seconds: card.medium === 'video' ? card.runtimeSeconds ?? null : null });

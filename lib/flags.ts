@@ -393,6 +393,21 @@ export function brandStudioEditorV2ChatOpenFor(
 }
 
 /**
+ * Parallel video overlay tracks in Editing Studio v2 (slice E-T). Uses the shared `orgListSwitchOpen` parser:
+ * default OFF; `BRAND_STUDIO_EDITOR_V2_TRACKS=on` with an empty list or `*`/`all` opens every organization,
+ * and a comma-separated `BRAND_STUDIO_EDITOR_V2_TRACKS_ORGS` restricts to those organizations (case-insensitive).
+ * A blank organization id never opens.
+ */
+export function brandStudioEditorV2TracksOpenFor(
+  organizationId: string | null | undefined,
+  env: Record<string, string | undefined> = process.env,
+): boolean {
+  const org = organizationId?.trim();
+  if (!org) return false;
+  return orgListSwitchOpen(env.BRAND_STUDIO_EDITOR_V2_TRACKS, env.BRAND_STUDIO_EDITOR_V2_TRACKS_ORGS, org);
+}
+
+/**
  * The home's news slot (docs/BRAND-PROJECT-SPINE.md §6, slice 3b; migrations 0196/0197): one announcement on the
  * 직접 만들기 home, written from the admin console (`brandNews.save` / `brandNews.publish` / `brandNews.end`) and
  * closed by each person for themselves (`news.dismiss`). Default OFF: open only when the server environment says

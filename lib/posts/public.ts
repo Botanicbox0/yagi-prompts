@@ -459,6 +459,40 @@ export async function loadTemplateOriginalInstagram(
   return url ? parseInstagramPost(url) : null;
 }
 
+/**
+ * Finds the newest published creator blog post written by the template's own author (or studio)
+ * that embeds `templateSlug`. Prevents third-party posts from hijacking `/t/[slug]` redirects.
+ */
+export async function findPrimaryBlogPostForTemplate(
+  sql: SqlRunner,
+  templateSlug: string,
+): Promise<{ handle: string; slug: string } | null> {
+  if (!makerBlogOpen() || !(await postsReady(sql))) return null;
+  const { rows } = await sql.query<{ handle: string; slug: string }>(
+    `select pc.handle, cp.slug
+       from creator_post_templates cpt
+       join prompt_items pi on pi.id = cpt.template_id
+       join creator_posts cp on cp.id = cpt.post_id
+       join platform_creators pc on pc.user_id = cp.user_id
+      where pi.slug = $1
+        and pi.status = 'published'
+        and pi.audience = 'public'
+        and ${PUBLIC_POST_SQL_FILTER}
+        and (
+          pi.author_id = cp.user_id
+          or exists (
+            select 1 from platform_formats f
+             where f.template_id = pi.id and f.user_id = cp.user_id and f.status = 'accepted'
+          )
+          or (pi.author_id is null and pi.source = 'yagi' and to_jsonb(pc.*)->>'payout' = 'company')
+        )
+      order by cp.published_at desc nulls last, cp.updated_at desc
+      limit 1`,
+    [templateSlug],
+  );
+  return rows[0] ?? null;
+}
+
 export async function listPublicBlogFeed(sql: SqlRunner, limit = FEED_POSTS_MAX): Promise<PublicFeedPost[]> {
   if (!makerBlogOpen() || !(await postsReady(sql))) return [];
   const safeLimit = Math.max(1, Math.min(limit, FEED_POSTS_MAX));

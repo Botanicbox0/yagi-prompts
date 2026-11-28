@@ -36,6 +36,8 @@ export interface CurveEditDeps {
   change: (mutate: (current: EditorDoc) => EditorDoc | null, coalesce?: string) => void;
   /** Says why a shape could not go on (audit A2). */
   say: (refused: SpeedCurveRefusal) => void;
+  /** Whether linked overlays follow main-track edits. */
+  linkage?: boolean;
 }
 
 /**
@@ -54,7 +56,7 @@ export function runCurveEdit(
   const first = apply(base.sequence, index, points);
   deps.change((current) => {
     const result = current === base ? first : apply(current.sequence, index, points);
-    return result.refused ? null : withSequence(current, result.seq);
+    return result.refused ? null : withSequence(current, result.seq, [], { linkage: deps.linkage });
   }, coalesce);
   if (first.refused) deps.say(first.refused);
 }

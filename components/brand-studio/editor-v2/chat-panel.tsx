@@ -34,9 +34,11 @@ import {
   validateSequenceForAssist,
 } from '@/lib/brand-studio/editor-v2/assist-project';
 import { formatTimecode, type FrameSequence } from '@/lib/brand-studio/editor-v2/frames';
+import { hasOwnedOverlays, reconcileLinkedOverlays } from '@/lib/brand-studio/editor-v2/tracks';
 import { editorSources, sourceSeconds, type EditorSource } from '@/lib/brand-studio/editor-v2/sources';
 import type { StudioEditorCopy } from '@/messages/studio-editor';
 import type { StudioEditorChatCopy } from '@/messages/studio-editor-chat';
+import type { StudioEditorTracksCopy } from '@/messages/studio-editor-tracks';
 import { requestAssistPlan, ASSIST_CLIENT_TIMEOUT_MS, type AssistClientResponse } from './assist-client';
 import {
   CHAT_UPLOAD_ACCEPT,
@@ -163,7 +165,10 @@ export interface EditorChatSessionInput {
   copy: StudioEditorCopy;
   chatCopy: StudioEditorChatCopy | null;
   playheadBus: PlayheadBus;
-  edit: (mutate: (current: FrameSequence) => FrameSequence, inherit?: ReadonlyArray<readonly [string, string]>) => void;
+  edit: (
+    mutate: (current: FrameSequence) => FrameSequence,
+    inherit?: ReadonlyArray<readonly [string, string]>,
+  ) => FrameSequence | null | void;
   undo: () => void;
   brandProjectId?: string | null;
   sources?: readonly EditorSource[];
@@ -172,6 +177,9 @@ export interface EditorChatSessionInput {
   uploadCopy?: ChatUploadErrorCopy | null;
   uploadClient?: ChatUploadClient;
   uploadMeasure?: (file: Blob, kind: StudioAssetKind) => Promise<MeasuredMedia>;
+  /** Parallel tracks linkage state and draft copy (C9; omitted when tracks switch is closed). */
+  linkage?: boolean;
+  tracksCopy?: StudioEditorTracksCopy | null;
 }
 
 export interface EditorChatSession {
@@ -292,6 +300,8 @@ export function useEditorChatSession(input: EditorChatSessionInput): EditorChatS
     uploadCopy = null,
     uploadClient,
     uploadMeasure,
+    linkage = true,
+    tracksCopy = null,
   } = input;
   const [entries, setEntries] = useState<ChatEntry[]>([]);
   const [draft, setDraftState] = useState('');
@@ -324,6 +334,10 @@ export function useEditorChatSession(input: EditorChatSessionInput): EditorChatS
   copyRef.current = copy;
   const chatCopyRef = useRef(chatCopy);
   chatCopyRef.current = chatCopy;
+  const tracksCopyRef = useRef(tracksCopy);
+  tracksCopyRef.current = tracksCopy;
+  const linkageRef = useRef(linkage);
+  linkageRef.current = linkage;
   const sourcesRef = useRef(sources);
   sourcesRef.current = sources;
   const onAssetSavedRef = useRef(onAssetSaved);
@@ -768,8 +782,8 @@ export function useEditorChatSession(input: EditorChatSessionInput): EditorChatS
           try {
             mapped =
               response.kind === 'plan'
-                ? applyResolvedStepsToSequence(requestBase, response.steps)
-                : applyRulePatchesToSequence(requestBase, response.patches, requestBase);
+                ? applyResolvedStepsToSequence(requestBase, response.steps, { linkage: linkageRef.current })
+                : applyRulePatchesToSequence(requestBase, response.patches, requestBase, { linkage: linkageRef.current });
             if (!mapped.ok) {
               finishWith({
                 id: nextId('n'),
@@ -778,7 +792,24 @@ export function useEditorChatSession(input: EditorChatSessionInput): EditorChatS
               });
               return;
             }
-            lines = diffFrameSequences(requestBase, mapped.sequence, latestCopy, latestChatCopy, mapped.inherit);
+            // B1: `mapped.sequence` is UNADJUSTED; run reconciliation ONLY to compute the card's summary lines
+            // so `withSequence` reconciles exactly once on draft preview and on Apply.
+            const previewReconciled = reconcileLinkedOverlays(
+              requestBase,
+              mapped.sequence,
+              linkageRef.current,
+              mapped.inherit,
+            ).sequence;
+            lines = diffFrameSequences(
+              requestBase,
+              previewReconciled,
+              latestCopy,
+              latestChatCopy,
+              mapped.inherit,
+              tracksCopyRef.current,
+              mapped.movedClipIds,
+              mapped.affectsFilmLength,
+            );
           } catch {
             finishWith({
               id: nextId('n'),
@@ -872,7 +903,10 @@ export function useEditorChatSession(input: EditorChatSessionInput): EditorChatS
         text: raw.slice(0, EDITOR_CHAT_MAX_CHARS),
         ...(chipSummaries(activeChips) ? { chips: chipSummaries(activeChips) } : {}),
       };
-      const outcome = evaluateBatch1Utterance(raw, sequence, context, copy, chatCopy);
+      const outcome = evaluateBatch1Utterance(raw, sequence, context, copy, chatCopy, {
+        linkage: linkageRef.current,
+        tracksCopy: tracksCopyRef.current,
+      });
       const replyEntry: ChatEntry =
         outcome.kind === 'proposal'
           ? {
@@ -953,7 +987,7 @@ export function useEditorChatSession(input: EditorChatSessionInput): EditorChatS
       const inheritPairs = target.inherit;
       appliedBaseByEntry.current.set(entryId, baseSequence);
       dirtyRef.current = true;
-      edit(() => nextSequence, inheritPairs);
+      const committed = edit(() => nextSequence, inheritPairs) ?? nextSequence;
       setEntries((prev) =>
         prev.map((entry) =>
           entry.id === entryId
@@ -962,7 +996,7 @@ export function useEditorChatSession(input: EditorChatSessionInput): EditorChatS
                 kind: 'applied',
                 lines: target.lines,
                 undone: false,
-                historySequence: nextSequence,
+                historySequence: committed,
               }
             : entry,
         ),
@@ -1666,6 +1700,7 @@ export interface EditorChatPanelProps {
   onSetDock: (dock: AssistDock) => void;
   inputRef?: RefObject<HTMLTextAreaElement | null>;
   onEscapeFocus?: () => boolean;
+  tracksCopy?: StudioEditorTracksCopy | null;
 }
 
 /**
@@ -1685,6 +1720,7 @@ export const EditorChatPanel = memo(function EditorChatPanel({
   onSetDock,
   inputRef: externalInputRef,
   onEscapeFocus,
+  tracksCopy = null,
 }: EditorChatPanelProps) {
   const internalInputRef = useRef<HTMLTextAreaElement | null>(null);
   const inputRef = externalInputRef ?? internalInputRef;
@@ -1917,6 +1953,12 @@ export const EditorChatPanel = memo(function EditorChatPanel({
       {session.attachNotice && (
         <p className={styles.chatAttachNotice} role="alert" data-editor-chat-attach-notice>
           {session.attachNotice}
+        </p>
+      )}
+
+      {tracksCopy && hasOwnedOverlays(sequence) && (
+        <p className={styles.chatAttachFootnote} data-editor-chat-upper-note>
+          {tracksCopy.chat.upperOnlyNote}
         </p>
       )}
 

@@ -9,7 +9,8 @@ import type { ComposeColorPresetId, ComposerProject } from '@/lib/brand-studio/c
 import { activeColorGradeForFrame, normalizeColorGradeState } from '@/lib/brand-studio/compose/timeline';
 import { captionsOnFrames, effectStartSec, overlayFrames, type CutAnchor } from './cut-anchor';
 import { storedCutFor } from './export-plan';
-import { totalFrames, visibleCaptions, type FrameSequence } from './frames';
+import { filmFrames, visibleCaptions, type FrameSequence } from './frames';
+import { overlayClipCount } from './tracks';
 
 /**
  * The current editor's names for its colour presets, by the copy key it shows each under
@@ -47,14 +48,17 @@ export interface FilmContents {
   effects: number;
   /** Still images over the picture that show on at least one frame. */
   stills: number;
+  /** Video clips on upper tracks owned by editor v2 (W11). */
+  overlays: number;
 }
 
 /** `anchor`: how the stored film's timed things land on these cuts (lib/brand-studio/editor-v2/cut-anchor.ts). */
 export function filmContents(sequence: FrameSequence, film: ComposerProject | null | undefined, anchor: CutAnchor | null | undefined): FilmContents {
-  const total = totalFrames(sequence);
+  const total = filmFrames(sequence);
   const fps = sequence.fps;
   const seconds = total / fps;
-  if (!film || !anchor) return { cuts: sequence.clips.length, captions: 0, grade: null, music: null, effects: 0, stills: 0 };
+  const overlays = overlayClipCount(sequence);
+  if (!film || !anchor) return { cuts: sequence.clips.length, captions: 0, grade: null, music: null, effects: 0, stills: 0, overlays };
   const shown = visibleCaptions({ ...sequence, captions: captionsOnFrames(film.captions, anchor) }).filter((caption) => caption.text.trim() !== '');
   const grade = normalizeColorGradeState(film.colorGrade);
   const graded = !!grade && sequence.clips.some((clip, index) => activeColorGradeForFrame(film, storedCutFor(film, clip, index)) !== null);
@@ -72,6 +76,7 @@ export function filmContents(sequence: FrameSequence, film: ComposerProject | nu
     effects: (film.sfxClips ?? []).filter((effect) => effect.volume > 0 && !!effect.srcUrl && effectStartSec(anchor, effect) < seconds).length,
     // Shown on at least one frame (export-plan.ts imageOverlaysAt): its first frame is inside the film.
     stills: (film.overlays ?? []).filter((overlay) => overlay.mediaKind === 'image' && overlayFrames(anchor, overlay).first < total).length,
+    overlays,
   };
 }
 

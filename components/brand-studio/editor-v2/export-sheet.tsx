@@ -1,13 +1,15 @@
 'use client';
 
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { fill } from '@/components/brand-studio/copy';
 import { unevenWarning, type ExportPath, type ExportPathOverride } from '@/lib/brand-studio/editor-v2/decode-plan';
 import { LAST_FRAME_QUIET_MAX, SOUND_BYTES_LIMIT, burnsCaptions, formatBytes, notIncluded, writesCaptionFile } from '@/lib/brand-studio/editor-v2/export-plan';
-import { formatTimecode, totalFrames, type FrameClip, type FrameSequence } from '@/lib/brand-studio/editor-v2/frames';
+import { filmFrames, formatTimecode, type FrameClip, type FrameSequence } from '@/lib/brand-studio/editor-v2/frames';
+import { hasOwnedOverlays } from '@/lib/brand-studio/editor-v2/tracks';
+import { studioEditorTracksEn, studioEditorTracksKo, type StudioEditorTracksCopy } from '@/messages/studio-editor-tracks';
 import { captionsToSrt, type EditorWorkspace } from '@/lib/brand-studio/editor-v2/model';
 import { filmContents } from '@/lib/brand-studio/editor-v2/film-contents';
-import type { StoredFilmView } from '@/lib/brand-studio/editor-v2/stored';
+import { hasStoredOwnedOverlays, type StoredFilmView } from '@/lib/brand-studio/editor-v2/stored';
 import { browserCanExport, plannedPath, type SourcePath } from './export-film';
 import { cancelExport, exportJobSnapshot, idleExportJob, startExport, subscribeExportJob, watchExportJob, type ExportJob, type ExportRequest } from './export-job';
 import { ExportKeep, type ExportKeepCopy, type KeepOptions } from './export-keep';
@@ -51,12 +53,16 @@ export function ExportSheet({
   autoDownload = true,
   keep = null,
   brandProjectId,
+  tracksCopy = null,
+  locale = 'ko',
 }: {
   api: EditorApi;
   exportPath?: ExportPathOverride;
   autoDownload?: boolean;
   keep?: { copy: ExportKeepCopy; title: string } | null;
   brandProjectId?: string | null;
+  tracksCopy?: StudioEditorTracksCopy | null;
+  locale?: 'ko' | 'en';
 }) {
   const { copy, doc, sequence } = api;
   const e = copy.export;
@@ -92,12 +98,32 @@ export function ExportSheet({
   const sampleDoc = real ? null : doc;
   const open = real ? [] : (Object.keys(api.openCount) as EditorWorkspace[]).filter((workspace) => api.openCount[workspace] > 0);
   const openTotal = open.reduce((sum, workspace) => sum + api.openCount[workspace], 0);
-  const frames = totalFrames(sequence);
+  const frames = filmFrames(sequence);
   const empty = frames === 0;
-  const missing = notIncluded({ sequence, doc: sampleDoc, extras: real ? (view?.film ?? null) : null });
+  const missing = useMemo(
+    () => notIncluded({ sequence, doc: sampleDoc, extras: real ? (view?.film ?? null) : null }),
+    [sequence, sampleDoc, real, view],
+  );
   const running = job.status === 'running';
   const uneven = real ? unevenClipOnSeek(sequence, variableRates, paths) : undefined;
-  const block = exportBlockOf({ real, readOnly: api.readOnly, empty, supported, sequence, unknownRates: api.unknownRates, missingSources: api.missingSources });
+  const storedHasOwnedOverlays = useMemo(
+    () => api.storedHasOwnedOverlays || hasStoredOwnedOverlays(view?.film),
+    [api.storedHasOwnedOverlays, view],
+  );
+  const viewContents = useMemo(
+    () => (real && view ? filmContents(view.sequence, view.film, view.anchor) : null),
+    [real, view],
+  );
+  const block = exportBlockOf({
+    real,
+    readOnly: api.readOnly,
+    empty,
+    supported,
+    sequence,
+    unknownRates: api.unknownRates,
+    missingSources: api.missingSources,
+    storedHasOwnedOverlays,
+  });
   const blocked = block !== null;
 
   const start = () => {
@@ -173,10 +199,21 @@ export function ExportSheet({
           <dd>{sequence.captions.length > 0 ? copy.captions.output[sampleDoc ? sampleDoc.captionSettings.output : 'burn'] : e.captionsNone}</dd>
         </div>
       </dl>
-      {real && view && (
+      {viewContents && (
         <section className={styles.section} data-editor-export-contents>
           <h3>{e.contents.heading}</h3>
-          <FilmContentsList contents={filmContents(view.sequence, view.film, view.anchor)} copy={copy} gradeNames={api.gradeNames} withCuts />
+          <FilmContentsList contents={{ ...viewContents, overlays: 0 }} copy={copy} gradeNames={api.gradeNames} withCuts />
+          {api.tracksOpen && viewContents.overlays > 0 && (
+            <ul className={styles.filmContents} data-editor-contents-owned="overlays">
+              <li data-editor-contents-row="overlays">
+                {fill(
+                  tracksCopy?.export.contentsOverlays ??
+                    (locale === 'ko' ? studioEditorTracksKo.export.contentsOverlays : studioEditorTracksEn.export.contentsOverlays),
+                  { count: viewContents.overlays },
+                )}
+              </li>
+            </ul>
+          )}
         </section>
       )}
       {missing.length > 0 && (
@@ -198,7 +235,7 @@ export function ExportSheet({
         <>
           {block && (
             <p className={styles.note} data-editor-export-blocked={block.as}>
-              {exportBlockSentence(copy, block)}
+              {exportBlockSentence(copy, block, tracksCopy, locale)}
             </p>
           )}
           {!blocked && uneven && (
@@ -223,7 +260,9 @@ type ExportCopy = EditorApi['copy']['export'];
  * whose file is confirmed missing (`missing`, audit A4: a 404 the organization's record confirms), a cut whose footage rate is not measured yet (`rate`: it
  * cannot be exported frame-exactly). The last two are the organization's film only, and name the first such cut.
  */
-export type ExportBlock = { as: 'read-only' | 'empty' | 'unsupported'; clip: null } | { as: 'missing' | 'rate'; clip: FrameClip };
+export type ExportBlock =
+  | { as: 'read-only' | 'empty' | 'unsupported' | 'overlay-tracks'; clip: null }
+  | { as: 'missing' | 'rate'; clip: FrameClip };
 
 export function exportBlockOf(input: {
   real: boolean;
@@ -233,10 +272,15 @@ export function exportBlockOf(input: {
   sequence: FrameSequence;
   unknownRates: Readonly<Record<string, true>>;
   missingSources: Readonly<Record<string, true>>;
+  /** S5: true when the stored film carries v2-owned overlay blocks, even if the tracks switch was later closed. */
+  storedHasOwnedOverlays?: boolean;
 }): ExportBlock | null {
   if (input.readOnly) return { as: 'read-only', clip: null };
   if (input.empty) return { as: 'empty', clip: null };
   if (!input.supported) return { as: 'unsupported', clip: null };
+  // C3 + S5: block export whenever editor-v2-owned overlay clips are present in the sequence OR stored film.
+  // Legacy video overlays (no `frameV2`) are never blocked and keep today's export notice.
+  if (hasOwnedOverlays(input.sequence) || input.storedHasOwnedOverlays) return { as: 'overlay-tracks', clip: null };
   if (!input.real) return null;
   const missing = input.sequence.clips.find((clip) => input.missingSources[clip.srcUrl]);
   if (missing) return { as: 'missing', clip: missing };
@@ -244,7 +288,12 @@ export function exportBlockOf(input: {
   return unmeasured ? { as: 'rate', clip: unmeasured } : null;
 }
 
-export function exportBlockSentence(copy: EditorApi['copy'], block: ExportBlock): string {
+export function exportBlockSentence(
+  copy: EditorApi['copy'],
+  block: ExportBlock,
+  tracksCopy?: StudioEditorTracksCopy | null,
+  locale: 'ko' | 'en' = 'ko',
+): string {
   switch (block.as) {
     case 'read-only':
       return copy.real.readOnly;
@@ -252,6 +301,12 @@ export function exportBlockSentence(copy: EditorApi['copy'], block: ExportBlock)
       return copy.export.empty;
     case 'unsupported':
       return copy.export.unsupported;
+    case 'overlay-tracks': {
+      const fallback = locale === 'ko'
+        ? studioEditorTracksKo.export.blocked
+        : studioEditorTracksEn.export.blocked;
+      return tracksCopy?.export.blocked ?? fallback;
+    }
     case 'missing':
       return fill(copy.export.sourceMissing, { clip: block.clip.label });
     case 'rate':

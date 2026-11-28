@@ -149,3 +149,8 @@ export function overlayFrames(anchor: CutAnchor, overlay: Pick<ComposeOverlayCli
 export function effectStartSec(anchor: CutAnchor, effect: { startSec: number }): number {
   return storedSecToFilmSec(anchor, effect.startSec);
 }
+
+/** Stored start/end seconds of an overlay (keeps all stored-time reads inside `cut-anchor.ts`). */
+export function storedOverlaySeconds(overlay: Pick<ComposeOverlayClip, 'startSec' | 'endSec'>): { start: number; end: number } {
+  return { start: overlay.startSec, end: overlay.endSec };
+}

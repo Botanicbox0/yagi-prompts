@@ -11,7 +11,7 @@
  */
 import type { ComposeCaption, ComposeClip, ComposeOverlayClip, ComposerProject } from '@/lib/brand-studio/compose/timeline';
 import type { TimingAnswer } from './container';
-import { frameStateAt, spansOf, totalFrames, type FrameClip, type FrameSequence } from './frames';
+import { filmFrames, frameStateAt, spansOf, totalFrames, type FrameClip, type FrameSequence } from './frames';
 import { overlayFrames, type CutAnchor } from './cut-anchor';
 import { isNeutral, type EditorDoc } from './model';
 import { cloneSpeedCurve, curveAverageSpeed, curveStartMedia } from './speed-curve';
@@ -180,7 +180,7 @@ export interface AudioPlan {
 }
 
 export function filmSampleCount(sequence: FrameSequence, sampleRate = EXPORT_SAMPLE_RATE): number {
-  return Math.ceil((totalFrames(sequence) * sampleRate) / sequence.fps - 1e-9);
+  return Math.ceil((filmFrames(sequence) * sampleRate) / sequence.fps - 1e-9);
 }
 
 /** Each cut's sound: where it sits in the file, to the sample, and where it is read from. */
@@ -350,7 +350,10 @@ export function notIncluded(input: { sequence: FrameSequence; doc?: ExportDocVie
     if (burnsCaptions(doc) && sequence.captions.some((caption) => caption.text.trim() !== '')) out.add('captionLook');
   }
   if (extras) {
-    if ((extras.overlays ?? []).some((overlay) => overlay.mediaKind === 'video')) out.add('videoOverlays');
+    // Legacy video overlays (without editor v2's `frameV2` block) keep today's export notice (C3).
+    if ((extras.overlays ?? []).some((overlay) => overlay.mediaKind === 'video' && !('frameV2' in overlay && (overlay as { frameV2?: unknown }).frameV2))) {
+      out.add('videoOverlays');
+    }
     if (extras.clips.some((clip) => clip.transitionIn && clip.transitionIn !== 'none')) out.add('transitions');
   }
   return NOT_INCLUDED_KEYS.filter((key) => out.has(key));

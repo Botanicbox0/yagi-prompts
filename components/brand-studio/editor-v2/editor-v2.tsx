@@ -5,13 +5,15 @@ import { fill } from '@/components/brand-studio/copy';
 import { ProjectChip, ProjectGoneNotice, useProjectSpine } from '@/components/brand-studio/project-chip';
 import { WorkspaceBell } from '@/components/brand-workspace/bell';
 import type { ExportPathOverride } from '@/lib/brand-studio/editor-v2/decode-plan';
-import { frameStateAt, spansOf, totalFrames } from '@/lib/brand-studio/editor-v2/frames';
+import { filmFrames, frameStateAt, spansOf } from '@/lib/brand-studio/editor-v2/frames';
 import { EDITOR_WORKSPACES, withSequence, type EditorWorkspace } from '@/lib/brand-studio/editor-v2/model';
 import { filmHasSpeedTheOldEditorChanges } from '@/lib/brand-studio/editor-v2/stored';
-import { actionFor, bindingFromEvent, formatBinding, typingTarget } from '@/lib/brand-studio/editor-v2/shortcuts';
+import { TRACKS_ONLY_ACTIONS, actionFor, bindingFromEvent, formatBinding, typingTarget } from '@/lib/brand-studio/editor-v2/shortcuts';
+import { OVERLAY_ROW_HEIGHT, hasOwnedOverlays, overlayTracksOf } from '@/lib/brand-studio/editor-v2/tracks';
 import { brandProjectIdOf, type StudioSpineProps } from '@/lib/brand-studio/open-project';
-import type { StudioEditorCopy } from '@/messages/studio-editor';
+import { studioEditorEn, type StudioEditorCopy } from '@/messages/studio-editor';
 import type { StudioEditorChatCopy } from '@/messages/studio-editor-chat';
+import { studioEditorTracksEn, studioEditorTracksKo, type StudioEditorTracksCopy } from '@/messages/studio-editor-tracks';
 import { Assistant } from './assistant';
 import { validChatExamples, type ChatExampleChip } from './chat-model';
 import { EditorChatPanel, createPlayheadBus, useEditorChatSession, type PlayheadBus } from './chat-panel';
@@ -102,6 +104,10 @@ export interface EditorV2Props {
   } | null;
   /** Dedicated right-side chat dictionary (slice E-C). Passed only when `realChat` is open. */
   chatCopy?: StudioEditorChatCopy | null;
+  /** Parallel video tracks switch (slice E-T). Omitted when closed or in sample mode. */
+  tracksOpen?: boolean;
+  /** Dedicated parallel tracks draft dictionary (slice E-T). Passed only when `tracksOpen` is true. */
+  tracksCopy?: StudioEditorTracksCopy | null;
 }
 
 /**
@@ -115,13 +121,21 @@ export interface EditorV2Props {
  * the cuts back (V1). Only cutting is real there; colour, sound and captions are locked and say so.
  * Without it, it runs the sample film and keeps everything in memory.
  */
-export function EditorV2({ copy, currentEditorHref, initialWorkspace, exportPath = null, autoDownload = true, real, keep = null, spine = null, nonce, realChat = null, chatCopy = null }: EditorV2Props) {
+export function EditorV2({ copy, currentEditorHref, initialWorkspace, exportPath = null, autoDownload = true, real, keep = null, spine = null, nonce, realChat = null, chatCopy = null, tracksOpen = false, tracksCopy = null }: EditorV2Props) {
   const spineCtx = useProjectSpine();
   const spineOpen = real ? (spineCtx?.open ?? spine?.open ?? undefined) : undefined;
   const spineActive = Boolean(spineOpen);
   const openBrandProjectId = spineOpen ? brandProjectIdOf(spineOpen) : undefined;
   const chatOpen = Boolean(real && realChat && chatCopy);
-  const api = useEditor(copy, { real, initialWorkspace, defaultAssistDock: chatOpen ? 'side' : 'bar' });
+  const tracksActive = Boolean(real && tracksOpen && tracksCopy);
+  const locale: 'ko' | 'en' = realChat?.locale ?? keep?.locale ?? (copy === studioEditorEn ? 'en' : 'ko');
+  const api = useEditor(copy, {
+    real,
+    initialWorkspace,
+    defaultAssistDock: chatOpen ? 'side' : 'bar',
+    locale,
+    ...(tracksActive ? { tracksOpen: true, tracksCopy } : {}),
+  });
   const playheadBusRef = useRef<PlayheadBus | null>(null);
   if (!playheadBusRef.current) playheadBusRef.current = createPlayheadBus(api.playhead);
   useEffect(() => {
@@ -171,6 +185,7 @@ export function EditorV2({ copy, currentEditorHref, initialWorkspace, exportPath
     uploadCopy: realChat?.uploadCopy ?? null,
     uploadClient: realChat?.uploadClient,
     uploadMeasure: realChat?.uploadMeasure,
+    ...(tracksActive ? { linkage: api.effectiveOverlayLinkage, tracksCopy } : {}),
   });
   const [rightTab, setRightTab] = useState<'inspector' | 'chat'>('chat');
   // ARIA-only wide-layout flag (>1360px): layout itself stays 100% CSS-driven (0 CLS), while above 1360px
@@ -200,11 +215,12 @@ export function EditorV2({ copy, currentEditorHref, initialWorkspace, exportPath
   const activeDraftInherit = chatOpen ? (chatSession?.activeDraftInherit ?? undefined) : undefined;
   const displayApi: EditorApi = useMemo(() => {
     if (!activeDraft) return api;
-    // Derive draft's `filmView` with pending split `inheritClip` entries WITHOUT mutating `catalogue` (S1).
-    const draftFilmView = api.previewDraftView(activeDraft, activeDraftInherit);
-    const draftDoc = withSequence(api.doc, activeDraft, activeDraftInherit);
-    const draftSequence = draftFilmView ? draftFilmView.sequence : activeDraft;
-    const total = totalFrames(draftSequence);
+    // B1: reconcile linked overlays ONCE via `withSequence`, then derive `filmView` from the reconciled
+    // sequence with pending split `inheritClip` entries WITHOUT mutating `catalogue` (S1).
+    const draftDoc = withSequence(api.doc, activeDraft, activeDraftInherit, { linkage: api.effectiveOverlayLinkage });
+    const draftFilmView = api.previewDraftView(draftDoc.sequence, activeDraftInherit);
+    const draftSequence = draftFilmView ? draftFilmView.sequence : draftDoc.sequence;
+    const total = filmFrames(draftSequence);
     const lastFrame = Math.max(0, total - 1);
     const frame = frameStateAt(draftSequence, api.playhead);
     return {
@@ -341,7 +357,16 @@ export function EditorV2({ copy, currentEditorHref, initialWorkspace, exportPath
   }, [api.assistDock, api.workspace, api.real]);
 
   const videoLaneHeight = effectiveLaneHeight(api.layout, 'video', api.workspace, api.real);
-  const aboveVideoHeights = aboveVideoLaneHeights(api.layout, api.workspace, api.real);
+  const baseAboveVideoHeights = aboveVideoLaneHeights(api.layout, api.workspace, api.real);
+  // C5: overlay rows have a fixed height in T1 (no store key) and enter timelineBounds ONLY when the
+  // tracks switch is open and at least one overlay row exists or a track drag is in progress.
+  const overlayRowCount = tracksActive
+    ? overlayTracksOf(displayApi.sequence).length + (api.isTracksDragging ? 1 : 0)
+    : 0;
+  const aboveVideoHeights =
+    overlayRowCount > 0
+      ? [...baseAboveVideoHeights, ...Array.from({ length: overlayRowCount }, () => OVERLAY_ROW_HEIGHT)]
+      : baseAboveVideoHeights;
   const bounds = timelineBounds({
     editorHeight: chrome.editorHeight,
     assistDock: api.assistDock,
@@ -454,11 +479,13 @@ export function EditorV2({ copy, currentEditorHref, initialWorkspace, exportPath
     const transportH = transportEl?.getBoundingClientRect?.().height ?? 0;
     const topH = topRef.current?.getBoundingClientRect?.().height ?? 0;
     const assistH = (bottomRef.current?.querySelector?.('[data-editor-assist="bar"]') as HTMLElement | null | undefined)?.getBoundingClientRect?.().height ?? 0;
-    const liveBounds = timelineBounds({
-      editorHeight: readEditorHeight(rootRef.current),
-      assistDock: cur.assistDock,
-      videoLaneHeight: effectiveLaneHeight(cur.layout, 'video', cur.workspace, cur.real),
-      aboveVideoHeights: aboveVideoLaneHeights(cur.layout, cur.workspace, cur.real),
+      const baseAbove = aboveVideoLaneHeights(cur.layout, cur.workspace, cur.real);
+      const ovCount = cur.tracksOpen ? overlayTracksOf(cur.sequence).length + (cur.isTracksDragging ? 1 : 0) : 0;
+      const liveBounds = timelineBounds({
+        editorHeight: readEditorHeight(rootRef.current),
+        assistDock: cur.assistDock,
+        videoLaneHeight: effectiveLaneHeight(cur.layout, 'video', cur.workspace, cur.real),
+        aboveVideoHeights: ovCount > 0 ? [...baseAbove, ...Array.from({ length: ovCount }, () => OVERLAY_ROW_HEIGHT)] : baseAbove,
       topBarHeight: topH >= 24 ? topH : chromeRef.current.topBarHeight,
       assistBarHeight: assistH >= 24 ? assistH : chromeRef.current.assistBarHeight,
       previewChromeHeight: transportH >= 24 ? Math.round(transportH + 22) : chromeRef.current.previewChromeHeight,
@@ -550,6 +577,7 @@ export function EditorV2({ copy, currentEditorHref, initialWorkspace, exportPath
       }
       const action = actionFor(bindingFromEvent(event, editor.mac), editor.shortcutMap);
       if (!action) return;
+      if (TRACKS_ONLY_ACTIONS.has(action) && !editor.tracksOpen) return;
       if (action === 'focusChat') {
         const chatState = chatKeyRef.current;
         if (!chatState.chatOpen) return;
@@ -597,7 +625,19 @@ export function EditorV2({ copy, currentEditorHref, initialWorkspace, exportPath
       {emitPrepaintScript && <script data-ev-prepaint="" nonce={nonce} suppressHydrationWarning dangerouslySetInnerHTML={{ __html: prepaintScript }} />}
       <header ref={topRef} className={styles.top}>
         <div className={styles.topLeft}>
-          <OldEditorLink copy={copy} href={currentEditorHref} speedDiffers={api.real && filmHasSpeedTheOldEditorChanges(api.sequence)} />
+          <OldEditorLink
+            copy={copy}
+            href={currentEditorHref}
+            speedDiffers={api.real && filmHasSpeedTheOldEditorChanges(api.sequence)}
+            overlaysNote={
+              api.real && (hasOwnedOverlays(api.sequence) || api.storedHasOwnedOverlays)
+                ? (tracksCopy?.classic.overlaysNote ??
+                    (locale === 'ko'
+                      ? studioEditorTracksKo.classic.overlaysNote
+                      : studioEditorTracksEn.classic.overlaysNote))
+                : null
+            }
+          />
           {real ? (
             <>
               <h1>{fill(copy.real.filmName, { name: real.organizationName })}</h1>
@@ -737,6 +777,7 @@ export function EditorV2({ copy, currentEditorHref, initialWorkspace, exportPath
                 onSetDock={api.setAssistDock}
                 inputRef={chatInputRef}
                 onEscapeFocus={onChatEscapeFocus}
+                {...(tracksActive ? { tracksCopy } : {})}
               />
             </div>
           </div>
@@ -809,11 +850,19 @@ export function EditorV2({ copy, currentEditorHref, initialWorkspace, exportPath
           exportPath={exportPath}
           autoDownload={autoDownload}
           keep={exportKeep}
+          locale={locale}
           {...(openBrandProjectId ? { brandProjectId: openBrandProjectId } : {})}
+          {...(tracksActive ? { tracksCopy } : {})}
         />
       )}
       {real && keep && exportKeep && <ExportShareHost organizationId={real.organizationId} locale={keep.locale} />}
-      {api.shortcutsOpen && <ShortcutsPanel api={api} chatCopy={chatOpen ? chatCopy : null} />}
+      {api.shortcutsOpen && (
+        <ShortcutsPanel
+          api={api}
+          chatCopy={chatOpen ? chatCopy : null}
+          {...(tracksActive ? { tracksCopy } : {})}
+        />
+      )}
       {api.toast && <p className={styles.toast} role="status" data-editor-toast>{api.toast}</p>}
     </div>
   );
@@ -821,34 +870,52 @@ export function EditorV2({ copy, currentEditorHref, initialWorkspace, exportPath
 
 /**
  * The header's way back to the earlier editor, as its tooltip: on the organization's film with a cut the
- * earlier editor plays at another speed, the same warning the locked workspaces' link carries (audit B5).
+ * earlier editor plays at another speed, or with upper-track overlay clips (S6), carries the warning.
  */
-export function oldEditorLinkTitle(copy: StudioEditorCopy, speedDiffers: boolean): string {
-  return speedDiffers ? `${copy.notice.current} · ${copy.real.locked.classicSpeed}` : copy.notice.current;
+export function oldEditorLinkTitle(copy: StudioEditorCopy, speedDiffers: boolean, overlaysNote?: string | null): string {
+  const notes: string[] = [];
+  if (speedDiffers) notes.push(copy.real.locked.classicSpeed);
+  if (overlaysNote) notes.push(overlaysNote);
+  return notes.length > 0 ? `${copy.notice.current} · ${notes.join(' · ')}` : copy.notice.current;
 }
 
 /**
- * The header's icon back to the earlier editor. With a cut the earlier editor plays at another speed it carries
- * the warning twice: as its tooltip for the mouse, and as hidden text the link points to (`aria-describedby`) for
- * keyboard and screen-reader users, who never see a tooltip (review item 4). Nothing visible is added.
+ * The header's icon back to the earlier editor. With a cut the earlier editor plays at another speed or
+ * upper-track overlay clips (S6) it carries the warning twice: as its tooltip for the mouse, and as hidden
+ * text the link points to (`aria-describedby`) for keyboard and screen-reader users. Nothing visible is added.
  */
-export function OldEditorLink({ copy, href, speedDiffers }: { copy: StudioEditorCopy; href: string; speedDiffers: boolean }) {
+export function OldEditorLink({
+  copy,
+  href,
+  speedDiffers,
+  overlaysNote = null,
+}: {
+  copy: StudioEditorCopy;
+  href: string;
+  speedDiffers: boolean;
+  overlaysNote?: string | null;
+}) {
   const noteId = useId();
+  const notes: string[] = [];
+  if (speedDiffers) notes.push(copy.real.locked.classicSpeed);
+  if (overlaysNote) notes.push(overlaysNote);
+  const hasNote = notes.length > 0;
   return (
     <>
       <a
         className={styles.iconBtn}
         href={href}
         aria-label={copy.notice.current}
-        aria-describedby={speedDiffers ? noteId : undefined}
-        title={oldEditorLinkTitle(copy, speedDiffers)}
+        aria-describedby={hasNote ? noteId : undefined}
+        title={oldEditorLinkTitle(copy, speedDiffers, overlaysNote)}
         data-editor-current
+        data-editor-current-overlays={overlaysNote ? '' : undefined}
       >
         <EditorIcon name="back" />
       </a>
-      {speedDiffers && (
+      {hasNote && (
         <span id={noteId} className={styles.srOnly}>
-          {copy.real.locked.classicSpeed}
+          {notes.join(' ')}
         </span>
       )}
     </>

@@ -25,6 +25,7 @@ import { studioComposeEn } from './studio-compose';
 import { studioSoundEn } from './studio-sound';
 import { studioEditorEn } from './studio-editor';
 import { studioEditorChatEn } from './studio-editor-chat';
+import { studioEditorTracksEn } from './studio-editor-tracks';
 import { studioWorkflowsEn } from './studio-workflows';
 import { studioShareDialogEn } from './studio-share-dialog';
 import { adminConsoleEn } from './admin-console';
@@ -83,6 +84,7 @@ export const en = {
   studioSound: studioSoundEn,
   studioEditor: studioEditorEn,
   studioEditorChat: studioEditorChatEn,
+  studioEditorTracks: studioEditorTracksEn,
   studioWorkflows: studioWorkflowsEn,
   adminConsole: adminConsoleEn,
   brandHome: brandHomeEn,
@@ -6899,8 +6901,24 @@ export const en = {
     fieldPromptMetaPlaceholder: 'e.g. Video · 9:16 · Seedance 2.5',
     fieldPromptBody: 'Prompt',
     fieldPromptTip: 'Tip (optional, shown above prompt)',
-    fieldTemplateSelect: 'Published template',
-    fieldTemplateEmpty: 'No published templates available.',
+    fieldTemplateSelect: 'Runnable template',
+    fieldTemplateEmpty: 'No runnable templates yet. You can create one directly from a prompt card.',
+    makeCardCta: 'Make this with my face',
+    makeCardCtaClosed: 'Notify me when open',
+    makeCardSubtitle: 'Try making this scene with one clear front photo.',
+    uploadMediaCta: 'Upload file directly',
+    uploadingMedia: 'Uploading…',
+    uploadMediaHint: 'Images up to 10 MB · Videos up to 50 MB (1080p MP4/MOV recommended)',
+    makeBuilderHeading: 'Let readers generate with their own face (monetized)',
+    makeBuilderHint: 'Pairs this video prompt with one of your example videos to add an inline generation card with creator royalties—without listing it in the main catalog. Include [My photo] in the prompt where the reader’s face belongs.',
+    makeBuilderImageHint: 'Image make cards require a test render with your own photo in the template editor before publishing.',
+    makeBuilderWorkLabel: 'Example video',
+    makeBuilderAspectLabel: 'Aspect ratio',
+    makeBuilderDurationLabel: 'Duration (sec)',
+    makeBuilderRoyaltyLabel: 'Your royalty raise (KRW)',
+    makeBuilderCreateCta: 'Create inline make card',
+    makeBuilderCreating: 'Creating make card…',
+    makeBuilderCreatedNotice: 'Inline make card created and inserted right below.',
     fieldInstagramUrl: 'Instagram post or reel URL',
     fieldInstagramHint: 'Paste an https://www.instagram.com/p/... or /reel/... link. Loaded only when clicked.',
     rightsConfirm: 'I only post content that I hold the rights to share.',
@@ -6926,6 +6944,11 @@ export const en = {
       empty_blocks: 'Add at least one block before publishing.',
       invalid_work: 'One of the selected works could not be found in your works.',
       invalid_template: 'One of the selected templates is not currently published.',
+      selfie_slot_required: 'Include [My photo] in the prompt where the reader’s face belongs.',
+      test_required: 'Image make cards require a successful test render with your own photo before publishing.',
+      make_limit_reached: 'You have reached the make-card limit (3 per day or too many requests in a short time). Please try again later.',
+      recipe_invalid: 'Please check the prompt length and generation parameters.',
+      upload_failed: 'File upload failed. Check file format and size (up to 50 MB video / 10 MB image).',
       unavailable: 'Service temporarily unavailable. Please try again.',
     },
   },

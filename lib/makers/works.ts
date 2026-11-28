@@ -2,6 +2,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import sharp from 'sharp';
 import type { SqlRunner } from '@/lib/db/sql-runner';
 import { extensionFor, type RenderStore } from '@/lib/renders/store';
+import { makerBlogOpen } from '@/lib/posts/flag';
 import { sniffMakerFile, MAKER_FILE_MAX_BYTES, type MakerFileMime } from '@/lib/recipes/assets';
 import { lineOf, linkOf } from './fields';
 import { creativeCoverReady, creativeProfilesReady } from './profile';
@@ -22,9 +23,53 @@ import { creativeCoverReady, creativeProfilesReady } from './profile';
 
 export const MAKER_WORKS_MAX = 12;
 export const MAKER_WORKS_MAX_BYTES = 40 * 1024 * 1024;
+export const BLOG_MAKER_WORKS_MAX = 60;
+export const BLOG_MAKER_WORKS_MAX_BYTES = 500 * 1024 * 1024;
+export const MAKER_WORK_IMAGE_MAX_BYTES = 10 * 1024 * 1024;
+export const MAKER_WORK_VIDEO_MAX_BYTES = 50 * 1024 * 1024;
 export const WORK_TITLE_MAX = 80;
 export const WORK_CAPTION_MAX = 280;
 export const WORK_ID = /^wrk_[0-9a-f]{32}$/;
+export const UPLOAD_ID = /^upl_[0-9a-f]{32}$/;
+export const UPLOAD_TTL_SECONDS = 300;
+export const ORPHAN_UPLOAD_MAX_AGE_MS = 15 * 60 * 1000;
+const PRESIGN_HOURLY_LIMIT = 30;
+const PRESIGN_PENDING_MAX = 10;
+const presignWindow = new Map<string, number[]>();
+
+function takePresignSlot(userId: string, now = Date.now()): boolean {
+  const cutoff = now - 60 * 60 * 1000;
+  const recent = (presignWindow.get(userId) ?? []).filter((ts) => ts > cutoff);
+  if (recent.length >= PRESIGN_HOURLY_LIMIT) {
+    presignWindow.set(userId, recent);
+    return false;
+  }
+  recent.push(now);
+  presignWindow.set(userId, recent);
+  return true;
+}
+
+export function resetPresignRateLimits(): void {
+  presignWindow.clear();
+}
+const WORK_ALLOWED_MIMES = new Set<MakerFileMime>(['image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'video/quicktime']);
+
+function makerWorkQuota() {
+  if (makerBlogOpen()) {
+    return {
+      maxWorks: BLOG_MAKER_WORKS_MAX,
+      maxTotalBytes: BLOG_MAKER_WORKS_MAX_BYTES,
+      maxImageBytes: MAKER_WORK_IMAGE_MAX_BYTES,
+      maxVideoBytes: MAKER_WORK_VIDEO_MAX_BYTES,
+    };
+  }
+  return {
+    maxWorks: MAKER_WORKS_MAX,
+    maxTotalBytes: MAKER_WORKS_MAX_BYTES,
+    maxImageBytes: MAKER_FILE_MAX_BYTES,
+    maxVideoBytes: MAKER_FILE_MAX_BYTES,
+  };
+}
 const IMAGE_MAX_SIDE = 2400;
 const AVATAR_SIDE = 512;
 /** The cover is stored 2:1 — the phone's banner whole; the desktop's 3:1 banner shows its middle band. */
@@ -86,11 +131,13 @@ export async function storeMakerWork(
   input: { userId: string; bytes: Uint8Array; title?: unknown; caption?: unknown; link?: unknown },
 ): Promise<{ work: MakerWork; unchanged: boolean }> {
   await ready(sql);
+  const quota = makerWorkQuota();
   const meta = workMetaOf(input);
   if (!meta) throw new WorkError('invalid');
-  if (!input.bytes.byteLength || input.bytes.byteLength > MAKER_FILE_MAX_BYTES) throw new WorkError('too_large');
+  if (!input.bytes.byteLength || input.bytes.byteLength > quota.maxVideoBytes) throw new WorkError('too_large');
   const sniffed = sniffMakerFile(input.bytes);
-  if (!sniffed) throw new WorkError('bad_file');
+  if (!sniffed || !WORK_ALLOWED_MIMES.has(sniffed)) throw new WorkError('bad_file');
+  if (sniffed.startsWith('image/') && input.bytes.byteLength > quota.maxImageBytes) throw new WorkError('too_large');
   const file = sniffed.startsWith('image/')
     ? await cleanWorkImage(input.bytes).catch((error: unknown) => { throw error instanceof WorkError ? error : new WorkError('bad_file'); })
     : { bytes: input.bytes, mime: sniffed, width: null, height: null };
@@ -103,15 +150,224 @@ export async function storeMakerWork(
     const totals = (await tx.query<{ n: number; total: string; next: number }>(
       'select count(*)::int n, coalesce(sum(bytes),0)::text total, coalesce(max(position)+1,0)::int next from maker_works where user_id=$1', [input.userId],
     )).rows[0]!;
-    if (totals.n >= MAKER_WORKS_MAX || Number(totals.total) + file.bytes.byteLength > MAKER_WORKS_MAX_BYTES) throw new WorkError('limit_reached');
+    if (totals.n >= quota.maxWorks || Number(totals.total) + file.bytes.byteLength > quota.maxTotalBytes) throw new WorkError('limit_reached');
     const id = `wrk_${randomBytes(16).toString('hex')}`;
     const key = `${input.userId}/${id}.${extensionFor(file.mime)}`;
     await store.put(key, file.bytes, file.mime);
     const { rows } = await tx.query<WorkRow>(`insert into maker_works(id,user_id,position,kind,storage_key,mime,bytes,sha256,width,height,title,caption,link_url)
       values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) returning ${COLUMNS}`,
-    [id, input.userId, Math.min(totals.next, MAKER_WORKS_MAX - 1), kind, key, file.mime, file.bytes.byteLength, sha, file.width, file.height, meta.title, meta.caption, meta.linkUrl]);
+    [id, input.userId, Math.min(totals.next, quota.maxWorks - 1), kind, key, file.mime, file.bytes.byteLength, sha, file.width, file.height, meta.title, meta.caption, meta.linkUrl]);
     return { work: toWork(rows[0]!), unchanged: false };
   });
+}
+
+/**
+ * Sweeps abandoned `upl_*` staging objects and unreferenced `wrk_*` orphan objects older than `maxAgeMs`
+ * inside one creative's folder, returning remaining active pending `upl_*` counts/bytes for quota accounting.
+ */
+export async function sweepOrphanMakerUploads(
+  sql: SqlRunner,
+  store: RenderStore,
+  userId: string,
+  options: { now?: number; maxAgeMs?: number } = {},
+): Promise<{ swept: number; pendingUploads: number; pendingBytes: number }> {
+  if (!store.listFolder || !store.delete) {
+    return { swept: 0, pendingUploads: 0, pendingBytes: 0 };
+  }
+  const entries = await store.listFolder(userId).catch(() => []);
+  if (entries.length === 0) {
+    return { swept: 0, pendingUploads: 0, pendingBytes: 0 };
+  }
+  const { rows } = await sql.query<{ storage_key: string }>(
+    'select storage_key from maker_works where user_id = $1',
+    [userId],
+  );
+  const knownKeys = new Set(rows.map((row) => row.storage_key));
+  const now = options.now ?? Date.now();
+  const maxAgeMs = options.maxAgeMs ?? ORPHAN_UPLOAD_MAX_AGE_MS;
+
+  let swept = 0;
+  let pendingUploads = 0;
+  let pendingBytes = 0;
+
+  for (const entry of entries) {
+    const base = entry.key.slice(entry.key.lastIndexOf('/') + 1);
+    const stem = base.slice(0, base.lastIndexOf('.'));
+    // Treat unknown timestamps as fresh so a store that omits LastModified never deletes an active upload.
+    const age = entry.updatedAt ? now - entry.updatedAt.getTime() : 0;
+    if (UPLOAD_ID.test(stem)) {
+      if (age >= maxAgeMs) {
+        await store.delete(entry.key).catch(() => undefined);
+        swept += 1;
+      } else {
+        pendingUploads += 1;
+        pendingBytes += entry.bytes;
+      }
+    } else if (WORK_ID.test(stem) && !knownKeys.has(entry.key) && age >= maxAgeMs) {
+      await store.delete(entry.key).catch(() => undefined);
+      swept += 1;
+    }
+  }
+  return { swept, pendingUploads, pendingBytes };
+}
+
+export type PresignMakerWorkResult =
+  | { mode: 'presigned'; uploadId: string; uploadUrl: string; mime: MakerFileMime }
+  | { mode: 'direct'; mime: MakerFileMime };
+
+/** Mints a short-lived R2 PUT URL on an ephemeral `upl_*` key with signed `Content-Length` + `Content-Type`. */
+export async function presignMakerWorkUpload(
+  sql: SqlRunner,
+  store: RenderStore,
+  input: { userId: string; mime: unknown; bytes: unknown },
+): Promise<PresignMakerWorkResult> {
+  if (!makerBlogOpen()) throw new WorkError('not_found');
+  await ready(sql);
+  if (typeof input.mime !== 'string' || !WORK_ALLOWED_MIMES.has(input.mime as MakerFileMime)) {
+    throw new WorkError('bad_file');
+  }
+  const mime = input.mime as MakerFileMime;
+  const size = typeof input.bytes === 'number' ? Math.floor(input.bytes) : NaN;
+  const quota = makerWorkQuota();
+  const maxBytes = mime.startsWith('image/') ? quota.maxImageBytes : quota.maxVideoBytes;
+  if (!Number.isFinite(size) || size <= 0) throw new WorkError('bad_file');
+  if (size > maxBytes) throw new WorkError('too_large');
+
+  const { pendingUploads, pendingBytes } = await sweepOrphanMakerUploads(sql, store, input.userId);
+  if (pendingUploads >= PRESIGN_PENDING_MAX) throw new WorkError('limit_reached');
+
+  await sql.transaction(async (tx) => {
+    await tx.query('select id from profiles where id=$1 for update', [input.userId]);
+    const totals = (
+      await tx.query<{ n: number; total: string; hourly: number }>(
+        `select count(*)::int n,
+                coalesce(sum(bytes),0)::text total,
+                count(*) filter (where created_at > now() - interval '1 hour')::int hourly
+           from maker_works
+          where user_id=$1`,
+        [input.userId],
+      )
+    ).rows[0]!;
+    if (
+      totals.hourly + pendingUploads >= PRESIGN_HOURLY_LIMIT ||
+      totals.n + pendingUploads >= quota.maxWorks ||
+      Number(totals.total) + pendingBytes + size > quota.maxTotalBytes ||
+      !takePresignSlot(input.userId)
+    ) {
+      throw new WorkError('limit_reached');
+    }
+  });
+
+  const uploadId = `upl_${randomBytes(16).toString('hex')}`;
+  const key = `${input.userId}/${uploadId}.${extensionFor(mime)}`;
+  const uploadUrl = store.signedUploadUrl
+    ? await store.signedUploadUrl(key, mime, size, UPLOAD_TTL_SECONDS)
+    : null;
+  if (!uploadUrl) return { mode: 'direct', mime };
+  return { mode: 'presigned', uploadId, uploadUrl, mime };
+}
+
+/**
+ * Verifies magic bytes, strips image EXIF/GPS, deduplicates by SHA-256, copies into a fresh
+ * server-only `wrk_*` key, and unconditionally deletes the temporary `upl_*` upload key.
+ */
+export async function completeMakerWorkUpload(
+  sql: SqlRunner,
+  store: RenderStore,
+  input: { userId: string; uploadId: unknown; mime: unknown; title?: unknown; caption?: unknown; link?: unknown },
+): Promise<{ work: MakerWork; unchanged: boolean }> {
+  if (!makerBlogOpen()) throw new WorkError('not_found');
+  await ready(sql);
+  if (typeof input.uploadId !== 'string' || !UPLOAD_ID.test(input.uploadId)) throw new WorkError('invalid');
+  if (typeof input.mime !== 'string' || !WORK_ALLOWED_MIMES.has(input.mime as MakerFileMime)) throw new WorkError('bad_file');
+  const meta = workMetaOf(input);
+  if (!meta) throw new WorkError('invalid');
+
+  const uploadId = input.uploadId;
+  const declaredMime = input.mime as MakerFileMime;
+  const rawKey = `${input.userId}/${uploadId}.${extensionFor(declaredMime)}`;
+  const quota = makerWorkQuota();
+  const maxBytes = declaredMime.startsWith('image/') ? quota.maxImageBytes : quota.maxVideoBytes;
+
+  try {
+    const info = store.head ? await store.head(rawKey) : null;
+    if (!info && store.head) throw new WorkError('not_found');
+    if (info && (info.bytes <= 0 || info.bytes > maxBytes)) {
+      throw new WorkError(info.bytes > maxBytes ? 'too_large' : 'bad_file');
+    }
+
+    if (store.readRange) {
+      const header = await store.readRange(rawKey, 0, 63).catch(() => new Uint8Array(0));
+      const headerMime = sniffMakerFile(header);
+      if (!headerMime || !WORK_ALLOWED_MIMES.has(headerMime) || headerMime.startsWith('image/') !== declaredMime.startsWith('image/')) {
+        throw new WorkError('bad_file');
+      }
+    }
+
+    const uploadedBytes = await store.read(rawKey).catch(() => {
+      throw new WorkError('not_found');
+    });
+    if (!uploadedBytes.byteLength || uploadedBytes.byteLength > maxBytes) {
+      throw new WorkError(uploadedBytes.byteLength > maxBytes ? 'too_large' : 'bad_file');
+    }
+
+    const sniffed = sniffMakerFile(uploadedBytes);
+    if (!sniffed || !WORK_ALLOWED_MIMES.has(sniffed)) {
+      throw new WorkError('bad_file');
+    }
+
+    let finalBytes = uploadedBytes;
+    let finalMime: MakerFileMime = sniffed;
+    let width: number | null = null;
+    let height: number | null = null;
+
+    if (sniffed.startsWith('image/')) {
+      const cleaned = await cleanWorkImage(uploadedBytes).catch((error: unknown) => {
+        throw error instanceof WorkError ? error : new WorkError('bad_file');
+      });
+      finalBytes = cleaned.bytes;
+      finalMime = cleaned.mime;
+      width = cleaned.width;
+      height = cleaned.height;
+    }
+
+    const workId = `wrk_${randomBytes(16).toString('hex')}`;
+    const finalKey = `${input.userId}/${workId}.${extensionFor(finalMime)}`;
+    const sha = createHash('sha256').update(finalBytes).digest('hex');
+    const kind = finalMime.startsWith('image/') ? 'image' : 'video';
+
+    return await sql.transaction(async (tx) => {
+      await tx.query('select id from profiles where id=$1 for update', [input.userId]);
+      const existing = await tx.query<WorkRow>(`select ${COLUMNS} from maker_works where user_id=$1 and sha256=$2`, [input.userId, sha]);
+      if (existing.rows[0]) {
+        return { work: toWork(existing.rows[0]), unchanged: true };
+      }
+      const totals = (
+        await tx.query<{ n: number; total: string; next: number }>(
+          'select count(*)::int n, coalesce(sum(bytes),0)::text total, coalesce(max(position)+1,0)::int next from maker_works where user_id=$1',
+          [input.userId],
+        )
+      ).rows[0]!;
+      if (totals.n >= quota.maxWorks || Number(totals.total) + finalBytes.byteLength > quota.maxTotalBytes) {
+        throw new WorkError('limit_reached');
+      }
+
+      await store.put(finalKey, finalBytes, finalMime);
+      try {
+        const { rows } = await tx.query<WorkRow>(
+          `insert into maker_works(id,user_id,position,kind,storage_key,mime,bytes,sha256,width,height,title,caption,link_url)
+           values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) returning ${COLUMNS}`,
+          [workId, input.userId, Math.min(totals.next, quota.maxWorks - 1), kind, finalKey, finalMime, finalBytes.byteLength, sha, width, height, meta.title, meta.caption, meta.linkUrl],
+        );
+        return { work: toWork(rows[0]!), unchanged: false };
+      } catch (dbErr) {
+        await store.delete?.(finalKey).catch(() => undefined);
+        throw dbErr;
+      }
+    });
+  } finally {
+    await store.delete?.(rawKey).catch(() => undefined);
+  }
 }
 
 export async function listMakerWorks(sql: SqlRunner, userId: string): Promise<MakerWork[]> {
@@ -150,7 +406,8 @@ export async function deleteMakerWork(sql: SqlRunner, store: RenderStore, userId
 /** The creative's chosen order. Ids not theirs are refused; ids left out keep their place after the named ones. */
 export async function reorderMakerWorks(sql: SqlRunner, userId: string, ids: readonly unknown[]): Promise<MakerWork[]> {
   await ready(sql);
-  if (ids.length > MAKER_WORKS_MAX || !ids.every((id): id is string => typeof id === 'string' && WORK_ID.test(id)) || new Set(ids).size !== ids.length) throw new WorkError('invalid');
+  const maxWorks = makerWorkQuota().maxWorks;
+  if (ids.length > maxWorks || !ids.every((id): id is string => typeof id === 'string' && WORK_ID.test(id)) || new Set(ids).size !== ids.length) throw new WorkError('invalid');
   return sql.transaction(async (tx) => {
     const own = (await tx.query<{ id: string }>('select id from maker_works where user_id=$1 order by position, created_at for update', [userId])).rows.map((row) => row.id);
     if (!ids.every((id) => own.includes(id as string))) throw new WorkError('not_found');

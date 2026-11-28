@@ -1,4 +1,4 @@
-import { access, mkdir, readFile, rm, writeFile, unlink } from 'node:fs/promises';
+import { access, mkdir, open, readdir, readFile, rm, stat, writeFile, unlink } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { AwsClient } from 'aws4fetch';
@@ -41,6 +41,14 @@ export interface RenderStore {
    * the object over HTTP (local driver) and the gateway must stream it.
    */
   url(key: string, ttlSeconds: number, options?: { download?: string }): Promise<string | null>;
+  /** Direct browser-to-object-storage PUT URL (`null` on local driver where body upload is used). */
+  signedUploadUrl?(key: string, contentType: string, contentLength: number, ttlSeconds?: number): Promise<string | null>;
+  /** Lists objects inside a single owner folder (`{uuid}` or `social/{uuid}`) for orphan upload sweeping. */
+  listFolder?(folder: string): Promise<Array<{ key: string; bytes: number; updatedAt: Date | null }>>;
+  /** Lightweight metadata check without buffering object bytes. */
+  head?(key: string): Promise<{ bytes: number; contentType: string | null } | null>;
+  /** Inclusive byte-range read (`bytes=start-end`) for magic-number header sniffing. */
+  readRange?(key: string, start: number, end: number): Promise<Uint8Array>;
 }
 
 export class RenderObjectNotFound extends Error {
@@ -102,6 +110,47 @@ export function createLocalRenderStore(rootDir?: string): RenderStore {
     },
     async url() {
       return null;
+    },
+    async signedUploadUrl() {
+      return null;
+    },
+    async listFolder(folder) {
+      assertRenderFolder(folder);
+      const dir = join(root, folder);
+      if (!(await fileExists(dir))) return [];
+      const names = await readdir(dir).catch(() => [] as string[]);
+      const out: Array<{ key: string; bytes: number; updatedAt: Date | null }> = [];
+      for (const name of names) {
+        const key = `${folder}/${name}`;
+        try {
+          assertRenderKey(key);
+          const info = await stat(join(dir, name));
+          if (info.isFile()) out.push({ key, bytes: info.size, updatedAt: info.mtime });
+        } catch {
+          // Ignore unexpected directory entries
+        }
+      }
+      return out;
+    },
+    async head(key) {
+      const path = pathOf(key);
+      if (!(await fileExists(path))) return null;
+      const info = await stat(path);
+      return { bytes: info.size, contentType: null };
+    },
+    async readRange(key, start, end) {
+      const path = pathOf(key);
+      if (!(await fileExists(path))) throw new RenderObjectNotFound(key);
+      const length = Math.max(0, end - start + 1);
+      if (length === 0) return new Uint8Array(0);
+      const fh = await open(path, 'r');
+      try {
+        const buf = Buffer.allocUnsafe(length);
+        const { bytesRead } = await fh.read(buf, 0, length, Math.max(0, start));
+        return new Uint8Array(buf.subarray(0, bytesRead));
+      } finally {
+        await fh.close();
+      }
     },
   };
 }
@@ -170,6 +219,57 @@ export function createSupabaseRenderStore(client?: SupabaseClient): RenderStore 
         throw new Error(`render sign failed: ${key} — ${error.message}`);
       }
       return data.signedUrl;
+    },
+    async signedUploadUrl(key) {
+      assertRenderKey(key);
+      const { data, error } = await (await db()).storage.from(RENDERS_BUCKET).createSignedUploadUrl(key);
+      if (error || !data) throw new Error(`render upload sign failed: ${key} — ${error?.message ?? 'no url'}`);
+      return data.signedUrl;
+    },
+    async listFolder(folder) {
+      assertRenderFolder(folder);
+      const bucket = (await db()).storage.from(RENDERS_BUCKET);
+      const { data, error } = await bucket.list(folder, { limit: 200 });
+      if (error) {
+        if (isMissing(error)) return [];
+        throw new Error(`render folder listing failed: ${folder} — ${error.message}`);
+      }
+      return (data ?? [])
+        .filter((entry) => entry.id !== null)
+        .map((entry) => {
+          const meta = (entry.metadata ?? {}) as { size?: unknown };
+          const bytes = typeof meta.size === 'number' ? meta.size : Number(meta.size ?? 0);
+          const updatedAt = entry.updated_at ? new Date(entry.updated_at) : entry.created_at ? new Date(entry.created_at) : null;
+          return {
+            key: `${folder}/${entry.name}`,
+            bytes: Number.isFinite(bytes) ? bytes : 0,
+            updatedAt,
+          };
+        });
+    },
+    async head(key) {
+      assertRenderKey(key);
+      const bucket = (await db()).storage.from(RENDERS_BUCKET);
+      const slash = key.lastIndexOf('/');
+      const folder = slash >= 0 ? key.slice(0, slash) : '';
+      const name = slash >= 0 ? key.slice(slash + 1) : key;
+      const { data, error } = await bucket.list(folder, { limit: 100, search: name });
+      if (error) {
+        if (isMissing(error)) return null;
+        throw new Error(`render head failed: ${key} — ${error.message}`);
+      }
+      const entry = (data ?? []).find((item) => item.name === name);
+      if (!entry) return null;
+      const meta = (entry.metadata ?? {}) as { size?: unknown; mimetype?: unknown };
+      const bytes = typeof meta.size === 'number' ? meta.size : Number(meta.size ?? 0);
+      return {
+        bytes: Number.isFinite(bytes) && bytes > 0 ? bytes : (await this.read(key)).byteLength,
+        contentType: typeof meta.mimetype === 'string' ? meta.mimetype : null,
+      };
+    },
+    async readRange(key, start, end) {
+      const full = await this.read(key);
+      return full.subarray(Math.max(0, start), Math.min(full.byteLength, end + 1));
     },
   };
 }
@@ -264,6 +364,74 @@ export function createR2RenderStore(
         aws: { signQuery: true },
       });
       return signed.url;
+    },
+    async signedUploadUrl(key, contentType, contentLength, ttlSeconds = 300) {
+      assertRenderKey(key);
+      const size = Math.floor(contentLength);
+      if (!Number.isFinite(size) || size <= 0) {
+        throw new Error(`invalid upload contentLength: ${contentLength}`);
+      }
+      const expiresIn = Math.max(60, Math.min(Math.floor(ttlSeconds), 900));
+      const params = new URLSearchParams({ 'X-Amz-Expires': String(expiresIn) });
+      const signed = await r2.sign(
+        new Request(urlFor(key, params), {
+          method: 'PUT',
+          headers: {
+            'Content-Type': contentType,
+            'Content-Length': String(size),
+          },
+        }),
+        { aws: { signQuery: true, allHeaders: true } },
+      );
+      return signed.url;
+    },
+    async listFolder(folder) {
+      assertRenderFolder(folder);
+      const prefix = `${RENDERS_BUCKET}/${folder}/`;
+      const params = new URLSearchParams({ 'list-type': '2', prefix, 'max-keys': '200' });
+      const signed = await r2.sign(new Request(`${baseUrl}?${params.toString()}`, { method: 'GET' }));
+      const res = await fetcher(signed);
+      if (!res.ok) throw new Error(`r2 render list failed: ${folder} — status ${res.status}`);
+      const xml = await res.text();
+      const items: Array<{ key: string; bytes: number; updatedAt: Date | null }> = [];
+      for (const match of xml.matchAll(/<Contents>([\s\S]*?)<\/Contents>/g)) {
+        const block = match[1]!;
+        const rawKey = /<Key>([\s\S]*?)<\/Key>/.exec(block)?.[1]?.replace(/&amp;/g, '&') ?? '';
+        if (!rawKey.startsWith(`${RENDERS_BUCKET}/`)) continue;
+        const relKey = rawKey.slice(`${RENDERS_BUCKET}/`.length);
+        const bytes = Number(/<Size>(\d+)<\/Size>/.exec(block)?.[1] ?? '0');
+        const lastMod = /<LastModified>([^<]+)<\/LastModified>/.exec(block)?.[1];
+        const updatedAt = lastMod ? new Date(lastMod) : null;
+        items.push({ key: relKey, bytes: Number.isFinite(bytes) ? bytes : 0, updatedAt });
+      }
+      return items;
+    },
+    async head(key) {
+      const signed = await r2.sign(new Request(urlFor(key), { method: 'HEAD' }));
+      const res = await fetcher(signed);
+      if (res.status === 404) {
+        if (options.legacyFallback?.head) return options.legacyFallback.head(key);
+        return null;
+      }
+      if (!res.ok) throw new Error(`r2 render head failed: ${key} — status ${res.status}`);
+      const len = Number(res.headers.get('content-length') ?? '');
+      return {
+        bytes: Number.isFinite(len) && len >= 0 ? len : 0,
+        contentType: res.headers.get('content-type'),
+      };
+    },
+    async readRange(key, start, end) {
+      const s = Math.max(0, Math.floor(start));
+      const e = Math.max(s, Math.floor(end));
+      const signed = await r2.sign(new Request(urlFor(key), { method: 'GET', headers: { Range: `bytes=${s}-${e}` } }));
+      const res = await fetcher(signed);
+      if (res.status === 404) {
+        if (options.legacyFallback?.readRange) return options.legacyFallback.readRange(key, s, e);
+        if (options.legacyFallback) return (await options.legacyFallback.read(key)).subarray(s, e + 1);
+        throw new RenderObjectNotFound(key);
+      }
+      if (!res.ok) throw new Error(`r2 render range failed: ${key} — status ${res.status}`);
+      return new Uint8Array(await res.arrayBuffer());
     },
   };
 }

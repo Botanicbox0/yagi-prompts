@@ -7,6 +7,7 @@ import { PromptCardView } from '@/components/prompts/prompt-card';
 import { cardRatio } from '@/components/prompts/card-frame';
 import type { PromptLabels } from '@/components/prompts/labels';
 import { InstagramEmbed, type InstagramEmbedLabels } from './instagram-embed';
+import { BlogMakeCard, type BlogMakeCardInfo } from './blog-make-studio';
 import { PostPromptCard } from './post-prompt-card';
 
 /**
@@ -18,6 +19,8 @@ export function PostBlocks({
   blocks,
   works,
   templatesBySlug,
+  makeCardsBySlug,
+  shopOpen = true,
   locale,
   promptLabels,
   blogCopy,
@@ -27,6 +30,8 @@ export function PostBlocks({
   blocks: readonly PublicPostBlock[];
   works: Readonly<Record<string, PublicPostMedia>>;
   templatesBySlug: ReadonlyMap<string, PromptCard>;
+  makeCardsBySlug?: ReadonlyMap<string, BlogMakeCardInfo>;
+  shopOpen?: boolean;
   locale: string;
   promptLabels: PromptLabels;
   blogCopy: Dictionary['makerBlog'];
@@ -145,6 +150,17 @@ export function PostBlocks({
             );
           }
           case 'template': {
+            const makeCard = makeCardsBySlug?.get(block.slug);
+            if (makeCard) {
+              return (
+                <BlogMakeCard
+                  key={index}
+                  item={makeCard}
+                  subtitle={blogCopy.makeCardSubtitle}
+                  ctaLabel={shopOpen ? blogCopy.makeCardCta : blogCopy.makeCardCtaClosed}
+                />
+              );
+            }
             const card = templatesBySlug.get(block.slug);
             // Quietly omit unpublished or missing templates.
             if (!card) return null;

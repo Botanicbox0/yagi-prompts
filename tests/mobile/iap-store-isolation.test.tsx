@@ -264,7 +264,7 @@ describe('Mobile store isolation, native IAP ledger & Apple auth gating', () => 
       price_krw: number;
       aspect_default: string;
     }>(
-      "select slug, price_krw, coalesce(aspect_default, '9:16') as aspect_default from prompt_items where status = 'published' and audience = 'public' and price_cents > 0 and coalesce(cast_kind, 'solo') = 'solo' limit 1",
+      "select slug, price_krw, coalesce(aspect_default, '9:16') as aspect_default from prompt_items where status = 'published' and audience = 'public' and price_cents > 0 and price_krw > 0 and coalesce(cast_kind, 'solo') = 'solo' order by slug asc limit 1",
     );
     const tpl = rows[0]!;
     const needed = creditsRequiredForKrw(Number(tpl.price_krw));

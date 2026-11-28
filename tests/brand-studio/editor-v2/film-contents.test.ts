@@ -60,6 +60,7 @@ describe('what the file of a real film carries', () => {
       music: 'Morning walk',
       effects: 2, // the one at volume 0 is not mixed
       stills: 2, // the video overlay is not a still
+      overlays: 0,
     });
   });
 
@@ -75,7 +76,7 @@ describe('what the file of a real film carries', () => {
   });
 
   it('nothing stored: only the cuts; muted music is not mixed', () => {
-    expect(filmContents(sequence, null, null)).toEqual({ cuts: 2, captions: 0, grade: null, music: null, effects: 0, stills: 0 });
+    expect(filmContents(sequence, null, null)).toEqual({ cuts: 2, captions: 0, grade: null, music: null, effects: 0, stills: 0, overlays: 0 });
     expect(filmContents(sequence, { ...FILM, bgm: { ...FILM.bgm!, volume: 0 } }, anchorOf(sequence, FILM)).music).toBeNull();
   });
 

@@ -7,6 +7,7 @@ import {
   SHORTCUT_DEFAULTS,
   SHORTCUT_GROUPS,
   SHORTCUT_SETS,
+  TRACKS_ONLY_ACTIONS,
   actionFor,
   assignBinding,
   bindingFromEvent,
@@ -20,6 +21,7 @@ import {
   type ShortcutAction,
 } from '@/lib/brand-studio/editor-v2/shortcuts';
 import type { StudioEditorChatCopy } from '@/messages/studio-editor-chat';
+import type { StudioEditorTracksCopy } from '@/messages/studio-editor-tracks';
 import { EditorIcon } from './icons';
 import type { EditorApi } from './use-editor';
 import styles from './editor-v2.module.css';
@@ -41,16 +43,49 @@ interface Notice {
  * Every keyboard action with its keys. Press a slot, then the new key: a key the browser keeps is
  * refused with a reason, a key another action holds asks before taking it. Saved in this browser.
  */
-export function ShortcutsPanel({ api, chatCopy = null }: { api: EditorApi; chatCopy?: StudioEditorChatCopy | null }) {
+export function ShortcutsPanel({
+  api,
+  chatCopy = null,
+  tracksCopy = null,
+}: {
+  api: EditorApi;
+  chatCopy?: StudioEditorChatCopy | null;
+  tracksCopy?: StudioEditorTracksCopy | null;
+}) {
   const { copy, shortcutPrefs: prefs, shortcutMap: map, mac } = api;
   const s = copy.shortcuts;
-  const labelOf = (action: ShortcutAction) => (action === 'focusChat' ? (chatCopy?.shortcutFocusChat ?? '') : s.actions[action]);
+  const labelOf = (action: ShortcutAction): string => {
+    if (action === 'focusChat') return chatCopy?.shortcutFocusChat ?? '';
+    if (action === 'splitAll') return tracksCopy?.actions.splitAll ?? '';
+    if (action === 'toggleLinkage') return tracksCopy?.actions.toggleLinkage ?? '';
+    if (action === 'moveTrackUp') return tracksCopy?.actions.moveUp ?? '';
+    if (action === 'moveTrackDown') return tracksCopy?.actions.moveDown ?? '';
+    if (action === 'magnet' && tracksCopy) return tracksCopy.actions.toggleSnap;
+    return s.actions[action];
+  };
+  const savePrefs = (next: typeof prefs) => {
+    // SMALL: when the tracks switch is closed, tracks-only keys must NEVER touch browser storage.
+    if (!tracksCopy) {
+      const prevSet = prefs.overrides[next.set] ?? {};
+      const nextSet = { ...(next.overrides[next.set] ?? {}) };
+      for (const hidden of TRACKS_ONLY_ACTIONS) {
+        if (prevSet[hidden] === undefined) delete nextSet[hidden];
+        else nextSet[hidden] = prevSet[hidden];
+      }
+      api.setShortcutPrefs({
+        ...next,
+        overrides: { ...next.overrides, [next.set]: nextSet },
+      });
+      return;
+    }
+    api.setShortcutPrefs(next);
+  };
   const [capture, setCapture] = useState<Capture | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [dismissedChatConflict, setDismissedChatConflict] = useState(false);
   const dialog = useRef<HTMLDivElement | null>(null);
-  const live = useRef({ prefs, mac, capture, save: api.setShortcutPrefs, chatOpen: Boolean(chatCopy) });
-  live.current = { prefs, mac, capture, save: api.setShortcutPrefs, chatOpen: Boolean(chatCopy) };
+  const live = useRef({ prefs, mac, capture, save: savePrefs, chatOpen: Boolean(chatCopy), tracksOpen: Boolean(tracksCopy) });
+  live.current = { prefs, mac, capture, save: savePrefs, chatOpen: Boolean(chatCopy), tracksOpen: Boolean(tracksCopy) };
 
   useEffect(() => {
     dialog.current?.focus();
@@ -68,7 +103,11 @@ export function ShortcutsPanel({ api, chatCopy = null }: { api: EditorApi; chatC
       const binding = bindingFromEvent(event, state.mac);
       if (!binding) return;
       let result = assignBinding(state.prefs, state.capture.action, state.capture.slot, binding);
-      if (!result.ok && result.reason === 'taken' && result.by === 'focusChat' && !state.chatOpen) {
+      if (
+        !result.ok &&
+        result.reason === 'taken' &&
+        ((result.by === 'focusChat' && !state.chatOpen) || (TRACKS_ONLY_ACTIONS.has(result.by) && !state.tracksOpen))
+      ) {
         result = assignBinding(state.prefs, state.capture.action, state.capture.slot, binding, true);
       }
       if (result.ok) {
@@ -95,7 +134,7 @@ export function ShortcutsPanel({ api, chatCopy = null }: { api: EditorApi; chatC
   const take = (target: Notice | null) => {
     if (!target || !target.by) return;
     const result = assignBinding(prefs, target.action, target.slot, target.binding, true);
-    if (result.ok) api.setShortcutPrefs(result.prefs);
+    if (result.ok) savePrefs(result.prefs);
     setNotice(null);
   };
 
@@ -132,6 +171,7 @@ export function ShortcutsPanel({ api, chatCopy = null }: { api: EditorApi; chatC
               <ul>
                 {group.actions.map((action) => {
                   if (action === 'focusChat' && !chatCopy) return null;
+                  if (TRACKS_ONLY_ACTIONS.has(action) && !tracksCopy) return null;
                   const label = labelOf(action);
                   const keys = map[action];
                   const slots = Math.min(MAX_BINDINGS_PER_ACTION, keys.length + 1);

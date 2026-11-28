@@ -70,6 +70,8 @@ import {
 } from '@/lib/brand-studio/compose/device-files';
 import { exportCompositionMp4, type ComposeExportResult } from '@/lib/brand-studio/compose/export-client';
 import { exportProjectNleBundleZip } from '@/lib/brand-studio/compose/nle-export';
+import { hasStoredOwnedOverlays } from '@/lib/brand-studio/editor-v2/stored';
+import { studioEditorTracksEn, studioEditorTracksKo } from '@/messages/studio-editor-tracks';
 import { musicCredits } from '@/lib/brand-studio/music/contracts';
 import {
   UPSCALE_RESOLUTIONS,
@@ -1709,7 +1711,7 @@ export function VideoComposer({
   };
 
   const handleExport = async () => {
-    if (!canCreate || project.clips.length === 0 || exportingRatio !== null) return;
+    if (!canCreate || project.clips.length === 0 || exportingRatio !== null || hasStoredOwnedOverlays(project)) return;
     setPlaying(false);
     setExportingRatio(0.02);
     setStatusMessage(null);
@@ -1805,7 +1807,7 @@ export function VideoComposer({
   };
 
   const handleExportNle = async () => {
-    if (project.clips.length === 0 || exportingNle) return;
+    if (project.clips.length === 0 || exportingNle || hasStoredOwnedOverlays(project)) return;
     setPlaying(false);
     setExportingNle(true);
     setStatusMessage(null);
@@ -2002,6 +2004,10 @@ export function VideoComposer({
     </div>
   );
 
+  const hasV2OverlayTracks = useMemo(() => hasStoredOwnedOverlays(project), [project]);
+  const v2OverlayRenderBlockedCopy =
+    locale === 'ko' ? studioEditorTracksKo.classic.renderBlocked : studioEditorTracksEn.classic.renderBlocked;
+
   return (
     <div className={`bs-page ${s.page}`} data-brand-studio-v2 data-brand-studio-compose>
       <header className={s.header}>
@@ -2064,7 +2070,8 @@ export function VideoComposer({
             type="button"
             className={s.pillBtn}
             onClick={() => void handleExportNle()}
-            disabled={project.clips.length === 0 || exportingNle}
+            disabled={project.clips.length === 0 || exportingNle || hasV2OverlayTracks}
+            title={hasV2OverlayTracks ? v2OverlayRenderBlockedCopy : undefined}
             data-compose-export-nle
             {...lockAttrs}
           >
@@ -2089,7 +2096,8 @@ export function VideoComposer({
             type="button"
             className={s.primaryBtn}
             onClick={() => void handleExport()}
-            disabled={!canCreate || project.clips.length === 0 || exportingRatio !== null}
+            disabled={!canCreate || project.clips.length === 0 || exportingRatio !== null || hasV2OverlayTracks}
+            title={hasV2OverlayTracks ? v2OverlayRenderBlockedCopy : undefined}
             data-variant="solid"
             data-compose-export
             {...lockAttrs}
@@ -2100,6 +2108,11 @@ export function VideoComposer({
           </button>
         </div>
       </header>
+      {hasV2OverlayTracks ? (
+        <p className={s.subtitle} role="status" data-compose-v2-overlays-blocked>
+          {v2OverlayRenderBlockedCopy}
+        </p>
+      ) : null}
 
       {canCreate && (allowance.capKrw <= 0 || allowanceError?.code === 'allowance_closed') ? (
         <StudioAllowanceNotice

@@ -84,8 +84,9 @@ export function sceneJumpTarget(
 
 /**
  * Sets `start` (I) or `end` (O) to the playhead, keeping `minSeconds..maxSeconds` via `clampTrimRange`.
- * When moving one handle forces the other handle to shift to stay inside `[minSeconds, maxSeconds]`,
- * returns `movedOther: "start" | "end"` so the modal can report it in one short line.
+ * If the new span falls outside `[minSeconds, maxSeconds]`, the opposite handle moves only as far as
+ * needed to satisfy the violated bound (`minSeconds` or `maxSeconds`), and `movedOther` reports which
+ * handle shifted so the modal can explain it in one short line.
  */
 export function applyPlayheadBound(
   range: { start: number; end: number; duration: number },
@@ -97,21 +98,16 @@ export function applyPlayheadBound(
 ): { range: { start: number; end: number; duration: number }; movedOther: "start" | "end" | null } {
   const dur = Math.max(0.1, Number.isFinite(total) && total > 0 ? total : minSeconds);
   const clampedHead = Math.max(0, Math.min(dur, Number.isFinite(playhead) ? playhead : 0));
-  const preferredSpan = Math.min(maxSeconds, Math.max(minSeconds, range.end - range.start));
 
   if (side === "start") {
     const startTarget = Math.min(Math.max(0, dur - minSeconds), clampedHead);
-    const keepEnd = range.end >= startTarget + minSeconds - 0.05 && range.end <= startTarget + maxSeconds + 0.05;
-    const endTarget = keepEnd ? range.end : Math.min(dur, startTarget + preferredSpan);
-    const next = clampTrimRange(startTarget, endTarget, dur, minSeconds, maxSeconds, "end");
+    const next = clampTrimRange(startTarget, range.end, dur, minSeconds, maxSeconds, "end");
     const movedOther = Math.abs(next.end - range.end) > 0.05 ? "end" : null;
     return { range: next, movedOther };
   }
 
   const endTarget = Math.max(Math.min(dur, minSeconds), clampedHead);
-  const keepStart = range.start <= endTarget - minSeconds + 0.05 && range.start >= endTarget - maxSeconds - 0.05;
-  const startTarget = keepStart ? range.start : Math.max(0, endTarget - preferredSpan);
-  const next = clampTrimRange(startTarget, endTarget, dur, minSeconds, maxSeconds, "start");
+  const next = clampTrimRange(range.start, endTarget, dur, minSeconds, maxSeconds, "start");
   const movedOther = Math.abs(next.start - range.start) > 0.05 ? "start" : null;
   return { range: next, movedOther };
 }

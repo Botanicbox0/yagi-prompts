@@ -5,7 +5,7 @@
  */
 import type { ComposerProject } from '@/lib/brand-studio/compose/timeline';
 import { slowNotice, type ExportPath, type ExportPathOverride } from '@/lib/brand-studio/editor-v2/decode-plan';
-import { totalFrames, type FrameSequence } from '@/lib/brand-studio/editor-v2/frames';
+import { filmFrames, type FrameSequence } from '@/lib/brand-studio/editor-v2/frames';
 import type { Reframe } from '@/lib/brand-studio/editor-v2/model';
 import { ExportStop, exportFilm, type ExportProgress, type ExportSoundSource, type ExportStopReason, type ExportWarning, type SourcePath } from './export-film';
 import { recordExport } from './export-record';
@@ -164,7 +164,7 @@ export function startExport(request: ExportRequest): void {
   const own = new AbortController();
   controller = own;
   const { sequence } = request;
-  const frames = totalFrames(sequence);
+  const frames = filmFrames(sequence);
   const fps = sequence.fps;
   let lastEmit = 0;
   let lastPhase: ExportProgress['phase'] = 'video';

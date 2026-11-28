@@ -8,6 +8,7 @@ import { makerBlogOpen } from './flag';
 import {
   countPublicPostsByAllHandles,
   countPublicPostsByHandle,
+  findPrimaryBlogPostForTemplate,
   listPublicBlogFeed,
   listPublicPostsByHandle,
   listPublicPostsForSitemap,
@@ -118,4 +119,18 @@ export async function cachedPublicBlogFeed(): Promise<PublicFeedPost[]> {
 export async function cachedPublicPostCountsByHandle(): Promise<Record<string, number>> {
   if (!makerBlogOpen()) return {};
   return cachedCountsByHandle();
+}
+
+const cachedPrimaryPostForTemplate = unstable_cache(
+  async (templateSlug: string): Promise<{ handle: string; slug: string } | null> =>
+    readPublicProjection(await getSqlRunner(), null, (sql) => findPrimaryBlogPostForTemplate(sql, templateSlug)),
+  ['maker-primary-post-for-template-v1', resolveRuntimeMode(), flagKey()],
+  { tags: [POSTS_TAG, PROMPTS_TAG], revalidate: CATALOG_TTL_SECONDS },
+);
+
+export async function cachedPrimaryBlogPostForTemplate(
+  templateSlug: string,
+): Promise<{ handle: string; slug: string } | null> {
+  if (!makerBlogOpen()) return null;
+  return cachedPrimaryPostForTemplate(templateSlug);
 }
