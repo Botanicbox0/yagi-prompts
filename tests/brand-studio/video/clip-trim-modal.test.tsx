@@ -119,7 +119,7 @@ describe("Batch T: trim-nav-model pure math", () => {
     expect(sceneJumpTarget(10, undefined, 60, "prev")).toMatchObject({ target: 4, usedShots: false, stepSeconds: 6 });
   });
 
-  it("applyPlayheadBound clamps I/O to minSeconds..maxSeconds and reports movedOther", () => {
+  it("applyPlayheadBound moves the opposite handle only as far as needed to fit minSeconds..maxSeconds", () => {
     const initial = { start: 0, end: 20, duration: 20 };
 
     // Set start at 10s -> end stays 20s (valid 10s span), no other handle moved
@@ -127,17 +127,51 @@ describe("Batch T: trim-nav-model pure math", () => {
     expect(okStart.range).toEqual({ start: 10, end: 20, duration: 10 });
     expect(okStart.movedOther).toBeNull();
 
-    // Set start at 25s (past current end 20s) -> end shifts automatically and movedOther = "end"
+    // Production repro on a 15s clip: 0-15 -> I at 7.3 -> 7.3-15.0 -> O at 9.4 -> 5.4-9.4 (4s min, not 1.7-9.4)
+    const afterI = applyPlayheadBound({ start: 0, end: 15, duration: 15 }, 7.3, "start", 15, 4, 30);
+    expect(afterI.range).toEqual({ start: 7.3, end: 15, duration: 7.7 });
+    expect(afterI.movedOther).toBeNull();
+    const afterO = applyPlayheadBound(afterI.range, 9.4, "end", 15, 4, 30);
+    expect(afterO.range).toEqual({ start: 5.4, end: 9.4, duration: 4 });
+    expect(afterO.movedOther).toBe("start");
+
+    // Set start too close to current end -> end moves only to start + minSeconds (22.5, not 38.5)
+    const shortStart = applyPlayheadBound(initial, 18.5, "start", 60, 4, 30);
+    expect(shortStart.range).toEqual({ start: 18.5, end: 22.5, duration: 4 });
+    expect(shortStart.movedOther).toBe("end");
+
+    // Set start past current end (25s > 20s) -> end moves only to 29s (minSeconds = 4, not 45s)
     const shiftedEnd = applyPlayheadBound(initial, 25, "start", 60, 4, 30);
-    expect(shiftedEnd.range.start).toBe(25);
-    expect(shiftedEnd.range.end).toBeGreaterThanOrEqual(29);
+    expect(shiftedEnd.range).toEqual({ start: 25, end: 29, duration: 4 });
     expect(shiftedEnd.movedOther).toBe("end");
 
-    // Set end at 45s (more than 30s past current start 0s) -> start shifts automatically and movedOther = "start"
+    // Set end before current start (15s < 20s) -> start moves only to 11s (minSeconds = 4, not 5s)
+    const endBeforeStart = applyPlayheadBound({ start: 20, end: 30, duration: 10 }, 15, "end", 60, 4, 30);
+    expect(endBeforeStart.range).toEqual({ start: 11, end: 15, duration: 4 });
+    expect(endBeforeStart.movedOther).toBe("start");
+
+    // Set end more than 30s past current start (45s from 0s) -> start moves only to 15s (maxSeconds = 30, not 25s)
     const shiftedStart = applyPlayheadBound(initial, 45, "end", 60, 4, 30);
-    expect(shiftedStart.range.end).toBe(45);
-    expect(shiftedStart.range.duration).toBeLessThanOrEqual(30);
+    expect(shiftedStart.range).toEqual({ start: 15, end: 45, duration: 30 });
     expect(shiftedStart.movedOther).toBe("start");
+
+    // Set start more than 30s before current end (10s to 50s) -> end moves only to 40s (maxSeconds = 30, not 30s)
+    const longStart = applyPlayheadBound({ start: 30, end: 50, duration: 20 }, 10, "start", 60, 4, 30);
+    expect(longStart.range).toEqual({ start: 10, end: 40, duration: 30 });
+    expect(longStart.movedOther).toBe("end");
+
+    // Playhead clamped near clip boundaries: O < minSeconds clamps to 0..4; I > total - minSeconds clamps to (total-4)..total
+    const nearZeroO = applyPlayheadBound(afterI.range, 2, "end", 15, 4, 30);
+    expect(nearZeroO.range).toEqual({ start: 0, end: 4, duration: 4 });
+    expect(nearZeroO.movedOther).toBe("start");
+
+    const nearEndIUnchangedEnd = applyPlayheadBound({ start: 0, end: 15, duration: 15 }, 13.5, "start", 15, 4, 30);
+    expect(nearEndIUnchangedEnd.range).toEqual({ start: 11, end: 15, duration: 4 });
+    expect(nearEndIUnchangedEnd.movedOther).toBeNull();
+
+    const nearEndIMovedEnd = applyPlayheadBound({ start: 0, end: 10, duration: 10 }, 13.5, "start", 15, 4, 30);
+    expect(nearEndIMovedEnd.range).toEqual({ start: 11, end: 15, duration: 4 });
+    expect(nearEndIMovedEnd.movedOther).toBe("end");
   });
 });
 
@@ -304,9 +338,9 @@ describe("Batch T: ClipTrimModal interactive navigation (all orgs)", () => {
       // Press `I` at ~25.5s -> moves start to 25.5s and shifts end cleanly (still within 30s) -> check clamp note when pushing end past 30s
       await dom.keyDown("ArrowDown", { target: dialog }); // 42s
       await dom.keyDown("i", { target: dialog });
-      // Original range was [0..30], setting start at 42s forces end to move -> clampNote shown!
-      expect(dom.query("[data-trim-clamp-note]")).not.toBeNull();
-      expect(dom.query("[data-trim-range-readout]")?.textContent).toContain("42.0초");
+      // Original range was [0..30], setting start at 42s forces end to move only to 46.0s (4s min) -> clampNote shown!
+      expect(dom.query("[data-trim-clamp-note]")?.textContent).toContain("46.0초");
+      expect(dom.query("[data-trim-range-readout]")?.textContent).toContain("42.0초 – 46.0초 (4.0초)");
 
       // Space toggles play/pause; J/K/L do NOT trigger playback or seek
       const timeBeforeJkl = v.getCurrentTime();
