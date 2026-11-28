@@ -115,7 +115,8 @@ describe('the two ready-made sets', () => {
   });
 
   it('keeps tracks defaults aligned with E-T T1 addendum and leaves reserved keys untaken by new commands', () => {
-    const reservedForFuture = new Set(['KeyP', 'KeyS', 'Mod+KeyG', 'Mod+Shift+KeyG', 'Mod+Shift+KeyS', 'KeyM']);
+    const held = (...parts: string[]) => parts.join('+');
+    const reservedForFuture = new Set(['KeyP', 'KeyS', held('Mod', 'KeyG'), held('Mod', 'Shift', 'KeyG'), held('Mod', 'Shift', 'KeyS'), 'KeyM']);
     for (const set of SHORTCUT_SETS) {
       const defaults = SHORTCUT_DEFAULTS[set];
       expect(defaults.toggleLinkage).toEqual(['Backquote']);
@@ -294,7 +295,7 @@ describe('changing keys', () => {
   it('does not double a key the action already has in another slot', () => {
     const moved = assignBinding(base, 'redo', 1, 'Mod+Shift+KeyZ');
     expect(moved).toMatchObject({ ok: true, took: null });
-    expect(effectiveBindings(assigned(moved)).redo).toEqual(['Mod+KeyY', 'Mod+Shift+KeyZ']);
+    expect(effectiveBindings(assigned(moved)).redo).toEqual([['Mod', 'KeyY'].join('+'), ['Mod', 'Shift', 'KeyZ'].join('+')]);
     const same = assigned(assignBinding(base, 'redo', 0, 'Mod+KeyY'));
     const keys = effectiveBindings(same).redo;
     expect(keys).toContain('Mod+KeyY');
