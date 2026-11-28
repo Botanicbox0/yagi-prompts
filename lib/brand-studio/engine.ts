@@ -54,6 +54,7 @@ function musicV2RequestInputOf(deps: Pick<StudioDeps, 'media' | 'env'>, job: Job
     kind: job.kind,
     model: job.model,
     prompt: sendPrompt(job),
+    customerPrompt: job.prompt,
     params: job.params,
     images: inputs.filter((i) => i.kind === 'image').map((i) => ({ url: i.url, ...(i.frame ? { frame: i.frame } : {}) })),
     videos: inputs.filter((i) => i.kind === 'video').map((i) => ({ url: i.url })),

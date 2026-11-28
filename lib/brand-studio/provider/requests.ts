@@ -26,6 +26,8 @@ export interface StudioRequestInput {
   model: string;
   /** What is sent: the enhanced prompt, or the customer's words when enhancement is off. */
   prompt: string;
+  /** Sound Studio v2: the job's stored original sentence (`job.prompt`), never the designed caption (`final_prompt`). */
+  customerPrompt?: string | null;
   params: StudioJobParams;
   /** Reference images in tray order. `frame` marks an opening/closing still for a video. */
   images: ReadonlyArray<{ url: string; frame?: 'start' | 'end' }>;
@@ -295,7 +297,7 @@ export function minimaxMusicRequestOf(
   const durationSeconds = resolveMinimaxDurationSeconds({
     durationSeconds: music.durationSeconds,
     video: music.video,
-    prompt: input.prompt,
+    prompt: input.customerPrompt ?? null,
   });
   const own = music.vocal ? ownLyrics(music.lyrics) : '';
   const lyrics = music.vocal ? (own ? markMinimaxLyrics(own, music.structure ?? null) : (input.draftedLyrics ?? '')) : undefined;

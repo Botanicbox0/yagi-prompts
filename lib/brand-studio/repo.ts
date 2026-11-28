@@ -131,7 +131,15 @@ function v2MusicJobView(row: JobRow, outputs: OutputRow[], media: StudioMediaSto
       }
     : row.params;
   const { lyricsDraftFailed, minimaxDraft: _minimaxDraft, ...restWork } = row.work ?? {};
-  const base = jobView({ ...row, model: 'suno-v6', params: baseParams, work: restWork }, outputs, media);
+  const normalizedWork =
+    restWork.enhancer &&
+    'profile' in restWork.enhancer &&
+    (restWork.enhancer.profile === 'suno-v6' ||
+      restWork.enhancer.profile === 'suno-v6-wild' ||
+      restWork.enhancer.profile === 'minimax-music-3')
+      ? { ...restWork, enhancer: { ...restWork.enhancer, profile: 'suno' as const } }
+      : restWork;
+  const base = jobView({ ...row, model: 'suno-v6', params: baseParams, work: normalizedWork }, outputs, media);
   return {
     ...base,
     model: row.model,

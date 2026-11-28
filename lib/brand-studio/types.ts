@@ -284,7 +284,10 @@ export interface StudioJobWork {
   enhanceNotes?: string;
   /** Which rules wrote the sent prompt (lib/brand-studio/enhancer `EnhanceMeta`). Internal; never shown. */
   /** How the prompt was designed: the image/video Architect's record, or the music Architect's (sound/architect.ts). */
-  enhancer?: import('./enhancer/types').EnhanceMeta | import('./sound/architect').MusicEnhanceMeta;
+  enhancer?:
+    | import('./enhancer/types').EnhanceMeta
+    | import('./sound/architect').MusicEnhanceMeta
+    | import('./sound/architect').MusicV2EnhanceMeta;
   region?: {
     plan: RegionPlan;
     cropKey: string;
@@ -434,6 +437,8 @@ export interface StudioMusicParams {
   plan?: import('./sound/length-plan').RunPlanRecord;
   /** Sung with no lyrics: the brand (and how to write it) and the words to include, sent with the request. */
   words?: { brand?: { name: string; readAs?: string | null } | null; mustInclude?: readonly string[] };
+  /** Sound Studio v2 (B5): optional reference readings (`audio`, `voice`, `inspo`) folded into the Prompt Architect. */
+  readings?: import('./sound/architect').MusicDesignReadings | null;
   /** The conditions snapshot: engine, endpoint, and our terms version. */
   made: { engine: string; endpoint: string; terms: string };
 }

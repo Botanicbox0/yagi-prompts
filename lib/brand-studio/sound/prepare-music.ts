@@ -26,8 +26,8 @@ import {
   resolveMinimaxDurationSeconds,
   type MusicDesign,
   type MusicDesignInput,
-  type MusicDesignReadings,
   type MusicEnhanceMeta,
+  type MusicV2EnhanceMeta,
 } from './architect';
 import type { MusicModelId } from './engine';
 import { minimaxMusic3Sunra } from './engines/minimax-sunra';
@@ -72,7 +72,6 @@ export function minimaxLyricsFailureReason(detail: string): LyricsDraftFailureRe
 
 export function musicDesignInputOf(job: Pick<JobRow, 'prompt' | 'params' | 'organization_id'>, brand: MusicDesignInput['brand'] = null): MusicDesignInput {
   const m = job.params.music!;
-  const maybeReadings = (m as unknown as { readings?: MusicDesignReadings | null }).readings ?? null;
   return {
     prompt: job.prompt,
     vocal: m.vocal,
@@ -88,7 +87,7 @@ export function musicDesignInputOf(job: Pick<JobRow, 'prompt' | 'params' | 'orga
     ...(m.composerMode ? { composerMode: m.composerMode } : {}),
     ...(m.targetSeconds !== undefined ? { targetSeconds: m.targetSeconds } : {}),
     ...(m.durationSeconds !== undefined ? { durationSeconds: m.durationSeconds } : {}),
-    ...(maybeReadings ? { readings: maybeReadings } : {}),
+    ...(m.readings ? { readings: m.readings } : {}),
     ...(job.organization_id ? { organizationId: job.organization_id } : {}),
   };
 }
@@ -421,8 +420,13 @@ async function prepareMusicV2(deps: StudioDeps, job: JobRow): Promise<{ finalPro
     }
 
     const existingEnhancer =
-      currentWork.enhancer && 'profile' in currentWork.enhancer && currentWork.enhancer.profile === 'suno'
-        ? (currentWork.enhancer as MusicEnhanceMeta)
+      currentWork.enhancer &&
+      'profile' in currentWork.enhancer &&
+      (currentWork.enhancer.profile === 'suno' ||
+        currentWork.enhancer.profile === 'suno-v6' ||
+        currentWork.enhancer.profile === 'suno-v6-wild' ||
+        currentWork.enhancer.profile === 'minimax-music-3')
+        ? (currentWork.enhancer as MusicEnhanceMeta | MusicV2EnhanceMeta)
         : null;
 
     const baseNoBrand = musicDesignInputOf(job);
@@ -435,7 +439,9 @@ async function prepareMusicV2(deps: StudioDeps, job: JobRow): Promise<{ finalPro
         !job.enhance && hasAttachedReadings
           ? fallbackDesignForModel('minimax-music-3', baseNoBrand, 'off')
           : minimaxFallbackDesign(baseNoBrand, 'off');
-      const baseMeta = existingEnhancer ?? designMetaForModel(offFallback);
+      const baseMeta: MusicV2EnhanceMeta = existingEnhancer
+        ? { ...existingEnhancer, profile: 'minimax-music-3' }
+        : designMetaForModel('minimax-music-3', offFallback);
       const finalPrompt =
         !job.enhance && hasAttachedReadings ? offFallback.style : (job.final_prompt ?? offFallback.style);
       return {
@@ -474,7 +480,7 @@ async function prepareMusicV2(deps: StudioDeps, job: JobRow): Promise<{ finalPro
         ...currentWork,
         prepared: true,
         enhancer: {
-          ...designMetaForModel(designed),
+          ...designMetaForModel('minimax-music-3', designed),
           ...(m.titleSource === 'customer' ? { title: m.title } : {}),
           ...(drafted ? { lyrics: drafted.lyrics, lyricsModel: drafted.model } : {}),
         },
@@ -489,7 +495,7 @@ async function prepareMusicV2(deps: StudioDeps, job: JobRow): Promise<{ finalPro
     ...input,
     customerLyrics: Boolean(m.vocal && ownLyrics(m.lyrics)),
   });
-  const meta = designMetaForModel(design);
+  const meta = designMetaForModel(modelId, design);
   return {
     finalPrompt: design.style,
     work: {

@@ -460,9 +460,17 @@ export function safeNotesForModel(modelId: MusicModelId, notes: string | null | 
   return text;
 }
 
-export function designMetaForModel(design: MusicDesign): MusicEnhanceMeta {
+export interface MusicV2EnhanceMeta extends Omit<MusicEnhanceMeta, 'profile'> {
+  profile: MusicModelId;
+}
+
+export function designMetaForModel(modelId: MusicModelId, design: MusicDesign): MusicV2EnhanceMeta {
   const base = designMeta(design);
-  return design.durationSeconds !== undefined ? { ...base, durationSeconds: design.durationSeconds } : base;
+  return {
+    ...base,
+    profile: modelId,
+    ...(design.durationSeconds !== undefined ? { durationSeconds: design.durationSeconds } : {}),
+  };
 }
 
 export interface MinimaxDurationInput {
@@ -1196,15 +1204,24 @@ export function inspectMusicDesignForModel(
 
   if (modelId === 'suno-v6' || modelId === 'suno-v6-wild') {
     const style = (design.style ?? design.prompt ?? '').trim();
-    const styleMin = profile.limits.styleMin;
-    const styleMax = context.styleMax ?? profile.limits.styleHardMax;
+    const styleMax = context.styleMax ?? DESIGN_LIMITS.styleHardMax;
+    const lyricsText = context.lyrics ?? design.lyrics ?? '';
+    const mode = musicWay({ vocal, lyrics: vocal ? ownLyrics(lyricsText) : '', careful: false });
     const planIssues = planProblems(style, {
       plan: context.plan ?? null,
       vocal,
-      lyrics: context.lyrics ?? design.lyrics ?? '',
+      lyrics: lyricsText,
     });
     const titleIssues = checkMusicTitle(design.title ?? '', context.prompt);
-    const secondsHit = hasDurationWording(style);
+    // Delegate style validation directly to today's `checkMusicDesign` (zero duplicated checks or era rules).
+    const styleIssues = checkMusicDesign({ style, title: PLAIN_TITLE.en }, mode, undefined, styleMax);
+    const pickStyleIssue = (expected: string) => styleIssues.find((msg) => msg === expected);
+    const minIssue = pickStyleIssue('the style paragraph is too short');
+    const maxIssue = pickStyleIssue(`the style is over ${styleMax} characters`);
+    const paraIssue = pickStyleIssue('the style must be one paragraph without line breaks');
+    const internalIssue = pickStyleIssue('the style names the service or a technical term');
+    const artistIssue = pickStyleIssue('the style names a real artist or song');
+    const secondsIssue = pickStyleIssue('the style gives a length in seconds or minutes');
 
     return [
       // [our-measurement] length-plan.ts tempo & intro consistency (`PROMPTING-RESEARCH.md:68`)
@@ -1220,26 +1237,26 @@ export function inspectMusicDesignForModel(
       {
         id: 'suno_length_min',
         category: 'caption',
-        rule: `Style paragraph is at least ${styleMin} characters`,
+        rule: `Style paragraph is at least ${profile.limits.styleMin} characters`,
         support: 'practitioner-consistent',
-        passed: style.length >= styleMin,
-        ...(style.length < styleMin ? { problem: 'the style paragraph is too short' } : {}),
+        passed: !minIssue,
+        ...(minIssue ? { problem: minIssue } : {}),
       },
       {
         id: 'suno_length_max',
         category: 'caption',
         rule: `Style paragraph fits within ${styleMax} characters`,
         support: 'official',
-        passed: style.length <= styleMax,
-        ...(style.length > styleMax ? { problem: `the style is over ${styleMax} characters` } : {}),
+        passed: !maxIssue,
+        ...(maxIssue ? { problem: maxIssue } : {}),
       },
       {
         id: 'suno_single_paragraph',
         category: 'caption',
         rule: 'Style is a single paragraph without line breaks',
         support: 'practitioner-consistent',
-        passed: !/\n/.test(style),
-        ...(/\n/.test(style) ? { problem: 'the style must be one paragraph without line breaks' } : {}),
+        passed: !paraIssue,
+        ...(paraIssue ? { problem: paraIssue } : {}),
       },
       // [house] no internal service, engine, or API terms (`suno.ts`)
       {
@@ -1247,8 +1264,8 @@ export function inspectMusicDesignForModel(
         category: 'caption',
         rule: 'No service, engine, or API terms in style',
         support: 'house',
-        passed: !INTERNAL_TERMS.test(style),
-        ...(INTERNAL_TERMS.test(style) ? { problem: 'the style names the service or a technical term' } : {}),
+        passed: !internalIssue,
+        ...(internalIssue ? { problem: internalIssue } : {}),
       },
       // [official] no artist or song names (`PROMPTING-RESEARCH.md:47,84`, Suno blog)
       {
@@ -1256,17 +1273,17 @@ export function inspectMusicDesignForModel(
         category: 'caption',
         rule: 'No real artist, band, or song names in style',
         support: 'official',
-        passed: !namedArtist(style),
-        ...(namedArtist(style) ? { problem: 'the style names a real artist or song' } : {}),
+        passed: !artistIssue,
+        ...(artistIssue ? { problem: artistIssue } : {}),
       },
-      // [official] no written length in seconds or minutes; era words ('70s-inspired', '90s hip-hop') allowed (`PROMPTING-RESEARCH.md:53,88`)
+      // [official] no written length in seconds or minutes (`checkMusicDesign` `SECONDS`, `PROMPTING-RESEARCH.md:53`)
       {
         id: 'suno_no_seconds',
         category: 'caption',
-        rule: 'No duration in seconds or minutes inside style (era words like 80s/90s allowed)',
+        rule: 'No duration in seconds or minutes inside style',
         support: 'official',
-        passed: !secondsHit,
-        ...(secondsHit ? { problem: 'the style gives a length in seconds or minutes' } : {}),
+        passed: !secondsIssue,
+        ...(secondsIssue ? { problem: secondsIssue } : {}),
       },
       // [our-measurement] instrumental requests send empty lyrics (`PROMPTING-RESEARCH.md:67`)
       {
@@ -1550,35 +1567,11 @@ export function checkMusicDesignForModel(
 }
 
 function v2SunoTaskBlock(input: MusicDesignInput, mode: MusicWay, styleMax: number, readings: NormalizedReadings | null): string {
-  if (!readings) return taskBlock(input, mode, styleMax);
-  const lines = [
-    mode === 'describe'
-      ? 'This run sends the style paragraph alone as the description of the track (no title, no lyrics).'
-      : 'This run sends the style paragraph, the title and the lyrics separately.',
-    input.vocal
-      ? input.lyrics.trim()
-        ? 'There are vocals and the customer wrote the lyrics: the voice sings them as written. Name the language of the lyrics in the voice sentence. Never quote or change the lyrics.'
-        : `There are vocals and no lyrics: name the language to sing in, ${input.language === 'ko' ? 'Korean' : 'English'}, in the voice sentence.`
-      : 'Instrumental: name what carries the melody; never mention a voice except to say the piece is instrumental.',
-    ...(input.plan && input.vocal && input.lyrics.trim()
-      ? [
-          `Tempo: ${input.plan.bpm} BPM exactly; the lyrics are planned at it. Write "around ${input.plan.bpm} BPM".`,
-          `The form is fixed: ${formSentence(input.plan).replace(/^Around \d+ BPM\. /, '')} Describe this arrangement in the structure sentence${opensOnIntro(input.plan.form) ? '; it opens on the intro, so never say it goes straight into the hook' : ''}.`,
-        ]
-      : []),
-    ...(styleMax < DESIGN_LIMITS.styleHardMax
-      ? [`Keep the style under ${styleMax} characters: a sentence saying what the song is about is added after it. Do not write the lyrics or the message yourself.`]
-      : []),
-    'Reference readings are given in `readings` (priority: customer request > audio/voice reading > inspo). Fold their musical traits into the paragraph without naming any artist or technical source.',
-    `Notes language: ${input.locale === 'ko' ? 'Korean (해요체, one sentence)' : 'English (one sentence)'}.`,
-    ...(input.video ? [videoDesignLine(input.video)] : []),
-    ...(input.avoid
-      ? [
-          'The music engine refused a request made from these words. Leave out anything that could read as a real artist, a song, an album, a brand other than the customer\'s, or explicit content; describe genre, tempo, instruments, voice and mood only.',
-        ]
-      : []),
-  ];
-  return `This run:\n${lines.map((l) => `- ${l}`).join('\n')}`;
+  const base = taskBlock(input, mode, styleMax);
+  if (!readings) return base;
+  const readingsBullet =
+    '- Reference readings are given in `readings` (priority: customer request > audio/voice reading > inspo). Fold their musical traits into the paragraph without naming any artist or technical source.';
+  return base.replace('\n- Notes language:', `\n${readingsBullet}\n- Notes language:`);
 }
 
 function minimaxTaskBlock(input: MusicDesignInput, readings: NormalizedReadings | null): string {
@@ -1774,28 +1767,40 @@ export async function designMusicForModel(
       }
     }
 
-    // MUST-FIX 3 & 4: check caption problems and title problems separately; never run lyric checks inside the caption retry loop.
-    const { captionProblems, titleProblems } = partitionMusicDesignProblemsForModel(
-      modelId,
-      {
-        style: normalizedStyle,
-        ...(isMinimax ? { prompt: normalizedStyle } : {}),
-        title: trimmedTitle,
-      },
-      {
-        prompt: input.prompt,
-        vocal: input.vocal,
-        lyrics: markedLyrics,
-        language: input.language,
-        plan: isMinimax ? null : (input.plan ?? null),
-        brand: input.brand,
-        words: input.words ?? null,
-        readings: input.readings ?? null,
-        styleMax,
-        customerLyrics,
-        source: 'model',
-      },
-    );
+    // MUST-FIX 3 & 4 + Round-2 Item 3: Suno v6 / Wild call today's `planProblems` + `checkMusicDesign` + `checkMusicTitle` directly;
+    // MiniMax partitions caption vs title problems separately and never runs lyric checks inside the caption retry loop.
+    let captionProblems: string[];
+    let titleProblems: string[];
+    if (!isMinimax) {
+      const sunoAll = [
+        ...planProblems(normalizedStyle, input),
+        ...checkMusicDesign({ style: normalizedStyle, title: trimmedTitle }, mode, input.prompt, styleMax),
+      ];
+      titleProblems = checkMusicTitle(trimmedTitle, input.prompt);
+      captionProblems = sunoAll.slice(0, sunoAll.length - titleProblems.length);
+    } else {
+      ({ captionProblems, titleProblems } = partitionMusicDesignProblemsForModel(
+        modelId,
+        {
+          style: normalizedStyle,
+          prompt: normalizedStyle,
+          title: trimmedTitle,
+        },
+        {
+          prompt: input.prompt,
+          vocal: input.vocal,
+          lyrics: markedLyrics,
+          language: input.language,
+          plan: null,
+          brand: input.brand,
+          words: input.words ?? null,
+          readings: input.readings ?? null,
+          styleMax,
+          customerLyrics,
+          source: 'model',
+        },
+      ));
+    }
 
     problems = [...captionProblems, ...titleProblems];
 
